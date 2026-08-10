@@ -1,0 +1,9 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { Home, LayoutTemplate, Menu, Palette, Settings, Users, WandSparkles, X } from "lucide-react";
+
+const links = [{ label: "Home", href: "/home", icon: Home }, { label: "Projects", href: "/projects", icon: LayoutTemplate }, { label: "Create", href: "/create", icon: WandSparkles }, { label: "Templates", href: "/templates", icon: LayoutTemplate }, { label: "Brand Kit", href: "/brand-kit", icon: Palette }, { label: "Team & Approval", href: "/team", icon: Users }, { label: "Settings", href: "/settings", icon: Settings }];
+
+export function MobileNavigation() { const [open, setOpen] = useState(false); return <><button className="rounded-xl p-2 text-muted-foreground hover:bg-surface-muted lg:hidden" aria-label="Open navigation menu" aria-expanded={open} onClick={() => setOpen(true)}><Menu size={20} /></button>{open ? <div className="fixed inset-0 z-50 lg:hidden"><button className="absolute inset-0 bg-[#201d1b]/40" aria-label="Close navigation menu" onClick={() => setOpen(false)} /><nav className="absolute inset-y-0 left-0 w-[280px] bg-surface p-5 shadow-[var(--shadow-md)]" aria-label="Mobile navigation"><div className="mb-8 flex items-center justify-between"><span className="text-sm font-black">EOS<span className="text-primary">.</span>studio</span><button className="rounded-lg p-2 text-muted-foreground hover:bg-surface-muted" aria-label="Close navigation menu" onClick={() => setOpen(false)}><X size={18} /></button></div><div className="space-y-1">{links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)} className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-muted-foreground hover:bg-[#fff0e9] hover:text-primary"><link.icon size={18} />{link.label}</Link>)}</div></nav></div> : null}</>; }

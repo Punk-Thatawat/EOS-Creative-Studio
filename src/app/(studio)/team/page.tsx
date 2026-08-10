@@ -1,0 +1,8 @@
+import { Mail, Plus, Users } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
+export const metadata = { title: "Team" };
+export default function TeamPage() { return <><PageHeader eyebrow="Workspace" title="Team" description="Manage who can contribute to this creative workspace." action={<Button><Plus size={17} /> Invite member</Button>} /><Card className="overflow-hidden"><div className="grid grid-cols-[1fr_120px_100px] border-b border-border bg-surface-muted px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"><span>Member</span><span>Role</span><span>Status</span></div><div className="flex items-center gap-3 px-5 py-5"><span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f8d7c9] text-xs font-bold text-[#a64d2d]">JD</span><div className="flex-1"><p className="text-sm font-bold">Jamie Davis</p><p className="text-xs text-muted-foreground">jamie@example.com</p></div><span className="w-[120px] text-xs font-medium">Owner</span><span className="w-[100px]"><Badge tone="success">Active</Badge></span></div><div className="border-t border-border px-5 py-4"><button className="inline-flex items-center gap-2 text-xs font-bold text-muted-foreground hover:text-primary"><Mail size={14} /> Invite teammates by email</button></div></Card><div className="mt-6"><div className="flex items-center gap-2 text-sm font-bold"><Users size={17} className="text-primary" /> Workspace access is invite-only</div></div></> }
