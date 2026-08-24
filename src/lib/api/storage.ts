@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getApiAccessToken } from "@/lib/auth/access-token";
 import { detectMediaUploadKind, friendlyUploadError, validateMediaFile, type ImageUploadConstraints } from "@/lib/media/upload-validation";
 
 const configuredBackendUrl = (
@@ -52,10 +52,7 @@ export async function uploadImageAsset(
   const mediaKind = detectMediaUploadKind(file);
   const validationError = await validateMediaFile(file, mediaKind, options.uploadConstraints);
   if (validationError) throw new Error(validationError);
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  const accessToken = data.session?.access_token;
+  const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in before uploading an image");
 
   // The provider key stays server-side. The backend forwards the file to

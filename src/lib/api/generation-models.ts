@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getApiAccessToken } from "@/lib/auth/access-token";
 
 export type ModelUploadConstraints = {
   maxFileSizeBytes?: number;
@@ -8,6 +8,8 @@ export type ModelUploadConstraints = {
   maxHeight?: number;
   maxImages?: number;
 };
+
+export type AiBackgroundMode = "remove" | "replace" | "generate" | "solid";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
@@ -96,12 +98,11 @@ export type AdminModelRoutesOverview = {
   routes: Record<string, GenerationModelOption[]>;
 };
 
-export async function listGenerationModels(feature = "text-to-image"): Promise<GenerationModelOption[]> {
-  const { data, error } = await getSupabaseBrowserClient().auth.getSession();
-  if (error) throw error;
-  const accessToken = data.session?.access_token;
+export async function listGenerationModels(feature = "text-to-image", backgroundMode?: AiBackgroundMode): Promise<GenerationModelOption[]> {
+  const accessToken = await getApiAccessToken();
   if (!accessToken) return [];
-  const response = await fetch(`${backendApiUrl}/generation-models?feature=${encodeURIComponent(feature)}`, {
+  const modeQuery = backgroundMode ? `&backgroundMode=${encodeURIComponent(backgroundMode)}` : "";
+  const response = await fetch(`${backendApiUrl}/generation-models?feature=${encodeURIComponent(feature)}${modeQuery}`, {
     headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });
@@ -111,9 +112,7 @@ export async function listGenerationModels(feature = "text-to-image"): Promise<G
 }
 
 async function adminRequest(path: string, init: RequestInit = {}): Promise<unknown> {
-  const { data, error } = await getSupabaseBrowserClient().auth.getSession();
-  if (error) throw error;
-  const accessToken = data.session?.access_token;
+  const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in as an admin");
   const apiPath = path.startsWith("/api/v1") ? path.slice("/api/v1".length) : path;
   const response = await fetch(`${backendApiUrl}${apiPath}`, {
@@ -126,8 +125,9 @@ async function adminRequest(path: string, init: RequestInit = {}): Promise<unkno
   return payload;
 }
 
-export async function listAdminGenerationModels(feature = "text-to-image"): Promise<GenerationModelOption[]> {
-  const payload = await adminRequest(`/api/v1/admin/model-routes?feature=${encodeURIComponent(feature)}`) as { data?: GenerationModelOption[] };
+export async function listAdminGenerationModels(feature = "text-to-image", backgroundMode?: AiBackgroundMode): Promise<GenerationModelOption[]> {
+  const modeQuery = backgroundMode ? `&backgroundMode=${encodeURIComponent(backgroundMode)}` : "";
+  const payload = await adminRequest(`/api/v1/admin/model-routes?feature=${encodeURIComponent(feature)}${modeQuery}`) as { data?: GenerationModelOption[] };
   return payload.data ?? [];
 }
 
@@ -141,7 +141,7 @@ export async function listAdminModelRoutesOverview(): Promise<AdminModelRoutesOv
   return payload.data ?? { catalog: [], routes: {} };
 }
 
-export async function updateGenerationModelRoute(feature: string, model: string, provider: string, options: { enabled?: boolean; isDefault?: boolean } = { enabled: true, isDefault: true }): Promise<GenerationModelOption[]> {
+export async function updateGenerationModelRoute(feature: string, model: string, provider: string, options: { backgroundMode?: AiBackgroundMode; enabled?: boolean; isDefault?: boolean } = { enabled: true, isDefault: true }): Promise<GenerationModelOption[]> {
   const payload = await adminRequest(`/api/v1/admin/model-routes/${encodeURIComponent(feature)}`, { method: "PATCH", body: JSON.stringify({ model, provider, ...options }) }) as { data?: GenerationModelOption[] };
   return payload.data ?? [];
 }

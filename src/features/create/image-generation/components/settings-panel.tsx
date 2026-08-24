@@ -84,12 +84,13 @@ function findSchemaField(properties: Record<string, SchemaProperty>, names: stri
 
 function SchemaFieldControl({ field, value, options, onChange }: { field: SchemaField; value: unknown; options?: string[]; onChange: (value: unknown) => void }) {
   const enumValues = options ?? (field.property.enum ?? []).map((item) => String(item));
-  const selectedValue = value ?? field.property.default ?? "";
+  const isAspectRatioField = /^(aspect[_-]?ratio|aspectRatio|ratio)$/i.test(field.name);
+  const selectedValue = value ?? field.property.default ?? (isAspectRatioField ? enumValues[0] ?? "" : "");
   const description = typeof field.property.description === "string" ? field.property.description : undefined;
   const type = field.property.type ?? "string";
   if (enumValues.length > 0) {
     const placeholder = typeof field.property["x-placeholder"] === "string" ? String(field.property["x-placeholder"]) : "Auto";
-    return <div className={cx("gen-setting-block")}><h3>{field.name} <Info size={12} /></h3><div className={cx("gen-dynamic-field")}><select value={String(selectedValue)} onChange={(event) => onChange(event.target.value || undefined)}><option value="">{placeholder}</option>{enumValues.map((item) => <option key={item} value={item}>{item}</option>)}</select>{description && <small>{description}</small>}</div></div>;
+    return <div className={cx("gen-setting-block")}><h3>{field.name} <Info size={12} /></h3><div className={cx("gen-dynamic-field")}><select value={String(selectedValue)} onChange={(event) => onChange(event.target.value || undefined)}>{!isAspectRatioField && <option value="">{placeholder}</option>}{enumValues.map((item) => <option key={item} value={item}>{item}</option>)}</select>{description && <small>{description}</small>}</div></div>;
   }
   return <div className={cx("gen-setting-block")}><h3>{field.name} <Info size={12} /></h3><div className={cx("gen-dynamic-field")}><input type={type === "number" || type === "integer" ? "number" : "text"} value={selectedValue === undefined ? "" : String(selectedValue)} min={typeof field.property.minimum === "number" ? field.property.minimum : undefined} max={typeof field.property.maximum === "number" ? field.property.maximum : undefined} step={type === "integer" ? 1 : "any"} onChange={(event) => { const raw = event.target.value; if (type === "integer") onChange(raw === "" ? undefined : Number.parseInt(raw, 10)); else if (type === "number") onChange(raw === "" ? undefined : Number(raw)); else onChange(raw || undefined); }} />{description && <small>{description}</small>}</div></div>;
 }

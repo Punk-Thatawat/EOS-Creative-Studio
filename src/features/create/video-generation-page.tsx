@@ -16,7 +16,6 @@ import {
   Info,
   LoaderCircle,
   Link2,
-  Lightbulb,
   Mic2,
   Play,
   Plus,
@@ -2027,7 +2026,8 @@ export function VideoGenerationPage() {
           <section className={styles.tutorials}>
             <div className={styles.tutorialTitle}>
               <h2>
-                <Lightbulb size={14} /> TUTORIAL &amp; IDEAS
+                TUTORIAL &amp; IDEAS
+                <span className={styles.annotation} aria-hidden="true" />
               </h2>
               <a href="#tutorials">View all tutorials →</a>
             </div>

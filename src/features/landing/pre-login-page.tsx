@@ -5,6 +5,7 @@ import { ArrowRight, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { EosLogo } from "@/components/brand/eos-logo";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { isDevAuthBypassEnabled } from "@/lib/auth/access-token";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 
 const tools = [
@@ -59,6 +60,10 @@ export function PreLoginPage() {
   };
 
   const openLogin = () => {
+    if (isDevAuthBypassEnabled()) {
+      window.location.replace("/home");
+      return;
+    }
     setGoogleLoginLoading(false);
     setGoogleLoginError(null);
     setLoginOpen(true);

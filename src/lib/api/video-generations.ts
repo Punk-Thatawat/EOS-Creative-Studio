@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getApiAccessToken } from "@/lib/auth/access-token";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
@@ -121,9 +121,7 @@ export type VideoStoryboardHistoryItem = {
 };
 
 async function authenticatedRequest(path: string, init: RequestInit = {}) {
-  const { data, error } = await getSupabaseBrowserClient().auth.getSession();
-  if (error) throw error;
-  const accessToken = data.session?.access_token;
+  const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in before generating a video");
 
   const response = await fetch(`${backendApiUrl}${path}`, {

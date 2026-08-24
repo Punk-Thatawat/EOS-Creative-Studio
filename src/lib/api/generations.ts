@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getApiAccessToken } from "@/lib/auth/access-token";
 import type { BackgroundMode, ExtendAmount, ExtendDirection, ImageCount, ImageQuality, ImageRatio, MaskTool, StylePreset, StyleTransferPreset } from "@/features/create/image-generation/config";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
@@ -256,10 +256,7 @@ function getErrorMessage(payload: unknown): string {
 }
 
 async function getAccessToken(): Promise<string> {
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  const accessToken = data.session?.access_token;
+  const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in before generating an image");
   return accessToken;
 }

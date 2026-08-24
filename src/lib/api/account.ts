@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getApiAccessToken } from "@/lib/auth/access-token";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendUrl = configuredBackendUrl.replace(/\/api\/v1$/, "");
@@ -22,9 +22,7 @@ export type HeaderAccountData = {
 };
 
 async function getAccessToken(): Promise<string | null> {
-  const { data, error } = await getSupabaseBrowserClient().auth.getSession();
-  if (error) throw error;
-  return data.session?.access_token ?? null;
+  return getApiAccessToken();
 }
 
 async function getBackendData(path: string, accessToken: string): Promise<BackendResponse> {

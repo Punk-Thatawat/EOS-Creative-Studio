@@ -27,6 +27,7 @@ import {
   updateModelInputLimits,
   updateGenerationModelRoute,
   type AdminModelRoutesOverview,
+  type AiBackgroundMode,
   type GenerationModelOption,
   type ModelUploadConstraints,
 } from "@/lib/api/generation-models";
@@ -54,6 +55,13 @@ const features = [
   { id: "audio", label: "Audio", description: "Create audio and music", icon: AudioWaveform },
   { id: "document", label: "Document", description: "Create documents and presentations", icon: FileText },
 ] as const;
+
+const aiBackgroundModes: Array<{ id: AiBackgroundMode; label: string; description: string }> = [
+  { id: "remove", label: "Remove", description: "Cut out the subject" },
+  { id: "replace", label: "Replace", description: "Swap the scene" },
+  { id: "generate", label: "Generate", description: "Create a background" },
+  { id: "solid", label: "Solid", description: "Fill with a color" },
+];
 
 type FeatureId = (typeof imageFunctions)[number]["id"] | (typeof videoFunctions)[number]["id"] | (typeof features)[number]["id"];
 
@@ -260,9 +268,18 @@ function isFeatureCompatible(item: GenerationModelOption, feature: FeatureId): b
   if (feature === "background-removal") {
     const providerType = capabilities.providerType?.toLowerCase() ?? "";
     const hasBackgroundMode = Boolean(capabilities.backgroundModes?.length);
-    return capabilities.parameters.length > 0 && Boolean(capabilities.imageParameter) && (hasBackgroundMode || Boolean(capabilities.backgroundImageParameter) || providerType.includes("background") || providerType.includes("remov"));
+    const imageInput = capabilities.imageParameter ?? capabilities.referenceImagesParameter ?? capabilities.imagesParameter ?? capabilities.inputImageParameter;
+    return capabilities.parameters.length > 0 && Boolean(imageInput) && (hasBackgroundMode || Boolean(capabilities.backgroundImageParameter) || providerType.includes("background") || providerType.includes("remov"));
   }
   return true;
+}
+
+function isBackgroundModeCompatible(item: GenerationModelOption, mode: AiBackgroundMode): boolean {
+  const configuredModes = item.capabilities.backgroundModes ?? [];
+  if (configuredModes.length > 0) return configuredModes.includes(mode);
+  if (mode === "remove") return true;
+  if (mode === "replace") return Boolean(item.capabilities.promptParameter || item.capabilities.backgroundImageParameter);
+  return Boolean(item.capabilities.promptParameter);
 }
 
 type AssignmentDraft = { assignedModelIds: string[]; defaultModel: string };
@@ -272,6 +289,8 @@ function MultiTargetModelAssignmentDialog({
   catalog,
   assignments,
   onFeatureChange,
+  backgroundMode,
+  onBackgroundModeChange,
   onAdd,
   onRemove,
   onSetDefault,
@@ -283,6 +302,8 @@ function MultiTargetModelAssignmentDialog({
   catalog: GenerationModelOption[];
   assignments: Record<string, AssignmentDraft>;
   onFeatureChange: (feature: FeatureId) => void;
+  backgroundMode: AiBackgroundMode;
+  onBackgroundModeChange: (mode: AiBackgroundMode) => void;
   onAdd: (feature: FeatureId, model: string) => void;
   onRemove: (feature: FeatureId, model: string) => void;
   onSetDefault: (feature: FeatureId, model: string) => void;
@@ -294,7 +315,12 @@ function MultiTargetModelAssignmentDialog({
   const [draggedModel, setDraggedModel] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const draft = assignments[feature] ?? { assignedModelIds: [], defaultModel: "" };
-  const compatibleModels = catalog.filter((item) => isFeatureCompatible(item, feature));
+  const compatibleModels = catalog
+    .filter((item) => isFeatureCompatible(item, feature))
+    .sort((left, right) => {
+      if (feature !== "background-removal") return 0;
+      return Number(isBackgroundModeCompatible(right, backgroundMode)) - Number(isBackgroundModeCompatible(left, backgroundMode));
+    });
   const filteredCatalog = compatibleModels.filter((item) => `${item.displayName} ${item.provider} ${item.model}`.toLowerCase().includes(query.trim().toLowerCase()));
   const assigned = compatibleModels.filter((item) => draft.assignedModelIds.includes(item.model));
   const unassigned = filteredCatalog.filter((item) => !draft.assignedModelIds.includes(item.model));
@@ -310,7 +336,7 @@ function MultiTargetModelAssignmentDialog({
     <div className="flex max-h-[min(820px,calc(100vh-32px))] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]">
       <header className="border-b border-border bg-white px-5 py-4 sm:px-7 sm:py-5">
         <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Model assignment</p><h2 id="assign-models-title" className="mt-1 text-xl font-bold tracking-tight">Assign models to features</h2><p className="mt-1 text-xs text-muted-foreground">เลือกฟีเจอร์ปลายทาง แล้วลาก model เข้าไป หรือกด Add</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground" aria-label="Close dialog"><X size={19} /></button></div>
-        <label className="mt-4 block max-w-md"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Assign to</span><select value={feature} onChange={(event) => handleFeatureChange(event.target.value as FeatureId)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><optgroup label="Image">{imageFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Video">{videoFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>{features.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Assign to</span><select value={feature} onChange={(event) => handleFeatureChange(event.target.value as FeatureId)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><optgroup label="Image">{imageFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Video">{videoFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>{features.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{feature === "background-removal" ? <label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">AI Background mode</span><select value={backgroundMode} onChange={(event) => onBackgroundModeChange(event.target.value as AiBackgroundMode)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10">{aiBackgroundModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label> : null}</div>
       </header>
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -336,6 +362,8 @@ function AdminModelRoutesContent() {
   const requestedFeature = searchParams.get("feature");
   const featureParam = (requestedFeature === "video" ? "image-to-video" : requestedFeature) as FeatureId | null;
   const feature = featureParam && [...imageFunctions, ...videoFunctions, ...features].some((item) => item.id === featureParam) ? featureParam : imageFunctions[0].id;
+  const [backgroundMode, setBackgroundMode] = useState<AiBackgroundMode>("remove");
+  const routeKey = feature === "background-removal" ? `background-removal:${backgroundMode}` : feature;
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   const [catalog, setCatalog] = useState<GenerationModelOption[]>([]);
   const [routeOverview, setRouteOverview] = useState<Record<string, GenerationModelOption[]>>({});
@@ -351,6 +379,8 @@ function AdminModelRoutesContent() {
   const [busy, setBusy] = useState(false);
   const [assignmentOpen, setAssignmentOpen] = useState(false);
   const [assignmentFeature, setAssignmentFeature] = useState<FeatureId>(imageFunctions[0].id);
+  const [assignmentBackgroundMode, setAssignmentBackgroundMode] = useState<AiBackgroundMode>("remove");
+  const [assignmentCatalog, setAssignmentCatalog] = useState<GenerationModelOption[]>([]);
   const [assignmentDrafts, setAssignmentDrafts] = useState<Record<string, AssignmentDraft>>({});
   const [savedAssignmentDrafts, setSavedAssignmentDrafts] = useState<Record<string, AssignmentDraft>>({});
   const [assignmentSaving, setAssignmentSaving] = useState(false);
@@ -362,7 +392,7 @@ function AdminModelRoutesContent() {
     try {
       const overview: AdminModelRoutesOverview = await listAdminModelRoutesOverview();
       const allModels = overview.catalog;
-      const next = overview.routes[feature] ?? [];
+      const next = overview.routes[routeKey] ?? overview.routes[feature] ?? [];
       setRouteOverview(overview.routes);
       setCatalog(allModels);
       setCatalogCount(allModels.length);
@@ -381,7 +411,7 @@ function AdminModelRoutesContent() {
     } finally {
       setLoading(false);
     }
-  }, [feature]);
+  }, [feature, routeKey]);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => { void load(); }, 0);
@@ -409,11 +439,12 @@ function AdminModelRoutesContent() {
       if (!selected) throw new Error("Selected model is no longer in the catalog");
       if (!enabledModels.includes(selectedModel)) throw new Error("The default model must be allowed for this feature");
       const changed = catalog.filter((item) => isFeatureCompatible(item, feature) && enabledModels.includes(item.model) !== savedEnabledModels.includes(item.model));
+      const modeOptions = feature === "background-removal" ? { backgroundMode } : {};
       for (const item of changed) {
-        await updateGenerationModelRoute(feature, item.model, item.provider, { enabled: enabledModels.includes(item.model), ...(item.model === selectedModel ? { isDefault: true } : {}) });
+        await updateGenerationModelRoute(feature, item.model, item.provider, { ...modeOptions, enabled: enabledModels.includes(item.model), ...(item.model === selectedModel ? { isDefault: true } : {}) });
       }
       if (!changed.some((item) => item.model === selectedModel) && selectedModel !== savedModel) {
-        await updateGenerationModelRoute(feature, selectedModel, selected.provider, { enabled: true, isDefault: true });
+        await updateGenerationModelRoute(feature, selectedModel, selected.provider, { ...modeOptions, enabled: true, isDefault: true });
       }
       setSavedModel(selectedModel);
       setSavedEnabledModels(enabledModels);
@@ -445,14 +476,30 @@ function AdminModelRoutesContent() {
 
   const openAssignment = () => {
     setAssignmentFeature(feature);
+    setAssignmentBackgroundMode(backgroundMode);
+    const assignmentModels = [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()];
+    setAssignmentCatalog(assignmentModels);
     const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
     const drafts = Object.fromEntries(targetFeatures.map((target) => {
-      const routes = routeOverview[target] ?? [];
+      const targetRouteKey = target === "background-removal" ? `background-removal:${backgroundMode}` : target;
+      // Use the already loaded mode-specific list for the active feature. This
+      // keeps the assignment dialog in sync with the cards on the main page.
+      const routes = target === "background-removal"
+        ? [...new Map([...models, ...(routeOverview[targetRouteKey] ?? [])].map((item) => [item.model, item])).values()]
+        : routeOverview[targetRouteKey] ?? routeOverview[target] ?? [];
       return [target, { assignedModelIds: routes.filter((item) => item.enabled).map((item) => item.model), defaultModel: routes.find((item) => item.isDefault)?.model ?? "" }];
     })) as Record<string, AssignmentDraft>;
     setAssignmentDrafts(drafts);
     setSavedAssignmentDrafts(drafts);
     setAssignmentOpen(true);
+  };
+
+  const changeAssignmentBackgroundMode = (mode: AiBackgroundMode) => {
+    const routes = routeOverview[`background-removal:${mode}`] ?? [];
+    const draft = { assignedModelIds: routes.filter((item) => item.enabled).map((item) => item.model), defaultModel: routes.find((item) => item.isDefault)?.model ?? "" };
+    setAssignmentBackgroundMode(mode);
+    setAssignmentDrafts((current) => ({ ...current, "background-removal": draft }));
+    setSavedAssignmentDrafts((current) => ({ ...current, "background-removal": draft }));
   };
 
   const saveAssignment = async () => {
@@ -464,14 +511,15 @@ function AdminModelRoutesContent() {
         const draft = assignmentDrafts[target] ?? { assignedModelIds: [], defaultModel: "" };
         if (draft.assignedModelIds.length > 0 && !draft.defaultModel) throw new Error(`${formatFeature(target)} needs a default model`);
         const original = savedAssignmentDrafts[target] ?? { assignedModelIds: [], defaultModel: "" };
-        const current = catalog.filter((item) => isFeatureCompatible(item, target));
+        const currentCatalog = target === "background-removal" ? assignmentCatalog : catalog;
+        const current = currentCatalog.filter((item) => isFeatureCompatible(item, target));
         for (const item of current) {
           const shouldBeEnabled = draft.assignedModelIds.includes(item.model);
           const wasEnabled = original.assignedModelIds.includes(item.model);
           const shouldBeDefault = draft.defaultModel === item.model;
           const wasDefault = original.defaultModel === item.model;
           if (shouldBeEnabled !== wasEnabled || shouldBeDefault !== wasDefault) {
-            await updateGenerationModelRoute(target, item.model, item.provider, { enabled: shouldBeEnabled, isDefault: shouldBeDefault });
+            await updateGenerationModelRoute(target, item.model, item.provider, { ...(target === "background-removal" ? { backgroundMode: assignmentBackgroundMode } : {}), enabled: shouldBeEnabled, isDefault: shouldBeDefault });
           }
         }
       }
@@ -529,7 +577,7 @@ function AdminModelRoutesContent() {
       setCatalog(overview.catalog);
       setCatalogCount(overview.catalog.length);
       setRouteOverview(overview.routes);
-      const next = overview.routes[feature] ?? [];
+      const next = overview.routes[routeKey] ?? overview.routes[feature] ?? [];
       setModels(next.filter((item) => item.enabled));
       const updated = overview.catalog.find((item) => item.model === model && item.provider === provider);
       if (updated) setDetailsModel(updated);
@@ -562,7 +610,8 @@ function AdminModelRoutesContent() {
 
         <div className="grid gap-6 lg:grid-cols-1 lg:items-start">
           <section aria-labelledby="route-heading" className="min-w-0">
-            <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Route configuration</p><h2 id="route-heading" className="mt-1 text-xl font-bold tracking-tight">{activeFeature.label}</h2></div><div className="relative w-full sm:w-60"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search models" aria-label="Search models" className="h-9 w-full rounded-xl border border-border bg-white pl-9 pr-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" /></div></div>
+            <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Route configuration</p><h2 id="route-heading" className="mt-1 text-xl font-bold tracking-tight">{activeFeature.label}</h2></div><div className="relative w-full sm:w-60"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search models" aria-label="Search models" className="h-9 w-full rounded-xl border border-border bg-white pl-9 pr-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" /></div></div>
+            {feature === "background-removal" ? <div className="mb-4 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-3"><div className="mb-2 flex items-center justify-between gap-3"><div><p className="text-xs font-bold">AI Background mode</p><p className="mt-1 text-[11px] text-muted-foreground">ตั้ง model และ default แยกตามงานที่เลือก</p></div><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">Mode-specific</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="AI Background modes">{aiBackgroundModes.map((mode) => <button key={mode.id} type="button" role="tab" aria-selected={backgroundMode === mode.id} onClick={() => { setBackgroundMode(mode.id); setQuery(""); }} className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${backgroundMode === mode.id ? "border-primary bg-primary text-white" : "border-border bg-white hover:border-primary/50"}`}><span className="block text-xs font-bold">{mode.label}</span><span className={`mt-0.5 block text-[10px] ${backgroundMode === mode.id ? "text-white/80" : "text-muted-foreground"}`}>{mode.description}</span></button>)}</div></div> : null}
             <div className="mb-4 flex items-center justify-between rounded-xl border border-[#eaded6] bg-[#fffdfb] px-4 py-3"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#4c9b72]" /><p className="text-xs font-semibold">{loading ? "Loading catalog..." : `${enabledCount} allowed · ${filteredModels.length} available`}</p></div><Button variant="ghost" size="sm" onClick={() => void openAssignment()} disabled={loading}><Settings2 size={14} /> Open drag &amp; drop</Button></div>
             <ModelGrid models={filteredModels} selectedModel={selectedModel} onSelect={selectModel} onToggleEnabled={toggleModel} onDetails={setDetailsModel} onOpenAssignment={openAssignment} loading={loading} query={query} />
           </section>
@@ -570,7 +619,7 @@ function AdminModelRoutesContent() {
       </div>
 
       <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div>
-      {assignmentOpen ? <MultiTargetModelAssignmentDialog feature={assignmentFeature} catalog={catalog} assignments={assignmentDrafts} onFeatureChange={setAssignmentFeature} onAdd={addAssignment} onRemove={removeAssignment} onSetDefault={setAssignmentDefault} onClose={() => setAssignmentOpen(false)} onSave={saveAssignment} saving={assignmentSaving} /> : null}
+      {assignmentOpen ? <MultiTargetModelAssignmentDialog feature={assignmentFeature} catalog={assignmentFeature === "background-removal" ? assignmentCatalog : [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()]} assignments={assignmentDrafts} backgroundMode={assignmentBackgroundMode} onFeatureChange={setAssignmentFeature} onBackgroundModeChange={changeAssignmentBackgroundMode} onAdd={addAssignment} onRemove={removeAssignment} onSetDefault={setAssignmentDefault} onClose={() => setAssignmentOpen(false)} onSave={saveAssignment} saving={assignmentSaving} /> : null}
       {detailsModel ? <ModelDetailsDialog item={detailsModel} onClose={() => setDetailsModel(null)} onSaveInputLimits={saveModelInputLimits} /> : null}
             </div>
           </main>

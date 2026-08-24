@@ -32,7 +32,6 @@ import {
   type StyleTransferPreset,
 } from "../config";
 
-const configuredWorkspaceId = process.env.NEXT_PUBLIC_WORKSPACE_ID ?? null;
 const pendingGenerationStorageKey = "eos.generation.pending";
 const imageGenerationDraftStorageKey = "eos.generation.image-draft.v1";
 const imageToImageSourceImageStorageKey = "eos.generation.source-image.image-to-image";
@@ -347,7 +346,10 @@ export function useImageGenerationState() {
   const [imageToImagePendingGeneration, setImageToImagePendingGeneration] = useState<PendingGeneration | null>(null);
   const [selectedRecentImageUrl, setSelectedRecentImageUrl] = useState<string | null>(null);
   const [recentGenerationUrls, setRecentGenerationUrls] = useState<string[]>([]);
-  const [workspaceId, setWorkspaceId] = useState<string | null>(configuredWorkspaceId);
+  // The backend resolves the workspace from the authenticated user. Do not
+  // seed this from a build-time workspace id because it can belong to a
+  // deleted user/workspace after a local database reset.
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [isLoadingRecent, setIsLoadingRecent] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(initialPendingIsActive);
@@ -434,8 +436,6 @@ export function useImageGenerationState() {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      const storedWorkspaceId = window.sessionStorage.getItem("eos.generation.workspace-id");
-      if (storedWorkspaceId) setWorkspaceId(storedWorkspaceId);
       if (generationRunRef.current) return;
 
       const storedDraft = readImageGenerationDraft();
@@ -714,7 +714,7 @@ export function useImageGenerationState() {
   ]);
 
   useEffect(() => {
-    let remainingModelLoads = 6;
+    let remainingModelLoads = 5;
     let isMounted = true;
     const finishModelLoad = () => {
       remainingModelLoads -= 1;
@@ -741,13 +741,6 @@ export function useImageGenerationState() {
       if (defaultModel) setSelectedStyleTransferModel((current) => current || defaultModel.model);
     }).catch(() => {
       // The backend still resolves its configured default if the catalog is unavailable.
-    }).finally(finishModelLoad);
-    void listGenerationModels("background-removal").then((models) => {
-      setBackgroundModelOptions(models);
-      const defaultModel = models.find((item) => item.isDefault);
-      if (defaultModel) setSelectedBackgroundModel((current) => current || defaultModel.model);
-    }).catch(() => {
-      // Automatic mode still resolves the configured background model on the backend.
     }).finally(finishModelLoad);
     void listGenerationModels("upscale").then((models) => {
       setUpscaleModelOptions(models);
@@ -778,6 +771,19 @@ export function useImageGenerationState() {
       upscaleAbortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    void listGenerationModels("background-removal", backgroundMode).then((models) => {
+      if (!isMounted) return;
+      setBackgroundModelOptions(models);
+      const defaultModel = models.find((item) => item.isDefault);
+      setSelectedBackgroundModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
+    }).catch(() => {
+      // The backend still resolves the configured background model on generation.
+    });
+    return () => { isMounted = false; };
+  }, [backgroundMode]);
 
   const modeBackgroundModelOptions = backgroundModelOptions.filter((model) => supportsBackgroundMode(model, backgroundMode, Boolean(backgroundMask)));
 
@@ -901,6 +907,7 @@ export function useImageGenerationState() {
           const enumValues = Array.isArray(property.enum) ? property.enum : undefined;
           if (current[name] !== undefined && (!enumValues || enumValues.some((value) => String(value) === String(current[name])))) next[name] = current[name];
           else if (property.default !== undefined) next[name] = property.default;
+          else if (/^(aspect[_-]?ratio|aspectRatio|ratio)$/i.test(name) && enumValues?.length) next[name] = enumValues[0];
         }
         return next;
       });
@@ -1496,7 +1503,7 @@ export function useImageGenerationState() {
 
   const cancelTextToImage = useCallback(async () => {
     if (!isGenerating) return;
-    const target = pendingGeneration ?? (generationId ? { generationId, workspaceId: workspaceId ?? configuredWorkspaceId ?? "" } : null);
+    const target = pendingGeneration ?? (generationId ? { generationId, workspaceId: workspaceId ?? "" } : null);
     await requestGenerationCancellation(target, () => {
       generationCancelRequestedRef.current = true;
       generationAbortRef.current?.abort();

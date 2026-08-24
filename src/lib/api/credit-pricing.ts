@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getApiAccessToken } from "@/lib/auth/access-token";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
@@ -82,9 +82,7 @@ export type UpsertCreditPricingDefaultsInput = {
 };
 
 async function adminRequest(path: string, init: RequestInit = {}): Promise<unknown> {
-  const { data, error } = await getSupabaseBrowserClient().auth.getSession();
-  if (error) throw error;
-  const accessToken = data.session?.access_token;
+  const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in as an admin");
   const response = await fetch(`${backendApiUrl}${path}`, {
     ...init,

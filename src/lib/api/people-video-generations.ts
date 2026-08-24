@@ -1,6 +1,6 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { getApiAccessToken } from "@/lib/auth/access-token";
 import { detectMediaUploadKind, friendlyUploadError, validateMediaFile, type ImageUploadConstraints } from "@/lib/media/upload-validation";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
@@ -53,9 +53,7 @@ export type PeopleVideoGenerationStatus = {
 };
 
 async function getAccessToken(): Promise<string> {
-  const { data, error } = await getSupabaseBrowserClient().auth.getSession();
-  if (error) throw error;
-  const accessToken = data.session?.access_token;
+  const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in before generating a people video");
   return accessToken;
 }
