@@ -8,12 +8,12 @@ import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 
 const tools = [
-  ["AI Image", "Generate stunning images", "/generated-icons-v2/icon-1-image.png"],
-  ["AI Video", "Create engaging videos in minutes", "/generated-icons-v2/icon-2-video.png"],
-  ["AI Presenter", "AI presenters that represent you", "/generated-icons-v2/icon-3-profile.png"],
-  ["AI Audio", "Generate voiceovers and music", "/generated-icons-v2/icon-4-audio.png"],
-  ["AI Document", "Smart docs with AI & OCR", "/generated-icons-v2/icon-5-document.png"],
-  ["More Tools", "Custom AI workflows", "/generated-icons-v2/icon-6-custom-v2.png"],
+  ["AI Image", "Generate stunning images", "/generated-icons-v2/icon-1-image.webp"],
+  ["AI Video", "Create engaging videos in minutes", "/generated-icons-v2/icon-2-video.webp"],
+  ["AI Presenter", "AI presenters that represent you", "/generated-icons-v2/icon-3-profile.webp"],
+  ["AI Audio", "Generate voiceovers and music", "/generated-icons-v2/icon-4-audio.webp"],
+  ["AI Document", "Smart docs with AI & OCR", "/generated-icons-v2/icon-5-document.webp"],
+  ["More Tools", "Custom AI workflows", "/generated-icons-v2/icon-6-sparkles-star-transparent.webp"],
 ] as const;
 
 const examples = [
@@ -29,6 +29,13 @@ const formatVideoDuration = (duration: number) => {
   if (!Number.isFinite(duration)) return "--:--";
   const totalSeconds = Math.round(duration);
   return `${Math.floor(totalSeconds / 60).toString().padStart(2, "0")}:${(totalSeconds % 60).toString().padStart(2, "0")}`;
+};
+
+const introVideoShownDateKey = "eos-intro-video-shown-date-v1";
+
+const getLocalDateKey = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
 export function PreLoginPage() {
@@ -90,7 +97,19 @@ export function PreLoginPage() {
   }, [showIntroVideo]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setShowIntroVideo(true), 400);
+    const timer = window.setTimeout(() => {
+      const today = getLocalDateKey();
+      let hasShownToday = false;
+
+      try {
+        hasShownToday = window.localStorage.getItem(introVideoShownDateKey) === today;
+        if (!hasShownToday) window.localStorage.setItem(introVideoShownDateKey, today);
+      } catch {
+        // If storage is unavailable, allow the intro to show for this visit.
+      }
+
+      if (!hasShownToday) setShowIntroVideo(true);
+    }, 400);
     return () => window.clearTimeout(timer);
   }, []);
 
@@ -147,8 +166,8 @@ export function PreLoginPage() {
 
       <section className="landing-hero">
         <div className="hero-visual placeholder-visual" aria-label="EOS creative studio hero artwork">
-          <Image src="/generated-assets/creative-studio-hero-with-text-right-copy.png" alt="Create without limits - EOS Creative Studio" fill priority sizes="100vw" className="hero-artwork hero-artwork-desktop" />
-          <Image src="/generated-assets/hero-mobile-5x4.png" alt="Create without limits - EOS Creative Studio" fill sizes="100vw" className="hero-artwork hero-artwork-mobile" />
+          <Image src="/generated-assets/creative-studio-hero-with-text-right-copy.webp" alt="Create without limits - EOS Creative Studio" fill priority sizes="100vw" className="hero-artwork hero-artwork-desktop" />
+          <Image src="/generated-assets/hero-mobile-5x4.webp" alt="Create without limits - EOS Creative Studio" fill sizes="100vw" className="hero-artwork hero-artwork-mobile" />
         </div>
       </section>
 
@@ -174,9 +193,9 @@ export function PreLoginPage() {
 
       {showIntroVideo && <div className="video-modal intro-video-modal" role="dialog" aria-modal="true" aria-label="AI Image Generator intro video" onClick={() => setShowIntroVideo(false)}>
         <div className="intro-video-decor" aria-hidden="true">
-          <Image src="/generated-assets/intro-corner-top-left-transparent.png" alt="" width={1672} height={940} className="intro-video-decor-image" />
-          <Image src="/generated-assets/intro-corner-bottom-left-transparent.png" alt="" width={1672} height={940} className="intro-video-decor-image" />
-          <Image src="/generated-assets/intro-corner-bottom-right-transparent.png" alt="" width={1672} height={940} className="intro-video-decor-image" />
+          <Image src="/generated-assets/intro-corner-top-left-transparent.webp" alt="" width={1672} height={940} className="intro-video-decor-image" />
+          <Image src="/generated-assets/intro-corner-bottom-left-transparent.webp" alt="" width={1672} height={940} className="intro-video-decor-image" />
+          <Image src="/generated-assets/intro-corner-bottom-right-transparent.webp" alt="" width={1672} height={940} className="intro-video-decor-image" />
         </div>
         <div className="video-modal-shell" onClick={(event) => event.stopPropagation()}>
           <div className="video-modal-actions"><button type="button" className="video-modal-close" aria-label="Close intro video" onClick={() => setShowIntroVideo(false)}><X size={24} /></button></div>
@@ -196,7 +215,7 @@ export function PreLoginPage() {
           <div className="auth-mobile-logo"><EosLogo href="/" /></div>
           <button type="button" className="auth-modal-close" aria-label="Close login" onClick={closeLogin}><X size={22} /></button>
           <div className="auth-modal-panel">
-          <div className="auth-modal-heading-art"><Image src="/generated-assets/login-welcome-back.png" alt="Welcome back" fill sizes="430px" className="auth-heading-desktop" /><Image src="/generated-assets/login-welcome-mobile.png" alt="Welcome back" fill sizes="430px" className="auth-heading-mobile" /></div>
+          <div className="auth-modal-heading-art"><Image src="/generated-assets/login-welcome-back.webp" alt="Welcome back" fill sizes="430px" className="auth-heading-desktop" /><Image src="/generated-assets/login-welcome-mobile.webp" alt="Welcome back" fill sizes="430px" className="auth-heading-mobile" /></div>
           <div className="auth-modal-heading"><span>✦</span><h2>Welcome back</h2></div>
           <p className="auth-modal-subtitle">Login to your <strong>EOS Creative Studio</strong> account</p>
           <label htmlFor="modal-email">Email address</label>
@@ -204,7 +223,7 @@ export function PreLoginPage() {
           <div className="auth-password-row"><label htmlFor="modal-password">Password</label><button type="button">Forgot password?</button></div>
           <input id="modal-password" type="password" placeholder="••••••••••••" autoComplete="current-password" />
           <label className="auth-remember"><input type="checkbox" /> Remember me</label>
-            <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.png" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.png" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="button" className="auth-submit">LOGIN <ArrowRight size={20} /></button></div>
+            <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="button" className="auth-submit">LOGIN <ArrowRight size={20} /></button></div>
           <div className="auth-divider"><span>OR CONTINUE WITH</span></div>
            {googleLoginError && <p className="auth-error" role="alert">{googleLoginError}</p>}
            <div className="auth-socials"><button type="button" onClick={() => { void handleGoogleLogin(); }} disabled={googleLoginLoading} aria-busy={googleLoginLoading}><Image src="/generated-assets/google-g-icon.svg" alt="" width={18} height={18} /> <span>{googleLoginLoading ? "Connecting..." : "Google"}</span></button></div>
@@ -214,11 +233,11 @@ export function PreLoginPage() {
       </div>}
 
       <footer className="landing-cta">
-        <Image src="/generated-assets/landing-cta-no-generated-button.png" alt="Power your creativity and elevate your impact" fill sizes="100vw" className="cta-artwork" />
-        <Image src="/generated-assets/landing-cta-mobile-reserved.png" alt="Power your creativity and elevate your impact" fill sizes="100vw" className="cta-artwork-mobile" />
+          <Image src="/generated-assets/landing-cta-no-generated-button.webp" alt="Power your creativity and elevate your impact" fill sizes="100vw" className="cta-artwork" />
+          <Image src="/generated-assets/landing-cta-mobile-reserved.webp" alt="Power your creativity and elevate your impact" fill sizes="100vw" className="cta-artwork-mobile" />
         <div className="cta-action-group">
-          <Image src="/generated-assets/cta-brush-only-transparent-v2-cropped.png" alt="" width={2124} height={279} className="cta-brush-overlay" aria-hidden="true" />
-          <Image src="/generated-assets/footer-cta-brush-transparent.png" alt="" width={1983} height={793} className="cta-brush-overlay-mobile" aria-hidden="true" />
+          <Image src="/generated-assets/cta-brush-only-transparent-v2-cropped.webp" alt="" width={2124} height={279} className="cta-brush-overlay" aria-hidden="true" />
+          <Image src="/generated-assets/footer-cta-brush-transparent.webp" alt="" width={1983} height={793} className="cta-brush-overlay-mobile" aria-hidden="true" />
           <button type="button" className="cta-overlay-link" aria-label="Get started free" onClick={openLogin}>
             <span>GET STARTED FREE</span>
             <ArrowRight size={23} aria-hidden="true" />

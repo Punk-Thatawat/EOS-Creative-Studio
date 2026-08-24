@@ -181,7 +181,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .eos-mark { font-size: 42px; font-weight: 300; letter-spacing: 6px; line-height: .82; position: relative; }
 .eos-mark::after { content: ""; position: absolute; width: 36px; height: 36px; border: 4px solid #ff560c; border-radius: 50%; left: 39px; top: -6px; z-index: -1; }
 .eos-caption { display: block; width: 100%; color: #0c0c0e; font-size: 8px; letter-spacing: 1.2px; line-height: 1; font-weight: 700; text-align: center; margin-top: 1px; white-space: nowrap; }
-.login-button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 250px; height: 100px; padding: 0; color: white; text-decoration: none; background: url('/generated-assets/login-signup-brush-only.png') center / 100% 100% no-repeat; font-size: 13px; font-weight: 800; }
+.login-button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 250px; height: 100px; padding: 0; color: white; text-decoration: none; background: url('/generated-assets/login-signup-brush-only.webp') center / 100% 100% no-repeat; font-size: 13px; font-weight: 800; }
 .login-button svg { transition: transform .25s ease; }
 .login-button:hover svg { transform: translateX(7px); }
 .landing-menu { position: absolute; z-index: 5; top: 75px; left: 3.5vw; display: grid; gap: 14px; padding: 20px 26px; background: #050505; color: white; box-shadow: 10px 10px 0 #ff1493; }
@@ -366,7 +366,7 @@ body:has([data-page="usage"]) .page-gutter > main { width: 100%; }
 @media (max-width: 600px) { .auth-callback-page { padding:18px 14px; }.auth-callback-card { min-height:430px; padding:42px 20px 48px; border-radius:18px; }.auth-callback-loader { width:60px; height:60px; margin-bottom:24px; border-width:7px; }.auth-callback-title-row { gap:11px; }.auth-callback-title-row h1 { font-size:clamp(28px,9vw,42px); }.auth-callback-title-row svg { width:28px; height:28px; }.auth-callback-title-row h1 span::after { bottom:-8px; height:4px; }.auth-callback-subtitle { margin:20px 0 31px; font-size:13px; }.auth-callback-step { gap:10px; font-size:11px; }.auth-callback-step:not(:last-child)::after { top:11px; left:calc(50% + 20px); width:calc(100% - 40px); }.auth-callback-step-dot { width:24px; height:24px; border-width:3px; font-size:10px; }.auth-callback-step.is-active .auth-callback-step-dot { box-shadow:inset 0 0 0 5px #fff,0 0 0 1px #f51591; }.auth-callback-progress { margin-top:30px; } }
 
 /* Login artwork popup */
-.auth-modal-shell { position:relative; width:min(100%,1440px,calc((100vh - 40px) * 1672 / 941)); aspect-ratio:1672 / 941; overflow:hidden; border:0; border-radius:12px; background:#fff url('/generated-assets/login-background.png') center / 100% 100% no-repeat; box-shadow:0 24px 90px rgba(0,0,0,.45); }
+.auth-modal-shell { position:relative; width:min(100%,1440px,calc((100vh - 40px) * 1672 / 941)); aspect-ratio:1672 / 941; overflow:hidden; border:0; border-radius:12px; background:#fff url('/generated-assets/login-background.webp') center / 100% 100% no-repeat; box-shadow:0 24px 90px rgba(0,0,0,.45); }
 .auth-modal-panel { position:absolute; top:9%; right:5.5%; width:min(31%,430px); max-height:82%; overflow:auto; padding:38px 34px 28px; color:#111; background:rgba(255,255,255,.97); border-radius:20px; box-shadow:0 18px 50px rgba(0,0,0,.16); }
 .auth-modal-panel::-webkit-scrollbar { width:5px; }.auth-modal-panel::-webkit-scrollbar-thumb { background:#d7d7dc; border-radius:99px; }
 .auth-modal-panel, .auth-modal-shell { scrollbar-width:none; -ms-overflow-style:none; }.auth-modal-panel::-webkit-scrollbar, .auth-modal-shell::-webkit-scrollbar { display:none; width:0; height:0; }
@@ -381,7 +381,7 @@ body:has([data-page="usage"]) .page-gutter > main { width: 100%; }
 .auth-mobile-logo, .auth-heading-mobile, .auth-brush-mobile { display:none; }
 @media (max-width: 800px) {
   .auth-modal { padding:12px; }
-  .auth-modal-shell { width:100%; max-height:calc(100vh - 24px); aspect-ratio:941 / 1672; min-height:calc(100vh - 24px); background-image:url('/generated-assets/login-background-mobile.png'); background-position:center; background-size:100% 100%; }
+  .auth-modal-shell { width:100%; max-height:calc(100vh - 24px); aspect-ratio:941 / 1672; min-height:calc(100vh - 24px); background-image:url('/generated-assets/login-background-mobile.webp'); background-position:center; background-size:100% 100%; }
   .auth-mobile-logo { position:absolute; z-index:2; top:18px; left:50%; display:block; transform:translateX(-50%); }
   .auth-mobile-logo .eos-logo { align-items:center; }
   .auth-modal-panel { position:absolute; inset:13% 14px auto; width:auto; max-height:78%; padding:30px 22px 22px; border-radius:16px; }
