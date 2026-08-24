@@ -1,0 +1,485 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, Clock3, Minus, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { listGenerationHistory, resumeGeneration, type GenerationHistoryItem, type GenerationProgress, type PendingGeneration } from "@/lib/api/generations";
+import styles from "./generation-progress-floating.module.css";
+
+const generationFeatureOptions = [
+  { feature: "text-to-image", key: "eos.generation.pending", label: "Text to Image", tab: "text-to-image", kind: "image" },
+  { feature: "image-to-image", key: "eos.generation.pending.image-to-image", label: "Image to Image", tab: "image-to-image", kind: "image" },
+  { feature: "style-transfer", key: "eos.generation.pending.style-transfer", label: "Style Transfer", tab: "style-transfer", kind: "image" },
+  { feature: "background-removal", key: "eos.generation.pending.background-removal", label: "Background", tab: "background-removal", kind: "image" },
+  { feature: "upscale", key: "eos.generation.pending.upscale", label: "Upscale", tab: "upscale", kind: "image" },
+  { feature: "extend-image", key: "eos.generation.pending.extend-image", label: "Extend Image", tab: "extend-image", kind: "image" },
+  { feature: "image-to-video", key: "eos.generation.pending.image-to-video", label: "Image to Video", tab: "image-to-video", kind: "video" },
+  { feature: "text-to-video", key: "eos.generation.pending.text-to-video", label: "Text to Video", tab: "text-to-video", kind: "video" },
+  { feature: "people-video", key: "eos.generation.pending.people-video", label: "People Video", tab: "people-video", kind: "video" },
+  { feature: "motion-transfer", key: "eos.generation.pending.motion-transfer", label: "Motion Transfer", tab: "motion-transfer", kind: "video" },
+  { feature: "lipsync", key: "eos.generation.pending.lipsync", label: "Lipsync", tab: "lipsync", kind: "video" },
+  { feature: "extend-video", key: "eos.generation.pending.extend-video", label: "Extend Video", tab: "extend-video", kind: "video" },
+] as const;
+
+type ActivePendingGeneration = {
+  key: string;
+  feature: string;
+  label: string;
+  tab: string;
+  kind: "image" | "video";
+  pending: PendingGeneration;
+};
+
+const floatingProgressStorageKey = "eos.generation.progress.cards";
+const dismissedProgressStorageKey = "eos.generation.progress.dismissed";
+
+function featureConfig(feature?: string) {
+  return generationFeatureOptions.find((item) => item.feature === feature) ?? {
+    feature: feature ?? "image-generation",
+    key: `eos.generation.pending.${feature ?? "image-generation"}`,
+    label: "Image Generation",
+    tab: feature ?? "text-to-image",
+    kind: "image",
+  };
+}
+
+function toPendingGeneration(generation: GenerationHistoryItem): ActivePendingGeneration | null {
+  if (generation.status !== "queued" && generation.status !== "processing") return null;
+  if (!generation.id) return null;
+
+  const config = featureConfig(generation.feature);
+  return {
+    key: config.key,
+    feature: config.feature,
+    label: config.label,
+    tab: config.tab,
+    kind: config.kind,
+    pending: {
+      generationId: generation.id,
+      pollUrl: generation.pollUrl ?? `/api/v1/generations/${encodeURIComponent(generation.id)}/status`,
+      workspaceId: generation.workspaceId ?? "",
+      provider: generation.provider ?? "",
+      model: generation.model ?? "",
+      status: generation.status,
+      totalCount: generation.totalCount ?? Math.max(1, generation.output?.length ?? 1),
+      completedCount: generation.completedCount ?? generation.output?.length ?? 0,
+      output: generation.output ?? [],
+      kind: config.kind,
+    },
+  };
+}
+
+function readActivePendingGenerations(): ActivePendingGeneration[] {
+  if (typeof window === "undefined") return [];
+
+  const sessionActive = generationFeatureOptions.flatMap(({ key, feature, label, kind }) => {
+    try {
+      const raw = window.sessionStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as Partial<PendingGeneration>;
+      if (parsed.status !== "queued" && parsed.status !== "processing" && parsed.status !== "completed") return [];
+      if (typeof parsed.generationId !== "string" || typeof parsed.pollUrl !== "string") return [];
+      return [{
+        key,
+        feature,
+        label,
+        tab: feature,
+        kind,
+        pending: {
+          generationId: parsed.generationId,
+          pollUrl: parsed.pollUrl,
+          workspaceId: typeof parsed.workspaceId === "string" ? parsed.workspaceId : "",
+          provider: typeof parsed.provider === "string" ? parsed.provider : "",
+          model: typeof parsed.model === "string" ? parsed.model : "",
+          status: parsed.status,
+          totalCount: typeof parsed.totalCount === "number" ? parsed.totalCount : 1,
+          completedCount: typeof parsed.completedCount === "number" ? parsed.completedCount : Array.isArray(parsed.output) ? parsed.output.length : 0,
+          output: Array.isArray(parsed.output) ? parsed.output as PendingGeneration["output"] : [],
+          kind,
+        },
+      }];
+    } catch {
+      window.sessionStorage.removeItem(key);
+      return [];
+    }
+  });
+
+  const dismissed = readDismissedGenerationIds();
+  return mergeActiveGenerations(readPersistedProgress(), sessionActive)
+    .filter((item) => !dismissed.has(item.pending.generationId));
+}
+
+function mergeActiveGenerations(...groups: ActivePendingGeneration[][]): ActivePendingGeneration[] {
+  const byId = new Map<string, ActivePendingGeneration>();
+  for (const group of groups) {
+    for (const item of group) byId.set(item.pending.generationId, item);
+  }
+  return Array.from(byId.values());
+}
+
+function isPersistableProgress(value: unknown): value is ActivePendingGeneration {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<ActivePendingGeneration>;
+  const pending = item.pending as Partial<PendingGeneration> | undefined;
+  return typeof item.key === "string"
+    && typeof item.feature === "string"
+    && typeof item.label === "string"
+    && typeof item.tab === "string"
+    && (item.kind === "image" || item.kind === "video")
+    && typeof pending?.generationId === "string"
+    && typeof pending.pollUrl === "string"
+    && (pending.status === "queued" || pending.status === "processing" || pending.status === "completed")
+    && Array.isArray(pending.output);
+}
+
+function readPersistedProgress(): ActivePendingGeneration[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(floatingProgressStorageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter(isPersistableProgress) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePersistedProgress(items: ActivePendingGeneration[]): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    if (items.length === 0) window.localStorage.removeItem(floatingProgressStorageKey);
+    else window.localStorage.setItem(floatingProgressStorageKey, JSON.stringify(items));
+  } catch {
+    // Storage may be unavailable in private browsing; the in-memory card still works.
+  }
+}
+
+function readDismissedGenerationIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+
+  try {
+    const raw = window.localStorage.getItem(dismissedProgressStorageKey);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as unknown;
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeDismissedGenerationIds(ids: Set<string>): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    if (ids.size === 0) window.localStorage.removeItem(dismissedProgressStorageKey);
+    else window.localStorage.setItem(dismissedProgressStorageKey, JSON.stringify(Array.from(ids)));
+  } catch {
+    // Storage may be unavailable; the in-memory dismissal still works.
+  }
+}
+
+function dismissGeneration(generationId: string): void {
+  const dismissed = readDismissedGenerationIds();
+  dismissed.add(generationId);
+  writeDismissedGenerationIds(dismissed);
+}
+
+function clearDismissedGeneration(generationId: string): void {
+  const dismissed = readDismissedGenerationIds();
+  if (!dismissed.delete(generationId)) return;
+  writeDismissedGenerationIds(dismissed);
+}
+
+function upsertPersistedProgress(item: ActivePendingGeneration): void {
+  const current = readPersistedProgress();
+  const next = mergeActiveGenerations(current, [item]);
+  if (JSON.stringify(current) !== JSON.stringify(next)) writePersistedProgress(next);
+}
+
+function removePersistedProgress(generationId: string): void {
+  const current = readPersistedProgress();
+  const next = current.filter((item) => item.pending.generationId !== generationId);
+  if (next.length !== current.length) writePersistedProgress(next);
+}
+
+function hasSessionPendingGeneration(generationId: string): boolean {
+  if (typeof window === "undefined") return false;
+
+  return generationFeatureOptions.some(({ key }) => {
+    try {
+      const raw = window.sessionStorage.getItem(key);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as Partial<PendingGeneration>;
+      return parsed.generationId === generationId && (parsed.status === "queued" || parsed.status === "processing");
+    } catch {
+      return false;
+    }
+  });
+}
+
+function persistProgress(item: ActivePendingGeneration, progress: GenerationProgress) {
+  if (typeof window === "undefined") return;
+  if (progress.status === "failed" || progress.status === "cancelled") {
+    window.sessionStorage.removeItem(item.key);
+    removePersistedProgress(progress.generationId);
+    return;
+  }
+
+  const updatedItem: ActivePendingGeneration = {
+    ...item,
+    pending: {
+      ...item.pending,
+      generationId: progress.generationId,
+      pollUrl: progress.pollUrl ?? item.pending.pollUrl,
+      workspaceId: progress.workspaceId ?? item.pending.workspaceId,
+      provider: progress.provider ?? item.pending.provider,
+      model: progress.model ?? item.pending.model,
+      status: progress.status === "completed" ? "completed" : progress.status,
+      totalCount: progress.totalCount,
+      completedCount: progress.completedCount,
+      output: progress.output,
+    },
+  };
+
+  window.sessionStorage.setItem(item.key, JSON.stringify({
+    ...item.pending,
+    generationId: progress.generationId,
+    pollUrl: progress.pollUrl ?? item.pending.pollUrl,
+    workspaceId: progress.workspaceId ?? item.pending.workspaceId,
+    provider: progress.provider ?? item.pending.provider,
+    model: progress.model ?? item.pending.model,
+    status: progress.status,
+    totalCount: progress.totalCount,
+    completedCount: progress.completedCount,
+    output: progress.output,
+  } satisfies PendingGeneration));
+  upsertPersistedProgress(updatedItem);
+}
+
+async function loadActiveGenerations(): Promise<ActivePendingGeneration[]> {
+  const responses = await Promise.allSettled(generationFeatureOptions.map(({ feature }) => listGenerationHistory(undefined, feature)));
+  return mergeActiveGenerations(
+    ...responses
+      .filter((response): response is PromiseFulfilledResult<GenerationHistoryItem[]> => response.status === "fulfilled")
+      .map((response) => response.value.flatMap((generation) => {
+        const active = toPendingGeneration(generation);
+        return active ? [active] : [];
+      })),
+  );
+}
+
+export function GenerationProgressFloating() {
+  const pathname = usePathname();
+  const isImageCreatePage = pathname === "/create/image";
+  const router = useRouter();
+  const [active, setActive] = useState<ActivePendingGeneration[]>([]);
+  const [collapsedGenerationIds, setCollapsedGenerationIds] = useState<Set<string>>(new Set());
+  const pollingRef = useRef(new Map<string, AbortController>());
+  const activeRef = useRef(active);
+  const dismissedGenerationIdsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
+  useEffect(() => {
+    const handleGenerationStarted = (event: Event) => {
+      const detail = (event as CustomEvent<{ feature?: string; generationId?: string; pollUrl?: string; workspaceId?: string; provider?: string; model?: string; status?: "queued" | "processing"; totalCount?: number; completedCount?: number }>).detail;
+      if (!detail?.feature || !detail.generationId || !detail.pollUrl) return;
+      dismissedGenerationIdsRef.current.delete(detail.generationId);
+      clearDismissedGeneration(detail.generationId);
+      const config = featureConfig(detail.feature);
+      const pending: PendingGeneration = {
+        generationId: detail.generationId,
+        pollUrl: detail.pollUrl,
+        workspaceId: detail.workspaceId ?? "",
+        provider: detail.provider ?? "",
+        model: detail.model ?? "",
+        status: detail.status ?? "queued",
+        totalCount: detail.totalCount ?? 1,
+        completedCount: detail.completedCount ?? 0,
+        output: [],
+        kind: config.kind,
+      };
+      const startedItem = { key: config.key, feature: config.feature, label: config.label, tab: config.tab, kind: config.kind, pending } satisfies ActivePendingGeneration;
+      upsertPersistedProgress(startedItem);
+      setActive((current) => mergeActiveGenerations(current, [startedItem]));
+    };
+    window.addEventListener("eos:generation-started", handleGenerationStarted);
+    return () => window.removeEventListener("eos:generation-started", handleGenerationStarted);
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const refreshFromBackend = async () => {
+      try {
+        const backendActive = await loadActiveGenerations();
+        if (disposed) return;
+        backendActive.forEach(upsertPersistedProgress);
+        setActive((current) => mergeActiveGenerations(backendActive, readActivePendingGenerations(), current));
+      } catch {
+        // Authentication/session loading can still be in progress. The next focus or page load retries.
+      }
+    };
+
+    void refreshFromBackend();
+    const handleFocus = () => void refreshFromBackend();
+    window.addEventListener("focus", handleFocus);
+    return () => {
+      disposed = true;
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    const pollingMap = pollingRef.current;
+
+    const sync = () => {
+      const localActive = readActivePendingGenerations();
+      localActive.forEach(upsertPersistedProgress);
+      if (localActive.length > 0) setActive((current) => mergeActiveGenerations(current, localActive));
+
+      const next = activeRef.current;
+      const activeIds = new Set(next.map((item) => item.pending.generationId));
+      for (const [generationId, controller] of pollingMap) {
+        if (!activeIds.has(generationId)) {
+          controller.abort();
+          pollingMap.delete(generationId);
+        }
+      }
+
+      for (const item of next) {
+        const generationId = item.pending.generationId;
+        if (item.pending.status === "completed") continue;
+        if (isImageCreatePage && hasSessionPendingGeneration(generationId)) continue;
+        if (pollingMap.has(generationId)) continue;
+
+        const controller = new AbortController();
+        pollingMap.set(generationId, controller);
+        void resumeGeneration(item.pending, (progress) => {
+          if (disposed) return;
+          if (dismissedGenerationIdsRef.current.has(generationId) || readDismissedGenerationIds().has(generationId)) return;
+          persistProgress(item, progress);
+          setActive((current) => {
+            if (dismissedGenerationIdsRef.current.has(generationId)) return current;
+            const currentIndex = current.findIndex((entry) => entry.pending.generationId === generationId);
+            const refreshed = readActivePendingGenerations();
+            if (progress.status === "failed" || progress.status === "cancelled") return current.filter((entry) => entry.pending.generationId !== generationId);
+            const updated: ActivePendingGeneration = {
+              ...item,
+              pending: {
+                ...item.pending,
+                status: progress.status === "completed" ? "completed" : progress.status,
+                totalCount: progress.totalCount,
+                completedCount: progress.completedCount,
+                output: progress.output,
+                kind: item.kind,
+              },
+            };
+            const next = [...current];
+            if (currentIndex >= 0) next[currentIndex] = updated;
+            else next.push(updated);
+            return mergeActiveGenerations(next, refreshed);
+          });
+        }, controller.signal).catch(() => {
+          if (!disposed && !controller.signal.aborted) {
+            window.sessionStorage.removeItem(item.key);
+            setActive((current) => current.filter((entry) => entry.pending.generationId !== generationId));
+          }
+        }).finally(() => {
+          if (pollingMap.get(generationId) === controller) pollingMap.delete(generationId);
+        });
+      }
+    };
+
+    sync();
+    const intervalId = window.setInterval(sync, 1_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      for (const controller of pollingMap.values()) controller.abort();
+      pollingMap.clear();
+    };
+  }, [isImageCreatePage]);
+
+  if (active.length === 0) return null;
+
+  return <div className={styles.wrapper}>
+    {active.map(({ key, pending, label, tab, kind }) => {
+      const generationId = pending.generationId;
+      const isCardCollapsed = collapsedGenerationIds.has(generationId);
+      const total = Math.max(1, pending.totalCount);
+      const completed = Math.min(total, Math.max(0, pending.completedCount));
+      const isCompleted = pending.status === "completed";
+      const percentage = isCompleted ? 100 : Math.round((completed / total) * 100);
+      const isQueued = pending.status === "queued";
+      const statusClass = isCompleted ? styles.statusCompleted : isQueued ? styles.statusQueued : styles.statusProcessing;
+      const visiblePercentage = percentage > 0 ? percentage : isQueued ? 10 : 22;
+
+      const handleCardClick = () => {
+        router.push(`${kind === "video" ? "/create/video" : "/create/image"}?tab=${encodeURIComponent(tab)}`);
+      };
+
+      const handleCollapse = () => setCollapsedGenerationIds((current) => new Set(current).add(generationId));
+      const handleExpand = () => setCollapsedGenerationIds((current) => {
+        const next = new Set(current);
+        next.delete(generationId);
+        return next;
+      });
+
+      const handleDismiss = () => {
+        dismissedGenerationIdsRef.current.add(generationId);
+        dismissGeneration(generationId);
+        const stored = window.sessionStorage.getItem(key);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored) as { generationId?: string };
+            if (parsed.generationId === generationId) window.sessionStorage.removeItem(key);
+          } catch {
+            // Ignore malformed stale progress storage and still dismiss the visible card.
+          }
+        }
+        removePersistedProgress(generationId);
+        pollingRef.current.get(generationId)?.abort();
+        pollingRef.current.delete(generationId);
+        setCollapsedGenerationIds((current) => {
+          const next = new Set(current);
+          next.delete(generationId);
+          return next;
+        });
+        setActive((current) => current.filter((entry) => entry.pending.generationId !== generationId));
+      };
+
+      if (isCardCollapsed) return <div className={styles.collapsedItem} key={generationId}>
+        <button type="button" className={styles.collapsedCard} onClick={handleExpand} aria-expanded="false" aria-label={`Show ${label} generation progress`} title="Show generation progress">
+          <i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />
+          <span>{label}</span>
+          <b>{isCompleted ? "DONE" : `${completed}/${total}`}</b>
+        </button>
+      </div>;
+
+      return <div className={styles.cardShell} key={pending.generationId}>
+        <button type="button" className={`${styles.card} ${isCompleted ? styles.cardCompleted : ""}`} onClick={handleCardClick} aria-label={`Open ${label} generation`} title={`Open ${label} in ${kind === "video" ? "Video Studio" : "Image Studio"}`}>
+          <div className={styles.heading}>
+            <span className={styles.headingLabel}><i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />GENERATION PROGRESS</span>
+            <span className={styles.feature}>{label}</span>
+            <b className={`${styles.status} ${statusClass}`}>{isCompleted ? "COMPLETED" : isQueued ? "QUEUED" : "PROCESSING"}</b>
+          </div>
+          <div className={styles.track} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage} aria-label={`${label}: ${percentage}% complete`}>
+            <span className={`${styles.bar} ${percentage === 0 ? styles.barIndeterminate : ""}`} style={{ width: `${visiblePercentage}%` }} />
+          </div>
+          <div className={styles.meta}>
+            <span>{completed}/{total} {kind === "video" ? (total === 1 ? "video" : "videos") : (total === 1 ? "image" : "images")} ready</span>
+            <span className={styles.eta}>{isCompleted ? <><CheckCircle2 size={12} /> <strong>Generation completed</strong></> : <><Clock3 size={12} /> <strong>{isQueued ? "Waiting for a slot" : "Processing"}</strong></>}</span>
+          </div>
+        </button>
+        <button type="button" className={styles.collapse} onClick={handleCollapse} aria-label="Minimize generation progress" title="Minimize generation progress"><Minus size={13} /></button>
+        {isCompleted && <button type="button" className={styles.dismiss} onClick={handleDismiss} aria-label={`Dismiss ${label} generation`} title="Dismiss completed generation"><X size={13} /></button>}
+      </div>;
+    })}
+  </div>;
+}

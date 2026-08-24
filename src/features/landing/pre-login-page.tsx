@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { ArrowRight, Captions, ChevronLeft, ChevronRight, Maximize, Pause, Play, RotateCcw, RotateCw, Settings, Volume2, VolumeX, X } from "lucide-react";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { ArrowRight, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { EosLogo } from "@/components/brand/eos-logo";
+import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 
 const tools = [
@@ -34,15 +35,11 @@ export function PreLoginPage() {
   const [exampleOffset, setExampleOffset] = useState(0);
   const [videoDurations, setVideoDurations] = useState<Record<number, string>>({});
   const [showIntroVideo, setShowIntroVideo] = useState(false);
-  const [introVideoTime, setIntroVideoTime] = useState(0);
-  const [introVideoDuration, setIntroVideoDuration] = useState(0);
-  const [introVideoPaused, setIntroVideoPaused] = useState(false);
-  const [introVideoMuted, setIntroVideoMuted] = useState(true);
   const [loginOpen, setLoginOpen] = useState(false);
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
-  const introVideoRef = useRef<HTMLVideoElement | null>(null);
+  const endedExampleVideos = useRef(new Set<number>());
 
   const handleGoogleLogin = async () => {
     setGoogleLoginLoading(true);
@@ -80,7 +77,8 @@ export function PreLoginPage() {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         const video = entry.target as HTMLVideoElement;
-        if (entry.isIntersecting) void video.play().catch(() => undefined);
+        const index = videoRefs.current.indexOf(video);
+        if (entry.isIntersecting && !endedExampleVideos.current.has(index)) void video.play().catch(() => undefined);
         else video.pause();
       });
     }, { rootMargin: "120px 0px", threshold: 0.1 });
@@ -118,48 +116,6 @@ export function PreLoginPage() {
     window.history.replaceState(null, "", window.location.pathname);
     return () => window.clearTimeout(timer);
   }, []);
-
-  useEffect(() => {
-    if (showIntroVideo && introVideoRef.current) {
-      void introVideoRef.current.play().catch(() => undefined);
-    }
-  }, [showIntroVideo]);
-
-  const toggleIntroVideoPlay = () => {
-    const video = introVideoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      void video.play().then(() => setIntroVideoPaused(false)).catch(() => undefined);
-    } else {
-      video.pause();
-      setIntroVideoPaused(true);
-    }
-  };
-
-  const seekIntroVideo = (amount: number) => {
-    const video = introVideoRef.current;
-    if (!video) return;
-    video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + amount));
-  };
-
-  const updateIntroVideoMute = () => {
-    const video = introVideoRef.current;
-    if (!video) return;
-    video.muted = !video.muted;
-    setIntroVideoMuted(video.muted);
-  };
-
-  const toggleIntroVideoFullscreen = () => {
-    const video = introVideoRef.current;
-    const target = video?.parentElement;
-    if (!target) return;
-    if (document.fullscreenElement) {
-      void document.exitFullscreen().catch(() => undefined);
-      return;
-    }
-    const request = target.requestFullscreen?.();
-    if (request) void request.catch(() => undefined);
-  };
 
   useEffect(() => {
     const cleanups = videoRefs.current.map((video, index) => {
@@ -210,7 +166,7 @@ export function PreLoginPage() {
         <div className="section-heading"><h2>SEE WHAT YOU CAN CREATE</h2><span>EXPLORE EXAMPLES</span><div className="carousel-actions"><button aria-label="Previous examples" onClick={() => setExampleOffset(Math.max(0, exampleOffset - 1))}><ChevronLeft size={18} /></button><button aria-label="Next examples" onClick={() => setExampleOffset(Math.min(1, exampleOffset + 1))}><ChevronRight size={18} /></button></div></div>
         <div className="example-window"><div className="example-track" style={{ transform: `translateX(-${exampleOffset * 20.5}%)` }}>{examples.map((example, index) => <article className={`example-card example-${index}${index === exampleOffset + 2 ? " example-featured" : ""}`} key={example.label}>
           <div className="example-placeholder">
-            <video ref={(video) => { videoRefs.current[index] = video; }} className="example-video" src={example.video} muted loop playsInline preload="metadata" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`} onLoadedMetadata={(event) => { const duration = event.currentTarget.duration; setVideoDurations((current) => ({ ...current, [index]: formatVideoDuration(duration) })); }} />
+            <video ref={(video) => { videoRefs.current[index] = video; }} className="example-video" src={example.video} muted playsInline preload="metadata" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`} onLoadedMetadata={(event) => { const duration = event.currentTarget.duration; setVideoDurations((current) => ({ ...current, [index]: formatVideoDuration(duration) })); }} onEnded={() => { endedExampleVideos.current.add(index); }} />
           </div>
           <div className="example-label">{example.label}<time>{videoDurations[index] ?? "--:--"}</time></div>
         </article>)}</div></div>
@@ -224,31 +180,13 @@ export function PreLoginPage() {
         </div>
         <div className="video-modal-shell" onClick={(event) => event.stopPropagation()}>
           <div className="video-modal-actions"><button type="button" className="video-modal-close" aria-label="Close intro video" onClick={() => setShowIntroVideo(false)}><X size={24} /></button></div>
-          <div className="intro-video-player-wrap">
-            <video ref={introVideoRef} className="video-modal-player" src="/uploaded-videos/intro-ai-image-generator.mp4" autoPlay muted playsInline preload="auto" disablePictureInPicture disableRemotePlayback onLoadedMetadata={(event) => { setIntroVideoDuration(event.currentTarget.duration); }} onLoadedData={(event) => { event.currentTarget.muted = introVideoMuted; void event.currentTarget.play().then(() => setIntroVideoPaused(false)).catch(() => undefined); }} onTimeUpdate={(event) => { setIntroVideoTime(event.currentTarget.currentTime); }} onPlay={() => setIntroVideoPaused(false)} onPause={() => setIntroVideoPaused(true)} onEnded={() => setShowIntroVideo(false)} />
-            <div className="intro-video-controls" onClick={(event) => event.stopPropagation()}>
-              <div className="intro-video-progress" style={{ "--intro-video-progress": `${introVideoDuration ? (introVideoTime / introVideoDuration) * 100 : 0}%` } as CSSProperties}>
-                <div className="intro-video-progress-fill" style={{ width: `${introVideoDuration ? (introVideoTime / introVideoDuration) * 100 : 0}%` }} />
-                <input type="range" min="0" max={introVideoDuration || 0} step="0.01" value={introVideoTime} onChange={(event) => { const time = Number(event.currentTarget.value); setIntroVideoTime(time); if (introVideoRef.current) introVideoRef.current.currentTime = time; }} aria-label="Video progress" />
-              </div>
-              <div className="intro-video-control-row">
-                <button type="button" className="intro-video-icon-button" aria-label={introVideoMuted ? "Unmute video" : "Mute video"} onClick={updateIntroVideoMute}>{introVideoMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
-                <div className="intro-video-center-controls">
-                  <div className="intro-video-transport">
-                    <button type="button" className="intro-video-icon-button intro-video-skip" aria-label="Rewind 10 seconds" onClick={() => seekIntroVideo(-10)}><RotateCcw size={17} /><span>10</span></button>
-                    <button type="button" className="intro-video-play-button" aria-label={introVideoPaused ? "Play video" : "Pause video"} onClick={toggleIntroVideoPlay}>{introVideoPaused ? <Play size={21} fill="white" /> : <Pause size={21} />}</button>
-                    <button type="button" className="intro-video-icon-button intro-video-skip" aria-label="Forward 10 seconds" onClick={() => seekIntroVideo(10)}><RotateCw size={17} /><span>10</span></button>
-                  </div>
-                  <span className="intro-video-time">{formatVideoDuration(introVideoTime)} / {formatVideoDuration(introVideoDuration)}</span>
-                </div>
-                <div className="intro-video-extra-controls">
-                  <button type="button" className="intro-video-icon-button" aria-label="Captions"><Captions size={16} /></button>
-                  <button type="button" className="intro-video-icon-button" aria-label="Video settings"><Settings size={17} /></button>
-                  <button type="button" className="intro-video-icon-button" aria-label="Fullscreen" onClick={toggleIntroVideoFullscreen}><Maximize size={17} /></button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <EosVideoPlayer
+            src="/uploaded-videos/intro-ai-image-generator.mp4"
+            autoPlay
+            muted
+            ariaLabel="AI Image Generator intro video"
+            onEnded={() => setShowIntroVideo(false)}
+          />
           <div className="video-modal-caption"><strong>AI IMAGE GENERATOR</strong><span>EOS CREATIVE STUDIO</span></div>
         </div>
       </div>}

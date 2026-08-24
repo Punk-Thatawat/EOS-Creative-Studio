@@ -1,7 +1,11 @@
-import { BarChart3, CreditCard, TrendingUp } from "lucide-react";
-import { PageHeader } from "@/components/dashboard/page-header";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { Card } from "@/components/ui/card";
+import type { Metadata } from "next";
+import { UsagePage } from "@/features/usage/usage-page";
 
-export const metadata = { title: "Usage" };
-export default function UsagePage() { return <><PageHeader eyebrow="Workspace" title="Usage & credits" description="Understand how your workspace is using its monthly creative allowance." /><div className="grid gap-4 sm:grid-cols-3"><StatCard label="Credits remaining" value="2,480" detail="Resets in 18 days" icon={CreditCard} tone="orange" /><StatCard label="Used this month" value="5,520" detail="69% of allowance" icon={BarChart3} tone="pink" /><StatCard label="Compared to last month" value="+18%" detail="More creative activity" icon={TrendingUp} tone="green" /></div><Card className="mt-6 min-h-72 p-6"><div className="flex items-center justify-between"><div><h2 className="font-bold">Credit activity</h2><p className="mt-1 text-xs text-muted-foreground">Your monthly generation pattern</p></div><span className="text-xs font-bold text-muted-foreground">August 2026</span></div><div className="mt-12 flex h-32 items-end gap-3 border-b border-l border-border px-4">{[30, 45, 38, 62, 55, 78, 68, 90, 72, 84, 62, 74].map((height, index) => <div key={index} className="flex-1 rounded-t-md bg-[#ffd5c4]" style={{ height: `${height}%` }} />)}</div><div className="mt-3 flex justify-between pl-4 text-[10px] text-muted-foreground"><span>Aug 1</span><span>Aug 15</span><span>Aug 31</span></div></Card></> }
+export const metadata: Metadata = {
+  title: "Usage & Credits",
+  description: "Track, manage, and understand your EOS Creative Studio credit usage.",
+};
+
+export default function UsageRoute() {
+  return <UsagePage />;
+}

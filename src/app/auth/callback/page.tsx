@@ -1,11 +1,21 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
+type AuthStage = "authenticating" | "workspace" | "ready";
+
+const stageIndex: Record<AuthStage, number> = {
+  authenticating: 0,
+  workspace: 1,
+  ready: 2,
+};
+
 export default function AuthCallbackPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [stage, setStage] = useState<AuthStage>("authenticating");
 
   useEffect(() => {
     let active = true;
@@ -26,8 +36,12 @@ export default function AuthCallbackPage() {
 
       if (!session) throw new Error("Supabase session was not created");
 
+      setStage("workspace");
       const backendProfile = await fetchBackendSession(session.access_token);
+      setStage("ready");
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
+
+      await new Promise((resolve) => window.setTimeout(resolve, 420));
       window.location.replace("/dashboard");
     }
 
@@ -42,22 +56,41 @@ export default function AuthCallbackPage() {
   }, []);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#111113] px-6 text-white">
-      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/[.06] p-8 text-center shadow-2xl">
+    <main className="auth-callback-page">
+      <section className="auth-callback-card" aria-live="polite">
         {errorMessage ? (
-          <>
-            <h1 className="text-xl font-bold">Login failed</h1>
-            <p className="mt-3 text-sm text-white/65">{errorMessage}</p>
-            <a href="/login" className="mt-6 inline-flex rounded-full bg-[#f51591] px-5 py-2 text-sm font-bold">Back to login</a>
-          </>
+          <div className="auth-callback-error">
+            <div className="auth-callback-error-mark" aria-hidden="true">!</div>
+            <h1>Login failed</h1>
+            <p>{errorMessage}</p>
+            <a href="/login">Back to login</a>
+          </div>
         ) : (
           <>
-            <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-[#f51591]" aria-hidden="true" />
-            <h1 className="mt-5 text-xl font-bold">Signing you in...</h1>
-            <p className="mt-2 text-sm text-white/65">Connecting your EOS Creative Studio account.</p>
+            <div className="auth-callback-loader" aria-hidden="true" />
+            <div className="auth-callback-title-row">
+              <Image src="/generated-assets/signing-you-in-transparent.png" alt="Signing you in..." width={1776} height={434} priority className="auth-callback-title-art" />
+            </div>
+            <p className="auth-callback-subtitle">Connecting your EOS Creative Studio account.</p>
+            <div className="auth-callback-steps">
+              {(["Authenticating", "Loading workspace", "Ready"] as const).map((label, index) => {
+                const currentIndex = stageIndex[stage];
+                const isActive = index === currentIndex;
+                const isComplete = index < currentIndex;
+                return (
+                  <div className={`auth-callback-step${isActive ? " is-active" : ""}${isComplete ? " is-complete" : ""}`} key={label}>
+                    <span className="auth-callback-step-dot" aria-hidden="true">{isComplete ? "✓" : ""}</span>
+                    <span>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="auth-callback-progress" aria-hidden="true">
+              <span style={{ width: `${Math.max(8, (stageIndex[stage] / 2) * 100)}%` }} />
+            </div>
           </>
         )}
-      </div>
+      </section>
     </main>
   );
 }

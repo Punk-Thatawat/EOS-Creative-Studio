@@ -11,19 +11,22 @@ type AccountMenuProps = {
   avatarText?: string;
   useUserIcon?: boolean;
   className?: string;
+  onOpenChange?: (isOpen: boolean) => void;
 };
 
 export function AccountMenu({
   displayName,
   role,
-  avatarText = "JD",
+  avatarText,
   useUserIcon = false,
   className,
+  onOpenChange,
 }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const resolvedAvatarText = avatarText ?? (displayName.trim().split(/\s+/).map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase() || "U");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -31,10 +34,14 @@ export function AccountMenu({
     const handlePointerDown = (event: PointerEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsOpen(false);
+        onOpenChange?.(false);
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsOpen(false);
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        onOpenChange?.(false);
+      }
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -43,7 +50,7 @@ export function AccountMenu({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, onOpenChange]);
 
   const handleLogout = async () => {
     setError(null);
@@ -65,7 +72,11 @@ export function AccountMenu({
         aria-label="Open account menu"
         aria-expanded={isOpen}
         aria-haspopup="menu"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => {
+          const next = !isOpen;
+          setIsOpen(next);
+          onOpenChange?.(next);
+        }}
       >
         {useUserIcon ? (
           <span className="flex h-9 w-9 items-center justify-center text-primary">
@@ -73,7 +84,7 @@ export function AccountMenu({
           </span>
         ) : (
           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f8d7c9] text-xs font-bold text-[#a64d2d]">
-            {avatarText}
+            {resolvedAvatarText}
           </span>
         )}
         <span className="hidden sm:block">
