@@ -8,12 +8,12 @@ import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 
 const tools = [
-  ["AI Image", "Generate stunning images", "/generated-icons-v2/icon-1-image.webp"],
-  ["AI Video", "Create engaging videos in minutes", "/generated-icons-v2/icon-2-video.webp"],
-  ["AI Presenter", "AI presenters that represent you", "/generated-icons-v2/icon-3-profile.webp"],
-  ["AI Audio", "Generate voiceovers and music", "/generated-icons-v2/icon-4-audio.webp"],
-  ["AI Document", "Smart docs with AI & OCR", "/generated-icons-v2/icon-5-document.webp"],
-  ["More Tools", "Custom AI workflows", "/generated-icons-v2/icon-6-sparkles-star-transparent.webp"],
+  ["AI Image", "Generate stunning images", "/generated-icons-v2/icon-1-image.png"],
+  ["AI Video", "Create engaging videos in minutes", "/generated-icons-v2/icon-2-video.png"],
+  ["AI Presenter", "AI presenters that represent you", "/generated-icons-v2/icon-3-profile.png"],
+  ["AI Audio", "Generate voiceovers and music", "/generated-icons-v2/icon-4-audio.png"],
+  ["AI Document", "Smart docs with AI & OCR", "/generated-icons-v2/icon-5-document.png"],
+  ["More Tools", "Custom AI workflows", "/generated-icons-v2/icon-6-sparkles.png"],
 ] as const;
 
 const examples = [

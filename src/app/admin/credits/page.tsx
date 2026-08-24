@@ -37,12 +37,15 @@ import {
 } from "@/lib/api/generation-models";
 import {
   listAdminCreditPricingRules,
+  getAdminSignupCreditGrant,
   previewAdminCreditPricingRules,
+  updateAdminSignupCreditGrant,
   upsertAdminCreditPricingDefaults,
   upsertAdminCreditPricingRule,
   type CreditPricingPreview,
   type CreditPricingRule,
   type CreditPricingSettings,
+  type SignupCreditGrantSettings,
 } from "@/lib/api/credit-pricing";
 
 type PricingRow = {
@@ -1051,6 +1054,9 @@ function AdminCreditsContent() {
     useState<PricingCategoryFilter>("all");
   const [featureFilter, setFeatureFilter] = useState("all");
   const [modelSearch, setModelSearch] = useState("");
+  const [signupBonusEnabled, setSignupBonusEnabled] = useState(false);
+  const [signupBonusCredits, setSignupBonusCredits] = useState("0");
+  const [signupBonusDirty, setSignupBonusDirty] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1063,6 +1069,7 @@ function AdminCreditsContent() {
         listAdminCreditPricingRules(),
         listAdminModelRoutesOverview(),
       ]);
+      const signupBonus: SignupCreditGrantSettings = await getAdminSignupCreditGrant();
       setPricingRules(settings.rules);
       setMarginPercent(String(settings.defaults.targetMargin * 100));
       setFxRate(settings.defaults.exchangeRateThbPerUsd.toFixed(4));
@@ -1074,6 +1081,9 @@ function AdminCreditsContent() {
       setFixedCost(String(settings.defaults.fixedCostThb));
       setMinimumCredits(String(settings.defaults.minimumCreditCost));
       setRoundingDecimals(settings.defaults.roundingDecimals);
+      setSignupBonusEnabled(signupBonus.enabled);
+      setSignupBonusCredits(String(signupBonus.credits));
+      setSignupBonusDirty(false);
       setGlobalDirty(false);
       const nextRows = modelRowsFromOverview(overview);
       const rowsForPreview = nextRows.length > 0 ? nextRows : fallbackModelRows;
@@ -1307,6 +1317,28 @@ function AdminCreditsContent() {
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save global pricing defaults");
+    } finally {
+      setSavingKey("");
+    }
+  };
+
+  const saveSignupBonus = async () => {
+    const credits = Number(signupBonusCredits);
+    if (!Number.isFinite(credits) || credits < 0 || credits > 1000000) {
+      setError("Welcome credits must be between 0 and 1,000,000");
+      return;
+    }
+    setSavingKey("signup-bonus");
+    setError("");
+    try {
+      const savedSettings = await updateAdminSignupCreditGrant({ enabled: signupBonusEnabled, credits });
+      setSignupBonusEnabled(savedSettings.enabled);
+      setSignupBonusCredits(String(savedSettings.credits));
+      setSignupBonusDirty(false);
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2800);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to save welcome credits");
     } finally {
       setSavingKey("");
     }
@@ -1575,6 +1607,55 @@ function AdminCreditsContent() {
                     </span>
                   ) : null}
                 </div>
+
+                <Card className="mb-6 border-[#f1c7b5] bg-[#fffaf7] p-5 sm:p-6">
+                  <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
+                        New user welcome credits
+                      </p>
+                      <h2 className="mt-1 text-xl font-bold tracking-tight">
+                        เครดิตต้อนรับผู้สมัครใหม่
+                      </h2>
+                      <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+                        แจกอัตโนมัติครั้งเดียวหลังสมัครสมาชิกสำเร็จ ใช้ idempotency กันการแจกซ้ำ
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant={signupBonusDirty ? "default" : "outline"}
+                      onClick={() => void saveSignupBonus()}
+                      disabled={!signupBonusDirty || savingKey !== "" || loading}
+                    >
+                      {savingKey === "signup-bonus" ? <LoaderCircle size={13} className="animate-spin" /> : <Save size={13} />}
+                      {savingKey === "signup-bonus" ? "Saving…" : "Save welcome credits"}
+                    </Button>
+                  </div>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)] sm:items-end">
+                    <NumberField
+                      label="Credits per new user"
+                      value={signupBonusCredits}
+                      suffix="credits"
+                      onChange={(value) => {
+                        setSignupBonusCredits(value);
+                        setSignupBonusDirty(true);
+                      }}
+                      help="ตั้งเป็น 0 เพื่อไม่แจกเครดิต"
+                    />
+                    <label className="flex min-h-11 items-center gap-3 rounded-xl border border-border bg-white px-3 text-xs font-semibold text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={signupBonusEnabled}
+                        onChange={(event) => {
+                          setSignupBonusEnabled(event.target.checked);
+                          setSignupBonusDirty(true);
+                        }}
+                        className="h-4 w-4 accent-[#f26b38]"
+                      />
+                      เปิดใช้งานการแจกเครดิตอัตโนมัติ
+                    </label>
+                  </div>
+                </Card>
 
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
                   <Card className="bg-white p-5 sm:p-6">

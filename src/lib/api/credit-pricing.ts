@@ -39,6 +39,12 @@ export type CreditPricingSettings = {
   rules: CreditPricingRule[];
 };
 
+export type SignupCreditGrantSettings = {
+  enabled: boolean;
+  credits: number;
+  updatedAt?: string;
+};
+
 export type CreditPricingPreview = {
   provider: string;
   model: string;
@@ -104,4 +110,12 @@ export async function upsertAdminCreditPricingDefaults(input: UpsertCreditPricin
 
 export async function previewAdminCreditPricingRules(models: Array<{ provider: string; model: string; featureKey?: string; input?: Record<string, unknown> }>): Promise<CreditPricingPreview[]> {
   return await adminRequest("/admin/credit-pricing-rules/preview", { method: "POST", body: JSON.stringify({ models }) }) as CreditPricingPreview[];
+}
+
+export async function getAdminSignupCreditGrant(): Promise<SignupCreditGrantSettings> {
+  return await adminRequest("/admin/signup-credit-grant") as SignupCreditGrantSettings;
+}
+
+export async function updateAdminSignupCreditGrant(input: { enabled: boolean; credits: number }): Promise<SignupCreditGrantSettings> {
+  return await adminRequest("/admin/signup-credit-grant", { method: "PATCH", body: JSON.stringify(input) }) as SignupCreditGrantSettings;
 }
