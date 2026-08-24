@@ -17,12 +17,12 @@ const tools = [
 ] as const;
 
 const examples = [
-  { label: "PRODUCT AD", video: "/uploaded-videos/product-ad.mp4" },
-  { label: "BRAND CAMPAIGN", video: "/uploaded-videos/brand-campaign.mp4" },
-  { label: "AI PRESENTER VIDEO", video: "/uploaded-videos/ai-presenter.mp4" },
-  { label: "GROOVY GOODS", video: "/uploaded-videos/groovy-goods.mp4" },
-  { label: "BLOWAWAY", video: "/uploaded-videos/blowaway.mp4" },
-  { label: "TAPE LOOK", video: "/uploaded-videos/tape-look.mp4" },
+  { label: "PRODUCT AD", video: "/uploaded-videos/product-ad.mp4", webm: "/uploaded-videos/product-ad.webm" },
+  { label: "BRAND CAMPAIGN", video: "/uploaded-videos/brand-campaign.mp4", webm: "/uploaded-videos/brand-campaign.webm" },
+  { label: "AI PRESENTER VIDEO", video: "/uploaded-videos/ai-presenter.mp4", webm: "/uploaded-videos/ai-presenter.webm" },
+  { label: "GROOVY GOODS", video: "/uploaded-videos/groovy-goods.mp4", webm: "/uploaded-videos/groovy-goods.webm" },
+  { label: "BLOWAWAY", video: "/uploaded-videos/blowaway.mp4", webm: "/uploaded-videos/blowaway.webm" },
+  { label: "TAPE LOOK", video: "/uploaded-videos/tape-look.mp4", webm: "/uploaded-videos/tape-look.webm" },
 ];
 
 const formatVideoDuration = (duration: number) => {
@@ -46,7 +46,6 @@ export function PreLoginPage() {
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
-  const endedExampleVideos = useRef(new Set<number>());
 
   const handleGoogleLogin = async () => {
     setGoogleLoginLoading(true);
@@ -85,7 +84,7 @@ export function PreLoginPage() {
       entries.forEach((entry) => {
         const video = entry.target as HTMLVideoElement;
         const index = videoRefs.current.indexOf(video);
-        if (entry.isIntersecting && !endedExampleVideos.current.has(index)) void video.play().catch(() => undefined);
+        if (entry.isIntersecting) void video.play().catch(() => undefined);
         else video.pause();
       });
     }, { rootMargin: "120px 0px", threshold: 0.1 });
@@ -191,7 +190,10 @@ export function PreLoginPage() {
         <div className="section-heading"><h2>SEE WHAT YOU CAN CREATE</h2><span>EXPLORE EXAMPLES</span><div className="carousel-actions"><button aria-label="Previous examples" onClick={() => setExampleOffset(Math.max(0, exampleOffset - 1))}><ChevronLeft size={18} /></button><button aria-label="Next examples" onClick={() => setExampleOffset(Math.min(1, exampleOffset + 1))}><ChevronRight size={18} /></button></div></div>
         <div className="example-window"><div className="example-track" style={{ transform: `translateX(-${exampleOffset * 20.5}%)` }}>{examples.map((example, index) => <article className={`example-card example-${index}${index === exampleOffset + 2 ? " example-featured" : ""}`} key={example.label}>
           <div className="example-placeholder">
-            <video ref={(video) => { videoRefs.current[index] = video; }} className="example-video" src={example.video} muted playsInline preload="metadata" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`} onLoadedMetadata={(event) => { const duration = event.currentTarget.duration; setVideoDurations((current) => ({ ...current, [index]: formatVideoDuration(duration) })); }} onEnded={() => { endedExampleVideos.current.add(index); }} />
+            <video ref={(video) => { videoRefs.current[index] = video; }} className="example-video" muted loop playsInline preload="none" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`} onLoadedMetadata={(event) => { const duration = event.currentTarget.duration; setVideoDurations((current) => ({ ...current, [index]: formatVideoDuration(duration) })); }}>
+              <source src={example.webm} type="video/webm" />
+              <source src={example.video} type="video/mp4" />
+            </video>
           </div>
           <div className="example-label">{example.label}<time>{videoDurations[index] ?? "--:--"}</time></div>
         </article>)}</div></div>
