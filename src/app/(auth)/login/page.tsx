@@ -1,7 +1,7 @@
-import LoginPageClient from "./login-page-client";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "Log in" };
 
 export default function LoginPage() {
-  return <LoginPageClient />;
+  redirect("/?login=1");
 }

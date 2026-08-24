@@ -47,7 +47,11 @@ export default function AuthCallbackPage() {
 
     completeAuth().catch((error: unknown) => {
       if (!active) return;
-      setErrorMessage(error instanceof Error ? error.message : "Unable to complete login");
+
+      const message = error instanceof Error ? error.message : "Unable to complete login";
+      setErrorMessage(message);
+      window.sessionStorage.setItem("eos.auth.login-error", message);
+      window.location.replace("/?login=1&auth_error=1");
     });
 
     return () => {
@@ -63,7 +67,7 @@ export default function AuthCallbackPage() {
             <div className="auth-callback-error-mark" aria-hidden="true">!</div>
             <h1>Login failed</h1>
             <p>{errorMessage}</p>
-            <a href="/login">Back to login</a>
+            <a href="/?login=1">Back to login</a>
           </div>
         ) : (
           <>

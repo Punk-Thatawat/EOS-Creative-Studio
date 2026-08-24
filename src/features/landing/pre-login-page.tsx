@@ -129,7 +129,13 @@ export function PreLoginPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("login") !== "1") return undefined;
+    if (params.get("login") !== "1" && params.get("auth_error") !== "1") return undefined;
+
+    if (params.get("auth_error") === "1") {
+      const storedError = window.sessionStorage.getItem("eos.auth.login-error");
+      setGoogleLoginError(storedError || "Login failed. Please try again.");
+      window.sessionStorage.removeItem("eos.auth.login-error");
+    }
 
     const timer = window.setTimeout(() => setLoginOpen(true), 0);
     window.history.replaceState(null, "", window.location.pathname);
