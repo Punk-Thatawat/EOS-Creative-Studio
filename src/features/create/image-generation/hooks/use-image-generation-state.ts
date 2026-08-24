@@ -252,8 +252,6 @@ type ImageGenerationDraft = {
   extendUrls: string[];
   upscaleGenerated: boolean;
   upscaleUrls: string[];
-  selectedRecentImageUrl: string | null;
-  recentGenerationUrls: string[];
 };
 
 function readImageGenerationDraft(): Partial<ImageGenerationDraft> | null {
@@ -495,8 +493,8 @@ export function useImageGenerationState() {
         if (Array.isArray(storedDraft.extendUrls)) setExtendUrls(storedDraft.extendUrls.filter((url): url is string => typeof url === "string"));
         if (typeof storedDraft.upscaleGenerated === "boolean") setUpscaleGenerated(storedDraft.upscaleGenerated);
         if (Array.isArray(storedDraft.upscaleUrls)) setUpscaleUrls(storedDraft.upscaleUrls.filter((url): url is string => typeof url === "string"));
-        if (storedDraft.selectedRecentImageUrl === null || typeof storedDraft.selectedRecentImageUrl === "string") setSelectedRecentImageUrl(storedDraft.selectedRecentImageUrl ?? null);
-        if (Array.isArray(storedDraft.recentGenerationUrls)) setRecentGenerationUrls(storedDraft.recentGenerationUrls.filter((url): url is string => typeof url === "string"));
+        // Recent generations are account-owned server data. Do not restore
+        // cached URLs from localStorage because that cache is not user-scoped.
       }
 
       const storedPendingGeneration = readPendingGeneration();
@@ -653,8 +651,6 @@ export function useImageGenerationState() {
       extendUrls,
       upscaleGenerated,
       upscaleUrls,
-      selectedRecentImageUrl,
-      recentGenerationUrls,
     });
   }, [
     activeTab,
@@ -715,8 +711,6 @@ export function useImageGenerationState() {
     extendUrls,
     upscaleGenerated,
     upscaleUrls,
-    selectedRecentImageUrl,
-    recentGenerationUrls,
   ]);
 
   useEffect(() => {
@@ -933,7 +927,11 @@ export function useImageGenerationState() {
         .filter((output) => !output.type || output.type === "image");
       rememberImageMimeTypes(completedOutputs);
       const historyUrls = completedOutputs.map((output) => output.url).filter(Boolean);
-      setRecentGenerationUrls((currentUrls) => Array.from(new Set([...currentUrls, ...historyUrls])));
+      // Replace the list instead of merging with local state. This prevents
+      // stale URLs from a previous account/browser session leaking into the
+      // current user's Recent Generations panel.
+      setRecentGenerationUrls(historyUrls);
+      setSelectedRecentImageUrl((currentUrl) => currentUrl && historyUrls.includes(currentUrl) ? currentUrl : null);
 
       const activeGeneration = generations.find((generation): generation is GenerationHistoryItem & { status: "queued" | "processing" } =>
         (generation.status === "queued" || generation.status === "processing") && (!generation.feature || generation.feature === requestedFeature),
