@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   AudioLines,
   AudioWaveform,
@@ -20,6 +20,7 @@ import {
   Maximize2,
   Mic2,
   MoreHorizontal,
+  Pause,
   Play,
   Plus,
   RotateCcw,
@@ -67,6 +68,8 @@ const tutorials = [
   "/generated-assets/audio-ui/audio-guide-sound-fx.png",
 ] as const;
 
+const waveformBars = Array.from({ length: 88 }, (_, index) => Math.round(24 + Math.abs(Math.sin(index * 0.37)) * 48 + Math.abs(Math.sin(index * 0.91)) * 20));
+
 type AudioHistoryItem = Omit<AudioHistoryEntry, "url"> & { url: string; localUrl?: boolean; persisted?: boolean };
 const AUDIO_HISTORY_LIMIT = 10;
 type SaveHistoryCallback = (input: SaveAudioHistoryInput) => Promise<void>;
@@ -107,6 +110,23 @@ function SelectField({ label, children, value, onChange, disabled = false }: { l
       <ChevronDown size={15} aria-hidden="true" />
     </span>
   </label>;
+}
+
+function PreviewWaveform({ audioUrl, progress, isPlaying }: { audioUrl: string | null; progress: number; isPlaying: boolean }) {
+  const safeProgress = Math.min(100, Math.max(0, progress));
+  return <div className={`${styles.waveform} ${isPlaying ? styles.waveformPlaying : ""}`} aria-label="Audio waveform preview">
+    <div className={styles.waveformBars} aria-hidden="true">
+      {waveformBars.map((height, index) => {
+        const barProgress = (index / Math.max(1, waveformBars.length - 1)) * 100;
+        return <span
+          key={`${height}-${index}`}
+          className={`${styles.waveformBar} ${audioUrl && barProgress <= safeProgress ? styles.waveformBarPlayed : ""}`}
+          style={{ height: `${height}%`, animationDelay: `${(index % 12) * -75}ms`, animationDuration: `${0.86 + (index % 5) * 0.08}s` }}
+        />;
+      })}
+    </div>
+    {audioUrl ? <span className={styles.waveformPlayhead} style={{ left: `${safeProgress}%` }} aria-hidden="true" /> : null}
+  </div>;
 }
 
 function AlternateHeading({ eyebrow, title, description, icon }: { eyebrow: string; title: string; description: string; icon: ReactNode }) {
@@ -404,6 +424,7 @@ export function AudioGenerationPage() {
   const [progress, setProgress] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioHistory, setAudioHistory] = useState<AudioHistoryItem[]>([]);
+  const [historyLoadingId, setHistoryLoadingId] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(78);
@@ -415,7 +436,6 @@ export function AudioGenerationPage() {
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
-  const [referenceFile, setReferenceFile] = useState<string | null>(null);
   const [audioScenes, setAudioScenes] = useState<AudioScene[]>(defaultAudioScenes);
   const [selectedSceneId, setSelectedSceneId] = useState(defaultAudioScenes[0]!.id);
   const [sceneGenerationStatus, setSceneGenerationStatus] = useState<"idle" | "generating" | "complete" | "error">("idle");
@@ -423,11 +443,15 @@ export function AudioGenerationPage() {
   const [status, setStatus] = useState<"idle" | "generating" | "complete" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedScene, setSelectedScene] = useState("01");
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const voicePreviewAudioRef = useRef<HTMLAudioElement>(null);
+  const durationRef = useRef(0);
+  const playbackFrameRef = useRef<number | null>(null);
   const voiceRowRef = useRef<HTMLDivElement>(null);
+  const voiceScrollTargetRef = useRef(0);
   const audioHistoryRef = useRef<AudioHistoryItem[]>([]);
   const historySequenceRef = useRef(0);
+  const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
 
   useEffect(() => {
     return () => { audioHistoryRef.current.filter((item) => item.localUrl).forEach((item) => URL.revokeObjectURL(item.url)); };
@@ -484,6 +508,8 @@ export function AudioGenerationPage() {
   }, []);
 
   const loadVoices = useCallback(async (modelId?: string) => {
+    voicePreviewAudioRef.current?.pause();
+    setPreviewingVoiceKey(null);
     setVoiceLoadState("loading");
     setVoiceError(null);
     try {
@@ -520,14 +546,23 @@ export function AudioGenerationPage() {
     const row = voiceRowRef.current;
     if (!row) return;
     const maxScrollLeft = Math.max(0, row.scrollWidth - row.clientWidth);
-    setCanScrollVoicesLeft(row.scrollLeft > 1);
-    setCanScrollVoicesRight(maxScrollLeft - row.scrollLeft > 1);
+    const currentScrollLeft = Math.min(maxScrollLeft, Math.max(0, row.scrollLeft));
+    voiceScrollTargetRef.current = currentScrollLeft;
+    setCanScrollVoicesLeft(currentScrollLeft > 1);
+    setCanScrollVoicesRight(maxScrollLeft - currentScrollLeft > 1);
   }, []);
 
   const scrollVoices = (direction: -1 | 1) => {
     const row = voiceRowRef.current;
     if (!row) return;
-    row.scrollBy({ left: direction * Math.max(row.clientWidth * 0.8, 180), behavior: "smooth" });
+    const maxScrollLeft = Math.max(0, row.scrollWidth - row.clientWidth);
+    const currentTarget = Math.min(maxScrollLeft, Math.max(0, voiceScrollTargetRef.current));
+    const nextTarget = Math.min(maxScrollLeft, Math.max(0, currentTarget + direction * Math.max(row.clientWidth, 180)));
+    voiceScrollTargetRef.current = nextTarget;
+    row.scrollTo({ left: nextTarget, behavior: "smooth" });
+    setCanScrollVoicesLeft(nextTarget > 1);
+    setCanScrollVoicesRight(maxScrollLeft - nextTarget > 1);
+    window.setTimeout(updateVoiceScrollButtons, 450);
   };
 
   useEffect(() => {
@@ -547,11 +582,84 @@ export function AudioGenerationPage() {
     if (audioRef.current) audioRef.current.playbackRate = speed;
   }, [speed, audioUrl]);
 
+  useEffect(() => () => {
+    voicePreviewAudioRef.current?.pause();
+  }, []);
+
+  const toggleVoicePreview = useCallback((voice: AudioVoice) => {
+    const audio = voicePreviewAudioRef.current;
+    if (!audio || !voice.previewUrl) return;
+    if (previewingVoiceKey === voice.key && !audio.paused) {
+      audio.pause();
+      audio.currentTime = 0;
+      setPreviewingVoiceKey(null);
+      return;
+    }
+    audio.pause();
+    audio.src = voice.previewUrl;
+    audio.currentTime = 0;
+    setPreviewingVoiceKey(voice.key);
+    void audio.play().catch(() => setPreviewingVoiceKey(null));
+  }, [previewingVoiceKey]);
+
+  const handleVoicePreviewClick = useCallback((event: MouseEvent<HTMLButtonElement>) => {
+    const voice = availableVoices.find((item) => item.key === event.currentTarget.dataset.voiceKey);
+    if (voice) toggleVoicePreview(voice);
+  }, [availableVoices, toggleVoicePreview]);
+
+  const syncAudioDuration = useCallback((audio: HTMLAudioElement) => {
+    const nextDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+    if (!nextDuration) return;
+    durationRef.current = nextDuration;
+    setDuration(nextDuration);
+    const nextTime = Number.isFinite(audio.currentTime) ? Math.min(audio.currentTime, nextDuration) : 0;
+    setCurrentTime(nextTime);
+    setProgress(Math.min(100, (nextTime / nextDuration) * 100));
+  }, []);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    durationRef.current = 0;
+    if (!audioUrl) return;
+    if (!audio) return;
+    if (audio.readyState >= 1) syncAudioDuration(audio);
+    else audio.load();
+  }, [audioUrl, syncAudioDuration]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      if (playbackFrameRef.current !== null) window.cancelAnimationFrame(playbackFrameRef.current);
+      playbackFrameRef.current = null;
+      return;
+    }
+    const updatePlaybackFrame = () => {
+      const audio = audioRef.current;
+      if (!audio || audio.paused) {
+        playbackFrameRef.current = null;
+        return;
+      }
+      const nextTime = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+      const nextDuration = durationRef.current || (Number.isFinite(audio.duration) ? audio.duration : 0);
+      if (nextDuration > 0 && durationRef.current !== nextDuration) {
+        durationRef.current = nextDuration;
+        setDuration(nextDuration);
+      }
+      setCurrentTime(nextTime);
+      setProgress(nextDuration ? Math.min(100, (nextTime / nextDuration) * 100) : 0);
+      playbackFrameRef.current = window.requestAnimationFrame(updatePlaybackFrame);
+    };
+    playbackFrameRef.current = window.requestAnimationFrame(updatePlaybackFrame);
+    return () => {
+      if (playbackFrameRef.current !== null) window.cancelAnimationFrame(playbackFrameRef.current);
+      playbackFrameRef.current = null;
+    };
+  }, [isPlaying]);
+
   const selectedAudioScene = audioScenes.find((scene) => scene.id === selectedSceneId) ?? audioScenes[0];
-  const isSceneMode = audioScenes.length > 0;
+  const voicePages = Array.from({ length: Math.ceil(availableVoices.length / 10) }, (_, pageIndex) => availableVoices.slice(pageIndex * 10, pageIndex * 10 + 10));
+  const isSceneMode = activeTab === "Podcast & Dialogue" && audioScenes.length > 0;
   const hasIncompleteScene = audioScenes.some((scene) => !scene.text.trim() || !scene.voice.trim());
   const isGenerating = status === "generating" || sceneGenerationStatus === "generating";
-  const generationReady = isSceneMode ? sceneGenerationStatus === "complete" : status === "complete";
   const creditQuoteRequest = selectedModel && (isSceneMode
     ? !hasIncompleteScene
     : Boolean(prompt.trim() && selectedVoice))
@@ -565,6 +673,7 @@ export function AudioGenerationPage() {
           languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
           tone: tone as "Energetic" | "Friendly" | "Premium" | "Dramatic",
           speed,
+          pronunciationHint: pronunciation.trim() || undefined,
           pauseSeconds: 0.25,
           backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
           backgroundMusicKey: backgroundMusicPreset || undefined,
@@ -580,6 +689,7 @@ export function AudioGenerationPage() {
           languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
           tone: tone as "Energetic" | "Friendly" | "Premium" | "Dramatic",
           speed,
+          pronunciationHint: pronunciation.trim() || undefined,
           backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
           backgroundMusicKey: backgroundMusicPreset || undefined,
         },
@@ -678,6 +788,7 @@ export function AudioGenerationPage() {
 
   const setGeneratedAudioResult = (result: TextToSpeechResponse, label: string, voice: string, metadata: Record<string, unknown> = {}) => {
     const nextUrl = URL.createObjectURL(result.blob);
+    audioRef.current?.pause();
     historySequenceRef.current += 1;
     const localHistoryItem: AudioHistoryItem = {
       id: `${Date.now()}-${historySequenceRef.current}`,
@@ -685,7 +796,7 @@ export function AudioGenerationPage() {
       label,
       createdAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
       feature: "tts",
-      provider: "elevenlabs",
+      provider: "wavespeed",
       outputFormat: format.toLowerCase() as "mp3" | "wav" | "ogg",
       mimeType: result.contentType,
       sizeBytes: result.blob.size,
@@ -696,12 +807,11 @@ export function AudioGenerationPage() {
     };
     const historyItem = result.localHistoryId
       ? { ...localHistoryItem, id: result.localHistoryId, persisted: true }
-      : result.providerHistoryId
-        ? { ...localHistoryItem, id: `elevenlabs:${result.providerHistoryId}`, persisted: true }
       : localHistoryItem;
     appendHistory(historyItem);
     setAudioUrl(nextUrl);
     setCurrentTime(0);
+    durationRef.current = 0;
     setDuration(0);
     setProgress(0);
     setIsPlaying(false);
@@ -719,6 +829,7 @@ export function AudioGenerationPage() {
         languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
         tone: tone as "Energetic" | "Friendly" | "Premium" | "Dramatic",
         speed,
+        pronunciationHint: pronunciation.trim() || undefined,
         backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
         backgroundMusicKey: backgroundMusicPreset || undefined,
         idempotencyKey: createAudioIdempotencyKey(),
@@ -766,6 +877,7 @@ export function AudioGenerationPage() {
         languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
         tone: tone as "Energetic" | "Friendly" | "Premium" | "Dramatic",
         speed,
+        pronunciationHint: pronunciation.trim() || undefined,
         pauseSeconds: 0.25,
         backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
         backgroundMusicKey: backgroundMusicPreset || undefined,
@@ -783,29 +895,59 @@ export function AudioGenerationPage() {
     }
   };
 
+  const playHistoryUrl = (nextUrl: string) => {
+    setAudioUrl(nextUrl);
+    const audio = audioRef.current;
+    if (!audio) {
+      setHistoryLoadingId(null);
+      return;
+    }
+    audio.src = nextUrl;
+    audio.load();
+    void audio.play().then(() => {
+      setIsPlaying(true);
+      setHistoryLoadingId(null);
+    }).catch(() => {
+      setIsPlaying(false);
+      setHistoryLoadingId(null);
+    });
+  };
+
   const selectHistoryItem = (item: AudioHistoryItem) => {
     if (!item.id) return;
-    audioRef.current?.pause();
+    const audio = audioRef.current;
+    const isCurrentItem = Boolean(item.url && item.url === audioUrl);
+    if (isCurrentItem && audio) {
+      setHistoryLoadingId(null);
+      if (audio.paused) {
+        if (audio.ended || (durationRef.current > 0 && audio.currentTime >= durationRef.current)) audio.currentTime = 0;
+        void audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      } else {
+        audio.pause();
+        setIsPlaying(false);
+      }
+      return;
+    }
+    setHistoryLoadingId(item.id);
+    audio?.pause();
     setCurrentTime(0);
+    durationRef.current = 0;
     setDuration(0);
     setProgress(0);
     setIsPlaying(false);
     setErrorMessage(null);
-    if (item.localUrl && item.url) {
-      setAudioUrl(item.url);
-      setStatus("complete");
+    if (item.url) {
+      playHistoryUrl(item.url);
       return;
     }
-    setStatus("generating");
     void fetchAudioHistoryAudio(item.id).then((result) => {
       const nextUrl = URL.createObjectURL(result.blob);
       const nextHistory = audioHistoryRef.current.map((historyItem) => historyItem.id === item.id ? { ...historyItem, url: nextUrl, localUrl: true } : historyItem);
       audioHistoryRef.current = nextHistory;
       setAudioHistory(nextHistory);
-      setAudioUrl(nextUrl);
-      setStatus("complete");
+      playHistoryUrl(nextUrl);
     }).catch((error) => {
-      setStatus("error");
+      setHistoryLoadingId(null);
       setErrorMessage(error instanceof Error ? error.message : "Unable to load saved audio");
     });
   };
@@ -820,6 +962,7 @@ export function AudioGenerationPage() {
         audioRef.current?.pause();
         setAudioUrl(null);
         setCurrentTime(0);
+        durationRef.current = 0;
         setDuration(0);
         setProgress(0);
         setIsPlaying(false);
@@ -842,14 +985,42 @@ export function AudioGenerationPage() {
     else { audio.pause(); setIsPlaying(false); }
   };
 
-  const seekBy = (amount: number) => {
-    if (!audioRef.current) return;
-    audioRef.current.currentTime = Math.max(0, Math.min(duration, audioRef.current.currentTime + amount));
+  const downloadAudio = () => {
+    if (!audioUrl) return;
+    const link = document.createElement("a");
+    link.href = audioUrl;
+    link.download = `eos-audio-${Date.now()}.${format.toLowerCase()}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
-  const handleReferenceFile = (file: File | undefined) => {
-    if (file) setReferenceFile(file.name);
+  const seekBy = (amount: number) => {
+    if (!audioRef.current) return;
+    const audioDuration = durationRef.current || duration;
+    audioRef.current.currentTime = Math.max(0, Math.min(audioDuration, audioRef.current.currentTime + amount));
   };
+
+  const scenesTimeline = selectedAudioScene ? <div className={styles.sectionBlock}>
+    <div className={styles.sectionHeading}><h2>AUDIO SCENES / TIMELINE</h2><span className={styles.timelineHint}>{audioScenes.length} scenes · {formatSceneSeconds(audioScenes.reduce((total, scene) => total + scene.durationSeconds, 0))} total</span></div>
+    <div className={styles.sceneRow}>{audioScenes.map((scene, index) => <button type="button" key={scene.id} className={selectedSceneId === scene.id ? styles.sceneCardActive : styles.sceneCard} onClick={() => setSelectedSceneId(scene.id)} aria-pressed={selectedSceneId === scene.id}>
+      <Image src={availableVoices.find((voice) => voice.key === scene.voice)?.imageUrl || voiceImages[index % voiceImages.length]} alt="" width={42} height={50} unoptimized /><span className={styles.sceneCopy}><strong><em>{scene.id}</em> {scene.title}</strong><small>{sceneTimeRange(audioScenes, index)}</small></span><span className={styles.miniWave} aria-hidden="true" />
+    </button>)}<button type="button" className={styles.addScene} onClick={addAudioScene} disabled={audioScenes.length >= 20}><Plus size={17} />Add Scene</button></div>
+    <div className={styles.sceneEditor}>
+      <div className={styles.sceneEditorHeader}><div><span>EDIT SCENE</span><strong>{selectedAudioScene.id} · {selectedAudioScene.title}</strong></div><button type="button" className={styles.sceneDeleteButton} onClick={() => removeAudioScene(selectedAudioScene.id)} disabled={audioScenes.length <= 1}><Trash2 size={13} /> Remove scene</button></div>
+      <div className={styles.sceneEditorFields}>
+        <label className={styles.sceneEditorField}><span>SCENE NAME</span><input value={selectedAudioScene.title} onChange={(event) => updateAudioScene(selectedAudioScene.id, { title: event.target.value })} maxLength={80} /></label>
+        <label className={styles.sceneEditorField}><span>VOICE</span><select value={selectedAudioScene.voice} onChange={(event) => updateAudioScene(selectedAudioScene.id, { voice: event.target.value })} disabled={voiceLoadState !== "ready" || availableVoices.length === 0}>{availableVoices.map((voice) => <option key={voice.key} value={voice.key}>{voice.name}</option>)}</select></label>
+        <label className={styles.sceneEditorField}><span>DURATION (SEC)</span><input type="number" min="1" max="600" value={selectedAudioScene.durationSeconds} onChange={(event) => updateAudioScene(selectedAudioScene.id, { durationSeconds: Math.min(600, Math.max(1, Number(event.target.value) || 1)) })} /></label>
+      </div>
+      <div className={`${styles.sceneEditorField} ${styles.sceneScriptField}`}><span>SCENE SCRIPT</span><div className={styles.promptBox}>
+        <textarea value={selectedAudioScene.text} onChange={(event) => updateAudioScene(selectedAudioScene.id, { text: event.target.value })} maxLength={2000} placeholder="ใส่ข้อความของ Scene นี้" />
+        <div className={styles.promptMeta}><span>{selectedAudioScene.text.length} / 2000</span><button type="button" onClick={() => updateAudioScene(selectedAudioScene.id, { text: "" })}>Clear <Trash2 size={13} /></button></div>
+      </div></div>
+      <div className={styles.sceneEditorFooter}><small>{sceneTimeRange(audioScenes, audioScenes.findIndex((scene) => scene.id === selectedAudioScene.id))}</small><span className={styles.sceneGenerateHint}>จัดลำดับ Scene สำหรับ Episode นี้</span></div>
+      {sceneError ? <p className={styles.sceneError} role="alert">{sceneError}</p> : null}
+    </div>
+  </div> : null;
 
   return <div className={`${styles.audioPage} audio-studio-page`}>
     <section className={styles.heroBanner} aria-label="Gen Audio hero">
@@ -879,45 +1050,13 @@ export function AudioGenerationPage() {
           <SelectField label="LANGUAGE" value={language} onChange={setLanguage}>
             <option>English (US)</option><option>English (UK)</option><option>Thai</option><option>Japanese</option>
           </SelectField>
-          <label className={styles.selectField}><FieldLabel>PRONUNCIATION HINTS</FieldLabel><input value={pronunciation} onChange={(event) => setPronunciation(event.target.value)} placeholder={'e.g. EOS as “eos”'} /></label>
+          <label className={styles.selectField}><FieldLabel>PRONUNCIATION HINTS</FieldLabel><input value={pronunciation} onChange={(event) => setPronunciation(event.target.value)} placeholder={'e.g. EOS as “อี-โอ-เอส”'} /></label>
         </div>
 
-        <div className={styles.inputSection}>
-          <FieldLabel hint="Optional">REFERENCE AUDIO</FieldLabel>
-          <button type="button" className={styles.uploadBox} onClick={() => fileInputRef.current?.click()}>
-            {referenceFile ? <><FileAudio size={24} /><strong>{referenceFile}</strong><small>Click to replace</small></> : <><CloudUpload size={26} /><strong>Drag & drop audio file here</strong><span>or click to upload</span><small>MP3, WAV up to 50MB</small></>}
-          </button>
-          <input ref={fileInputRef} type="file" className="hidden" accept="audio/*" onChange={(event) => { handleReferenceFile(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-        </div>
       </section>
 
       <section className={styles.centerColumn} aria-label="Audio preview and scenes">
-        <div className={styles.previewPanel}>
-           <div className={styles.previewHeader}><h2>AUDIO PREVIEW</h2><div className={styles.previewActions}><button type="button">Sample 1 <ChevronDown size={14} /></button><button type="button" className={styles.outlineAction} onClick={() => void handleGenerate()} disabled={status === "generating"}><RotateCcw size={15} /> Regenerate</button><button type="button" className={styles.iconAction} aria-label="More preview actions"><MoreHorizontal size={17} /></button></div></div>
-           <div className={styles.waveform}><Image src="/generated-assets/audio-ui/audio-waveform.png" alt="Audio waveform preview" fill unoptimized sizes="700px" /></div>
-           <div className={styles.playerRow}>
-             <button type="button" className={styles.playButton} onClick={togglePlayback} aria-label={isPlaying ? "Pause audio" : "Play audio"} disabled={!audioUrl}>{isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}</button>
-             <button type="button" className={styles.skipButton} onClick={() => seekBy(-10)} aria-label="Rewind 10 seconds" disabled={!audioUrl}><RotateCcw size={17} /><small>10</small></button>
-             <button type="button" className={styles.skipButton} onClick={() => seekBy(10)} aria-label="Forward 10 seconds" disabled={!audioUrl}><RotateCw size={17} /><small>10</small></button>
-             <span className={styles.timeLabel}>{formatTime(currentTime)} / {formatTime(duration)}</span>
-             <input className={styles.scrubber} type="range" min="0" max="100" value={progress} onChange={(event) => { const nextProgress = Number(event.target.value); setProgress(nextProgress); if (audioRef.current && duration) audioRef.current.currentTime = (nextProgress / 100) * duration; }} aria-label="Audio progress" disabled={!audioUrl} />
-             <Volume2 size={17} className={styles.volumeIcon} />
-             <input className={styles.volumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (audioRef.current) audioRef.current.volume = nextVolume / 100; }} aria-label="Volume" />
-             <button type="button" className={styles.iconAction} aria-label="Fullscreen audio preview"><Maximize2 size={16} /></button>
-           </div>
-           <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { setDuration(event.currentTarget.duration); event.currentTarget.volume = volume / 100; event.currentTarget.playbackRate = speed; }} onTimeUpdate={(event) => { const nextTime = event.currentTarget.currentTime; setCurrentTime(nextTime); setProgress(duration ? (nextTime / duration) * 100 : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => { setIsPlaying(false); setProgress(100); }} />
-           {errorMessage ? <p className={styles.securityNote} role="alert">{errorMessage}</p> : null}
-        </div>
-
-        <section className={styles.historyPanel} aria-label="Generation history">
-          <div className={styles.sectionHeading}><h2><History size={13} /> GENERATION HISTORY</h2><span className={styles.timelineHint}>{audioHistory.length ? `${audioHistory.length} result${audioHistory.length === 1 ? "" : "s"}` : "No results yet"}</span></div>
-          {audioHistory.length ? <div className={styles.historyList}>{audioHistory.map((item) => <div key={item.id} className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}>
-            <button type="button" className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem} onClick={() => selectHistoryItem(item)}><span className={styles.historyPlay}><Play size={13} fill="currentColor" /></span><span className={styles.historyCopy}><strong>{item.label}</strong><small>{item.createdAt}</small></span><span className={styles.historyCurrent}>{item.url === audioUrl ? "CURRENT" : "PLAY"}</span></button>
-            <button type="button" className={styles.historyDelete} aria-label={`Delete ${item.label}`} onClick={() => removeHistoryItem(item)}><Trash2 size={13} /></button>
-          </div>)}</div> : <div className={styles.historyEmpty}><History size={15} /><span>Generate audio to save and replay results here.</span></div>}
-        </section>
-
-        <div className={styles.sectionBlock}>
+        <div className={`${styles.sectionBlock} ${styles.voiceSection}`}>
           <div className={styles.sectionHeading}><h2>VOICE / SPEAKER</h2><button type="button" className={styles.linkAction}><Settings2 size={14} /> Manage voices</button></div>
           <div className={styles.voiceCarousel}>
             <button type="button" className={`${styles.voiceCarouselButton} ${styles.voiceCarouselButtonLeft}`} onClick={() => scrollVoices(-1)} disabled={!canScrollVoicesLeft} aria-label="เลื่อน Voice ไปทางซ้าย" aria-controls="audio-voice-carousel"><ChevronLeft size={16} /></button>
@@ -925,31 +1064,46 @@ export function AudioGenerationPage() {
             {voiceLoadState === "loading" ? <div className={styles.voiceState} role="status">Loading voices...</div> : null}
             {voiceLoadState === "error" ? <div className={styles.voiceStateError} role="alert"><span>{voiceError ?? "Unable to load voices"}</span><button type="button" className={styles.voiceRetry} onClick={() => void loadVoices(selectedModel || undefined)}>Try again</button></div> : null}
             {voiceLoadState === "ready" && availableVoices.length === 0 ? <div className={styles.voiceState}>No voices available.</div> : null}
-            {voiceLoadState === "ready" ? availableVoices.map((voice, index) => <button type="button" key={voice.key} className={selectedVoice === voice.key ? styles.voiceCardActive : styles.voiceCard} onClick={() => setSelectedVoice(voice.key)} aria-pressed={selectedVoice === voice.key}>
-              <div className={styles.voiceImage}><Image src={voice.imageUrl || voiceImages[index % voiceImages.length]} alt="" fill unoptimized sizes="60px" /><span><Play size={11} fill="currentColor" /></span></div><strong>{voice.name}</strong><small>{voice.description || "Voice"}</small>{selectedVoice === voice.key ? <Check size={14} className={styles.voiceCheck} /> : null}
-            </button>) : null}
+            {voiceLoadState === "ready" ? voicePages.map((page, pageIndex) => <div className={styles.voicePage} key={`voice-page-${pageIndex}`}>
+              {page.map((voice, index) => <div className={styles.voiceCardWrap} key={voice.key}>
+                <button type="button" className={selectedVoice === voice.key ? styles.voiceCardActive : styles.voiceCard} onClick={() => setSelectedVoice(voice.key)} aria-pressed={selectedVoice === voice.key}>
+                  <div className={styles.voiceImage}><Image src={voice.imageUrl || voiceImages[(pageIndex * 10 + index) % voiceImages.length]} alt="" fill unoptimized sizes="60px" /></div><strong>{voice.name}</strong><small>{voice.description || "Voice"}</small>{selectedVoice === voice.key ? <Check size={14} className={styles.voiceCheck} /> : null}
+                </button>
+                <button type="button" data-voice-key={voice.key} className={`${styles.voicePreviewButton} ${previewingVoiceKey === voice.key ? styles.voicePreviewButtonActive : ""}`} onClick={handleVoicePreviewClick} disabled={!voice.previewUrl} aria-label={voice.previewUrl ? (previewingVoiceKey === voice.key ? `หยุดตัวอย่างเสียง ${voice.name}` : `ฟังตัวอย่างเสียง ${voice.name}`) : `ไม่มีตัวอย่างเสียง ${voice.name}`} title={voice.previewUrl ? "ฟังตัวอย่างเสียง" : "ไม่มีตัวอย่างเสียง"}>
+                  {previewingVoiceKey === voice.key ? <span className={styles.voicePauseGlyph} /> : <Play size={11} fill="currentColor" />}
+                </button>
+              </div>)}
+            </div>) : null}
             </div>
             <button type="button" className={`${styles.voiceCarouselButton} ${styles.voiceCarouselButtonRight}`} onClick={() => scrollVoices(1)} disabled={!canScrollVoicesRight} aria-label="เลื่อน Voice ไปทางขวา" aria-controls="audio-voice-carousel"><ChevronRight size={16} /></button>
           </div>
         </div>
 
-        <div className={styles.sectionBlock}>
-          <div className={styles.sectionHeading}><h2>AUDIO SCENES / TIMELINE</h2><span className={styles.timelineHint}>{audioScenes.length} scenes · {formatSceneSeconds(audioScenes.reduce((total, scene) => total + scene.durationSeconds, 0))} total</span></div>
-          <div className={styles.sceneRow}>{audioScenes.map((scene, index) => <button type="button" key={scene.id} className={selectedSceneId === scene.id ? styles.sceneCardActive : styles.sceneCard} onClick={() => setSelectedSceneId(scene.id)} aria-pressed={selectedSceneId === scene.id}>
-            <Image src={availableVoices.find((voice) => voice.key === scene.voice)?.imageUrl || voiceImages[index % voiceImages.length]} alt="" width={42} height={50} unoptimized /><span className={styles.sceneCopy}><strong><em>{scene.id}</em> {scene.title}</strong><small>{sceneTimeRange(audioScenes, index)}</small></span><span className={styles.miniWave} aria-hidden="true" />
-          </button>)}<button type="button" className={styles.addScene} onClick={addAudioScene} disabled={audioScenes.length >= 20}><Plus size={17} />Add Scene</button></div>
-          {selectedAudioScene ? <div className={styles.sceneEditor}>
-            <div className={styles.sceneEditorHeader}><div><span>EDIT SCENE</span><strong>{selectedAudioScene.id} · {selectedAudioScene.title}</strong></div><button type="button" className={styles.sceneDeleteButton} onClick={() => removeAudioScene(selectedAudioScene.id)} disabled={audioScenes.length <= 1}><Trash2 size={13} /> Remove scene</button></div>
-            <div className={styles.sceneEditorFields}>
-              <label className={styles.sceneEditorField}><span>SCENE NAME</span><input value={selectedAudioScene.title} onChange={(event) => updateAudioScene(selectedAudioScene.id, { title: event.target.value })} maxLength={80} /></label>
-              <label className={styles.sceneEditorField}><span>VOICE</span><select value={selectedAudioScene.voice} onChange={(event) => updateAudioScene(selectedAudioScene.id, { voice: event.target.value })} disabled={voiceLoadState !== "ready" || availableVoices.length === 0}><option value="">Select a voice</option>{availableVoices.map((voice) => <option key={voice.key} value={voice.key}>{voice.name}</option>)}</select></label>
-              <label className={styles.sceneEditorField}><span>DURATION (SEC)</span><input type="number" min="1" max="600" value={selectedAudioScene.durationSeconds} onChange={(event) => updateAudioScene(selectedAudioScene.id, { durationSeconds: Math.min(600, Math.max(1, Number(event.target.value) || 1)) })} /></label>
-            </div>
-            <label className={`${styles.sceneEditorField} ${styles.sceneScriptField}`}><span>SCENE SCRIPT</span><textarea value={selectedAudioScene.text} onChange={(event) => updateAudioScene(selectedAudioScene.id, { text: event.target.value })} maxLength={2000} placeholder="ใส่ข้อความของ Scene นี้" /></label>
-            <div className={styles.sceneEditorFooter}><small>{sceneTimeRange(audioScenes, audioScenes.findIndex((scene) => scene.id === selectedAudioScene.id))} · {selectedAudioScene.text.length} / 2000 characters</small><span className={styles.sceneGenerateHint}>{sceneGenerationStatus === "complete" ? "เสียงพร้อมเล่นใน Audio Preview" : selectedAudioScene.id === "01" ? "Scene 1 เชื่อมกับ SCRIPT / PROMPT" : "กด GENERATE AUDIO ด้านขวาเพื่อสร้างทุก Scene"}</span></div>
-            {sceneError ? <p className={styles.sceneError} role="alert">{sceneError}</p> : null}
-          </div> : null}
+        <div className={styles.previewPanel}>
+           <div className={styles.previewHeader}><h2>AUDIO PREVIEW</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> Download</button><button type="button" className={styles.outlineAction} onClick={() => void handleGenerate()} disabled={status === "generating"}><RotateCcw size={15} /> Regenerate</button><button type="button" className={styles.iconAction} aria-label="More preview actions"><MoreHorizontal size={17} /></button></div></div>
+           <PreviewWaveform audioUrl={audioUrl} progress={progress} isPlaying={isPlaying} />
+           <div className={styles.playerRow}>
+             <button type="button" className={styles.playButton} onClick={togglePlayback} aria-label={isPlaying ? "Pause audio" : "Play audio"} disabled={!audioUrl}>{isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}</button>
+             <button type="button" className={styles.skipButton} onClick={() => seekBy(-10)} aria-label="Rewind 10 seconds" disabled={!audioUrl}><RotateCcw size={17} /><small>10</small></button>
+             <button type="button" className={styles.skipButton} onClick={() => seekBy(10)} aria-label="Forward 10 seconds" disabled={!audioUrl}><RotateCw size={17} /><small>10</small></button>
+             <span className={styles.timeLabel}>{formatTime(currentTime)} / {formatTime(duration)}</span>
+             <input className={styles.scrubber} type="range" min="0" max="100" value={progress} onChange={(event) => { const nextProgress = Number(event.target.value); const audioDuration = durationRef.current || duration; setProgress(nextProgress); if (audioRef.current && audioDuration) audioRef.current.currentTime = (nextProgress / 100) * audioDuration; }} aria-label="Audio progress" disabled={!audioUrl} />
+             <Volume2 size={17} className={styles.volumeIcon} />
+             <input className={styles.volumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (audioRef.current) audioRef.current.volume = nextVolume / 100; }} aria-label="Volume" />
+             <button type="button" className={styles.iconAction} aria-label="Fullscreen audio preview"><Maximize2 size={16} /></button>
+           </div>
+           <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { syncAudioDuration(event.currentTarget); event.currentTarget.volume = volume / 100; event.currentTarget.playbackRate = speed; }} onDurationChange={(event) => syncAudioDuration(event.currentTarget)} onTimeUpdate={(event) => { const nextTime = event.currentTarget.currentTime; const nextDuration = durationRef.current || (Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); if (nextDuration > 0 && durationRef.current !== nextDuration) { durationRef.current = nextDuration; setDuration(nextDuration); } setCurrentTime(nextTime); setProgress(nextDuration ? Math.min(100, (nextTime / nextDuration) * 100) : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={(event) => { const endDuration = durationRef.current || event.currentTarget.duration; setIsPlaying(false); if (Number.isFinite(endDuration) && endDuration > 0) { durationRef.current = endDuration; setDuration(endDuration); setCurrentTime(endDuration); } setProgress(100); }} />
+           <audio ref={voicePreviewAudioRef} preload="none" onEnded={() => setPreviewingVoiceKey(null)} onError={() => setPreviewingVoiceKey(null)} aria-hidden="true" />
+           {errorMessage ? <p className={styles.securityNote} role="alert">{errorMessage}</p> : null}
         </div>
+
+        <section className={styles.historyPanel} aria-label="Generation history">
+          <div className={styles.sectionHeading}><h2><History size={13} /> GENERATION HISTORY</h2><span className={styles.timelineHint}>{audioHistory.length ? `${audioHistory.length} result${audioHistory.length === 1 ? "" : "s"}` : "No results yet"}</span></div>
+          {audioHistory.length ? <div className={styles.historyList}>{audioHistory.map((item) => <div key={item.id} className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}>
+            <button type="button" className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem} onClick={() => selectHistoryItem(item)} disabled={historyLoadingId === item.id} aria-busy={historyLoadingId === item.id}><span className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>{historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}</span><span className={styles.historyCopy}><strong>{item.label}</strong><small>{item.createdAt}</small></span><span className={styles.historyCurrent}>{item.url === audioUrl ? "CURRENT" : "PLAY"}</span></button>
+            <button type="button" className={styles.historyDelete} aria-label={`Delete ${item.label}`} onClick={() => removeHistoryItem(item)}><Trash2 size={13} /></button>
+          </div>)}</div> : <div className={styles.historyEmpty}><History size={15} /><span>Generate audio to save and replay results here.</span></div>}
+        </section>
 
       </section>
 
@@ -961,14 +1115,13 @@ export function AudioGenerationPage() {
       <aside className={styles.settingsPanel} aria-label="Audio settings">
         <div className={styles.settingsTitle}><h2>SETTINGS</h2><WandSparkles size={22} /></div>
         <div className={styles.settingBlock}><SelectField label="VOICE MODEL" value={selectedModel} onChange={(modelId) => { setSelectedModel(modelId); setSelectedVoice(""); }} disabled={modelLoadState !== "ready" || availableModels.length === 0}>{modelLoadState === "loading" ? <option value="">Loading models...</option> : availableModels.length ? availableModels.map((model) => <option key={model.key} value={model.key}>{model.name}</option>) : <option value="">No models configured</option>}</SelectField></div>
-        <div className={styles.settingBlock}><SelectField label="VOICE STYLE" value={selectedVoice} onChange={setSelectedVoice} disabled={voiceLoadState !== "ready" || availableVoices.length === 0}>{availableVoices.map((voice) => <option key={voice.key} value={voice.key}>{voice.name}</option>)}</SelectField></div>
         <div className={styles.settingBlock}><FieldLabel>OUTPUT FORMAT</FieldLabel><div className={styles.formatRow}>{["MP3", "WAV", "OGG"].map((item) => <button type="button" key={item} className={format === item ? styles.formatActive : styles.formatButton} onClick={() => setFormat(item)}>{item}</button>)}</div></div>
         <div className={styles.settingBlock}><div className={styles.speedHeader}><FieldLabel>SPEECH SPEED</FieldLabel><strong>{speed.toFixed(2)}x</strong></div><input className={styles.speedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.rangeLabels}><span>0.5x</span><span>1x</span><span>2x</span></div></div>
         <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>AUTO BACKGROUND MUSIC</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}><span /></button></div><SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}>{backgroundMusicLoadState === "loading" ? <option value="">Loading music...</option> : backgroundMusicPresets.length ? backgroundMusicPresets.map((preset) => <option key={preset.key} value={preset.key}>{preset.name}</option>) : <option value="">No music configured</option>}</SelectField></div>
          <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}><div><strong>ESTIMATED CREDITS</strong><b>{creditEstimateLoading ? "Calculating…" : creditEstimate ? `~ ${formatCreditAmount(creditEstimate.creditCost)} Credits` : "Pricing unavailable"}</b></div><small>{creditEstimate ? `Speech ${formatCreditAmount(creditEstimate.speechCredits)}${creditEstimate.backgroundMusicCredits > 0 ? ` + Music ${formatCreditAmount(creditEstimate.backgroundMusicCredits)}` : ""} · ${creditEstimate.sceneCount} scene${creditEstimate.sceneCount === 1 ? "" : "s"}` : "Calculated from selected model, text, scenes, and background music"}</small><span>{creditBalance === null ? "Credit balance unavailable" : `${formatCreditAmount(creditBalance)} Credits available`} · {creditEstimate?.backgroundMusicSource === "admin-audio-url" ? "Admin audio URL" : "Failed generations refunded"}</span></div>
-          <button type="button" className={styles.generateButton} onClick={() => void (isSceneMode ? handleGenerateScenes() : handleGenerate())} disabled={isGenerating || !selectedModel || voiceLoadState !== "ready" || (isSceneMode ? hasIncompleteScene : !prompt.trim() || !selectedVoice)}>{isGenerating ? <><span className={styles.spinner} /> GENERATING...</> : generationReady ? <><Check size={18} /> AUDIO READY</> : <>GENERATE AUDIO <Sparkles size={17} /></>}</button>
+          <button type="button" className={styles.generateButton} onClick={() => void (isSceneMode ? handleGenerateScenes() : handleGenerate())} disabled={isGenerating || !selectedModel || voiceLoadState !== "ready" || (isSceneMode ? hasIncompleteScene : !prompt.trim() || !selectedVoice)}>{isGenerating ? <><span className={styles.spinner} /> GENERATING...</> : <>GENERATE AUDIO <Sparkles size={17} /></>}</button>
         <p className={styles.securityNote}><LockKeyhole size={11} /> Secure generation. Your data is private.</p>
       </aside>
-  </div> : activeTab === "Podcast & Dialogue" ? <PodcastDialogueLayout onHistorySaved={persistGeneratedAudio} /> : activeTab === "Voice Clone" ? <VoiceCloneLayout onHistorySaved={persistGeneratedAudio} /> : activeTab === "Sound Effects" ? <SoundEffectsLayout onHistorySaved={persistGeneratedAudio} /> : <AudioCleanupLayout />}
+  </div> : activeTab === "Podcast & Dialogue" ? <><PodcastDialogueLayout onHistorySaved={persistGeneratedAudio} /><div className={styles.podcastScenesBlock}>{scenesTimeline}</div></> : activeTab === "Voice Clone" ? <VoiceCloneLayout onHistorySaved={persistGeneratedAudio} /> : activeTab === "Sound Effects" ? <SoundEffectsLayout onHistorySaved={persistGeneratedAudio} /> : <AudioCleanupLayout />}
   </div>;
 }

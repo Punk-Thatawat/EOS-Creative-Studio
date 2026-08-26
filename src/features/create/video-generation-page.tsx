@@ -92,6 +92,18 @@ const videoModeOptions = [
     description: "Choose the start frame per scene",
   },
 ] as const;
+const generationModeOptions = [
+  {
+    value: "single-image",
+    label: "Single Storyboard Image",
+    description: "Use the full uploaded storyboard as one reference",
+  },
+  {
+    value: "multi-scene",
+    label: "Multi-Scene Storyboard",
+    description: "Build the video scene by scene",
+  },
+] as const;
 const sceneSourceOptions = [
   { value: "manual", label: "New image" },
   { value: "previous_last_frame", label: "Previous frame" },
@@ -292,6 +304,7 @@ export function VideoGenerationPage() {
   const [aspectRatio, setAspectRatio] = useState("");
   const [autoSound, setAutoSound] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [generationMode, setGenerationMode] = useState<(typeof generationModeOptions)[number]["value"]>("multi-scene");
   const [videoMode, setVideoMode] =
     useState<(typeof videoModeOptions)[number]["value"]>("storyboard");
   const [isVideoModeMenuOpen, setIsVideoModeMenuOpen] = useState(false);
@@ -711,6 +724,14 @@ export function VideoGenerationPage() {
       })),
     );
   };
+  const selectGenerationMode = (
+    nextMode: (typeof generationModeOptions)[number]["value"],
+  ) => {
+    setGenerationMode(nextMode);
+    setIsVideoModeMenuOpen(false);
+    setOpenSceneSourceMenu(null);
+    setSceneSourceMenuPosition(null);
+  };
   const updateSceneSource = (index: number, source: StartFrameSource) => {
     if (index === 0) return;
     setStoryboardScenes((current) =>
@@ -732,9 +753,12 @@ export function VideoGenerationPage() {
     ? extendModels.find((model) => modelFamily(model.model) === modelFamily(selectedModelOption.model))
     : undefined;
   const hasNativeExtend = Boolean(nativeExtendModel);
+  const generationScenes = generationMode === "single-image"
+    ? storyboardScenes.slice(0, 1)
+    : storyboardScenes;
   const creditQuoteInput: Omit<VideoGenerationInput, "idempotencyKey"> | null = (() => {
-    if (activeVideoTab !== "image-to-video" || !selectedModel || storyboardScenes.length === 0) return null;
-    const scenes = storyboardScenes.map((scene, index) => {
+    if (activeVideoTab !== "image-to-video" || !selectedModel || generationScenes.length === 0) return null;
+    const scenes = generationScenes.map((scene, index) => {
       const startFrameSource: StartFrameSource = index === 0 || videoMode === "storyboard"
         ? "manual"
         : videoMode === "continuous"
@@ -805,11 +829,13 @@ export function VideoGenerationPage() {
     };
   }, [creditQuoteKey]);
 
-  const estimateSceneCount = storyboardScenes.length;
-  const estimateDurations = storyboardScenes.map((scene) => durationProperty ? scene.duration : duration);
+  const estimateSceneCount = generationScenes.length;
+  const estimateDurations = generationScenes.map((scene) => durationProperty ? scene.duration : duration);
   const estimateTotalDuration = estimateDurations.reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0);
   const allScenesShareDuration = estimateDurations.every((value) => value === estimateDurations[0]);
-  const estimateDescription = allScenesShareDuration
+  const estimateDescription = generationMode === "single-image"
+    ? `1 video x ${estimateDurations[0] ?? 0} sec`
+    : allScenesShareDuration
     ? `${estimateSceneCount} ${estimateSceneCount === 1 ? "scene" : "scenes"} x ${estimateDurations[0] ?? 0} sec`
     : `${estimateSceneCount} scenes x ${estimateTotalDuration} sec total`;
   const formattedCreditEstimate: ReactNode = creditEstimateLoading
@@ -819,7 +845,7 @@ export function VideoGenerationPage() {
       : `${creditEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits`;
   const firstScene = storyboardScenes[0];
   const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
-  const canAddScene = Boolean(firstScene?.image && firstSceneHasPrompt);
+  const canAddScene = generationMode === "multi-scene" && Boolean(firstScene?.image && firstSceneHasPrompt);
   const getVideoModeDescription = (mode: (typeof videoModeOptions)[number]["value"]) => {
     if (mode === "continuous") {
       return hasNativeExtend
@@ -1024,12 +1050,12 @@ export function VideoGenerationPage() {
       setGenerationError(`${labelFromParameterName(requiredStructuredField)} is required for this model.`);
       return;
     }
-    const sceneSources = storyboardScenes.map((scene, index) => getSceneSource(scene, index));
-    if (sceneSources.some((source, index) => source === "manual" && !storyboardScenes[index].image)) {
+    const sceneSources = generationScenes.map((scene, index) => getSceneSource(scene, index));
+    if (sceneSources.some((source, index) => source === "manual" && !generationScenes[index].image)) {
       setGenerationError("Every manual scene needs a storyboard image.");
       return;
     }
-    if (storyboardScenes.some((scene) => !scene.prompt.trim())) {
+    if (generationScenes.some((scene) => !scene.prompt.trim())) {
       setGenerationError("Every scene needs a prompt before generating.");
       return;
     }
@@ -1043,10 +1069,12 @@ export function VideoGenerationPage() {
       const uploadedImages: Array<string | undefined> = [];
       const uploadedEndImages: Array<string | undefined> = [];
       const uploadedReferenceImages: string[] = [];
-      for (let index = 0; index < storyboardScenes.length; index += 1) {
-        const scene = storyboardScenes[index];
+      for (let index = 0; index < generationScenes.length; index += 1) {
+        const scene = generationScenes[index];
         if (sceneSources[index] === "manual") {
-          setNotice(`Uploading Scene ${index + 1} of ${storyboardScenes.length}…`);
+          setNotice(generationMode === "single-image"
+            ? "Uploading storyboard image…"
+            : `Uploading Scene ${index + 1} of ${generationScenes.length}…`);
           const file = await fileFromSceneImage(scene.image as string, index, scene.imageFile);
           uploadedImages[index] = await uploadImageAsset(file, {
             purpose: "content",
@@ -1076,7 +1104,7 @@ export function VideoGenerationPage() {
         }
       }
 
-      const scenes = storyboardScenes.map((scene, index) => {
+      const scenes = generationScenes.map((scene, index) => {
         const sceneInput: VideoGenerationInput["scenes"][number] = {
           startFrameSource: sceneSources[index],
           prompt: scene.prompt.trim(),
@@ -1091,7 +1119,7 @@ export function VideoGenerationPage() {
       });
       const request: VideoGenerationInput = {
         model: selectedModel,
-        mode: videoMode,
+        mode: generationMode === "single-image" ? "storyboard" : videoMode,
         scenes,
         idempotencyKey: `video-${crypto.randomUUID()}`,
       };
@@ -1130,7 +1158,9 @@ export function VideoGenerationPage() {
       while (status.status !== "completed" && status.status !== "failed" && status.status !== "cancelled") {
         setGenerationProgress({ completed: status.completedScenes ?? 0, total: status.totalScenes ?? scenes.length });
         setContinuationInfo(status.continuation ?? null);
-        setNotice(`Generating video… ${status.completedScenes ?? 0}/${status.totalScenes ?? scenes.length} scenes complete`);
+        setNotice(generationMode === "single-image"
+          ? "Generating video from storyboard image…"
+          : `Generating video… ${status.completedScenes ?? 0}/${status.totalScenes ?? scenes.length} scenes complete`);
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
         status = await getVideoStoryboardStatus(created.storyboardId);
       }
@@ -1213,62 +1243,88 @@ export function VideoGenerationPage() {
                 aria-labelledby="video-mode-title"
               >
                 <div className={styles.videoModeHeading}>
-                  <h2 id="video-mode-title">VIDEO MODE</h2>
+                  <h2 id="video-mode-title">GENERATION MODE</h2>
                   <Info size={11} />
                 </div>
-                <div
-                  className={`${styles.modelDropdown} ${styles.videoModeDropdown}`}
-                >
-                  <button
-                    type="button"
-                    className={styles.modelDropdownTrigger}
-                    aria-haspopup="listbox"
-                    aria-expanded={isVideoModeMenuOpen}
-                    onClick={() => setIsVideoModeMenuOpen((open) => !open)}
-                  >
-                    <span>
-                      <strong>{selectedVideoMode.label}</strong>
-                      <small>{getVideoModeDescription(videoMode)}</small>
-                    </span>
-                    <ChevronDown size={17} />
-                  </button>
-                  {isVideoModeMenuOpen ? (
-                    <div
-                      className={styles.modelDropdownMenu}
-                      role="listbox"
-                      aria-label="Video mode options"
+                <div className={styles.generationModeOptions} role="radiogroup" aria-label="Video generation mode">
+                  {generationModeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={generationMode === option.value ? styles.generationModeSelected : undefined}
+                      role="radio"
+                      aria-checked={generationMode === option.value}
+                      onClick={() => selectGenerationMode(option.value)}
                     >
-                      {videoModeOptions.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          role="option"
-                          aria-selected={option.value === videoMode}
-                          onClick={() => {
-                            selectVideoMode(option.value);
-                            setIsVideoModeMenuOpen(false);
-                          }}
-                        >
-                          <span>
-                            <strong>{option.label}</strong>
-                            <small>{getVideoModeDescription(option.value)}</small>
-                          </span>
-                          {option.value === videoMode ? (
-                            <span className={styles.modelCheck}>✓</span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
+                      <strong>{option.label}</strong>
+                      <small>{option.description}</small>
+                    </button>
+                  ))}
                 </div>
-                {videoMode === "continuous" ? (
+                {generationMode === "single-image" ? (
+                  <div className={`${styles.sequenceNotice} ${styles.sequenceNoticeNative}`}>
+                    <ImageIcon size={13} />
+                    <span>The full storyboard image is sent as one reference with one prompt.</span>
+                  </div>
+                ) : null}
+                {generationMode === "multi-scene" ? (
+                  <div className={styles.sceneFlowMode}>
+                    <span>SCENE FLOW</span>
+                    <div
+                      className={`${styles.modelDropdown} ${styles.videoModeDropdown}`}
+                    >
+                      <button
+                        type="button"
+                        className={styles.modelDropdownTrigger}
+                        aria-haspopup="listbox"
+                        aria-expanded={isVideoModeMenuOpen}
+                        onClick={() => setIsVideoModeMenuOpen((open) => !open)}
+                      >
+                        <span>
+                          <strong>{selectedVideoMode.label}</strong>
+                          <small>{getVideoModeDescription(videoMode)}</small>
+                        </span>
+                        <ChevronDown size={17} />
+                      </button>
+                      {isVideoModeMenuOpen ? (
+                        <div
+                          className={styles.modelDropdownMenu}
+                          role="listbox"
+                          aria-label="Scene flow options"
+                        >
+                          {videoModeOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              role="option"
+                              aria-selected={option.value === videoMode}
+                              onClick={() => {
+                                selectVideoMode(option.value);
+                                setIsVideoModeMenuOpen(false);
+                              }}
+                            >
+                              <span>
+                                <strong>{option.label}</strong>
+                                <small>{getVideoModeDescription(option.value)}</small>
+                              </span>
+                              {option.value === videoMode ? (
+                                <span className={styles.modelCheck}>✓</span>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                {generationMode === "multi-scene" && videoMode === "continuous" ? (
                   <div className={`${styles.sequenceNotice} ${hasNativeExtend ? styles.sequenceNoticeNative : styles.sequenceNoticeWarning}`}>
                     <Link2 size={13} />
                     <span>{hasNativeExtend
                       ? "Native Extend will continue scenes in order"
                       : "No Native Extend; continuation may not be seamless"}</span>
                   </div>
-                ) : videoMode === "hybrid" ? (
+                ) : generationMode === "multi-scene" && videoMode === "hybrid" ? (
                   <div className={`${styles.sequenceNotice} ${hasNativeExtend ? styles.sequenceNoticeNative : styles.sequenceNoticeWarning}`}>
                     <Link2 size={13} />
                     <span>{hasNativeExtend
@@ -1310,9 +1366,9 @@ export function VideoGenerationPage() {
               </label>
             </section>
             <section className={styles.panel}>
-              <SectionTitle number="2">SOURCE</SectionTitle>
+              <SectionTitle number="2">{generationMode === "single-image" ? "STORYBOARD IMAGE" : "SOURCE"}</SectionTitle>
               <label className="mb-2 block text-[10px] font-bold">
-                Start Frame <small>(Required)</small>
+                {generationMode === "single-image" ? "Storyboard Sheet" : "Start Frame"} <small>(Required)</small>
               </label>
               {sourcePreviewImage ? (
                 <div className={styles.sourcePreview}>
@@ -1331,7 +1387,7 @@ export function VideoGenerationPage() {
               ) : (
                 <label className={styles.upload}>
                   <CloudUpload size={22} />
-                  <strong>Upload Image</strong>
+                  <strong>{generationMode === "single-image" ? "Upload Storyboard Sheet" : "Upload Image"}</strong>
                   <small>PNG / JPG / WEBP</small>
                   <input
                     ref={sourceInputRef}
@@ -1358,6 +1414,9 @@ export function VideoGenerationPage() {
                     event.currentTarget.value = "";
                   }}
                 />
+              ) : null}
+              {generationMode === "single-image" ? (
+                <p className={styles.sourceModeNote}>The uploaded storyboard image is sent as one reference image with your prompt.</p>
               ) : null}
               {supportsLastImage ? (
                 <div className={styles.sourceLastImage}>
@@ -1412,11 +1471,13 @@ export function VideoGenerationPage() {
                   <div className={styles.videoGeneratingPreview} aria-busy="true">
                     <WandSparkles size={26} />
                     <strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong>
-                    <span>{generationStatus === "uploading" ? "Uploading scene assets…" : "Your scenes are being generated in order…"}</span>
+                    <span>{generationStatus === "uploading"
+                      ? generationMode === "single-image" ? "Uploading storyboard image…" : "Uploading scene assets…"
+                      : generationMode === "single-image" ? "Generating from the storyboard image…" : "Your scenes are being generated in order…"}</span>
                     <div className={styles.videoGenerationProgress}>
                       <i style={{ width: `${generationProgress.total ? Math.round((generationProgress.completed / generationProgress.total) * 100) : 12}%` }} />
                     </div>
-                    <small>{generationProgress.completed}/{generationProgress.total || storyboardScenes.length} scenes complete</small>
+                    <small>{generationProgress.completed}/{generationProgress.total || generationScenes.length} {generationMode === "single-image" ? "video" : "scenes"} complete</small>
                   </div>
                 ) : displayedVideoUrl ? (
                   <EosVideoPlayer
@@ -1612,7 +1673,7 @@ export function VideoGenerationPage() {
                 <p className={styles.referenceHint}>Reference images are hidden because the selected model does not expose a reference-image input.</p>
               )}
             </section>
-            <section className={styles.stripSection}>
+            {generationMode === "multi-scene" ? <section className={styles.stripSection}>
               <div className={styles.subheading}>
                 STORYBOARD <small>(Optional)</small>
               </div>
@@ -1784,7 +1845,7 @@ export function VideoGenerationPage() {
                   ))}
                 </div>
               ) : null}
-            </section>
+            </section> : null}
           </div>
           <aside className={styles.settings}>
             <SectionTitle number="3">SETTINGS</SectionTitle>
@@ -2016,7 +2077,7 @@ export function VideoGenerationPage() {
               <WandSparkles size={18} /> {generationStatus === "uploading" || generationStatus === "processing" ? "GENERATING…" : "GENERATE VIDEO"}
             </button>
             {generationProgress.total > 0 && (generationStatus === "uploading" || generationStatus === "processing" || generationStatus === "completed") ? (
-              <p className={styles.generationProgress}>{generationProgress.completed}/{generationProgress.total} scenes complete</p>
+              <p className={styles.generationProgress}>{generationProgress.completed}/{generationProgress.total} {generationMode === "single-image" ? "video" : "scenes"} complete</p>
             ) : null}
             {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
             <p className={styles.privateNote}>

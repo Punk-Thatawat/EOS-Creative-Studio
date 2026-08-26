@@ -12,6 +12,7 @@ export type TextToSpeechInput = {
   languageCode: string;
   tone: "Energetic" | "Friendly" | "Premium" | "Dramatic";
   speed: number;
+  pronunciationHint?: string;
   backgroundMusicEnabled?: boolean;
   backgroundMusicKey?: string;
   idempotencyKey?: string;
@@ -25,6 +26,7 @@ export type TextToSpeechScenesInput = {
   languageCode: string;
   tone: "Energetic" | "Friendly" | "Premium" | "Dramatic";
   speed: number;
+  pronunciationHint?: string;
   pauseSeconds?: number;
   backgroundMusicEnabled?: boolean;
   backgroundMusicKey?: string;
@@ -32,14 +34,14 @@ export type TextToSpeechScenesInput = {
 };
 
 export type AudioCreditQuote = {
-  provider: "elevenlabs";
+  provider: "wavespeed" | "elevenlabs";
   model: string;
   sceneCount: number;
   textCharacters: number;
   creditCost: number;
   speechCredits: number;
   backgroundMusicCredits: number;
-  backgroundMusicSource: "disabled" | "admin-audio-url" | "elevenlabs";
+  backgroundMusicSource: "disabled" | "admin-audio-url" | "wavespeed" | "elevenlabs";
   pricingSource: "provider" | "fallback";
 };
 
@@ -144,7 +146,7 @@ export type AdminAudioVoiceSettings = {
   corporate: string;
   podcastHost: string;
 };
-export type AdminAudioVoiceProfile = { id: string; name: string; description: string; imageUrl: string };
+export type AdminAudioVoiceProfile = { id: string; name: string; description: string; imageUrl: string; previewUrl: string };
 export type AdminAudioModelProfile = { voices: AdminAudioVoiceProfile[] };
 export type AdminAudioFeatureProfile = { modelId: string; voices: AdminAudioVoiceProfile[]; models: Record<string, AdminAudioModelProfile> };
 export type AdminAudioBackgroundMusicPreset = {
@@ -159,16 +161,17 @@ export type AdminAudioBackgroundMusicPreset = {
   isActive: boolean;
 };
 
-export type AdminAudioProvider = "elevenlabs" | "internal";
+export type AdminAudioProvider = "wavespeed" | "elevenlabs" | "internal";
 export type AdminAudioFeature = "textToSpeech" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
 export type AdminAudioRouting = Record<AdminAudioFeature, AdminAudioProvider>;
 export type AdminAudioProviderSettings = {
+  wavespeed: { defaultFormat: "mp3" | "wav" | "ogg"; timeoutMs: number };
   elevenlabs: { defaultFormat: "mp3" | "wav" | "ogg"; timeoutMs: number };
   internal: { ffmpegPath: string; maxUploadMb: number; defaultFormat: "mp3" | "wav" | "ogg" };
 };
 
 export type AdminAudioSettings = {
-  provider: "elevenlabs";
+  provider: AdminAudioProvider;
   modelId: string;
   voices: AdminAudioVoiceSettings;
   modelProfiles: Record<string, AdminAudioModelProfile>;
@@ -187,6 +190,7 @@ export type AdminAudioSettingsPatch = {
   featureProfiles?: Record<AudioFeatureKey, AdminAudioFeatureProfile>;
   backgroundMusicPresets?: AdminAudioBackgroundMusicPreset[];
   routing?: Partial<AdminAudioRouting>;
+  wavespeed?: Partial<AdminAudioProviderSettings["wavespeed"]>;
   elevenlabs?: Partial<AdminAudioProviderSettings["elevenlabs"]>;
   internal?: Partial<AdminAudioProviderSettings["internal"]>;
 };
@@ -229,7 +233,7 @@ async function userAudioRequest(path: string, init: RequestInit = {}): Promise<R
 async function userAudioBlobRequest(path: string, init: RequestInit): Promise<TextToSpeechResponse> {
   const response = await userAudioRequest(path, init);
   const localHistoryId = response.headers.get("x-audio-history-id") ?? undefined;
-  const providerHistoryId = response.headers.get("x-elevenlabs-history-id") ?? undefined;
+  const providerHistoryId = response.headers.get("x-wavespeed-prediction-id") ?? undefined;
   return {
     blob: await response.blob(),
     contentType: response.headers.get("content-type") ?? "audio/mpeg",
@@ -465,12 +469,7 @@ export async function getAudioHistory(id: string): Promise<AudioHistoryEntry> {
 }
 
 export async function fetchAudioHistoryAudio(id: string): Promise<TextToSpeechResponse> {
-  const isProviderHistory = id.startsWith("elevenlabs:");
-  const historyId = isProviderHistory ? id.slice("elevenlabs:".length) : id;
-  const path = isProviderHistory
-    ? `/audio/provider-history/${encodeURIComponent(historyId)}/audio`
-    : `/audio/history/${encodeURIComponent(historyId)}/audio`;
-  const response = await userAudioRequest(path, { headers: { Accept: "audio/*, application/json" } });
+  const response = await userAudioRequest(`/audio/history/${encodeURIComponent(id)}/audio`, { headers: { Accept: "audio/*, application/json" } });
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.startsWith("audio/") || contentType.includes("octet-stream")) {
     return { blob: await response.blob(), contentType };
@@ -492,10 +491,6 @@ export async function fetchAudioHistoryAudio(id: string): Promise<TextToSpeechRe
 }
 
 export async function deleteAudioHistory(id: string): Promise<void> {
-  if (id.startsWith("elevenlabs:")) {
-    await userAudioRequest(`/audio/provider-history/${encodeURIComponent(id.slice("elevenlabs:".length))}`, { method: "DELETE" });
-    return;
-  }
   await userAudioRequest(`/audio/history/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
@@ -514,9 +509,7 @@ function unwrapAudioHistoryEntry(payload: unknown): AudioHistoryEntry | null {
 function normalizeAudioHistoryEntry(value: unknown): AudioHistoryEntry {
   const entry = value as AudioHistoryEntry & { historyItemId?: string | null; history_item_id?: string | null };
   if (entry.feature !== "tts") return entry;
-  if (entry.id.startsWith("elevenlabs:")) return entry;
-  const providerHistoryId = entry.historyItemId ?? entry.history_item_id;
-  return providerHistoryId ? { ...entry, id: `elevenlabs:${providerHistoryId}` } : entry;
+  return entry;
 }
 
 function getAudioHistoryBase64(payload: unknown): string | null {
@@ -543,7 +536,7 @@ const legacyVoiceNames: Array<{ key: keyof AdminAudioVoiceSettings; name: string
 ];
 
 function legacyAdminVoiceProfiles(voices: AdminAudioVoiceSettings): AdminAudioVoiceProfile[] {
-  return legacyVoiceNames.map((item) => ({ id: voices[item.key], name: item.name, description: item.description, imageUrl: "" })).filter((voice) => Boolean(voice.id));
+  return legacyVoiceNames.map((item) => ({ id: voices[item.key], name: item.name, description: item.description, imageUrl: "", previewUrl: "" })).filter((voice) => Boolean(voice.id));
 }
 
 function normalizeAdminVoiceProfiles(value: unknown, fallback: AdminAudioVoiceProfile[]): AdminAudioVoiceProfile[] {
@@ -558,6 +551,7 @@ function normalizeAdminVoiceProfiles(value: unknown, fallback: AdminAudioVoicePr
         name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim() : `Voice ${index + 1}`,
         description: typeof candidate.description === "string" ? candidate.description.trim() : "",
         imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl.trim() : "",
+        previewUrl: typeof candidate.previewUrl === "string" ? candidate.previewUrl.trim() : "",
       };
     }).filter((profile): profile is AdminAudioVoiceProfile => profile !== null);
     return profiles;
@@ -568,7 +562,7 @@ function normalizeAdminVoiceProfiles(value: unknown, fallback: AdminAudioVoicePr
       const id = typeof rawValue === "string" ? rawValue.trim() : typeof candidate.id === "string" ? candidate.id.trim() : typeof candidate.voiceId === "string" ? candidate.voiceId.trim() : "";
       if (!id) return null;
       const legacy = legacyVoiceNames.find((item) => item.key === key);
-      return { id, name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim() : legacy?.name ?? (key || `Voice ${index + 1}`), description: typeof candidate.description === "string" ? candidate.description.trim() : legacy?.description ?? "", imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl.trim() : "" };
+      return { id, name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim() : legacy?.name ?? (key || `Voice ${index + 1}`), description: typeof candidate.description === "string" ? candidate.description.trim() : legacy?.description ?? "", imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl.trim() : "", previewUrl: typeof candidate.previewUrl === "string" ? candidate.previewUrl.trim() : "" };
     }).filter((profile): profile is AdminAudioVoiceProfile => profile !== null);
     return profiles.length ? profiles : fallback;
   }
@@ -609,8 +603,8 @@ function normalizeAdminFeatureProfiles(value: unknown, modelProfiles: Record<str
   const defaults: Record<AudioFeatureKey, AdminAudioFeatureProfile> = {
     textToSpeech: { modelId, voices: activeVoices, models: { [modelId]: { voices: activeVoices } } },
     podcastDialogue: { modelId, voices: activeVoices, models: { [modelId]: { voices: activeVoices } } },
-    voiceClone: { modelId, voices: activeVoices, models: { [modelId]: { voices: activeVoices } } },
-    soundEffects: { modelId: "eleven_text_to_sound_v2", voices: [], models: { eleven_text_to_sound_v2: { voices: [] } } },
+    voiceClone: { modelId: "minimax/speech-2.6-hd", voices: activeVoices, models: { "minimax/speech-2.6-hd": { voices: activeVoices } } },
+    soundEffects: { modelId: "mirelo-ai/sfx-1.6/text-to-audio", voices: [], models: { "mirelo-ai/sfx-1.6/text-to-audio": { voices: [] } } },
     audioCleanup: { modelId: "internal", voices: [], models: { internal: { voices: [] } } },
   };
   const candidate = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -627,7 +621,7 @@ function normalizeAdminFeatureProfiles(value: unknown, modelProfiles: Record<str
 }
 
 function normalizeAdminAudioSettings(value: AdminAudioSettings): AdminAudioSettings {
-  const modelId = value.modelId?.trim() || "eleven_multilingual_v2";
+  const modelId = value.modelId?.trim() || "elevenlabs/flash-v2.5";
   const suppliedProfiles = value.modelProfiles && typeof value.modelProfiles === "object" ? value.modelProfiles : {};
   const fallbackProfiles = legacyAdminVoiceProfiles(value.voices);
   const modelProfiles = Object.keys(suppliedProfiles).length > 0
@@ -646,7 +640,19 @@ function normalizeAdminAudioSettings(value: AdminAudioSettings): AdminAudioSetti
     volume: typeof preset.volume === "number" && Number.isFinite(preset.volume) ? Math.min(1, Math.max(0, preset.volume)) : 0.15,
     isActive: preset.isActive !== false,
   })) : [];
-  return { ...value, modelId, voices, modelProfiles, featureProfiles, backgroundMusicPresets };
+  const rawProviderSettings = value.providerSettings ?? {};
+  const legacyProviderSettings = rawProviderSettings.elevenlabs ?? { defaultFormat: "mp3" as const, timeoutMs: 60000 };
+  const wavespeedProviderSettings = rawProviderSettings.wavespeed ?? legacyProviderSettings;
+  return {
+    ...value,
+    provider: "wavespeed",
+    modelId,
+    voices,
+    modelProfiles,
+    featureProfiles,
+    backgroundMusicPresets,
+    providerSettings: { ...rawProviderSettings, wavespeed: wavespeedProviderSettings },
+  };
 }
 
 export async function getAdminAudioSettings(): Promise<AdminAudioSettings> {
@@ -667,14 +673,14 @@ export async function updateAdminAudioRouting(input: Partial<AdminAudioRouting>)
   return normalizeAdminAudioSettings(payload.data);
 }
 
-export async function updateAdminAudioProvider(provider: "elevenlabs" | "internal", input: AdminAudioSettingsPatch["elevenlabs"] | AdminAudioSettingsPatch["internal"]): Promise<AdminAudioSettings> {
+export async function updateAdminAudioProvider(provider: "wavespeed" | "elevenlabs" | "internal", input: AdminAudioSettingsPatch["wavespeed"] | AdminAudioSettingsPatch["elevenlabs"] | AdminAudioSettingsPatch["internal"]): Promise<AdminAudioSettings> {
   const payload = await adminRequest(`/api/v1/admin/audio-settings/providers/${provider}`, { method: "PATCH", body: JSON.stringify(input) }) as { data?: AdminAudioSettings };
   if (!payload.data) throw new Error(`Unable to save ${provider} settings`);
   return normalizeAdminAudioSettings(payload.data);
 }
 
-export async function testAdminElevenLabsConnection(): Promise<{ provider: "elevenlabs"; ok: boolean; message: string }> {
-  const payload = await adminRequest("/api/v1/admin/audio-settings/providers/elevenlabs/test", { method: "POST" }) as { data?: { provider: "elevenlabs"; ok: boolean; message: string } };
-  if (!payload.data) throw new Error("Unable to test ElevenLabs connection");
+export async function testAdminWaveSpeedConnection(): Promise<{ provider: "wavespeed"; ok: boolean; message: string }> {
+  const payload = await adminRequest("/api/v1/admin/audio-settings/providers/wavespeed/test", { method: "POST" }) as { data?: { provider: "wavespeed"; ok: boolean; message: string } };
+  if (!payload.data) throw new Error("Unable to test WaveSpeed connection");
   return payload.data;
 }

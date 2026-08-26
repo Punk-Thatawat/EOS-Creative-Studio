@@ -28,7 +28,7 @@
 .panelHeading h2 span { display: inline-grid; width: 17px; height: 17px; margin-right: 4px; place-items: center; border-radius: 50%; background: #13161b; color: #fff; font-size: 10px; }
 .panelHeading > svg { color: #8c929c; }
 .promptBox { border: 1px solid #dadde2; border-radius: 9px; background: #fff; }
-.promptBox textarea { display: block; width: 100%; height: 96px; resize: none; border: 0; outline: 0; padding: 11px 12px 4px; color: #2b3038; font: inherit; font-size: 12px; line-height: 1.43; }
+.promptBox textarea { display: block; width: 100%; height: 96px; min-height: 96px; max-height: 360px; resize: vertical; overflow-y: auto; border: 0; outline: 0; padding: 11px 12px 4px; color: #2b3038; font: inherit; font-size: 12px; line-height: 1.43; }
 .promptBox textarea::selection { background: #ffd7c4; }
 .promptMeta { display: flex; align-items: center; justify-content: space-between; padding: 7px 11px 9px; color: #8a8e97; font-size: 10px; }
 .promptMeta button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: #6f747d; font: inherit; cursor: pointer; }
@@ -61,10 +61,18 @@
 .previewActions { display: flex; align-items: center; gap: 8px; }
 .previewActions button { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: #3e4651; font: inherit; font-size: 10px; cursor: pointer; }
 .previewActions button:hover { color: var(--audio-orange); }
+.previewActions button:disabled { cursor: not-allowed; opacity: .45; }
 .previewActions .outlineAction { height: 29px; border: 1px solid #e0e2e5; border-radius: 7px; padding: 0 9px; font-weight: 700; }
 .previewActions .iconAction { padding: 4px; }
 .waveform { position: relative; height: 36px; margin: 11px -1px 4px; overflow: hidden; }
-.waveform img { object-fit: cover; object-position: center; }
+.waveformBars { position: absolute; inset: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; padding: 2px 1px; }
+.waveformBar { display: block; min-width: 1px; flex: 1 1 0; border-radius: 999px; background: linear-gradient(180deg, #e7ebf0 0%, #b8c1cd 100%); opacity: .8; transform: scaleY(.72); transform-origin: center; animation: waveformPulse ease-in-out infinite; animation-play-state: paused; transition: background .2s ease, opacity .2s ease, transform .2s ease; }
+.waveformBarPlayed { background: linear-gradient(180deg, #ff9d69 0%, #ff620b 48%, #f0189d 100%); box-shadow: 0 0 5px #ff620b33; opacity: 1; }
+.waveformPlaying .waveformBar { animation-play-state: running; }
+@keyframes waveformPulse { 0%, 100% { transform: scaleY(.58); } 50% { transform: scaleY(1); } }
+.waveformPlayhead { position: absolute; top: -2px; bottom: -2px; width: 2px; border-radius: 999px; background: var(--audio-orange); box-shadow: 0 0 0 1px #fff, 0 0 8px #ff620b99; pointer-events: none; transform: translateX(-1px); transition: left .08s linear; }
+.waveformPlaying .waveformPlayhead { box-shadow: 0 0 0 1px #fff, 0 0 10px #ff620bcc; transition: none; }
+@media (prefers-reduced-motion: reduce) { .waveformBar { animation: none !important; transition: none; } .waveformPlayhead { transition: none; } }
 .playerRow { display: flex; align-items: center; gap: 13px; min-width: 0; border-top: 1px solid #f0f1f3; padding-top: 10px; }
 .playButton { display: grid; width: 43px; height: 43px; flex: none; place-items: center; border: 0; border-radius: 50%; background: #111318; color: #fff; box-shadow: 0 0 0 2px var(--audio-orange); cursor: pointer; }
 .playButton:hover { background: var(--audio-orange); }
@@ -97,6 +105,7 @@
 .historyDelete:hover { background: #ffe9e5; color: #d54c35; }
 .historyPlay { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border-radius: 50%; background: #171a20; color: #fff; }
 .historyItemActive .historyPlay { background: var(--audio-orange); }
+.historyLoading { width: 24px; height: 24px; flex: none; border: 3px solid #ffd6c2; border-top-color: var(--audio-orange); border-right-color: var(--audio-orange); border-radius: 50%; animation: spin .75s linear infinite; }
 .historyCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
 .historyCopy strong { overflow: hidden; color: #303640; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .historyCopy small { margin-top: 2px; color: #858b95; font-size: 8px; }
@@ -104,6 +113,8 @@
 .historyItemActive .historyCurrent { color: var(--audio-orange); }
 
 .sectionBlock { margin-top: 0; }
+.voiceSection { margin-bottom: 14px; }
+.podcastScenesBlock { margin-top: 14px; border: 1px solid var(--audio-line); border-radius: 10px; background: #fff; padding: 14px; }
 .sectionBlock + .sectionBlock { margin-top: 15px; }
 .sectionHeading { margin: 0 0 10px; padding-inline: 1px; }
 .sectionHeading h2 { font-size: 11px; }
@@ -116,18 +127,26 @@
 .voiceCarouselButtonRight { right: -7px; }
 .voiceCarouselButton:hover:not(:disabled) { border-color: var(--audio-orange); background: #fff8f3; color: var(--audio-orange); }
 .voiceCarouselButton:disabled { cursor: default; opacity: .35; }
-.voiceRow { display: flex; min-width: 0; flex: 1; gap: 8px; overflow-x: auto; padding: 1px 15px 3px; scroll-behavior: smooth; scrollbar-width: none; }
+.voiceRow { display: flex; min-width: 0; flex: 1; gap: 8px; overflow-x: auto; padding: 1px 15px 3px; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .voiceRow::-webkit-scrollbar { display: none; }
+.voicePage { display: grid; min-width: 100%; flex: 0 0 100%; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; scroll-snap-align: start; }
 .voiceState, .voiceStateError { display: flex; min-height: 100px; flex: 1 0 100%; align-items: center; justify-content: center; border: 1px dashed #dfe2e7; border-radius: 8px; color: #7b818a; font-size: 10px; }
 .voiceStateError { flex-direction: column; gap: 9px; border-color: #f0b4a5; background: #fff8f6; color: #b64f3c; text-align: center; }
 .voiceRetry { border: 1px solid #f0a07d; border-radius: 6px; background: #fff; padding: 5px 10px; color: #c34d17; font: inherit; font-size: 9px; font-weight: 750; cursor: pointer; }
 .voiceRetry:hover { background: #fff1e9; }
-.voiceCard, .voiceCardActive { position: relative; min-width: 0; flex: 0 0 calc((100% - 32px) / 5); overflow: hidden; border: 1px solid #e4e6e9; border-radius: 8px; background: #fff; padding: 0 7px 8px; text-align: left; cursor: pointer; scroll-snap-align: start; }
+.voiceCardWrap { position: relative; min-width: 0; min-height: 0; height: 100%; }
+.voiceCard, .voiceCardActive { position: relative; width: 100%; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid #e4e6e9; border-radius: 8px; background: #fff; padding: 0 7px 8px; text-align: left; cursor: pointer; }
+.voiceCard, .voiceCardActive { height: 100%; }
 .voiceCard:hover { border-color: #f6b08c; }
 .voiceCardActive { border-color: var(--audio-orange); box-shadow: 0 0 0 1px var(--audio-orange); }
 .voiceImage { position: relative; height: 64px; margin: 0 -7px 7px; overflow: hidden; background: #f4f4f2; }
 .voiceImage img { object-fit: cover; object-position: center top; }
-.voiceImage span { position: absolute; right: 6px; bottom: 5px; display: grid; width: 21px; height: 21px; place-items: center; border-radius: 50%; background: #fff; color: #222831; box-shadow: 0 1px 4px #1113; }
+.voicePreviewButton { position: absolute; z-index: 1; top: 43px; right: 5px; display: grid; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 50%; background: #fff; color: #222831; box-shadow: 0 1px 4px #1113; cursor: pointer; }
+.voicePreviewButton:hover:not(:disabled) { background: #fff1e9; color: var(--audio-orange); }
+.voicePreviewButton:disabled { cursor: default; opacity: .48; }
+.voicePreviewButtonActive { background: var(--audio-orange); color: #fff; }
+.voicePreviewButtonActive:hover:not(:disabled) { background: #f05d16; color: #fff; }
+.voicePauseGlyph { display: block; width: 7px; height: 9px; border-right: 2px solid currentColor; border-left: 2px solid currentColor; }
 .voiceCard strong, .voiceCardActive strong { display: block; overflow: hidden; color: #20252d; font-size: 10px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .voiceCard small, .voiceCardActive small { display: block; overflow: hidden; margin-top: 3px; color: #777e87; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .voiceCheck { position: absolute; top: 6px; left: 6px; padding: 2px; border-radius: 50%; background: var(--audio-orange); color: #fff; }
@@ -162,6 +181,8 @@
 .sceneEditorField input:focus, .sceneEditorField select:focus, .sceneEditorField textarea:focus { border-color: var(--audio-orange); box-shadow: 0 0 0 2px #ff620b1c; }
 .sceneScriptField { margin-top: 9px; }
 .sceneEditorField textarea { min-height: 58px; resize: vertical; line-height: 1.4; }
+.sceneScriptField .promptBox { width: 100%; }
+.sceneScriptField .promptBox textarea { height: 96px; min-height: 96px; max-height: 360px; padding: 11px 12px 4px; border: 0; font-size: 12px; line-height: 1.43; }
 .sceneEditorFooter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; }
 .sceneEditorFooter small { min-width: 0; overflow: hidden; color: #7e848d; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .sceneGenerateHint { color: #c55b23; font-size: 8px; font-weight: 750; text-align: right; }
