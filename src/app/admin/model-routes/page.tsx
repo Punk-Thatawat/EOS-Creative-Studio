@@ -31,7 +31,7 @@ import {
   type GenerationModelOption,
   type ModelUploadConstraints,
 } from "@/lib/api/generation-models";
-import { getAdminAudioSettings, testAdminWaveSpeedConnection, updateAdminAudioSettings, type AdminAudioBackgroundMusicPreset, type AdminAudioFeature, type AdminAudioProvider, type AdminAudioSettings, type AdminAudioVoiceProfile, type AdminAudioVoiceSettings } from "@/lib/api/audio";
+import { generateAdminAudioVoicePreview, getAdminAudioSettings, testAdminElevenLabsConnection, testAdminWaveSpeedConnection, updateAdminAudioSettings, type AdminAudioBackgroundMusicPreset, type AdminAudioFeature, type AdminAudioProvider, type AdminAudioSettings, type AdminAudioVoiceProfile, type AdminAudioVoiceSettings } from "@/lib/api/audio";
 import { useSearchParams } from "next/navigation";
 
 const imageFunctions = [
@@ -367,10 +367,10 @@ const audioVoiceFields: Array<{ key: keyof AdminAudioVoiceSettings; label: strin
 ];
 
 const waveSpeedAudioModelOptions = [
-  { id: "elevenlabs/multilingual-v2", label: "WaveSpeed · Eleven Multilingual v2" },
-  { id: "elevenlabs/flash-v2.5", label: "WaveSpeed · Eleven Flash v2.5" },
-  { id: "elevenlabs/turbo-v2.5", label: "WaveSpeed · Eleven Turbo v2.5" },
-  { id: "elevenlabs/eleven-v3", label: "WaveSpeed · Eleven v3" },
+  { id: "elevenlabs/multilingual-v2", label: "ElevenLabs · Multilingual v2" },
+  { id: "elevenlabs/flash-v2.5", label: "ElevenLabs · Flash v2.5" },
+  { id: "elevenlabs/turbo-v2.5", label: "ElevenLabs · Turbo v2.5" },
+  { id: "elevenlabs/eleven-v3", label: "ElevenLabs · Eleven v3" },
   { id: "minimax/speech-2.6-hd", label: "WaveSpeed · MiniMax Speech 2.6 HD" },
   { id: "mirelo-ai/sfx-1.6/text-to-audio", label: "WaveSpeed · Mirelo SFX 1.6" },
   { id: "elevenlabs/music", label: "WaveSpeed · Eleven Music" },
@@ -460,7 +460,13 @@ const audioFeatureProfileRows: Array<{ key: AdminAudioFeature; label: string; de
 ];
 
 function audioProviderLabel(provider: AdminAudioProvider) {
-  return provider === "wavespeed" || provider === "elevenlabs" ? "WaveSpeed" : "Internal Audio Processor";
+  return provider === "wavespeed" ? "WaveSpeed" : provider === "elevenlabs" ? "ElevenLabs" : "Internal Audio Processor";
+}
+
+function audioProviderOptions(feature: AdminAudioFeature): AdminAudioProvider[] {
+  if (feature === "audioCleanup") return ["internal"];
+  if (feature === "voiceClone" || feature === "soundEffects") return ["wavespeed"];
+  return ["elevenlabs", "wavespeed"];
 }
 
 function BackgroundMusicPresetsEditor({ presets, onChange }: { presets: AdminAudioBackgroundMusicPreset[]; onChange: (presets: AdminAudioBackgroundMusicPreset[]) => void }) {
@@ -485,6 +491,7 @@ function AudioProviderSettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [generatingPreviewKey, setGeneratingPreviewKey] = useState("");
   const [selectedFeature, setSelectedFeature] = useState<AdminAudioFeature>("textToSpeech");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -517,6 +524,7 @@ function AudioProviderSettingsPanel() {
         backgroundMusicPresets: draft.backgroundMusicPresets,
         routing: draft.routing,
         wavespeed: draft.providerSettings.wavespeed,
+        elevenlabs: draft.providerSettings.elevenlabs,
         internal: draft.providerSettings.internal,
       });
       setSettings(next);
@@ -534,11 +542,11 @@ function AudioProviderSettingsPanel() {
     setMessage("");
     setError("");
     try {
-      const result = await testAdminWaveSpeedConnection();
+      const result = draft?.routing[selectedFeature] === "elevenlabs" ? await testAdminElevenLabsConnection() : await testAdminWaveSpeedConnection();
       if (result.ok) setMessage(result.message);
       else setError(result.message);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to test WaveSpeed connection");
+      } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to test audio provider connection");
     } finally {
       setTesting(false);
     }
@@ -547,6 +555,8 @@ function AudioProviderSettingsPanel() {
   const isDirty = Boolean(settings && draft && JSON.stringify(settings) !== JSON.stringify(draft));
   const selectedFeatureProfile = draft?.featureProfiles[selectedFeature];
   const selectedFeatureModelId = selectedFeatureProfile?.modelId ?? draft?.modelId ?? "";
+  const selectedFeatureProvider: "wavespeed" | "elevenlabs" = draft?.routing[selectedFeature] === "elevenlabs" ? "elevenlabs" : "wavespeed";
+  const selectedProviderSettings = draft?.providerSettings[selectedFeatureProvider];
   const configuredFeatureModelIds = Object.keys(selectedFeatureProfile?.models ?? {});
   const modelOptionMap = new Map<string, { id: string; label: string }>();
   [...configuredFeatureModelIds, selectedFeatureModelId].forEach((modelId) => {
@@ -575,6 +585,28 @@ function AudioProviderSettingsPanel() {
     const voices = baseVoices.map((voice, voiceIndex) => voiceIndex === index ? { ...voice, ...patch } : voice);
     return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...profile, voices, models: { ...(profile.models ?? {}), [modelId]: { voices } } } } };
   });
+  const generateVoicePreview = async (index: number, voice: AdminAudioVoiceProfile) => {
+    const voiceId = voice.id.trim();
+    if (!voiceId) {
+      setError("กรุณาใส่ Voice ID ก่อนสร้าง Preview");
+      return;
+    }
+    const feature = selectedFeature;
+    const modelId = selectedFeatureModelId;
+    const previewKey = `${feature}:${modelId}:${index}`;
+    setGeneratingPreviewKey(previewKey);
+    setMessage("");
+    setError("");
+    try {
+      const result = await generateAdminAudioVoicePreview({ feature, modelId, voiceId });
+      updateActiveVoice(index, { previewUrl: result.previewUrl, previewStorageKey: result.previewStorageKey });
+      setMessage(`สร้างเสียง Preview ภาษาไทยสำหรับ ${voice.name || `Voice ${index + 1}`} แล้ว — กด Save provider settings เพื่อบันทึก`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to generate voice preview");
+    } finally {
+      setGeneratingPreviewKey("");
+    }
+  };
   const addActiveVoice = () => setDraft((current) => {
     if (!current) return current;
     if (selectedFeature === "soundEffects" || selectedFeature === "audioCleanup") return current;
@@ -598,11 +630,11 @@ function AudioProviderSettingsPanel() {
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Audio administration</p>
         <h2 id="audio-provider-settings-heading" className="mt-1 text-xl font-bold tracking-tight">Provider routing &amp; settings</h2>
-        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">กำหนด provider ของแต่ละ tab และตั้งค่า WaveSpeed / Internal Audio Processor จากจุดเดียว</p>
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">กำหนด provider ของแต่ละ tab และตั้งค่า ElevenLabs / WaveSpeed / Internal Audio Processor จากจุดเดียว</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-white"><span className="h-2 w-2 rounded-full bg-[#f47d4b]" />Audio providers</span>
-        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] ${draft?.providerConfigured ? "bg-[#e3f3e9] text-[#347454]" : "bg-[#fff0e9] text-primary"}`}><span className={`h-2 w-2 rounded-full ${draft?.providerConfigured ? "bg-[#4c9b72]" : "bg-primary"}`} />WaveSpeed {draft?.providerConfigured ? "configured" : "missing"}</span>
+        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] ${draft?.providerConfigured ? "bg-[#e3f3e9] text-[#347454]" : "bg-[#fff0e9] text-primary"}`}><span className={`h-2 w-2 rounded-full ${draft?.providerConfigured ? "bg-[#4c9b72]" : "bg-primary"}`} />ElevenLabs {draft?.providerConfigured ? "configured" : "missing"}</span>
       </div>
     </div>
 
@@ -612,16 +644,16 @@ function AudioProviderSettingsPanel() {
     {loading || !draft ? <div className="mt-5 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">Loading audio provider settings...</div> : <>
       <section className="mt-5 rounded-2xl border border-border bg-[#fcfaf8] p-4" aria-labelledby="audio-routing-heading">
         <div className="flex items-start justify-between gap-3"><div><h3 id="audio-routing-heading" className="text-sm font-bold">Feature routing</h3><p className="mt-1 text-[11px] text-muted-foreground">เลือก provider ที่จะรับผิดชอบแต่ละ tab ใน Audio Studio</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">5 features</span></div>
-        <div className="mt-4 space-y-2">{audioRoutingRows.map((row) => <div key={row.key} className="flex flex-col justify-between gap-3 rounded-xl border border-border bg-white p-3 sm:flex-row sm:items-center"><div className="min-w-0"><p className="text-xs font-bold">{row.label}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{row.description}</p></div><span className={`inline-flex w-fit shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold ${draft.routing[row.key] === "wavespeed" || draft.routing[row.key] === "elevenlabs" ? "bg-[#fff0e9] text-primary" : "bg-[#eeeaf8] text-[#66518f]"}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{audioProviderLabel(draft.routing[row.key])}</span></div>)}</div>
+        <div className="mt-4 space-y-2">{audioRoutingRows.map((row) => <div key={row.key} className="flex flex-col justify-between gap-3 rounded-xl border border-border bg-white p-3 sm:flex-row sm:items-center"><div className="min-w-0"><p className="text-xs font-bold">{row.label}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{row.description}</p></div><select value={draft.routing[row.key]} onChange={(event) => setDraft((current) => current ? { ...current, routing: { ...current.routing, [row.key]: event.target.value as AdminAudioProvider } } : current)} className="h-9 w-full shrink-0 rounded-lg border border-border bg-white px-2.5 text-xs font-bold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10 sm:w-auto" aria-label={`${row.label} provider`}>{audioProviderOptions(row.key).map((provider) => <option key={provider} value={provider}>{audioProviderLabel(provider)}</option>)}</select></div>)}</div>
       </section>
 
-      <section className="mt-4 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4" aria-labelledby="wavespeed-settings-heading">
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Provider: WaveSpeed</p><h3 id="wavespeed-settings-heading" className="mt-1 text-base font-bold">Speech, dialogue, clone &amp; sound effects</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">API key อยู่ใน backend secret; หน้านี้ตั้งค่า model path, voice mapping และ transport ได้</p></div><Button variant="outline" size="sm" onClick={() => void testConnection()} disabled={testing}>{testing ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {testing ? "Testing..." : "Test connection"}</Button></div>
+      <section className="mt-4 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4" aria-labelledby="audio-provider-details-heading">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Provider: {audioProviderLabel(selectedFeatureProvider)}</p><h3 id="audio-provider-details-heading" className="mt-1 text-base font-bold">Speech, dialogue, clone &amp; sound effects</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">API key อยู่ใน backend secret; หน้านี้ตั้งค่า model, voice mapping และ transport ได้</p></div><Button variant="outline" size="sm" onClick={() => void testConnection()} disabled={testing}>{testing ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {testing ? "Testing..." : "Test connection"}</Button></div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{audioFeatureProfileRows.map((row) => <button key={row.key} type="button" onClick={() => setSelectedFeature(row.key)} className={`rounded-xl border px-3 py-2.5 text-left transition ${selectedFeature === row.key ? "border-primary bg-[#fff0e9]" : "border-border bg-white hover:border-primary/50"}`}><span className="block text-xs font-bold">{row.label}</span><span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{draft.featureProfiles[row.key]?.modelId ?? "Not configured"}</span></button>)}</div>
         <label className="mt-4 block max-w-xl"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{audioFeatureProfileRows.find((row) => row.key === selectedFeature)?.label} model</span><select value={selectedFeatureModelId} onChange={(event) => selectFeatureModel(event.target.value)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${selectedFeature} model`}>{modelOptions.map((option) => <option key={option.id} value={option.id}>{option.label} ({option.id})</option>)}</select><span className="mt-1 block text-[10px] text-muted-foreground">ตั้ง model แยกเฉพาะ tab นี้</span></label>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Default format</span><select value={draft.providerSettings.wavespeed.defaultFormat} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, wavespeed: { ...current.providerSettings.wavespeed, defaultFormat: event.target.value as "mp3" | "wav" | "ogg" } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="WaveSpeed default format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="ogg">OGG</option></select></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Request timeout (ms)</span><input type="number" min="1000" max="180000" step="1000" value={draft.providerSettings.wavespeed.timeoutMs} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, wavespeed: { ...current.providerSettings.wavespeed, timeoutMs: Number(event.target.value) } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="WaveSpeed request timeout" /></label></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Default format</span><select value={selectedProviderSettings?.defaultFormat ?? "mp3"} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, [selectedFeatureProvider]: { ...current.providerSettings[selectedFeatureProvider], defaultFormat: event.target.value as "mp3" | "wav" | "ogg" } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioProviderLabel(selectedFeatureProvider)} default format`}><option value="mp3">MP3</option><option value="wav">WAV</option><option value="ogg">OGG</option></select></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Request timeout (ms)</span><input type="number" min="1000" max="180000" step="1000" value={selectedProviderSettings?.timeoutMs ?? 60000} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, [selectedFeatureProvider]: { ...current.providerSettings[selectedFeatureProvider], timeoutMs: Number(event.target.value) } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioProviderLabel(selectedFeatureProvider)} request timeout`} /></label></div>
         <div className="mt-4 space-y-3">
-           {selectedFeature === "soundEffects" || selectedFeature === "audioCleanup" ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">This tab does not use voice IDs. Configure its model above.</div> : <><div className="space-y-3">{activeVoices.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">No voice IDs configured for this model. Add one below.</div> : activeVoices.map((voice, index) => <div key={`${selectedFeature}-${selectedFeatureModelId}-${index}`} className="rounded-xl border border-border bg-white p-3"><div className="mb-2 flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice {index + 1}</span><button type="button" className="inline-flex items-center gap-1 text-[10px] font-bold text-[#9f3b3b] hover:underline" onClick={() => removeActiveVoice(index)}><X size={13} /> Remove</button></div><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice ID</span><input value={voice.id} onChange={(event) => updateActiveVoice(index, { id: event.target.value })} placeholder="JBFqnCBsd6RMkjVDRZzb" className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} ID for ${selectedFeatureModelId}`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Display name</span><input value={voice.name} onChange={(event) => updateActiveVoice(index, { name: event.target.value })} placeholder="Narrator" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} name`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Description</span><input value={voice.description} onChange={(event) => updateActiveVoice(index, { description: event.target.value })} placeholder="Warm and natural" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} description`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Image URL</span><input type="text" value={voice.imageUrl ?? ""} onChange={(event) => updateActiveVoice(index, { imageUrl: event.target.value })} placeholder="https://.../voice.png or /generated-assets/..." className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} image URL for ${selectedFeatureModelId}`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Preview audio URL</span><input type="url" value={voice.previewUrl ?? ""} onChange={(event) => updateActiveVoice(index, { previewUrl: event.target.value })} placeholder="https://.../voice-preview.mp3" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} preview audio URL for ${selectedFeatureModelId}`} /></label></div></div>)}</div><button type="button" className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-dashed border-primary/50 bg-white px-4 text-xs font-bold text-primary transition hover:bg-[#fff0e9]" onClick={addActiveVoice}><span className="text-base leading-none">+</span> Add voice ID</button></>}
+            {selectedFeature === "soundEffects" || selectedFeature === "audioCleanup" ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">This tab does not use voice IDs. Configure its model above.</div> : <><div className="space-y-3">{activeVoices.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">No voice IDs configured for this model. Add one below.</div> : activeVoices.map((voice, index) => { const previewKey = `${selectedFeature}:${selectedFeatureModelId}:${index}`; return <div key={`${selectedFeature}-${selectedFeatureModelId}-${index}`} className="rounded-xl border border-border bg-white p-3"><div className="mb-2 flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice {index + 1}</span><button type="button" className="inline-flex items-center gap-1 text-[10px] font-bold text-[#9f3b3b] hover:underline" onClick={() => removeActiveVoice(index)}><X size={13} /> Remove</button></div><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice ID</span><input value={voice.id} onChange={(event) => updateActiveVoice(index, { id: event.target.value })} placeholder="JBFqnCBsd6RMkjVDRZzb" className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} ID for ${selectedFeatureModelId}`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Display name</span><input value={voice.name} onChange={(event) => updateActiveVoice(index, { name: event.target.value })} placeholder="Narrator" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} name`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Description</span><input value={voice.description} onChange={(event) => updateActiveVoice(index, { description: event.target.value })} placeholder="Warm and natural" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} description`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Image URL</span><input type="text" value={voice.imageUrl ?? ""} onChange={(event) => updateActiveVoice(index, { imageUrl: event.target.value })} placeholder="https://.../voice.png or /generated-assets/..." className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} image URL for ${selectedFeatureModelId}`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Preview audio URL</span><div className="mt-1.5 flex gap-2"><input type="url" value={voice.previewUrl ?? ""} onChange={(event) => updateActiveVoice(index, { previewUrl: event.target.value })} placeholder="https://.../voice-preview.mp3" className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} preview audio URL for ${selectedFeatureModelId}`} /><button type="button" className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl border border-primary/50 bg-[#fff0e9] px-2.5 text-[10px] font-bold text-primary transition hover:bg-[#ffe5d9] disabled:cursor-not-allowed disabled:opacity-60" onClick={() => void generateVoicePreview(index, voice)} disabled={Boolean(generatingPreviewKey)} aria-busy={generatingPreviewKey === previewKey} title="สร้าง Preview ภาษาไทยผ่าน WaveSpeed">{generatingPreviewKey === previewKey ? <LoaderCircle size={13} className="animate-spin" /> : <AudioWaveform size={13} />} {generatingPreviewKey === previewKey ? "Generating..." : voice.previewUrl ? "Regenerate" : "Generate"}</button></div><span className="mt-1 block text-[10px] text-muted-foreground">สร้างตัวอย่างภาษาไทยผ่าน WaveSpeed และมีค่าใช้จ่ายตามจำนวนตัวอักษร</span></label></div></div>; })}</div><button type="button" className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-dashed border-primary/50 bg-white px-4 text-xs font-bold text-primary transition hover:bg-[#fff0e9]" onClick={addActiveVoice}><span className="text-base leading-none">+</span> Add voice ID</button></>}
         </div>
       </section>
 
@@ -879,14 +911,14 @@ function AdminModelRoutesContent() {
             <div className="min-h-[calc(100vh-120px)] overflow-x-clip rounded-3xl bg-[#faf8f6] px-4 pb-20 sm:px-6 lg:px-8 lg:pb-24">
       <div className="mx-auto max-w-[1180px] pt-6 lg:pt-8">
         <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-          <div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><ServerCog size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">{feature === "audio" ? "WaveSpeed audio provider" : "Generation model routes"}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{feature === "audio" ? "Configure the WaveSpeed provider used by Create > Audio." : "Choose the model that powers each creative feature. Changes apply to new generations immediately."}</p></div>
-          {feature === "audio" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">WaveSpeed provider configuration</span> : <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void openAssignment()} disabled={busy || loading}><Settings2 size={17} /> Assign models</Button><Button variant="outline" size="lg" onClick={() => void sync()} disabled={busy || loading}><CloudDownload size={17} /> {busy ? "Syncing catalog..." : "Sync provider catalog"}</Button></div>}
+           <div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><ServerCog size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">{feature === "audio" ? "Audio provider settings" : "Generation model routes"}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{feature === "audio" ? "Configure ElevenLabs, WaveSpeed and internal audio processing for Create > Audio." : "Choose the model that powers each creative feature. Changes apply to new generations immediately."}</p></div>
+           {feature === "audio" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">ElevenLabs / WaveSpeed configuration</span> : <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void openAssignment()} disabled={busy || loading}><Settings2 size={17} /> Assign models</Button><Button variant="outline" size="lg" onClick={() => void sync()} disabled={busy || loading}><CloudDownload size={17} /> {busy ? "Syncing catalog..." : "Sync provider catalog"}</Button></div>}
         </div>
 
         {error ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc2c2] bg-[#fff6f6] p-4 text-sm text-[#9f3b3b]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={18} /><div><p className="font-bold">Couldn&apos;t load model routes</p><p className="mt-1 text-xs leading-5">{error}</p><button type="button" className="mt-2 text-xs font-bold underline underline-offset-2" onClick={() => void load()}>Try again</button></div></div> : null}
         {message ? <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#bfe1cc] bg-[#f3fbf5] p-4 text-sm text-[#347454]" role="status"><CheckCircle2 size={18} /><p className="font-semibold">{message}</p></div> : null}
 
-        {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="WaveSpeed" detail="Selected provider" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Provider API" value="WaveSpeed" detail="Text-to-Speech" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
+         {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
 
         {feature === "audio" ? <AudioProviderSettingsPanel /> : null}
 

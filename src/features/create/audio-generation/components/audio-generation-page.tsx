@@ -428,7 +428,7 @@ export function AudioGenerationPage() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(78);
-  const [backgroundMusic, setBackgroundMusic] = useState(true);
+  const [backgroundMusic, setBackgroundMusic] = useState(false);
   const [backgroundMusicPreset, setBackgroundMusicPreset] = useState("");
   const [backgroundMusicPresets, setBackgroundMusicPresets] = useState<AudioBackgroundMusic[]>([]);
   const [backgroundMusicLoadState, setBackgroundMusicLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -463,7 +463,7 @@ export function AudioGenerationPage() {
       if (cancelled) return;
       setBackgroundMusicPresets(items);
       setBackgroundMusicPreset((current) => items.some((preset) => preset.key === current) ? current : items[0]?.key ?? "");
-      setBackgroundMusic(items.length > 0);
+      setBackgroundMusic(false);
       setBackgroundMusicLoadState("ready");
     }).catch(() => {
       if (cancelled) return;
@@ -1069,9 +1069,9 @@ export function AudioGenerationPage() {
                 <button type="button" className={selectedVoice === voice.key ? styles.voiceCardActive : styles.voiceCard} onClick={() => setSelectedVoice(voice.key)} aria-pressed={selectedVoice === voice.key}>
                   <div className={styles.voiceImage}><Image src={voice.imageUrl || voiceImages[(pageIndex * 10 + index) % voiceImages.length]} alt="" fill unoptimized sizes="60px" /></div><strong>{voice.name}</strong><small>{voice.description || "Voice"}</small>{selectedVoice === voice.key ? <Check size={14} className={styles.voiceCheck} /> : null}
                 </button>
-                <button type="button" data-voice-key={voice.key} className={`${styles.voicePreviewButton} ${previewingVoiceKey === voice.key ? styles.voicePreviewButtonActive : ""}`} onClick={handleVoicePreviewClick} disabled={!voice.previewUrl} aria-label={voice.previewUrl ? (previewingVoiceKey === voice.key ? `หยุดตัวอย่างเสียง ${voice.name}` : `ฟังตัวอย่างเสียง ${voice.name}`) : `ไม่มีตัวอย่างเสียง ${voice.name}`} title={voice.previewUrl ? "ฟังตัวอย่างเสียง" : "ไม่มีตัวอย่างเสียง"}>
+                {voice.previewUrl ? <button type="button" data-voice-key={voice.key} className={`${styles.voicePreviewButton} ${previewingVoiceKey === voice.key ? styles.voicePreviewButtonActive : ""}`} onClick={handleVoicePreviewClick} aria-label={previewingVoiceKey === voice.key ? `หยุดตัวอย่างเสียง ${voice.name}` : `ฟังตัวอย่างเสียง ${voice.name}`} title="ฟังตัวอย่างเสียง">
                   {previewingVoiceKey === voice.key ? <span className={styles.voicePauseGlyph} /> : <Play size={11} fill="currentColor" />}
-                </button>
+                </button> : null}
               </div>)}
             </div>) : null}
             </div>
@@ -1117,7 +1117,7 @@ export function AudioGenerationPage() {
         <div className={styles.settingBlock}><SelectField label="VOICE MODEL" value={selectedModel} onChange={(modelId) => { setSelectedModel(modelId); setSelectedVoice(""); }} disabled={modelLoadState !== "ready" || availableModels.length === 0}>{modelLoadState === "loading" ? <option value="">Loading models...</option> : availableModels.length ? availableModels.map((model) => <option key={model.key} value={model.key}>{model.name}</option>) : <option value="">No models configured</option>}</SelectField></div>
         <div className={styles.settingBlock}><FieldLabel>OUTPUT FORMAT</FieldLabel><div className={styles.formatRow}>{["MP3", "WAV", "OGG"].map((item) => <button type="button" key={item} className={format === item ? styles.formatActive : styles.formatButton} onClick={() => setFormat(item)}>{item}</button>)}</div></div>
         <div className={styles.settingBlock}><div className={styles.speedHeader}><FieldLabel>SPEECH SPEED</FieldLabel><strong>{speed.toFixed(2)}x</strong></div><input className={styles.speedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.rangeLabels}><span>0.5x</span><span>1x</span><span>2x</span></div></div>
-        <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>AUTO BACKGROUND MUSIC</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}><span /></button></div><SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}>{backgroundMusicLoadState === "loading" ? <option value="">Loading music...</option> : backgroundMusicPresets.length ? backgroundMusicPresets.map((preset) => <option key={preset.key} value={preset.key}>{preset.name}</option>) : <option value="">No music configured</option>}</SelectField></div>
+        <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>AUTO BACKGROUND MUSIC</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}><span /></button></div>{backgroundMusic ? <SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}>{backgroundMusicLoadState === "loading" ? <option value="">Loading music...</option> : backgroundMusicPresets.length ? backgroundMusicPresets.map((preset) => <option key={preset.key} value={preset.key}>{preset.name}</option>) : <option value="">No music configured</option>}</SelectField> : null}</div>
          <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}><div><strong>ESTIMATED CREDITS</strong><b>{creditEstimateLoading ? "Calculating…" : creditEstimate ? `~ ${formatCreditAmount(creditEstimate.creditCost)} Credits` : "Pricing unavailable"}</b></div><small>{creditEstimate ? `Speech ${formatCreditAmount(creditEstimate.speechCredits)}${creditEstimate.backgroundMusicCredits > 0 ? ` + Music ${formatCreditAmount(creditEstimate.backgroundMusicCredits)}` : ""} · ${creditEstimate.sceneCount} scene${creditEstimate.sceneCount === 1 ? "" : "s"}` : "Calculated from selected model, text, scenes, and background music"}</small><span>{creditBalance === null ? "Credit balance unavailable" : `${formatCreditAmount(creditBalance)} Credits available`} · {creditEstimate?.backgroundMusicSource === "admin-audio-url" ? "Admin audio URL" : "Failed generations refunded"}</span></div>
           <button type="button" className={styles.generateButton} onClick={() => void (isSceneMode ? handleGenerateScenes() : handleGenerate())} disabled={isGenerating || !selectedModel || voiceLoadState !== "ready" || (isSceneMode ? hasIncompleteScene : !prompt.trim() || !selectedVoice)}>{isGenerating ? <><span className={styles.spinner} /> GENERATING...</> : <>GENERATE AUDIO <Sparkles size={17} /></>}</button>
         <p className={styles.securityNote}><LockKeyhole size={11} /> Secure generation. Your data is private.</p>

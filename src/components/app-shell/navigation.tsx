@@ -127,7 +127,7 @@ function AudioSidebarNavigation({ pathname }: { pathname: string }) {
       </SidebarMenu></SidebarGroup>
       <SidebarGroup className="mt-auto px-0 pt-3"><SidebarMenu><SidebarMenuItem><SidebarMenuButton render={<Link href="/settings" />} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"><Settings size={18} /><span>Settings</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroup>
     </SidebarContent>
-    <SidebarFooter className="px-0 pt-3"><div className="relative -top-12 aspect-[1.04] overflow-hidden rounded-[14px]"><Image src="/generated-assets/audio-ui/audio-presenter-promo.png" alt="AI Presenter — that connects" fill unoptimized sizes="220px" /></div><p className="relative top-3 px-2 pt-2 text-[10px] text-muted-foreground">© 2025 EOS. All rights reserved.</p></SidebarFooter>
+     <SidebarFooter className="px-0 pt-3"><p className="px-2 pt-2 text-[10px] text-muted-foreground">© 2025 EOS. All rights reserved.</p></SidebarFooter>
   </Sidebar>;
 }
 

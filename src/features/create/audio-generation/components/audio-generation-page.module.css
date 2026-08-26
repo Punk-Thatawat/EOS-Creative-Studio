@@ -74,7 +74,8 @@
 .waveformPlaying .waveformPlayhead { box-shadow: 0 0 0 1px #fff, 0 0 10px #ff620bcc; transition: none; }
 @media (prefers-reduced-motion: reduce) { .waveformBar { animation: none !important; transition: none; } .waveformPlayhead { transition: none; } }
 .playerRow { display: flex; align-items: center; gap: 13px; min-width: 0; border-top: 1px solid #f0f1f3; padding-top: 10px; }
-.playButton { display: grid; width: 43px; height: 43px; flex: none; place-items: center; border: 0; border-radius: 50%; background: #111318; color: #fff; box-shadow: 0 0 0 2px var(--audio-orange); cursor: pointer; }
+.playButton { display: grid; width: 43px; height: 43px; flex: none; place-items: center; border: 0; border-radius: 50%; background: #111318; color: #fff; box-shadow: 0 0 0 2px var(--audio-orange); padding: 0; line-height: 0; cursor: pointer; }
+.playButton > svg, .historyPlay > svg, .voicePreviewButton > svg { display: block; margin: 0; }
 .playButton:hover { background: var(--audio-orange); }
 .pauseGlyph { display: block; width: 12px; height: 17px; border-right: 4px solid currentColor; border-left: 4px solid currentColor; }
 .skipButton { position: relative; display: grid; width: 26px; height: 30px; place-items: center; border: 0; background: transparent; color: #1a2029; cursor: pointer; }
@@ -103,7 +104,7 @@
 .historyItemRow .historyItem:hover, .historyItemRowActive .historyItemActive:hover { border: 0; background: transparent; }
 .historyDelete { display: grid; width: 29px; height: 29px; flex: none; margin-right: 4px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #9aa0a8; cursor: pointer; }
 .historyDelete:hover { background: #ffe9e5; color: #d54c35; }
-.historyPlay { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border-radius: 50%; background: #171a20; color: #fff; }
+.historyPlay { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border-radius: 50%; background: #171a20; color: #fff; padding: 0; line-height: 0; }
 .historyItemActive .historyPlay { background: var(--audio-orange); }
 .historyLoading { width: 24px; height: 24px; flex: none; border: 3px solid #ffd6c2; border-top-color: var(--audio-orange); border-right-color: var(--audio-orange); border-radius: 50%; animation: spin .75s linear infinite; }
 .historyCopy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
@@ -140,8 +141,9 @@
 .voiceCard:hover { border-color: #f6b08c; }
 .voiceCardActive { border-color: var(--audio-orange); box-shadow: 0 0 0 1px var(--audio-orange); }
 .voiceImage { position: relative; height: 64px; margin: 0 -7px 7px; overflow: hidden; background: #f4f4f2; }
-.voiceImage img { object-fit: cover; object-position: center top; }
-.voicePreviewButton { position: absolute; z-index: 1; top: 43px; right: 5px; display: grid; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 50%; background: #fff; color: #222831; box-shadow: 0 1px 4px #1113; cursor: pointer; }
+.voiceImage img { object-fit: cover; object-position: center center; }
+.voicePreviewButton { position: absolute; z-index: 1; top: 36px; right: 5px; display: grid; width: 24px; height: 24px; place-items: center; border: 2px solid #fff; border-radius: 50%; background: rgba(255, 255, 255, .96); color: #222831; box-shadow: 0 2px 6px #1114; padding: 0; line-height: 0; cursor: pointer; transition: background-color .15s ease, color .15s ease, transform .15s ease; }
+.voicePreviewButton:hover { transform: scale(1.06); }
 .voicePreviewButton:hover:not(:disabled) { background: #fff1e9; color: var(--audio-orange); }
 .voicePreviewButton:disabled { cursor: default; opacity: .48; }
 .voicePreviewButtonActive { background: var(--audio-orange); color: #fff; }

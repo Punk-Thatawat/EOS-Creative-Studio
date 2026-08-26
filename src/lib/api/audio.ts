@@ -146,7 +146,7 @@ export type AdminAudioVoiceSettings = {
   corporate: string;
   podcastHost: string;
 };
-export type AdminAudioVoiceProfile = { id: string; name: string; description: string; imageUrl: string; previewUrl: string };
+export type AdminAudioVoiceProfile = { id: string; name: string; description: string; imageUrl: string; previewUrl: string; previewStorageKey?: string };
 export type AdminAudioModelProfile = { voices: AdminAudioVoiceProfile[] };
 export type AdminAudioFeatureProfile = { modelId: string; voices: AdminAudioVoiceProfile[]; models: Record<string, AdminAudioModelProfile> };
 export type AdminAudioBackgroundMusicPreset = {
@@ -552,6 +552,7 @@ function normalizeAdminVoiceProfiles(value: unknown, fallback: AdminAudioVoicePr
         description: typeof candidate.description === "string" ? candidate.description.trim() : "",
         imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl.trim() : "",
         previewUrl: typeof candidate.previewUrl === "string" ? candidate.previewUrl.trim() : "",
+        ...(typeof candidate.previewStorageKey === "string" && candidate.previewStorageKey.trim() ? { previewStorageKey: candidate.previewStorageKey.trim() } : {}),
       };
     }).filter((profile): profile is AdminAudioVoiceProfile => profile !== null);
     return profiles;
@@ -562,7 +563,7 @@ function normalizeAdminVoiceProfiles(value: unknown, fallback: AdminAudioVoicePr
       const id = typeof rawValue === "string" ? rawValue.trim() : typeof candidate.id === "string" ? candidate.id.trim() : typeof candidate.voiceId === "string" ? candidate.voiceId.trim() : "";
       if (!id) return null;
       const legacy = legacyVoiceNames.find((item) => item.key === key);
-      return { id, name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim() : legacy?.name ?? (key || `Voice ${index + 1}`), description: typeof candidate.description === "string" ? candidate.description.trim() : legacy?.description ?? "", imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl.trim() : "", previewUrl: typeof candidate.previewUrl === "string" ? candidate.previewUrl.trim() : "" };
+      return { id, name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim() : legacy?.name ?? (key || `Voice ${index + 1}`), description: typeof candidate.description === "string" ? candidate.description.trim() : legacy?.description ?? "", imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl.trim() : "", previewUrl: typeof candidate.previewUrl === "string" ? candidate.previewUrl.trim() : "", ...(typeof candidate.previewStorageKey === "string" && candidate.previewStorageKey.trim() ? { previewStorageKey: candidate.previewStorageKey.trim() } : {}) };
     }).filter((profile): profile is AdminAudioVoiceProfile => profile !== null);
     return profiles.length ? profiles : fallback;
   }
@@ -643,15 +644,16 @@ function normalizeAdminAudioSettings(value: AdminAudioSettings): AdminAudioSetti
   const rawProviderSettings = value.providerSettings ?? {};
   const legacyProviderSettings = rawProviderSettings.elevenlabs ?? { defaultFormat: "mp3" as const, timeoutMs: 60000 };
   const wavespeedProviderSettings = rawProviderSettings.wavespeed ?? legacyProviderSettings;
+  const elevenLabsProviderSettings = rawProviderSettings.elevenlabs ?? legacyProviderSettings;
   return {
     ...value,
-    provider: "wavespeed",
+    provider: value.provider === "elevenlabs" || value.provider === "internal" ? value.provider : "wavespeed",
     modelId,
     voices,
     modelProfiles,
     featureProfiles,
     backgroundMusicPresets,
-    providerSettings: { ...rawProviderSettings, wavespeed: wavespeedProviderSettings },
+    providerSettings: { ...rawProviderSettings, wavespeed: wavespeedProviderSettings, elevenlabs: elevenLabsProviderSettings },
   };
 }
 
@@ -682,5 +684,25 @@ export async function updateAdminAudioProvider(provider: "wavespeed" | "elevenla
 export async function testAdminWaveSpeedConnection(): Promise<{ provider: "wavespeed"; ok: boolean; message: string }> {
   const payload = await adminRequest("/api/v1/admin/audio-settings/providers/wavespeed/test", { method: "POST" }) as { data?: { provider: "wavespeed"; ok: boolean; message: string } };
   if (!payload.data) throw new Error("Unable to test WaveSpeed connection");
+  return payload.data;
+}
+
+export async function testAdminElevenLabsConnection(): Promise<{ provider: "elevenlabs"; ok: boolean; message: string }> {
+  const payload = await adminRequest("/api/v1/admin/audio-settings/providers/elevenlabs/test", { method: "POST" }) as { data?: { provider: "elevenlabs"; ok: boolean; message: string } };
+  if (!payload.data) throw new Error("Unable to test ElevenLabs connection");
+  return payload.data;
+}
+
+export type AdminAudioVoicePreviewInput = {
+  feature: AdminAudioFeature;
+  modelId?: string;
+  voiceId: string;
+  text?: string;
+};
+export type AdminAudioVoicePreviewResult = { previewUrl: string; previewStorageKey: string; providerRequestId?: string };
+
+export async function generateAdminAudioVoicePreview(input: AdminAudioVoicePreviewInput): Promise<AdminAudioVoicePreviewResult> {
+  const payload = await adminRequest("/api/v1/admin/audio-settings/voice-preview", { method: "POST", body: JSON.stringify(input) }) as { data?: AdminAudioVoicePreviewResult };
+  if (!payload.data?.previewUrl || !payload.data.previewStorageKey) throw new Error("Unable to generate voice preview");
   return payload.data;
 }

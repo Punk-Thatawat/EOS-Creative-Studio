@@ -103,6 +103,16 @@ const generationModeOptions = [
     label: "Multi-Scene Storyboard",
     description: "Build the video scene by scene",
   },
+  {
+    value: "continuous",
+    label: "Continuous",
+    description: "Continue each scene from the previous frame",
+  },
+  {
+    value: "hybrid",
+    label: "Hybrid",
+    description: "Choose a new image or previous frame per scene",
+  },
 ] as const;
 const sceneSourceOptions = [
   { value: "manual", label: "New image" },
@@ -307,7 +317,7 @@ export function VideoGenerationPage() {
   const [generationMode, setGenerationMode] = useState<(typeof generationModeOptions)[number]["value"]>("multi-scene");
   const [videoMode, setVideoMode] =
     useState<(typeof videoModeOptions)[number]["value"]>("storyboard");
-  const [isVideoModeMenuOpen, setIsVideoModeMenuOpen] = useState(false);
+  const [isGenerationModeMenuOpen, setIsGenerationModeMenuOpen] = useState(false);
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   const [extendModels, setExtendModels] = useState<GenerationModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
@@ -706,31 +716,30 @@ export function VideoGenerationPage() {
     }
     setOpenSceneSourceMenu(index);
   };
-  const selectVideoMode = (
-    nextMode: (typeof videoModeOptions)[number]["value"],
-  ) => {
-    setVideoMode(nextMode);
-    setOpenSceneSourceMenu(null);
-    setSceneSourceMenuPosition(null);
-    setStoryboardScenes((current) =>
-      current.map((scene, index) => ({
-        ...scene,
-        startFrameSource:
-          index === 0 || nextMode === "storyboard"
-            ? "manual"
-            : nextMode === "continuous"
-              ? "previous_last_frame"
-              : scene.startFrameSource,
-      })),
-    );
-  };
   const selectGenerationMode = (
     nextMode: (typeof generationModeOptions)[number]["value"],
   ) => {
     setGenerationMode(nextMode);
-    setIsVideoModeMenuOpen(false);
+    setIsGenerationModeMenuOpen(false);
     setOpenSceneSourceMenu(null);
     setSceneSourceMenuPosition(null);
+    const nextVideoMode = nextMode === "continuous"
+      ? "continuous"
+      : nextMode === "hybrid"
+        ? "hybrid"
+        : "storyboard";
+    setVideoMode(nextVideoMode);
+    setStoryboardScenes((current) =>
+      current.map((scene, index) => ({
+        ...scene,
+        startFrameSource:
+          index === 0 || nextVideoMode === "storyboard"
+            ? "manual"
+            : nextVideoMode === "continuous"
+              ? "previous_last_frame"
+              : scene.startFrameSource,
+      })),
+    );
   };
   const updateSceneSource = (index: number, source: StartFrameSource) => {
     if (index === 0) return;
@@ -845,20 +854,10 @@ export function VideoGenerationPage() {
       : `${creditEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits`;
   const firstScene = storyboardScenes[0];
   const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
-  const canAddScene = generationMode === "multi-scene" && Boolean(firstScene?.image && firstSceneHasPrompt);
-  const getVideoModeDescription = (mode: (typeof videoModeOptions)[number]["value"]) => {
-    if (mode === "continuous") {
-      return hasNativeExtend
-        ? "Continue with Native Extend"
-        : "Continue from previous frame; may not be seamless";
-    }
-    if (mode === "hybrid") {
-      return hasNativeExtend
-        ? "Choose new images or Native Extend"
-        : "Choose start frames; continuation may not be seamless";
-    }
-    return "Every scene starts from its own image";
-  };
+  const canAddScene = generationMode !== "single-image" && Boolean(firstScene?.image && firstSceneHasPrompt);
+  const selectedGenerationMode =
+    generationModeOptions.find((option) => option.value === generationMode) ??
+    generationModeOptions[0];
   const selectedVideoMode =
     videoModeOptions.find((option) => option.value === videoMode) ??
     videoModeOptions[0];
@@ -881,15 +880,16 @@ export function VideoGenerationPage() {
   const openEditSceneModal = (index: number) => {
     const scene = storyboardScenes[index];
     if (!scene) return;
+    const sceneSource = getSceneSource(scene, index);
     setEditingSceneIndex(index);
     setSceneError(null);
     setScenePrompt(scene.prompt);
     setSceneDuration(scene.duration);
-    setSceneImage(scene.image);
-    setSceneImageFile(scene.imageFile);
+    setSceneImage(sceneSource === "manual" ? scene.image : null);
+    setSceneImageFile(sceneSource === "manual" ? scene.imageFile : null);
     setSceneEndImage(scene.endImage);
     setSceneEndImageFile(scene.endImageFile);
-    setSceneStartFrameSource(getSceneSource(scene, index));
+    setSceneStartFrameSource(sceneSource);
     setSceneModelParams({
       ...modelSpecificDefaults(models.find((model) => model.model === selectedModel)),
       ...scene.modelParams,
@@ -1246,20 +1246,45 @@ export function VideoGenerationPage() {
                   <h2 id="video-mode-title">GENERATION MODE</h2>
                   <Info size={11} />
                 </div>
-                <div className={styles.generationModeOptions} role="radiogroup" aria-label="Video generation mode">
-                  {generationModeOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={generationMode === option.value ? styles.generationModeSelected : undefined}
-                      role="radio"
-                      aria-checked={generationMode === option.value}
-                      onClick={() => selectGenerationMode(option.value)}
+                <div className={`${styles.modelDropdown} ${styles.generationModeDropdown}`}>
+                  <button
+                    type="button"
+                    className={styles.modelDropdownTrigger}
+                    aria-haspopup="listbox"
+                    aria-expanded={isGenerationModeMenuOpen}
+                    onClick={() => setIsGenerationModeMenuOpen((open) => !open)}
+                  >
+                    <span>
+                      <strong>{selectedGenerationMode.label}</strong>
+                      <small>{selectedGenerationMode.description}</small>
+                    </span>
+                    <ChevronDown size={17} />
+                  </button>
+                  {isGenerationModeMenuOpen ? (
+                    <div
+                      className={styles.modelDropdownMenu}
+                      role="listbox"
+                      aria-label="Video generation mode options"
                     >
-                      <strong>{option.label}</strong>
-                      <small>{option.description}</small>
-                    </button>
-                  ))}
+                      {generationModeOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="option"
+                          aria-selected={option.value === generationMode}
+                          onClick={() => selectGenerationMode(option.value)}
+                        >
+                          <span>
+                            <strong>{option.label}</strong>
+                            <small>{option.description}</small>
+                          </span>
+                          {option.value === generationMode ? (
+                            <span className={styles.modelCheck}>✓</span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 {generationMode === "single-image" ? (
                   <div className={`${styles.sequenceNotice} ${styles.sequenceNoticeNative}`}>
@@ -1267,64 +1292,14 @@ export function VideoGenerationPage() {
                     <span>The full storyboard image is sent as one reference with one prompt.</span>
                   </div>
                 ) : null}
-                {generationMode === "multi-scene" ? (
-                  <div className={styles.sceneFlowMode}>
-                    <span>SCENE FLOW</span>
-                    <div
-                      className={`${styles.modelDropdown} ${styles.videoModeDropdown}`}
-                    >
-                      <button
-                        type="button"
-                        className={styles.modelDropdownTrigger}
-                        aria-haspopup="listbox"
-                        aria-expanded={isVideoModeMenuOpen}
-                        onClick={() => setIsVideoModeMenuOpen((open) => !open)}
-                      >
-                        <span>
-                          <strong>{selectedVideoMode.label}</strong>
-                          <small>{getVideoModeDescription(videoMode)}</small>
-                        </span>
-                        <ChevronDown size={17} />
-                      </button>
-                      {isVideoModeMenuOpen ? (
-                        <div
-                          className={styles.modelDropdownMenu}
-                          role="listbox"
-                          aria-label="Scene flow options"
-                        >
-                          {videoModeOptions.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              role="option"
-                              aria-selected={option.value === videoMode}
-                              onClick={() => {
-                                selectVideoMode(option.value);
-                                setIsVideoModeMenuOpen(false);
-                              }}
-                            >
-                              <span>
-                                <strong>{option.label}</strong>
-                                <small>{getVideoModeDescription(option.value)}</small>
-                              </span>
-                              {option.value === videoMode ? (
-                                <span className={styles.modelCheck}>✓</span>
-                              ) : null}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                {generationMode === "multi-scene" && videoMode === "continuous" ? (
+                {generationMode === "continuous" ? (
                   <div className={`${styles.sequenceNotice} ${hasNativeExtend ? styles.sequenceNoticeNative : styles.sequenceNoticeWarning}`}>
                     <Link2 size={13} />
                     <span>{hasNativeExtend
                       ? "Native Extend will continue scenes in order"
                       : "No Native Extend; continuation may not be seamless"}</span>
                   </div>
-                ) : generationMode === "multi-scene" && videoMode === "hybrid" ? (
+                ) : generationMode === "hybrid" ? (
                   <div className={`${styles.sequenceNotice} ${hasNativeExtend ? styles.sequenceNoticeNative : styles.sequenceNoticeWarning}`}>
                     <Link2 size={13} />
                     <span>{hasNativeExtend
@@ -1673,7 +1648,7 @@ export function VideoGenerationPage() {
                 <p className={styles.referenceHint}>Reference images are hidden because the selected model does not expose a reference-image input.</p>
               )}
             </section>
-            {generationMode === "multi-scene" ? <section className={styles.stripSection}>
+            {generationMode !== "single-image" ? <section className={styles.stripSection}>
               <div className={styles.subheading}>
                 STORYBOARD <small>(Optional)</small>
               </div>
@@ -2164,7 +2139,7 @@ export function VideoGenerationPage() {
               <div className={styles.sceneModalError}>{sceneError}</div>
             ) : null}
             <div className={styles.sceneModalUpload}>
-              {sceneImage ? (
+              {sceneStartFrameSource === "manual" && sceneImage ? (
                 <div className={styles.sceneModalImagePreview}>
                   <Image
                     src={sceneImage}
@@ -2251,6 +2226,7 @@ export function VideoGenerationPage() {
                     }
                     onClick={() => {
                       setSceneStartFrameSource("previous_last_frame");
+                      clearSceneModalImage();
                       setSceneError(null);
                     }}
                   >
