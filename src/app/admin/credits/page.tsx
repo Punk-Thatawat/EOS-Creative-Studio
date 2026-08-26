@@ -36,6 +36,10 @@ import {
   type GenerationModelOption,
 } from "@/lib/api/generation-models";
 import {
+  getAdminAudioSettings,
+  type AdminAudioSettings,
+} from "@/lib/api/audio";
+import {
   listAdminCreditPricingRules,
   getAdminSignupCreditGrant,
   previewAdminCreditPricingRules,
@@ -86,6 +90,8 @@ const featureLabels: Record<string, string> = {
   "background-removal": "AI Background",
   upscale: "Upscale",
   "extend-image": "Extend Image",
+  audio: "Audio Text to Speech",
+  "audio-music": "Audio Background Music",
 };
 
 const featureOrder = [
@@ -102,6 +108,8 @@ const featureOrder = [
   "background-removal",
   "upscale",
   "extend-image",
+  "audio",
+  "audio-music",
 ];
 
 const videoFeatureKeys = new Set([
@@ -113,7 +121,9 @@ const videoFeatureKeys = new Set([
   "lipsync",
   "extend-video",
 ]);
-type PricingCategoryFilter = "all" | "image" | "video";
+type PricingCategoryFilter = "all" | "image" | "video" | "audio";
+
+const audioFeatureKeys = new Set(["audio", "audio-music"]);
 
 const fallbackModelRows: PricingRow[] = [
   {
@@ -163,6 +173,7 @@ function modelRowsFromOverview(
 ): PricingRow[] {
   const rows: PricingRow[] = [];
   for (const featureKey of featureOrder) {
+    if (audioFeatureKeys.has(featureKey)) continue;
     const routes = overview.routes[featureKey] ?? [];
     const visibleRoutes = routes.some((route) => route.enabled)
       ? routes.filter((route) => route.enabled)
@@ -183,6 +194,61 @@ function modelRowsFromOverview(
       });
     }
   }
+  return rows;
+}
+
+function audioModelName(model: string): string {
+  return model === "eleven_multilingual_v2"
+    ? "Eleven Multilingual v2"
+    : model === "eleven_flash_v2_5"
+      ? "Eleven Flash v2.5"
+      : model === "eleven_turbo_v2_5"
+        ? "Eleven Turbo v2.5"
+        : model === "eleven_v3"
+          ? "Eleven v3"
+          : model === "music_v1"
+            ? "ElevenLabs Music v1"
+            : model === "music_v2"
+              ? "ElevenLabs Music v2"
+              : model;
+}
+
+function audioPricingRows(settings: AdminAudioSettings): PricingRow[] {
+  const rows: PricingRow[] = [];
+  const textToSpeech = settings.featureProfiles.textToSpeech;
+  const speechModelIds = new Set([
+    ...Object.keys(textToSpeech.models),
+    textToSpeech.modelId,
+  ]);
+  speechModelIds.forEach((model) => {
+    if (!model || model === "internal") return;
+    rows.push({
+      feature: featureLabels.audio,
+      featureKey: "audio",
+      model,
+      provider: "elevenlabs",
+      displayName: audioModelName(model),
+      unit: "Per scene",
+      note: "ElevenLabs API pricing by character",
+    });
+  });
+  const musicModelIds = new Set(
+    settings.backgroundMusicPresets
+      .filter((preset) => preset.isActive)
+      .map((preset) => preset.musicModelId),
+  );
+  if (!musicModelIds.size) musicModelIds.add("music_v1");
+  musicModelIds.forEach((model) => {
+    rows.push({
+      feature: featureLabels["audio-music"],
+      featureKey: "audio-music",
+      model,
+      provider: "elevenlabs",
+      displayName: audioModelName(model),
+      unit: "Per background track",
+      note: "Eleven Music API pricing by minute",
+    });
+  });
   return rows;
 }
 
@@ -1062,12 +1128,14 @@ function AdminCreditsContent() {
     setLoading(true);
     setError("");
     try {
-      const [settings, overview]: [
+      const [settings, overview, audioSettings]: [
         CreditPricingSettings,
         AdminModelRoutesOverview,
+        AdminAudioSettings,
       ] = await Promise.all([
         listAdminCreditPricingRules(),
         listAdminModelRoutesOverview(),
+        getAdminAudioSettings(),
       ]);
       const signupBonus: SignupCreditGrantSettings = await getAdminSignupCreditGrant();
       setPricingRules(settings.rules);
@@ -1085,7 +1153,10 @@ function AdminCreditsContent() {
       setSignupBonusCredits(String(signupBonus.credits));
       setSignupBonusDirty(false);
       setGlobalDirty(false);
-      const nextRows = modelRowsFromOverview(overview);
+      const nextRows = [
+        ...modelRowsFromOverview(overview),
+        ...audioPricingRows(audioSettings),
+      ];
       const rowsForPreview = nextRows.length > 0 ? nextRows : fallbackModelRows;
       if (nextRows.length > 0) setModelRows(nextRows);
       setScenarioValues(
@@ -1447,7 +1518,9 @@ function AdminCreditsContent() {
           if (categoryFilter === "video")
             return videoFeatureKeys.has(featureKey);
           if (categoryFilter === "image")
-            return !videoFeatureKeys.has(featureKey);
+            return !videoFeatureKeys.has(featureKey) && !audioFeatureKeys.has(featureKey);
+          if (categoryFilter === "audio")
+            return audioFeatureKeys.has(featureKey);
           return true;
         }),
       ),
@@ -1459,11 +1532,13 @@ function AdminCreditsContent() {
   const filteredModelRows = useMemo(() => {
     const normalizedSearch = modelSearch.trim().toLowerCase();
     return modelRows.filter((row) => {
-      const matchesCategory =
-        categoryFilter === "all" ||
-        (categoryFilter === "video"
+      const matchesCategory = categoryFilter === "all"
+        ? true
+        : categoryFilter === "video"
           ? videoFeatureKeys.has(row.featureKey)
-          : !videoFeatureKeys.has(row.featureKey));
+          : categoryFilter === "audio"
+            ? audioFeatureKeys.has(row.featureKey)
+            : !videoFeatureKeys.has(row.featureKey) && !audioFeatureKeys.has(row.featureKey);
       const matchesFeature =
         selectedFeatureFilter === "all" ||
         row.featureKey === selectedFeatureFilter;
@@ -1890,6 +1965,7 @@ function AdminCreditsContent() {
                         <option value="all">All types</option>
                         <option value="image">Image</option>
                         <option value="video">Video</option>
+                        <option value="audio">Audio</option>
                       </select>
                     </label>
                     <label className="min-w-[170px] flex-1 sm:flex-none">

@@ -45,10 +45,10 @@
 .gen-segmented button.is-selected { color: #202124; background: transparent; box-shadow: inset 0 0 0 1px #f26b38; }
 .gen-segmented button.is-selected { font-weight: 700; }
 .gen-select b { font-weight: 700; }
-.gen-image-hero { min-height: 0; aspect-ratio: 1976 / 391; padding: 0; display: block; }.gen-hero-picture { display: block; width: 100%; height: 100%; }.gen-hero-artwork { display: block; width: 100%; height: auto; object-fit: contain; }
-.gen-image-hero { position: relative; z-index: 40; background: transparent; border: 0; border-radius: 0; margin-top: -70px; pointer-events: none; }
+.gen-image-hero { min-height: 0; aspect-ratio: 5.5 / 1; padding: 0; display: block; }.gen-hero-picture { display: block; width: 100%; height: 100%; }.gen-hero-artwork { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.gen-image-hero { position: relative; background: transparent; border: 0; border-radius: 0; margin-top: 0; pointer-events: none; }
 .gen-image-hero * { pointer-events: none; }
-@media (max-width: 700px) { .gen-image-hero { min-height: 0; aspect-ratio: 5 / 4; }.gen-hero-artwork { width: 100%; height: 100%; object-fit: contain; object-position: center; } }
+@media (max-width: 700px) { .gen-image-hero { min-height: 0; aspect-ratio: 5.5 / 1; }.gen-hero-artwork { width: 100%; height: 100%; object-fit: cover; object-position: center; } }
 .gen-select-wrap { position: relative; }
 .gen-select { min-height: 44px; padding: 10px 12px; text-align: left; }
 .gen-model-loading { cursor: wait; }

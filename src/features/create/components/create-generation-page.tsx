@@ -6,12 +6,14 @@ import { generationKindConfig } from "../config/generation-kinds";
 import type { GenerationKind } from "../types/generation";
 import { ImageGenerationPage } from "../image-generation/components/image-generation-page";
 import { VideoGenerationPage } from "../video-generation-page";
+import { AudioGenerationPage } from "../audio-generation/components/audio-generation-page";
 
 const generationKindIcons: Record<GenerationKind, LucideIcon> = { image: ImageIcon, video: Video, "ai-presenter": Mic2, audio: AudioLines, document: FileText, workflow: Sparkles };
 
 export function CreateGenerationPage({ kind }: { kind: GenerationKind }) {
   if (kind === "image") return <ImageGenerationPage />;
   if (kind === "video") return <VideoGenerationPage />;
+  if (kind === "audio") return <AudioGenerationPage />;
 
   const config = generationKindConfig[kind];
   const Icon = generationKindIcons[kind];

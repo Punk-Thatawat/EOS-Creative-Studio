@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Clock3, Minus, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { listGenerationHistory, resumeGeneration, type GenerationHistoryItem, type GenerationProgress, type PendingGeneration } from "@/lib/api/generations";
+import { emitGenerationCompleted } from "@/lib/generation-progress-events";
 import styles from "./generation-progress-floating.module.css";
 
 const generationFeatureOptions = [
@@ -46,6 +47,13 @@ function featureConfig(feature?: string) {
 function toPendingGeneration(generation: GenerationHistoryItem): ActivePendingGeneration | null {
   if (generation.status !== "queued" && generation.status !== "processing") return null;
   if (!generation.id) return null;
+
+  // Image-to-video storyboards have one parent progress record (the
+  // storyboard) and one generation record per scene. The parent is already
+  // persisted by the create flow, so do not add the scene records again or
+  // the floating card will double-count scenes.
+  const storyboardId = generation.input?.storyboard_id ?? generation.input?.storyboardId;
+  if (typeof storyboardId === "string" && storyboardId.trim()) return null;
 
   const config = featureConfig(generation.feature);
   return {
@@ -132,6 +140,17 @@ function isPersistableProgress(value: unknown): value is ActivePendingGeneration
     && Array.isArray(pending.output);
 }
 
+function isStoryboardParentProgress(item: ActivePendingGeneration): boolean {
+  return item.feature === "image-to-video" && /\/generations\/video\/image-to-video\//.test(item.pending.pollUrl);
+}
+
+function isPersistedStoryboardSceneProgress(item: ActivePendingGeneration): boolean {
+  // Storyboard scenes use the generic generation status URL. The storyboard
+  // parent uses the dedicated storyboard status URL and is the only card we
+  // want to show for this workflow.
+  return item.feature === "image-to-video" && !isStoryboardParentProgress(item);
+}
+
 function readPersistedProgress(): ActivePendingGeneration[] {
   if (typeof window === "undefined") return [];
 
@@ -139,7 +158,9 @@ function readPersistedProgress(): ActivePendingGeneration[] {
     const raw = window.localStorage.getItem(floatingProgressStorageKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed.filter(isPersistableProgress) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter(isPersistableProgress).filter((item) => !isPersistedStoryboardSceneProgress(item))
+      : [];
   } catch {
     return [];
   }
@@ -279,6 +300,8 @@ export function GenerationProgressFloating() {
   const pollingRef = useRef(new Map<string, AbortController>());
   const activeRef = useRef(active);
   const dismissedGenerationIdsRef = useRef(new Set<string>());
+  const completedGenerationIdsRef = useRef(new Set<string>());
+  const isAssetsPage = pathname.startsWith("/assets");
 
   useEffect(() => {
     activeRef.current = active;
@@ -363,6 +386,10 @@ export function GenerationProgressFloating() {
         void resumeGeneration(item.pending, (progress) => {
           if (disposed) return;
           if (dismissedGenerationIdsRef.current.has(generationId) || readDismissedGenerationIds().has(generationId)) return;
+          if (progress.status === "completed" && !completedGenerationIdsRef.current.has(generationId)) {
+            completedGenerationIdsRef.current.add(generationId);
+            emitGenerationCompleted({ feature: item.feature, generationId });
+          }
           persistProgress(item, progress);
           setActive((current) => {
             if (dismissedGenerationIdsRef.current.has(generationId)) return current;
@@ -406,19 +433,20 @@ export function GenerationProgressFloating() {
     };
   }, [isImageCreatePage]);
 
-  if (active.length === 0) return null;
+  if (isAssetsPage || active.length === 0) return null;
 
   return <div className={styles.wrapper}>
-    {active.map(({ key, pending, label, tab, kind }) => {
+    {active.map((item) => {
+      const { label, tab, kind, pending } = item;
       const generationId = pending.generationId;
-      const isCardCollapsed = collapsedGenerationIds.has(generationId);
       const total = Math.max(1, pending.totalCount);
       const completed = Math.min(total, Math.max(0, pending.completedCount));
       const isCompleted = pending.status === "completed";
-      const percentage = isCompleted ? 100 : Math.round((completed / total) * 100);
       const isQueued = pending.status === "queued";
+      const percentage = isCompleted ? 100 : Math.round((completed / total) * 100);
       const statusClass = isCompleted ? styles.statusCompleted : isQueued ? styles.statusQueued : styles.statusProcessing;
       const visiblePercentage = percentage > 0 ? percentage : isQueued ? 10 : 22;
+      const isCardCollapsed = collapsedGenerationIds.has(generationId);
 
       const handleCardClick = () => {
         router.push(`${kind === "video" ? "/create/video" : "/create/image"}?tab=${encodeURIComponent(tab)}`);
@@ -434,18 +462,19 @@ export function GenerationProgressFloating() {
       const handleDismiss = () => {
         dismissedGenerationIdsRef.current.add(generationId);
         dismissGeneration(generationId);
-        const stored = window.sessionStorage.getItem(key);
+        removePersistedProgress(generationId);
+        pollingRef.current.get(generationId)?.abort();
+        pollingRef.current.delete(generationId);
+        const stored = window.sessionStorage.getItem(item.key);
         if (stored) {
           try {
             const parsed = JSON.parse(stored) as { generationId?: string };
-            if (parsed.generationId === generationId) window.sessionStorage.removeItem(key);
+            if (parsed.generationId === generationId) window.sessionStorage.removeItem(item.key);
           } catch {
             // Ignore malformed stale progress storage and still dismiss the visible card.
           }
         }
-        removePersistedProgress(generationId);
-        pollingRef.current.get(generationId)?.abort();
-        pollingRef.current.delete(generationId);
+
         setCollapsedGenerationIds((current) => {
           const next = new Set(current);
           next.delete(generationId);
@@ -462,7 +491,7 @@ export function GenerationProgressFloating() {
         </button>
       </div>;
 
-      return <div className={styles.cardShell} key={pending.generationId}>
+      return <div className={styles.cardShell} key={generationId}>
         <button type="button" className={`${styles.card} ${isCompleted ? styles.cardCompleted : ""}`} onClick={handleCardClick} aria-label={`Open ${label} generation`} title={`Open ${label} in ${kind === "video" ? "Video Studio" : "Image Studio"}`}>
           <div className={styles.heading}>
             <span className={styles.headingLabel}><i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />GENERATION PROGRESS</span>

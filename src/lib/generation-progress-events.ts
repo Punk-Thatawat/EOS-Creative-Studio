@@ -12,7 +12,17 @@ export type GenerationProgressEventDetail = {
   completedCount?: number;
 };
 
+export type GenerationCompletedEventDetail = {
+  feature: string;
+  generationId: string;
+};
+
 export function emitGenerationStarted(detail: GenerationProgressEventDetail): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<GenerationProgressEventDetail>("eos:generation-started", { detail }));
+}
+
+export function emitGenerationCompleted(detail: GenerationCompletedEventDetail): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<GenerationCompletedEventDetail>("eos:generation-completed", { detail }));
 }

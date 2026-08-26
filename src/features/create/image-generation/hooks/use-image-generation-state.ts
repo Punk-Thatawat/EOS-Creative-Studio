@@ -1708,15 +1708,17 @@ export function useImageGenerationState() {
     style,
     setActiveTab: (nextTab: ImageGenerationTab) => {
       const previousTab = activeTabRef.current;
-      if (previousTab !== nextTab && !hasActiveGenerationForTab(previousTab)) {
-        clearSourceImageForTab(previousTab);
+      if (previousTab !== nextTab) {
+        if (!hasActiveGenerationForTab(previousTab)) {
+          clearSourceImageForTab(previousTab);
+        }
+        setRecentGenerationUrls([]);
+        setSelectedRecentImageUrl(null);
+        setRecentError(null);
       }
       activeTabRef.current = nextTab;
       restorePendingForTab(nextTab);
       setActiveTab(nextTab);
-      setRecentGenerationUrls([]);
-      setSelectedRecentImageUrl(null);
-      setRecentError(null);
     },
     setCount,
     setGenerated,

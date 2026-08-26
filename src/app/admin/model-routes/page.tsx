@@ -31,6 +31,7 @@ import {
   type GenerationModelOption,
   type ModelUploadConstraints,
 } from "@/lib/api/generation-models";
+import { getAdminAudioSettings, testAdminElevenLabsConnection, updateAdminAudioSettings, type AdminAudioBackgroundMusicPreset, type AdminAudioFeature, type AdminAudioProvider, type AdminAudioSettings, type AdminAudioVoiceProfile, type AdminAudioVoiceSettings } from "@/lib/api/audio";
 import { useSearchParams } from "next/navigation";
 
 const imageFunctions = [
@@ -357,6 +358,282 @@ function MultiTargetModelAssignmentDialog({
   </div>;
 }
 
+const audioVoiceFields: Array<{ key: keyof AdminAudioVoiceSettings; label: string; hint: string }> = [
+  { key: "femaleWarm", label: "Female Warm", hint: "เสียงผู้หญิงโทนอุ่น" },
+  { key: "maleBold", label: "Male Bold", hint: "เสียงผู้ชายโทนหนักแน่น" },
+  { key: "youthful", label: "Youthful", hint: "เสียงวัยรุ่น" },
+  { key: "corporate", label: "Corporate", hint: "เสียงองค์กร" },
+  { key: "podcastHost", label: "Podcast Host", hint: "เสียงผู้ดำเนินรายการ" },
+];
+
+const elevenLabsModelOptions = [
+  { id: "eleven_multilingual_v2", label: "Eleven Multilingual v2" },
+  { id: "eleven_flash_v2_5", label: "Eleven Flash v2.5" },
+  { id: "eleven_turbo_v2_5", label: "Eleven Turbo v2.5" },
+  { id: "eleven_v3", label: "Eleven v3" },
+];
+
+function AudioSettingsCard() {
+  const [settings, setSettings] = useState<AdminAudioSettings | null>(null);
+  const [draft, setDraft] = useState<AdminAudioSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAdminAudioSettings().then((next) => {
+      if (cancelled) return;
+      setSettings(next);
+      setDraft(next);
+    }).catch((reason) => {
+      if (!cancelled) setError(reason instanceof Error ? reason.message : "Unable to load audio settings");
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const save = async () => {
+    if (!draft) return;
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      const next = await updateAdminAudioSettings({ modelId: draft.modelId.trim(), voices: draft.voices });
+      setSettings(next);
+      setDraft(next);
+      setMessage("Audio settings saved.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to save audio settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isDirty = Boolean(settings && draft && JSON.stringify(settings) !== JSON.stringify(draft));
+
+  return <section aria-labelledby="audio-settings-heading" className="mb-7 rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Provider settings</p>
+        <h2 id="audio-settings-heading" className="mt-1 text-xl font-bold tracking-tight">ElevenLabs Audio Settings</h2>
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">Audio provider ตัวนี้คือ ElevenLabs โดยตรง กำหนด model และ voice ID ที่หน้า Create &gt; Audio จะใช้ ค่าเหล่านี้มีผลกับการสร้างเสียงใหม่ทันที</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-white"><span className="h-2 w-2 rounded-full bg-[#f47d4b]" />Provider: ElevenLabs</span>
+        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] ${draft?.providerConfigured ? "bg-[#e3f3e9] text-[#347454]" : "bg-[#fff0e9] text-primary"}`}><span className={`h-2 w-2 rounded-full ${draft?.providerConfigured ? "bg-[#4c9b72]" : "bg-primary"}`} />API key {draft?.providerConfigured ? "configured" : "missing"}</span>
+      </div>
+    </div>
+
+    {error ? <div className="mt-4 rounded-xl border border-[#efc2c2] bg-[#fff6f6] p-3 text-xs text-[#9f3b3b]" role="alert">{error}</div> : null}
+    {message ? <div className="mt-4 rounded-xl border border-[#bfe1cc] bg-[#f3fbf5] p-3 text-xs font-semibold text-[#347454]" role="status">{message}</div> : null}
+
+    {loading || !draft ? <div className="mt-5 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">Loading audio settings...</div> : <>
+      <label className="mt-5 block max-w-xl"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">ElevenLabs model ID</span><input value={draft.modelId} onChange={(event) => setDraft((current) => current ? { ...current, modelId: event.target.value } : current)} placeholder="eleven_multilingual_v2" className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="ElevenLabs model ID" /></label>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {audioVoiceFields.map((field) => <label key={field.key} className="block"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{field.label}</span><input value={draft.voices[field.key]} onChange={(event) => setDraft((current) => current ? { ...current, voices: { ...current.voices, [field.key]: event.target.value } } : current)} placeholder={field.hint} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${field.label} ElevenLabs voice ID`} /><span className="mt-1 block text-[10px] text-muted-foreground">{field.hint}</span></label>)}
+      </div>
+      <div className="mt-5 flex flex-col justify-between gap-3 border-t border-border pt-4 sm:flex-row sm:items-center"><p className="max-w-2xl text-[11px] leading-5 text-muted-foreground">API key ตั้งใน backend secret เท่านั้น เพื่อไม่ให้หลุดไปยัง browser — หน้านี้จัดการเฉพาะ model และ voice mapping</p><Button size="sm" onClick={() => void save()} disabled={saving || !isDirty || !draft.modelId.trim()}>{saving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {saving ? "Saving..." : "Save audio settings"}</Button></div>
+    </>}
+  </section>;
+}
+
+const audioRoutingRows: Array<{ key: AdminAudioFeature; label: string; description: string }> = [
+  { key: "textToSpeech", label: "Text to Speech", description: "Narration and voiceover generation" },
+  { key: "podcastDialogue", label: "Podcast & Dialogue", description: "Multi-speaker episode rendering" },
+  { key: "voiceClone", label: "Voice Clone", description: "Create and test account voices" },
+  { key: "soundEffects", label: "Sound Effects", description: "Prompt-based sound generation" },
+  { key: "audioCleanup", label: "Audio Cleanup", description: "Noise, clarity and reverb processing" },
+];
+
+const audioFeatureProfileRows: Array<{ key: AdminAudioFeature; label: string; description: string }> = [
+  { key: "textToSpeech", label: "Text to Speech", description: "Narration and voiceover" },
+  { key: "podcastDialogue", label: "Podcast & Dialogue", description: "Multi-speaker rendering" },
+  { key: "voiceClone", label: "Voice Clone", description: "Clone preview synthesis" },
+  { key: "soundEffects", label: "Sound Effects", description: "Prompt-based sound generation" },
+  { key: "audioCleanup", label: "Audio Cleanup", description: "Internal processor" },
+];
+
+function audioProviderLabel(provider: AdminAudioProvider) {
+  return provider === "elevenlabs" ? "ElevenLabs" : "Internal Audio Processor";
+}
+
+function BackgroundMusicPresetsEditor({ presets, onChange }: { presets: AdminAudioBackgroundMusicPreset[]; onChange: (presets: AdminAudioBackgroundMusicPreset[]) => void }) {
+  const updatePreset = (index: number, patch: Partial<AdminAudioBackgroundMusicPreset>) => onChange(presets.map((preset, presetIndex) => presetIndex === index ? { ...preset, ...patch } : preset));
+  const addPreset = () => onChange([...presets, { key: `background_${presets.length + 1}`, name: `Background ${presets.length + 1}`, description: "", prompt: "", musicModelId: "music_v1", forceInstrumental: true, volume: 0.15, isActive: true }]);
+  const removePreset = (index: number) => onChange(presets.filter((_, presetIndex) => presetIndex !== index));
+
+  return <section className="mt-4 rounded-2xl border border-[#cfe3db] bg-[#f7fcfa] p-4" aria-labelledby="background-music-settings-heading">
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#347454]">Audio background music</p><h3 id="background-music-settings-heading" className="mt-1 text-base font-bold">Auto Background Music</h3><p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted-foreground">ตั้งชื่อเพลงและ prompt ให้ dropdown หน้า Create &gt; Audio ได้จาก API โดยตรง ถ้าไม่ใส่ Audio URL ระบบจะสร้าง instrumental ด้วย ElevenLabs Music ตอนกด Generate</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-[#347454]">{presets.filter((preset) => preset.isActive).length} active</span></div>
+    <div className="mt-4 space-y-3">{presets.length ? presets.map((preset, index) => <div key={`${preset.key}-${index}`} className="rounded-xl border border-[#cfe3db] bg-white p-3">
+      <div className="mb-3 flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Preset {index + 1}</span><div className="flex items-center gap-3"><label className="flex items-center gap-2 text-[10px] font-semibold text-muted-foreground"><input type="checkbox" checked={preset.isActive} onChange={(event) => updatePreset(index, { isActive: event.target.checked })} /> Active</label><button type="button" className="inline-flex items-center gap-1 text-[10px] font-bold text-[#9f3b3b] hover:underline" onClick={() => removePreset(index)}><X size={13} /> Remove</button></div></div>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Key</span><input value={preset.key} onChange={(event) => updatePreset(index, { key: event.target.value })} placeholder="uplifting_corporate" className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Display name</span><input value={preset.name} onChange={(event) => updatePreset(index, { name: event.target.value })} placeholder="Uplifting Corporate" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Description</span><input value={preset.description} onChange={(event) => updatePreset(index, { description: event.target.value })} placeholder="เพลงองค์กร ฟังดูมีพลัง" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Music model</span><select value={preset.musicModelId} onChange={(event) => updatePreset(index, { musicModelId: event.target.value as "music_v1" | "music_v2" })} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><option value="music_v1">Music v1</option><option value="music_v2">Music v2</option></select></label></div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">ElevenLabs music prompt</span><textarea value={preset.prompt} onChange={(event) => updatePreset(index, { prompt: event.target.value })} placeholder="Warm instrumental background music, no vocals" rows={2} className="w-full rounded-xl border border-border bg-white px-3 py-2 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><div className="space-y-3"><label className="block"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Audio URL (optional)</span><input value={preset.audioUrl ?? ""} onChange={(event) => updatePreset(index, { audioUrl: event.target.value || undefined })} placeholder="https://.../background.mp3" className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><div className="grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Music volume</span><input type="number" min="0" max="1" step="0.01" value={preset.volume} onChange={(event) => updatePreset(index, { volume: Number(event.target.value) })} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><label className="flex items-center gap-2 self-end pb-2 text-xs font-semibold"><input type="checkbox" checked={preset.forceInstrumental} onChange={(event) => updatePreset(index, { forceInstrumental: event.target.checked })} /> Instrumental only</label></div></div></div>
+    </div>) : <div className="rounded-xl border border-dashed border-[#b9d8ca] bg-white p-5 text-center text-xs text-muted-foreground">ยังไม่มี preset เพลง เพิ่มรายการเพื่อให้หน้า User แสดง dropdown</div>}</div>
+    <button type="button" className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-dashed border-[#75ae91] bg-white px-4 text-xs font-bold text-[#347454] transition hover:bg-[#eef9f2]" onClick={addPreset}><span className="text-base leading-none">+</span> Add background preset</button>
+  </section>;
+}
+
+function AudioProviderSettingsPanel() {
+  const [settings, setSettings] = useState<AdminAudioSettings | null>(null);
+  const [draft, setDraft] = useState<AdminAudioSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [selectedFeature, setSelectedFeature] = useState<AdminAudioFeature>("textToSpeech");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAdminAudioSettings().then((next) => {
+      if (cancelled) return;
+      setSettings(next);
+      setDraft(next);
+    }).catch((reason) => {
+      if (!cancelled) setError(reason instanceof Error ? reason.message : "Unable to load audio settings");
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const save = async () => {
+    if (!draft) return;
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      const next = await updateAdminAudioSettings({
+        modelId: draft.modelId.trim(),
+        voices: draft.voices,
+        modelProfiles: draft.modelProfiles,
+        featureProfiles: draft.featureProfiles,
+        backgroundMusicPresets: draft.backgroundMusicPresets,
+        routing: draft.routing,
+        elevenlabs: draft.providerSettings.elevenlabs,
+        internal: draft.providerSettings.internal,
+      });
+      setSettings(next);
+      setDraft(next);
+      setMessage("Audio provider settings saved.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to save audio provider settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testConnection = async () => {
+    setTesting(true);
+    setMessage("");
+    setError("");
+    try {
+      const result = await testAdminElevenLabsConnection();
+      if (result.ok) setMessage(result.message);
+      else setError(result.message);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to test ElevenLabs connection");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const isDirty = Boolean(settings && draft && JSON.stringify(settings) !== JSON.stringify(draft));
+  const selectedFeatureProfile = draft?.featureProfiles[selectedFeature];
+  const selectedFeatureModelId = selectedFeatureProfile?.modelId ?? draft?.modelId ?? "";
+  const configuredFeatureModelIds = Object.keys(selectedFeatureProfile?.models ?? {});
+  const modelOptionMap = new Map<string, { id: string; label: string }>();
+  [...configuredFeatureModelIds, selectedFeatureModelId].forEach((modelId) => {
+    if (modelId && !elevenLabsModelOptions.some((option) => option.id === modelId)) modelOptionMap.set(modelId, { id: modelId, label: `Custom · ${modelId}` });
+  });
+  elevenLabsModelOptions.forEach((option) => modelOptionMap.set(option.id, option));
+  const modelOptions = Array.from(modelOptionMap.values());
+  const activeVoices = selectedFeatureProfile?.models?.[selectedFeatureModelId]?.voices ?? selectedFeatureProfile?.voices ?? [];
+  const selectFeatureModel = (modelId: string) => setDraft((current) => {
+    if (!current) return current;
+    const currentFeatureProfile = current.featureProfiles[selectedFeature] ?? { modelId: current.modelId, voices: [], models: {} };
+    const currentModelId = currentFeatureProfile.modelId;
+    const currentModelVoices = currentFeatureProfile.models?.[currentModelId]?.voices ?? currentFeatureProfile.voices ?? [];
+    const models = { ...(currentFeatureProfile.models ?? {}), [currentModelId]: { voices: currentModelVoices } };
+    const voices = selectedFeature === "soundEffects" || selectedFeature === "audioCleanup"
+      ? []
+      : models[modelId]?.voices ?? [];
+    if (!models[modelId]) models[modelId] = { voices };
+    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { modelId, voices, models } } };
+  });
+  const updateActiveVoice = (index: number, patch: Partial<AdminAudioVoiceProfile>) => setDraft((current) => {
+    if (!current) return current;
+    const profile = current.featureProfiles[selectedFeature] ?? { modelId: current.modelId, voices: [], models: {} };
+    const modelId = profile.modelId;
+    const baseVoices = profile.models?.[modelId]?.voices ?? profile.voices ?? [];
+    const voices = baseVoices.map((voice, voiceIndex) => voiceIndex === index ? { ...voice, ...patch } : voice);
+    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...profile, voices, models: { ...(profile.models ?? {}), [modelId]: { voices } } } } };
+  });
+  const addActiveVoice = () => setDraft((current) => {
+    if (!current) return current;
+    if (selectedFeature === "soundEffects" || selectedFeature === "audioCleanup") return current;
+    const profile = current.featureProfiles[selectedFeature] ?? { modelId: current.modelId, voices: [], models: {} };
+    const modelId = profile.modelId;
+    const baseVoices = profile.models?.[modelId]?.voices ?? profile.voices ?? [];
+    const voices = [...baseVoices, { id: "", name: `Voice ${baseVoices.length + 1}`, description: "", imageUrl: "" }];
+    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...profile, voices, models: { ...(profile.models ?? {}), [modelId]: { voices } } } } };
+  });
+  const removeActiveVoice = (index: number) => setDraft((current) => {
+    if (!current) return current;
+    const profile = current.featureProfiles[selectedFeature] ?? { modelId: current.modelId, voices: [], models: {} };
+    const modelId = profile.modelId;
+    const baseVoices = profile.models?.[modelId]?.voices ?? profile.voices ?? [];
+    const voices = baseVoices.filter((_, voiceIndex) => voiceIndex !== index);
+    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...profile, voices, models: { ...(profile.models ?? {}), [modelId]: { voices } } } } };
+  });
+
+  return <section aria-labelledby="audio-provider-settings-heading" className="mb-7 rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Audio administration</p>
+        <h2 id="audio-provider-settings-heading" className="mt-1 text-xl font-bold tracking-tight">Provider routing &amp; settings</h2>
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">กำหนด provider ของแต่ละ tab และตั้งค่า ElevenLabs / Internal Audio Processor จากจุดเดียว</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-white"><span className="h-2 w-2 rounded-full bg-[#f47d4b]" />Audio providers</span>
+        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] ${draft?.providerConfigured ? "bg-[#e3f3e9] text-[#347454]" : "bg-[#fff0e9] text-primary"}`}><span className={`h-2 w-2 rounded-full ${draft?.providerConfigured ? "bg-[#4c9b72]" : "bg-primary"}`} />ElevenLabs {draft?.providerConfigured ? "configured" : "missing"}</span>
+      </div>
+    </div>
+
+    {error ? <div className="mt-4 rounded-xl border border-[#efc2c2] bg-[#fff6f6] p-3 text-xs text-[#9f3b3b]" role="alert">{error}</div> : null}
+    {message ? <div className="mt-4 rounded-xl border border-[#bfe1cc] bg-[#f3fbf5] p-3 text-xs font-semibold text-[#347454]" role="status">{message}</div> : null}
+
+    {loading || !draft ? <div className="mt-5 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">Loading audio provider settings...</div> : <>
+      <section className="mt-5 rounded-2xl border border-border bg-[#fcfaf8] p-4" aria-labelledby="audio-routing-heading">
+        <div className="flex items-start justify-between gap-3"><div><h3 id="audio-routing-heading" className="text-sm font-bold">Feature routing</h3><p className="mt-1 text-[11px] text-muted-foreground">เลือก provider ที่จะรับผิดชอบแต่ละ tab ใน Audio Studio</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">5 features</span></div>
+        <div className="mt-4 space-y-2">{audioRoutingRows.map((row) => <div key={row.key} className="flex flex-col justify-between gap-3 rounded-xl border border-border bg-white p-3 sm:flex-row sm:items-center"><div className="min-w-0"><p className="text-xs font-bold">{row.label}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{row.description}</p></div><span className={`inline-flex w-fit shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold ${draft.routing[row.key] === "elevenlabs" ? "bg-[#fff0e9] text-primary" : "bg-[#eeeaf8] text-[#66518f]"}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{audioProviderLabel(draft.routing[row.key])}</span></div>)}</div>
+      </section>
+
+      <section className="mt-4 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4" aria-labelledby="elevenlabs-settings-heading">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Provider: ElevenLabs</p><h3 id="elevenlabs-settings-heading" className="mt-1 text-base font-bold">Speech, dialogue, clone &amp; sound effects</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">API key อยู่ใน backend secret; หน้านี้ตั้งค่า model, voice mapping และ transport ได้</p></div><Button variant="outline" size="sm" onClick={() => void testConnection()} disabled={testing}>{testing ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {testing ? "Testing..." : "Test connection"}</Button></div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{audioFeatureProfileRows.map((row) => <button key={row.key} type="button" onClick={() => setSelectedFeature(row.key)} className={`rounded-xl border px-3 py-2.5 text-left transition ${selectedFeature === row.key ? "border-primary bg-[#fff0e9]" : "border-border bg-white hover:border-primary/50"}`}><span className="block text-xs font-bold">{row.label}</span><span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{draft.featureProfiles[row.key]?.modelId ?? "Not configured"}</span></button>)}</div>
+        <label className="mt-4 block max-w-xl"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{audioFeatureProfileRows.find((row) => row.key === selectedFeature)?.label} model</span><select value={selectedFeatureModelId} onChange={(event) => selectFeatureModel(event.target.value)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${selectedFeature} model`}>{modelOptions.map((option) => <option key={option.id} value={option.id}>{option.label} ({option.id})</option>)}</select><span className="mt-1 block text-[10px] text-muted-foreground">ตั้ง model แยกเฉพาะ tab นี้</span></label>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Default format</span><select value={draft.providerSettings.elevenlabs.defaultFormat} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, elevenlabs: { ...current.providerSettings.elevenlabs, defaultFormat: event.target.value as "mp3" | "wav" | "ogg" } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="ElevenLabs default format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="ogg">OGG</option></select></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Request timeout (ms)</span><input type="number" min="1000" max="180000" step="1000" value={draft.providerSettings.elevenlabs.timeoutMs} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, elevenlabs: { ...current.providerSettings.elevenlabs, timeoutMs: Number(event.target.value) } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="ElevenLabs request timeout" /></label></div>
+        <div className="mt-4 space-y-3">
+           {selectedFeature === "soundEffects" || selectedFeature === "audioCleanup" ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">This tab does not use voice IDs. Configure its model above.</div> : <><div className="space-y-3">{activeVoices.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">No voice IDs configured for this model. Add one below.</div> : activeVoices.map((voice, index) => <div key={`${selectedFeature}-${selectedFeatureModelId}-${index}`} className="rounded-xl border border-border bg-white p-3"><div className="mb-2 flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice {index + 1}</span><button type="button" className="inline-flex items-center gap-1 text-[10px] font-bold text-[#9f3b3b] hover:underline" onClick={() => removeActiveVoice(index)}><X size={13} /> Remove</button></div><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice ID</span><input value={voice.id} onChange={(event) => updateActiveVoice(index, { id: event.target.value })} placeholder="JBFqnCBsd6RMkjVDRZzb" className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} ID for ${selectedFeatureModelId}`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Display name</span><input value={voice.name} onChange={(event) => updateActiveVoice(index, { name: event.target.value })} placeholder="Narrator" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} name`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Description</span><input value={voice.description} onChange={(event) => updateActiveVoice(index, { description: event.target.value })} placeholder="Warm and natural" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} description`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Image URL</span><input type="text" value={voice.imageUrl ?? ""} onChange={(event) => updateActiveVoice(index, { imageUrl: event.target.value })} placeholder="https://.../voice.png or /generated-assets/..." className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} image URL for ${selectedFeatureModelId}`} /></label></div></div>)}</div><button type="button" className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-dashed border-primary/50 bg-white px-4 text-xs font-bold text-primary transition hover:bg-[#fff0e9]" onClick={addActiveVoice}><span className="text-base leading-none">+</span> Add voice ID</button></>}
+        </div>
+      </section>
+
+      <BackgroundMusicPresetsEditor presets={draft.backgroundMusicPresets} onChange={(backgroundMusicPresets) => setDraft((current) => current ? { ...current, backgroundMusicPresets } : current)} />
+
+      <section className="mt-4 rounded-2xl border border-[#ddd5ee] bg-[#faf8ff] p-4" aria-labelledby="internal-settings-heading">
+        <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#66518f]">Provider: Internal Audio Processor</p><h3 id="internal-settings-heading" className="mt-1 text-base font-bold">Audio Cleanup</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">ใช้สำหรับ noise reduction, voice clarity และ remove reverb โดยไม่ส่ง API key ไปยัง browser</p></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">FFmpeg path</span><input value={draft.providerSettings.internal.ffmpegPath} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, internal: { ...current.providerSettings.internal, ffmpegPath: event.target.value } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="FFmpeg path" /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Max upload (MB)</span><input type="number" min="1" max="500" value={draft.providerSettings.internal.maxUploadMb} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, internal: { ...current.providerSettings.internal, maxUploadMb: Number(event.target.value) } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="Internal processor max upload" /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Default format</span><select value={draft.providerSettings.internal.defaultFormat} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, internal: { ...current.providerSettings.internal, defaultFormat: event.target.value as "mp3" | "wav" | "ogg" } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="Internal processor default format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="ogg">OGG</option></select></label></div>
+      </section>
+
+      <div className="mt-5 flex flex-col justify-between gap-3 border-t border-border pt-4 sm:flex-row sm:items-center"><p className="max-w-2xl text-[11px] leading-5 text-muted-foreground">บันทึก routing และ settings ทั้งหมดพร้อมกัน ค่า API key ยังคงอยู่ใน backend secret เท่านั้น</p><Button size="sm" onClick={() => void save()} disabled={saving || !isDirty || !draft.modelId.trim()}>{saving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {saving ? "Saving..." : "Save provider settings"}</Button></div>
+    </>}
+  </section>;
+}
+
 function AdminModelRoutesContent() {
   const searchParams = useSearchParams();
   const requestedFeature = searchParams.get("feature");
@@ -599,26 +876,28 @@ function AdminModelRoutesContent() {
             <div className="min-h-[calc(100vh-120px)] overflow-x-clip rounded-3xl bg-[#faf8f6] px-4 pb-20 sm:px-6 lg:px-8 lg:pb-24">
       <div className="mx-auto max-w-[1180px] pt-6 lg:pt-8">
         <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-          <div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><ServerCog size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">Generation model routes</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Choose the model that powers each creative feature. Changes apply to new generations immediately.</p></div>
-          <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void openAssignment()} disabled={busy || loading}><Settings2 size={17} /> Assign models</Button><Button variant="outline" size="lg" onClick={() => void sync()} disabled={busy || loading}><CloudDownload size={17} /> {busy ? "Syncing catalog..." : "Sync provider catalog"}</Button></div>
+          <div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><ServerCog size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">{feature === "audio" ? "ElevenLabs audio provider" : "Generation model routes"}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{feature === "audio" ? "Configure the ElevenLabs provider used by Create > Audio." : "Choose the model that powers each creative feature. Changes apply to new generations immediately."}</p></div>
+          {feature === "audio" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">ElevenLabs provider configuration</span> : <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void openAssignment()} disabled={busy || loading}><Settings2 size={17} /> Assign models</Button><Button variant="outline" size="lg" onClick={() => void sync()} disabled={busy || loading}><CloudDownload size={17} /> {busy ? "Syncing catalog..." : "Sync provider catalog"}</Button></div>}
         </div>
 
         {error ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc2c2] bg-[#fff6f6] p-4 text-sm text-[#9f3b3b]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={18} /><div><p className="font-bold">Couldn&apos;t load model routes</p><p className="mt-1 text-xs leading-5">{error}</p><button type="button" className="mt-2 text-xs font-bold underline underline-offset-2" onClick={() => void load()}>Try again</button></div></div> : null}
         {message ? <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#bfe1cc] bg-[#f3fbf5] p-4 text-sm text-[#347454]" role="status"><CheckCircle2 size={18} /><p className="font-semibold">{message}</p></div> : null}
 
-        <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>
+        {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Selected provider" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Provider API" value="ElevenLabs" detail="Text-to-Speech" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
 
-        <div className="grid gap-6 lg:grid-cols-1 lg:items-start">
+        {feature === "audio" ? <AudioProviderSettingsPanel /> : null}
+
+        {feature === "audio" ? null : <div className="grid gap-6 lg:grid-cols-1 lg:items-start">
           <section aria-labelledby="route-heading" className="min-w-0">
             <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Route configuration</p><h2 id="route-heading" className="mt-1 text-xl font-bold tracking-tight">{activeFeature.label}</h2></div><div className="relative w-full sm:w-60"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search models" aria-label="Search models" className="h-9 w-full rounded-xl border border-border bg-white pl-9 pr-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" /></div></div>
             {feature === "background-removal" ? <div className="mb-4 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-3"><div className="mb-2 flex items-center justify-between gap-3"><div><p className="text-xs font-bold">AI Background mode</p><p className="mt-1 text-[11px] text-muted-foreground">ตั้ง model และ default แยกตามงานที่เลือก</p></div><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">Mode-specific</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="AI Background modes">{aiBackgroundModes.map((mode) => <button key={mode.id} type="button" role="tab" aria-selected={backgroundMode === mode.id} onClick={() => { setBackgroundMode(mode.id); setQuery(""); }} className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${backgroundMode === mode.id ? "border-primary bg-primary text-white" : "border-border bg-white hover:border-primary/50"}`}><span className="block text-xs font-bold">{mode.label}</span><span className={`mt-0.5 block text-[10px] ${backgroundMode === mode.id ? "text-white/80" : "text-muted-foreground"}`}>{mode.description}</span></button>)}</div></div> : null}
             <div className="mb-4 flex items-center justify-between rounded-xl border border-[#eaded6] bg-[#fffdfb] px-4 py-3"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#4c9b72]" /><p className="text-xs font-semibold">{loading ? "Loading catalog..." : `${enabledCount} allowed · ${filteredModels.length} available`}</p></div><Button variant="ghost" size="sm" onClick={() => void openAssignment()} disabled={loading}><Settings2 size={14} /> Open drag &amp; drop</Button></div>
             <ModelGrid models={filteredModels} selectedModel={selectedModel} onSelect={selectModel} onToggleEnabled={toggleModel} onDetails={setDetailsModel} onOpenAssignment={openAssignment} loading={loading} query={query} />
           </section>
-        </div>
+        </div>}
       </div>
 
-      <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div>
+      {feature !== "audio" ? <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div> : null}
       {assignmentOpen ? <MultiTargetModelAssignmentDialog feature={assignmentFeature} catalog={assignmentFeature === "background-removal" ? assignmentCatalog : [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()]} assignments={assignmentDrafts} backgroundMode={assignmentBackgroundMode} onFeatureChange={setAssignmentFeature} onBackgroundModeChange={changeAssignmentBackgroundMode} onAdd={addAssignment} onRemove={removeAssignment} onSetDefault={setAssignmentDefault} onClose={() => setAssignmentOpen(false)} onSave={saveAssignment} saving={assignmentSaving} /> : null}
       {detailsModel ? <ModelDetailsDialog item={detailsModel} onClose={() => setDetailsModel(null)} onSaveInputLimits={saveModelInputLimits} /> : null}
             </div>

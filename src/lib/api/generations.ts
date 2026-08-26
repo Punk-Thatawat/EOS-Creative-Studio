@@ -547,6 +547,7 @@ export type GenerationHistoryItem = {
   id: string;
   status: "queued" | "processing" | "completed" | "failed" | "cancelled";
   feature?: string;
+  input?: Record<string, unknown>;
   pollUrl?: string;
   workspaceId?: string;
   provider?: string;

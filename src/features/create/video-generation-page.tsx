@@ -1161,7 +1161,7 @@ export function VideoGenerationPage() {
     <div className={styles.page} data-page="gen-video">
       <div className={styles.hero}>
         <Image
-          src="/generated-assets/create-video-hero-transparent-v3.png"
+          src="/generated-assets/create-video-hero-transparent-v6-eos.png"
           alt="Create video that moves"
           fill
           sizes="100vw"

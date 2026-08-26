@@ -1,23 +1,31 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import {
-  ArrowDownToLine,
   ArrowUpRight,
   AudioLines,
-  BarChart3,
   CalendarDays,
+  Check,
   ChevronDown,
   CircleHelp,
   CreditCard,
+  Download,
   FileText,
+  Filter,
   ImageIcon,
   Info,
+  MoreHorizontal,
   Plus,
+  QrCode,
+  Search,
   Sparkles,
   UserRound,
   Users,
+  UsersRound,
   Video,
+  WalletCards,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -59,14 +67,29 @@ const activities = [
 const chartValues = [150, 320, 210, 270, 390, 620, 300];
 const chartLabels = ["26 Apr", "27 Apr", "28 Apr", "29 Apr", "30 Apr", "1 May", "2 May"];
 
-function AssetPlaceholder({ label, className }: { label: string; className?: string }) {
-  return (
-    <div className={cn(styles.assetPlaceholder, className)} aria-label={`${label} asset placeholder`}>
-      <Sparkles size={17} />
-      <span>{label}</span>
-    </div>
-  );
-}
+const usageDetails = [
+  { title: "AI Video Generation", project: "Product Launch", detail: "2 May 2025 · 10:45 AM", usage: "1 generation", credits: "-150", icon: Video, iconClass: "video" },
+  { title: "AI Image Generation", project: "Social Post", detail: "2 May 2025 · 09:30 AM", usage: "4 images", credits: "-80", icon: ImageIcon, iconClass: "image" },
+  { title: "AI Presenter Generation", project: "Company Intro", detail: "1 May 2025 · 04:20 PM", usage: "1 presenter", credits: "-120", icon: UserRound, iconClass: "presenter" },
+  { title: "AI Audio Generation", project: "Brand Voice", detail: "1 May 2025 · 01:10 PM", usage: "2 minutes", credits: "-65", icon: AudioLines, iconClass: "audio" },
+  { title: "AI Document (OCR)", project: "Quarterly Report", detail: "30 Apr 2025 · 10:05 AM", usage: "12 pages", credits: "-40", icon: FileText, iconClass: "document" },
+  { title: "Custom AI Workflow", project: "Campaign Toolkit", detail: "29 Apr 2025 · 03:50 PM", usage: "1 workflow", credits: "-25", icon: Sparkles, iconClass: "custom" },
+];
+
+const creditEvents = [
+  { title: "Credits used", description: "AI Video Generation · Product Launch", date: "2 May 2025, 10:45 AM", amount: "-150", balance: "4,250", icon: Video, iconClass: "video" },
+  { title: "Credits used", description: "AI Image Generation · Social Post", date: "2 May 2025, 09:30 AM", amount: "-80", balance: "4,400", icon: ImageIcon, iconClass: "image" },
+  { title: "Credits added", description: "Manual top-up · 2,000 credits", date: "30 Apr 2025, 11:10 AM", amount: "+2,000", balance: "4,480", icon: Plus, iconClass: "added" },
+  { title: "Monthly credits renewed", description: "Enterprise plan · May 2025", date: "1 May 2025, 12:00 AM", amount: "+10,000", balance: "2,480", icon: Sparkles, iconClass: "custom" },
+  { title: "Credits used", description: "AI Document (OCR) · Quarterly Report", date: "30 Apr 2025, 10:05 AM", amount: "-40", balance: "2,480", icon: FileText, iconClass: "document" },
+];
+
+const teamMembers = [
+  { name: "EOS Admin", email: "admin@eoscreative.studio", role: "Owner", credits: "820", percent: 47, color: "#f51591", initials: "EA" },
+  { name: "Nina S.", email: "nina@eoscreative.studio", role: "Editor", credits: "510", percent: 29, color: "#ff6414", initials: "NS" },
+  { name: "Mark T.", email: "mark@eoscreative.studio", role: "Editor", credits: "280", percent: 16, color: "#13c9b2", initials: "MT" },
+  { name: "Ploy K.", email: "ploy@eoscreative.studio", role: "Viewer", credits: "140", percent: 8, color: "#5d1db8", initials: "PK" },
+];
 
 function SelectControl({ value, options, onChange }: { value: SelectValue; options: SelectValue[]; onChange: (value: SelectValue) => void }) {
   return (
@@ -191,7 +214,7 @@ function PlanCard() {
         <p className={styles.planAvailable}>Credits Available</p>
         <div className={styles.planProgress}><span /></div>
         <p className={styles.planRenew}>Renews on 1 Jun 2025</p>
-        <div className={styles.planAsset}><AssetPlaceholder label="Plan visual asset" /></div>
+        <div className={styles.planAsset} aria-hidden="true"><Image src="/generated-icons-v2/icon-6-custom-v2.png" alt="" fill sizes="96px" /></div>
         <button className={styles.outlineButton}>Manage plan</button>
         <button className={styles.gradientButton}>Buy more credits <ArrowUpRight size={16} /></button>
       </div>
@@ -215,16 +238,142 @@ function ActivityCard() {
   );
 }
 
+function TabKpi({ label, value, detail, tone = "neutral" }: { label: string; value: string; detail: string; tone?: "neutral" | "pink" | "orange" | "green" }) {
+  return <div className={cn(styles.tabKpi, styles[tone])}><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>;
+}
+
+function TabHeader({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) {
+  return <div className={styles.tabHeader}><div><h2>{title}</h2><p>{description}</p></div>{action ? <div className={styles.tabActions}>{action}</div> : null}</div>;
+}
+
+function UsageDetailsTab({ period, onPeriodChange }: { period: SelectValue; onPeriodChange: (value: SelectValue) => void }) {
+  return <div className={styles.tabContent}>
+    <TabHeader
+      title="Usage details"
+      description="Review every generation and see exactly where your credits are going."
+      action={<><SelectControl value={period} options={["This billing cycle", "Last billing cycle"]} onChange={onPeriodChange} /><button type="button" className={styles.softButton}><Filter size={14} /> Filter</button><button type="button" className={styles.lightAction}><Download size={14} /> Export report</button></>}
+    />
+    <div className={styles.kpiGrid}>
+      <TabKpi label="Credits used" value="1,750" detail="This billing cycle" tone="pink" />
+      <TabKpi label="Generations" value="128" detail="Across 6 tools" tone="orange" />
+      <TabKpi label="Top tool" value="AI Video" detail="37% of usage" tone="green" />
+      <TabKpi label="Average / day" value="250" detail="Credits per day" />
+    </div>
+    <Card className={styles.dataPanel}>
+      <div className={styles.dataPanelHeading}><div><h3>Generation activity</h3><p>Latest usage from your workspace</p></div><button type="button" className={styles.iconButton} aria-label="Search usage"><Search size={16} /></button></div>
+      <div className={styles.dataTable}>
+        <div className={styles.dataTableHeader}><span>Activity</span><span>Usage</span><span>Credits</span><span>Status</span><span aria-hidden="true" /></div>
+        {usageDetails.map((item) => {
+          const Icon = item.icon;
+          return <div className={styles.dataTableRow} key={`${item.title}-${item.detail}`}>
+            <div className={styles.tableActivity}><span className={cn(styles.toolIcon, styles[item.iconClass])}><Icon size={16} /></span><div><strong>{item.title}</strong><span>{item.project} · {item.detail}</span></div></div>
+            <span className={styles.tableMuted}>{item.usage}</span>
+            <strong className={styles.tableAmount}>{item.credits}</strong>
+            <span className={styles.statusPill}><Check size={12} /> Completed</span>
+            <button type="button" className={styles.moreButton} aria-label={`More options for ${item.title}`}><MoreHorizontal size={16} /></button>
+          </div>;
+        })}
+      </div>
+      <div className={styles.dataPanelFooter}><span>Showing 1–6 of 128 generations</span><button type="button">View all usage <ArrowUpRight size={14} /></button></div>
+    </Card>
+  </div>;
+}
+
+function CreditHistoryTab({ period, onPeriodChange }: { period: SelectValue; onPeriodChange: (value: SelectValue) => void }) {
+  return <div className={styles.tabContent}>
+    <TabHeader
+      title="Credit history"
+      description="A clear timeline of credits added, renewed, and spent."
+      action={<><SelectControl value={period} options={["This billing cycle", "Last billing cycle"]} onChange={onPeriodChange} /><button type="button" className={styles.lightAction}><Download size={14} /> Download history</button></>}
+    />
+    <div className={styles.historySummary}>
+      <div className={styles.historyBalance}><div><span>Current balance</span><strong>4,250 <small>Credits</small></strong><p>Available until 1 Jun 2025</p></div><div className={styles.historyBalanceArt}><WalletCards size={38} /></div></div>
+      <TabKpi label="Added this cycle" value="12,000" detail="Credits" tone="green" />
+      <TabKpi label="Used this cycle" value="1,750" detail="Credits" tone="orange" />
+    </div>
+    <Card className={styles.dataPanel}>
+      <div className={styles.dataPanelHeading}><div><h3>Credit movements</h3><p>All balance changes in your workspace</p></div><span className={styles.balanceLabel}>Balance after activity</span></div>
+      <div className={styles.historyList}>
+        {creditEvents.map((event) => {
+          const Icon = event.icon;
+          const isPositive = event.amount.startsWith("+");
+          return <div className={styles.historyRow} key={`${event.title}-${event.date}`}><span className={cn(styles.toolIcon, styles[event.iconClass])}><Icon size={16} /></span><div className={styles.historyCopy}><strong>{event.title}</strong><span>{event.description}</span><small>{event.date}</small></div><strong className={cn(styles.historyAmount, isPositive && styles.positive)}>{event.amount}</strong><span className={styles.historyBalanceValue}>{event.balance}</span></div>;
+        })}
+      </div>
+      <div className={styles.dataPanelFooter}><span>Showing 1–5 of 28 credit movements</span><button type="button">View full history <ArrowUpRight size={14} /></button></div>
+    </Card>
+  </div>;
+}
+
+function TeamUsageTab({ period, onPeriodChange }: { period: SelectValue; onPeriodChange: (value: SelectValue) => void }) {
+  return <div className={styles.tabContent}>
+    <TabHeader
+      title="Team usage"
+      description="See how your team creates together and keep usage balanced."
+      action={<><SelectControl value={period} options={["This billing cycle", "Last billing cycle"]} onChange={onPeriodChange} /><button type="button" className={styles.lightAction}><UsersRound size={14} /> Invite teammate</button></>}
+    />
+    <div className={styles.kpiGrid}>
+      <TabKpi label="Team credits used" value="1,750" detail="42% of allowance" tone="pink" />
+      <TabKpi label="Active creators" value="4" detail="Out of 8 seats" tone="green" />
+      <TabKpi label="Average / member" value="438" detail="Credits this cycle" tone="orange" />
+      <TabKpi label="Most active" value="EOS Admin" detail="47% of team usage" />
+    </div>
+    <Card className={styles.dataPanel}>
+      <div className={styles.dataPanelHeading}><div><h3>Usage by member</h3><p>Credits used during this billing cycle</p></div><button type="button" className={styles.iconButton} aria-label="Team settings"><Users size={16} /></button></div>
+      <div className={styles.memberTable}>
+        <div className={styles.memberTableHeader}><span>Member</span><span>Role</span><span>Usage</span><span>Share</span><span aria-hidden="true" /></div>
+        {teamMembers.map((member) => <div className={styles.memberRow} key={member.email}>
+          <div className={styles.memberIdentity}><span className={styles.memberAvatar} style={{ backgroundColor: member.color }}>{member.initials}</span><div><strong>{member.name}</strong><span>{member.email}</span></div></div>
+          <span className={styles.rolePill}>{member.role}</span>
+          <div className={styles.memberUsage}><strong>{member.credits} <small>Credits</small></strong><span><i style={{ width: `${member.percent}%`, backgroundColor: member.color }} /></span></div>
+          <strong className={styles.memberPercent}>{member.percent}%</strong>
+          <button type="button" className={styles.moreButton} aria-label={`More options for ${member.name}`}><MoreHorizontal size={16} /></button>
+        </div>)}
+      </div>
+      <div className={styles.dataPanelFooter}><span>4 active members · 8 total seats</span><button type="button">Manage team <ArrowUpRight size={14} /></button></div>
+    </Card>
+  </div>;
+}
+
+function BillingPlanTab() {
+  return <div className={styles.tabContent}>
+    <TabHeader title="Billing & plan" description="Manage your plan, payment method, and credit top-ups." action={<button type="button" className={styles.lightAction}><CreditCard size={14} /> Manage billing</button>} />
+    <div className={styles.billingGrid}>
+      <Card className={styles.currentPlanPanel}>
+        <div className={styles.billingPanelTop}><div><span className={styles.eyebrow}>Current plan</span><h3>Enterprise</h3><p>10,000 credits / month</p></div><span className={styles.planBadge}>Active</span></div>
+        <div className={styles.billingPlanPrice}><strong>฿10,000</strong><span>/ month</span></div>
+        <div className={styles.billingProgress}><span /></div><div className={styles.billingProgressMeta}><span>4,250 credits remaining</span><strong>42% used</strong></div>
+        <div className={styles.billingRenew}><CalendarDays size={15} /><span>Renews on 1 Jun 2025</span><Check size={15} /></div>
+        <button type="button" className={styles.gradientButton}>Change plan <ArrowUpRight size={15} /></button>
+      </Card>
+      <Card className={styles.billingInfoPanel}>
+        <div className={styles.dataPanelHeading}><div><h3>Payment method</h3><p>Your default billing details</p></div><span className={styles.qrPill}>QR code</span></div>
+        <div className={styles.paymentMethodQr}><span className={styles.paymentQrIcon}><QrCode size={20} /></span><div><strong>QR code payment</strong><span>Scan a QR code to pay your invoice securely.</span></div><span className={styles.qrAvailable}>Available</span></div>
+        <div className={styles.invoiceRow}><ReceiptLine /><div><strong>Next invoice</strong><span>1 Jun 2025</span></div><strong>฿10,000</strong></div>
+        <button type="button" className={styles.outlineLightButton}>View payment QR code</button>
+      </Card>
+    </div>
+    <Card className={styles.dataPanel}>
+      <div className={styles.dataPanelHeading}><div><h3>Buy more credits</h3><p>Top up your workspace when you need extra creative power.</p></div><span className={styles.creditHint}>Credits never expire</span></div>
+      <div className={styles.creditPackGrid}>
+        <button type="button" className={styles.creditPack}><strong>1,000</strong><span>Credits</span><b>฿1,000</b></button>
+        <button type="button" className={cn(styles.creditPack, styles.featuredPack)}><em>Most popular</em><strong>5,000</strong><span>Credits</span><b>฿4,500</b></button>
+        <button type="button" className={styles.creditPack}><strong>10,000</strong><span>Credits</span><b>฿8,000</b></button>
+      </div>
+    </Card>
+  </div>;
+}
+
+function ReceiptLine() {
+  return <span className={styles.receiptIcon}><FileText size={16} /></span>;
+}
+
 function PlaceholderTab({ tab }: { tab: Exclude<UsageTab, "Overview"> }) {
-  const copy: Record<Exclude<UsageTab, "Overview">, { title: string; description: string; button: string; icon: LucideIcon }> = {
-    "Usage Details": { title: "Usage details are ready to explore", description: "Break down every generation by tool, project, and date range when the usage data source is connected.", button: "Export usage report", icon: ArrowDownToLine },
-    "Credit History": { title: "Your credit history", description: "Review top-ups, renewals, and adjustments in one clean timeline.", button: "Download history", icon: ArrowDownToLine },
-    "Team Usage": { title: "See how your team creates", description: "Compare credit usage across members and keep creative work moving together.", button: "Invite a teammate", icon: Users },
-    "Billing & Plan": { title: "Plan and billing controls", description: "Manage your plan, payment method, and credit top-ups from one place.", button: "Manage billing", icon: CreditCard },
-  };
-  const item = copy[tab];
-  const Icon = item.icon;
-  return <Card className={styles.placeholderTab}><span className={styles.placeholderIcon}><BarChart3 size={25} /></span><h2>{item.title}</h2><p>{item.description}</p><button className={styles.gradientButton}>{item.button}<Icon size={15} /></button></Card>;
+  const [period, setPeriod] = useState<SelectValue>("This billing cycle");
+  if (tab === "Usage Details") return <UsageDetailsTab period={period} onPeriodChange={setPeriod} />;
+  if (tab === "Credit History") return <CreditHistoryTab period={period} onPeriodChange={setPeriod} />;
+  if (tab === "Team Usage") return <TeamUsageTab period={period} onPeriodChange={setPeriod} />;
+  return <BillingPlanTab />;
 }
 
 export function UsagePage() {
@@ -234,29 +383,35 @@ export function UsagePage() {
 
   return (
     <div className={styles.usagePage} data-page="usage">
-      <div className={styles.pageIntro}>
-        <div className={styles.titleBlock}>
-          <h1>Usage &amp; Credits <span>ϟ</span></h1>
-          <p>Track. Manage. Create <em>without limits.</em></p>
-        </div>
-        <div className={styles.introDecoration} aria-hidden="true"><span /><i /><b /></div>
-      </div>
-
-      <div className={styles.tabBar} role="tablist" aria-label="Usage sections">
-        {tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={cn(activeTab === tab && styles.activeTab)} onClick={() => setActiveTab(tab)}>{tab}</button>)}
-      </div>
-
-      {activeTab === "Overview" ? <>
-        <SummaryCard />
-        <div className={styles.contentGrid}>
-          <div className={styles.mainColumn}>
-            <div className={styles.twoColumnPanels}><UsageByTool period={toolPeriod} onPeriodChange={setToolPeriod} /><UsageChart range={chartRange} onRangeChange={setChartRange} /></div>
+      <div className={styles.pageLayout}>
+        <div className={styles.primaryColumn}>
+          <div className={styles.pageIntro}>
+            <div className={styles.titleBlock}>
+              <h1>Usage &amp; Credit <Zap aria-hidden="true" /></h1>
+              <p>Track. Manage. Create <em>without limits.</em></p>
+            </div>
+            <div className={styles.introDecoration} aria-hidden="true"><span /><i /><b /></div>
           </div>
-          <div className={styles.sideColumn}><PlanCard /><ActivityCard /></div>
-        </div>
-        <div className={styles.upgradeBanner}><div className={styles.bannerMark}>MAKE<br /><b>IT</b><br /><strong>LOUD.</strong></div><div><p>Need more power?</p><strong>Upgrade your plan and unlock <em>more credits.</em></strong></div><button className={styles.bannerButton}>Upgrade now <ArrowUpRight size={16} /></button><div className={styles.bannerScribble}>⌁</div></div>
-      </> : <PlaceholderTab tab={activeTab as Exclude<UsageTab, "Overview">} />}
 
+          <div className={styles.tabBar} role="tablist" aria-label="Usage sections">
+            {tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={cn(activeTab === tab && styles.activeTab)} onClick={() => setActiveTab(tab)}>{tab}</button>)}
+          </div>
+
+          {activeTab === "Overview" ? <>
+            <SummaryCard />
+            <div className={styles.twoColumnPanels}><UsageByTool period={toolPeriod} onPeriodChange={setToolPeriod} /><UsageChart range={chartRange} onRangeChange={setChartRange} /></div>
+          </> : <PlaceholderTab tab={activeTab as Exclude<UsageTab, "Overview">} />}
+        </div>
+
+        <div className={styles.sideColumn}><PlanCard /><ActivityCard /></div>
+      </div>
+
+      {activeTab === "Overview" ? <div className={styles.upgradeBanner}>
+        <Image className={styles.bannerArtwork} src="/generated-assets/landing-cta-artwork-transparent-v2.png" alt="" fill sizes="(min-width: 1024px) 1230px, 100vw" priority />
+        <div className={styles.bannerMark}>MAKE<br /><b>IT</b><br /><strong>LOUD.</strong></div><div className={styles.bannerCopy}><p>Need more power?</p><strong>Upgrade your plan and unlock <em>more credits.</em></strong></div><button className={styles.bannerButton}>Upgrade now <ArrowUpRight size={16} /></button><div className={styles.bannerScribble} aria-hidden="true">⌁</div>
+      </div> : null}
+
+      {/* Keep the help affordance below the full overview canvas. */}
       <div className={styles.helperLink}><CircleHelp size={14} /><span>Need a hand?</span><a href="/settings">Help center</a></div>
     </div>
   );
