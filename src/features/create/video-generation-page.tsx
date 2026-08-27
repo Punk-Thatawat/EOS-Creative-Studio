@@ -10,18 +10,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  FileText,
   Heart,
   ImageIcon,
   Info,
   LoaderCircle,
   Link2,
+  LockKeyhole,
   Mic2,
   Play,
   Plus,
   Pencil,
   Trash2,
-  Users,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -50,12 +49,12 @@ import styles from "./video-generation-page.module.css";
 import { modelTier, modelTierClass } from "./model-tier";
 
 const videoModes = [
-  ["Image to Video", ImageIcon],
-  ["Text to Video", FileText],
-  ["People Video", Users],
-  ["Motion Transfer", WandSparkles],
-  ["Lipsync", Mic2],
-  ["Extend Video", Plus],
+  "Image to Video",
+  "Text to Video",
+  "People Video",
+  "Motion Transfer",
+  "Lipsync",
+  "Extend Video",
 ] as const;
 const tutorials = [
   { title: "Quick Start Guide", subtitle: "", duration: "2:15" },
@@ -1204,7 +1203,7 @@ export function VideoGenerationPage() {
           </div>
         ) : null}
         <nav className={styles.tabs} aria-label="Video generation modes">
-          {videoModes.map(([label, Icon]) => {
+          {videoModes.map((label) => {
             const tab = label === "Image to Video" ? "image-to-video" : label === "Text to Video" ? "text-to-video" : label === "People Video" ? "people-video" : label === "Motion Transfer" ? "motion-transfer" : label === "Lipsync" ? "lipsync" : label === "Extend Video" ? "extend-video" : null;
             const isActive = tab === "image-to-video"
               ? activeVideoTab === "image-to-video"
@@ -1229,7 +1228,6 @@ export function VideoGenerationPage() {
                   if (tab) setActiveVideoTab(tab);
                 }}
               >
-                <Icon size={16} />
                 {label}
               </button>
             );
@@ -2037,27 +2035,29 @@ export function VideoGenerationPage() {
                 </label>
               );
             })}
-            <div className={styles.estimate} title={creditEstimateError ?? undefined}>
-              <div>
-                ESTIMATED CREDITS <Info size={11} />
+            <div className={styles.estimateBlock}>
+              <div className={styles.estimate} title={creditEstimateError ?? undefined}>
+                <div>
+                  ESTIMATED CREDITS <Info size={11} />
+                </div>
+                <span>{estimateDescription}<strong>{creditEstimateLoading || creditEstimate === null ? formattedCreditEstimate : `= ${formattedCreditEstimate}`}</strong></span>
               </div>
-              <span>{estimateDescription}<strong>{creditEstimateLoading || creditEstimate === null ? formattedCreditEstimate : `= ${formattedCreditEstimate}`}</strong></span>
+              <button
+                type="button"
+                className={styles.generate}
+                onClick={handleGenerate}
+                disabled={modelsLoading || !selectedModel || generationStatus === "uploading" || generationStatus === "processing"}
+              >
+                <WandSparkles size={18} /> {generationStatus === "uploading" || generationStatus === "processing" ? "GENERATING…" : "GENERATE VIDEO"}
+              </button>
+              <p className={styles.privateNote}>
+                <LockKeyhole size={12} /> Your generation is private and secure
+              </p>
             </div>
-            <button
-              type="button"
-              className={styles.generate}
-              onClick={handleGenerate}
-              disabled={modelsLoading || !selectedModel || generationStatus === "uploading" || generationStatus === "processing"}
-            >
-              <WandSparkles size={18} /> {generationStatus === "uploading" || generationStatus === "processing" ? "GENERATING…" : "GENERATE VIDEO"}
-            </button>
             {generationProgress.total > 0 && (generationStatus === "uploading" || generationStatus === "processing" || generationStatus === "completed") ? (
               <p className={styles.generationProgress}>{generationProgress.completed}/{generationProgress.total} {generationMode === "single-image" ? "video" : "scenes"} complete</p>
             ) : null}
             {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
-            <p className={styles.privateNote}>
-              ใช้เวลาโดยประมาณ 1–3 นาที <Info size={10} />
-            </p>
           </aside>
           <section className={styles.tutorials}>
             <div className={styles.tutorialTitle}>

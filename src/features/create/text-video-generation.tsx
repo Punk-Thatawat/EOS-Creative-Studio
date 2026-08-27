@@ -682,15 +682,15 @@ export function TextToVideoWorkspace() {
             {modelParameterEntries.map(([name, property]) => <TextSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}
           </div>
         ) : null}
-        <VideoCreditEstimate featureLabel="Text to Video" duration={durationValue} estimate={videoCreditEstimate} />
-        {isGenerating ? (
-          <button type="button" className={styles.textVideoCancel} onClick={() => void cancelGeneration()}><X size={14} /> CANCEL GENERATION</button>
-        ) : (
-          <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={modelsLoading}><WandSparkles size={18} /> GENERATE VIDEO</button>
-        )}
+        <VideoCreditEstimate featureLabel="Text to Video" duration={durationValue} estimate={videoCreditEstimate}>
+          {isGenerating ? (
+            <button type="button" className={styles.textVideoCancel} onClick={() => void cancelGeneration()}><X size={14} /> CANCEL GENERATION</button>
+          ) : (
+            <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={modelsLoading}><WandSparkles size={18} /> GENERATE VIDEO</button>
+          )}
+        </VideoCreditEstimate>
         {generationStatus === "failed" || generationStatus === "cancelled" ? <button type="button" className={styles.textVideoRetry} onClick={() => void handleGenerate()}><RotateCcw size={13} /> RETRY</button> : null}
         {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
-        <p className={styles.privateNote}>ใช้เวลาโดยประมาณ 1–3 นาที <Info size={10} /></p>
       </aside>
       <TextVideoTutorials />
     </div>

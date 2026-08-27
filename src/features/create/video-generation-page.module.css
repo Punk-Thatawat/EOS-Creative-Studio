@@ -5,6 +5,13 @@
 .hero{position:relative;isolation:isolate;height:auto;aspect-ratio:5.5 / 1;margin:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;border:0;border-bottom:0;pointer-events:none}.hero img{position:absolute!important;inset:0;z-index:0;display:block;width:100%;height:100%;object-fit:cover;object-position:center 18%;pointer-events:none}
 @media(max-width:700px){.hero{height:auto;aspect-ratio:5.5 / 1;margin-top:0}.hero img{object-fit:cover;object-position:center 18%}}
 
+/* Keep video mode tabs aligned with the Image generator tab pattern. */
+.tabs{border:1px solid var(--border);border-radius:13px 13px 0 0;background:#fff}
+.tabs button{position:relative;min-width:125px;margin-top:3px;padding:12px 10px;border-right:1px solid #ece9e6;border-bottom:3px solid transparent;color:#515866;background:transparent;font-weight:600;cursor:pointer}
+.tabs button:last-child{border-right:0}
+.tabs button.active{margin-top:0;border:1px solid #e5e1de;border-bottom:3px solid #f26b38;border-radius:10px 10px 0 0;color:#ef5c29;background:#fff;box-shadow:0 -1px 5px rgba(58,42,30,.04)}
+.tabs button:has(+ button.active){border-right:0}
+
 .annotation{display:inline-block;width:51px;height:35px;margin-left:4px;color:transparent!important;font-size:0;background:url('/generated-assets/annotation-arrow-pink.png') center / contain no-repeat;vertical-align:middle}
 .leftColumn .annotation,.tutorialTitle .annotation{background-image:url('/generated-assets/annotation-arrow-pink.png')}
 .settings .annotation{background-image:url('/generated-assets/annotation-crown-pink-generated.png')}
@@ -157,3 +164,5 @@
 .modelTierBadge{display:inline-flex;flex:none;align-items:center;border-radius:999px;padding:2px 6px;font-size:7px!important;font-weight:900!important;letter-spacing:.05em;line-height:1.2}.modelTierTop{background:#fff0e9;color:#e85c27}.modelTierMid{background:#eef5ff;color:#41668f}.modelTierTest{background:#f2f2f2;color:#777}.audioReferenceField{margin-top:16px}.audioReferenceField .settingLabel{justify-content:space-between}.audioReferenceField .settingLabel small{margin-left:auto;color:#8b8f98;font-size:8px;font-weight:500}
 .modelTierBadge{display:inline-flex;flex:none;align-items:center;border-radius:999px;padding:2px 6px;font-size:7px!important;font-weight:900!important;letter-spacing:.05em;line-height:1.2}.modelTierTop{background:#fff0e9;color:#e85c27}.modelTierMid{background:#eef5ff;color:#41668f}.modelTierTest{background:#f2f2f2;color:#777}
 .settingsError[role="alert"]{padding:8px 9px;border:1px solid #f2c7b8;border-radius:8px;background:#fff6f2}
+.estimateBlock{margin-top:18px;padding-top:13px;border-top:1px dashed #d9d9d9}.estimateBlock .estimate{margin:0;padding:0;border-top:0}.estimateBlock .estimate>div{font-size:11px}.estimateBlock .estimate>span{margin-top:6px;color:#626872;font-size:9px}.estimateBlock .estimate>span strong{font-size:9px}.estimateBlock .generate{min-height:52px;margin-top:18px;padding:13px 8px;border-radius:9px;box-shadow:0 8px 17px rgba(242,107,56,.22);font-size:16px}.estimateBlock .generate:disabled{cursor:not-allowed;opacity:.48;filter:saturate(.5)}.privateNote{display:flex;align-items:center;justify-content:center;gap:5px;margin:8px 0 0;color:#727780;font-size:9px}.privateNote svg{flex:none}
+@media(max-width:1100px){.settings>.estimateBlock{grid-column:1/-1}}

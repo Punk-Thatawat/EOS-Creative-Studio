@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, AudioLines, BarChart3, Boxes, ChevronDown, ChevronUp, Clock3, FileText, FolderKanban, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Mic2, Palette, Settings, Settings2, ShieldCheck, Users, UsersRound, Video, WandSparkles } from "lucide-react";
+import { ArrowLeft, AudioLines, BarChart3, Boxes, ChevronDown, ChevronUp, Clock3, FileText, FolderKanban, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, UsersRound, Video, WandSparkles } from "lucide-react";
 import { EosLogo } from "@/components/brand/eos-logo";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import type { NavigationItem } from "@/types/navigation";
@@ -21,8 +21,6 @@ const libraryItems: NavigationItem[] = [
 ];
 
 const workspaceItems: NavigationItem[] = [
-  { label: "Brand Kit", href: "/brand-kit", icon: Palette },
-  { label: "Team & Approval", href: "/team", icon: Users },
   { label: "History", href: "/history", icon: Clock3 },
   { label: "Usage & Credits", href: "/usage", icon: BarChart3 },
   { label: "Settings", href: "/settings", icon: Settings },
@@ -32,8 +30,6 @@ const createItems: NavigationItem[] = [
   { label: "Image", href: "/create/image", icon: ImageIcon },
   { label: "Video", href: "/create/video", icon: Video },
   { label: "Audio", href: "/create/audio", icon: AudioLines },
-  { label: "Document", href: "/create/document", icon: FileText },
-  { label: "AI Presenter", href: "/create/ai-presenter", icon: Mic2 },
 ];
 
 function NavigationGroup({ label, items, pathname }: { label?: string; items: NavigationItem[]; pathname: string }) {
@@ -111,8 +107,6 @@ const audioWorkspaceItems = [
   { label: "Projects", href: "/projects", icon: FolderKanban },
   { label: "Templates", href: "/templates", icon: LayoutTemplate },
   { label: "Assets", href: "/assets", icon: ImageIcon },
-  { label: "Brand Kit", href: "/brand-kit", icon: Palette },
-  { label: "Team & Approval", href: "/team", icon: Users },
   { label: "History", href: "/history", icon: Clock3 },
   { label: "Usage & Credits", href: "/usage", icon: BarChart3 },
 ] as const;

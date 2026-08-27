@@ -424,12 +424,12 @@ export function MotionTransferWorkspace() {
         {orientationProperty ? <MotionSchemaField name={orientationProperty[0]} property={orientationProperty[1]} value={orientationValue} required={requiredProperties.has(orientationProperty[0])} labelOverride="Character Orientation" onChange={setOrientationValue} /> : null}
         {keepSoundProperty ? <MotionSchemaField name={keepSoundProperty[0]} property={keepSoundProperty[1]} value={keepOriginalSound} required={requiredProperties.has(keepSoundProperty[0])} labelOverride="Keep Original Sound" onChange={setKeepOriginalSound} /> : null}
         {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>{modelParameterEntries.map(([name, property]) => <MotionSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}
-        <VideoCreditEstimate featureLabel="Motion Transfer" estimate={videoCreditEstimate} />
-        <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><WandSparkles size={18} /> {isGenerating ? "GENERATING…" : "GENERATE VIDEO"}</button>
+        <VideoCreditEstimate featureLabel="Motion Transfer" estimate={videoCreditEstimate}>
+          <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><WandSparkles size={18} /> {isGenerating ? "GENERATING…" : "GENERATE VIDEO"}</button>
+        </VideoCreditEstimate>
         {submitAttempted && !isComplete ? <p className={styles.settingsError}>{modelsLoading ? "Loading motion transfer models…" : validationMessage}</p> : null}
         {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
         {notice ? <p className={styles.peopleNotice}>{notice}</p> : null}
-        <p className={styles.privateNote}>ใช้เวลาโดยประมาณ 1–3 นาที <Info size={10} /></p>
       </aside>
     </div>
   );

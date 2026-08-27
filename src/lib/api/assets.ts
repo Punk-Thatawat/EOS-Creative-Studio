@@ -158,6 +158,11 @@ export async function createAssetTag(name: string, workspaceId?: string): Promis
   });
 }
 
+export async function deleteAssetTag(name: string, workspaceId?: string): Promise<{ name: string; unassignedCount: number }> {
+  const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
+  return request<{ name: string; unassignedCount: number }>(`/assets/tags/${encodeURIComponent(name)}${query}`, { method: "DELETE" });
+}
+
 export async function updateAsset(assetId: string, input: AssetMetadataInput): Promise<AssetsApiAsset> {
   const { workspaceId, ...body } = input;
   const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";

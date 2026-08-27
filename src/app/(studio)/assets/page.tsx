@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Archive,
   AudioLines,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -18,7 +19,6 @@ import {
   Folder,
   Grid2X2,
   Image as ImageIcon,
-  Info,
   List,
   LoaderCircle,
   MoreVertical,
@@ -33,6 +33,7 @@ import {
 import {
   deleteAsset,
   deleteAssetFolder,
+  deleteAssetTag,
   emptyTrash,
   fetchAssets,
   createAssetFolder,
@@ -95,6 +96,7 @@ const filterByApiType: Record<AssetsApiType, Exclude<FilterType, "All Types">> =
 
 const filterOptions: FilterType[] = ["All Types", "Images", "Videos", "Documents", "Audio", "Other"];
 const defaultAssetFolderNames = new Set(["image", "videos", "voice", "document"]);
+const SIDEBAR_GROUP_LIMIT = 5;
 
 const previewFallbacks: Record<AssetsApiType, string> = {
   image: "/generated-assets/creative-studio-hero-with-text.png",
@@ -103,6 +105,14 @@ const previewFallbacks: Record<AssetsApiType, string> = {
   audio: "/generated-assets/audio-ui/audio-waveform.png",
   other: "/generated-icons-v2/jobs/image-generate.png",
 };
+
+const summaryIconPaths = {
+  total: "/generated-assets/assets-summary-icons/asset-summary-total.png",
+  images: "/generated-assets/assets-summary-icons/asset-summary-images.png",
+  videos: "/generated-assets/assets-summary-icons/asset-summary-videos.png",
+  documents: "/generated-assets/assets-summary-icons/asset-summary-documents.png",
+  other: "/generated-assets/assets-summary-icons/asset-summary-other.png",
+} as const;
 
 const typeColors: Record<string, string> = {
   JPG: "#0bca84", JPEG: "#0bca84", PNG: "#0bca84", WEBP: "#0bca84",
@@ -196,17 +206,48 @@ function FilterSelect({
   options,
   value,
   onSelect,
+  open,
+  onToggle,
 }: {
   label: string;
   options: SelectOption[];
   value: string;
   onSelect: (value: string) => void;
+  open: boolean;
+  onToggle: (open: boolean) => void;
 }) {
-  return <div className="assets-select">
-    <select className="assets-select-native" aria-label={label} value={value} onChange={(event) => onSelect(event.target.value)}>
-      {options.map((option) => <option value={option.value} key={option.value || "all"}>{option.label}</option>)}
-    </select>
-    <ChevronDown className="assets-select-chevron" size={15} aria-hidden="true" />
+  const selectRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (selectRef.current && !selectRef.current.contains(event.target as Node)) onToggle(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onToggle(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onToggle, open]);
+
+  return <div className={`assets-select ${open ? "is-open" : ""}`} ref={selectRef}>
+    <button type="button" className="assets-select-trigger" aria-haspopup="listbox" aria-expanded={open} aria-label={label} onClick={() => onToggle(!open)}>
+      <span>{label}</span>
+      <ChevronDown className="assets-select-chevron" size={15} aria-hidden="true" />
+    </button>
+    {open ? <div className="assets-select-menu" role="listbox" aria-label={label}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return <button type="button" role="option" aria-selected={selected} className={`assets-select-option ${selected ? "is-selected" : ""}`} value={option.value} key={option.value || "all"} onClick={() => { onSelect(option.value); onToggle(false); }}>
+          <span>{option.label}</span>
+          {selected ? <Check size={15} aria-hidden="true" /> : null}
+        </button>;
+      })}
+    </div> : null}
   </div>;
 }
 
@@ -263,6 +304,9 @@ export default function AssetsPage() {
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeSort, setActiveSort] = useState<AssetSort>("Newest");
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
+  const [showAllFolders, setShowAllFolders] = useState(false);
+  const [showAllTags, setShowAllTags] = useState(false);
   const [search, setSearch] = useState(() => queryParams.get("q") ?? "");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [page, setPage] = useState(1);
@@ -271,7 +315,9 @@ export default function AssetsPage() {
   const [openMenuAsset, setOpenMenuAsset] = useState<string | null>(null);
   const [busyAssetId, setBusyAssetId] = useState<string | null>(null);
   const [busyFolderName, setBusyFolderName] = useState<string | null>(null);
+  const [busyTagName, setBusyTagName] = useState<string | null>(null);
   const [pendingDeleteFolder, setPendingDeleteFolder] = useState<AssetsApiFilter | null>(null);
+  const [pendingDeleteTag, setPendingDeleteTag] = useState<AssetsApiFilter | null>(null);
   const [groupDialog, setGroupDialog] = useState<GroupDialog | null>(null);
   const [groupName, setGroupName] = useState("");
   const [groupSaving, setGroupSaving] = useState(false);
@@ -342,6 +388,8 @@ export default function AssetsPage() {
     const tabFolderName = activeTab === "Trash" ? "All Trash" : activeTab === "Shared with me" ? "All Shared" : activeTab === "Team Assets" ? "All Team Assets" : "All Assets";
     return [{ id: "all", name: tabFolderName, count: assetsData.summary.total }, ...assetsData.filters.folders.filter((item) => item.id !== "all")];
   }, [activeTab, assetsData.filters.folders, assetsData.summary.total]);
+  const visibleFolderItems = showAllFolders ? folderItems : folderItems.slice(0, SIDEBAR_GROUP_LIMIT);
+  const visibleTagItems = showAllTags ? assetsData.filters.tags : assetsData.filters.tags.slice(0, SIDEBAR_GROUP_LIMIT);
   const totalPages = Math.max(1, assetsData.pagination.totalPages || 1);
   const cta = ctaByTab[activeTab];
   const activeFolderLabel = activeFolder ? formatLabel(folderItems.find((item) => item.id === activeFolder)?.name ?? activeFolder) : "All Folders";
@@ -358,6 +406,7 @@ export default function AssetsPage() {
   const selectedCustomFolder = activeFolder
     ? assetsData.filters.folders.find((item) => item.id === activeFolder && !defaultAssetFolderNames.has(item.name.trim().toLocaleLowerCase()))
     : undefined;
+  const selectedTag = activeTag ? assetsData.filters.tags.find((item) => item.id === activeTag) : undefined;
   const startItem = assetsData.pagination.total === 0 ? 0 : ((assetsData.pagination.page - 1) * assetsData.pagination.limit) + 1;
   const endItem = Math.min(assetsData.pagination.total, startItem + assetsData.pagination.limit - 1);
   const rangeLabel = assetsData.pagination.total === 0
@@ -370,17 +419,23 @@ export default function AssetsPage() {
     setActiveFolder(null);
     setActiveTag(null);
     setActiveSort("Newest");
+    setOpenFilter(null);
+    setShowAllFolders(false);
+    setShowAllTags(false);
     setSearch("");
     window.dispatchEvent(new Event("assets-search-clear"));
     setPage(1);
     setPendingDeleteFolder(null);
+    setPendingDeleteTag(null);
     setSelectedAsset(null);
     setOpenMenuAsset(null);
     window.history.replaceState(null, "", "/assets");
   };
 
   const openGroupDialog = (kind: GroupDialog["kind"], assetId: string | null = null) => {
+    setOpenFilter(null);
     setPendingDeleteFolder(null);
+    setPendingDeleteTag(null);
     setOpenMenuAsset(null);
     setGroupName("");
     setGroupDialog({ kind, assetId });
@@ -463,6 +518,32 @@ export default function AssetsPage() {
     }
   };
 
+  const handleDeleteTag = async (tag: AssetsApiFilter) => {
+    if (!tag.name.trim() || busyTagName) return;
+    setBusyTagName(tag.name);
+    setPendingDeleteTag(null);
+    setError(null);
+    try {
+      await deleteAssetTag(tag.name);
+      if (activeTag === tag.id) {
+        setAssetsData((current) => ({
+          ...current,
+          filters: { ...current.filters, tags: current.filters.tags.filter((item) => item.id !== tag.id) },
+        }));
+        window.requestAnimationFrame(() => {
+          setActiveTag(null);
+          setPage(1);
+        });
+      } else {
+        setRefreshKey((current) => current + 1);
+      }
+    } catch (tagError) {
+      setError(tagError instanceof Error ? tagError.message : "Unable to delete tag");
+    } finally {
+      setBusyTagName(null);
+    }
+  };
+
   const handleAssetAction = async (assetId: string, action: "trash" | "restore") => {
     setBusyAssetId(assetId);
     setError(null);
@@ -505,23 +586,26 @@ export default function AssetsPage() {
     <div className="assets-page" data-active-tab={activeTab}>
       <section className="assets-hero" aria-labelledby="assets-heading">
         <div className="assets-hero-copy">
-          <div className="assets-wordmark-wrap">
-            <h1 id="assets-heading">ASSETS</h1>
-            <Image src="/generated-assets/annotation-crown-pink.png" alt="" width={58} height={58} className="assets-crown" />
-          </div>
-          <div className="assets-hero-strip"><span>ORGANIZE. FIND. USE.</span> <b>CREATE WITHOUT LIMITS.</b></div>
+          <Image
+            id="assets-heading"
+            src="/generated-assets/assets-hero-banner-transparent.png"
+            alt="Assets — Organize. Find. Use. Create without limits."
+            width={2079}
+            height={378}
+            priority
+            className="assets-hero-banner"
+          />
           <p>All your creative assets in one place.<br />Easy to manage, search, and <strong>reuse</strong> across your projects.</p>
-          <Image src="/generated-assets/annotation-speed-lines.png" alt="" width={50} height={18} className="assets-speed-lines" />
         </div>
 
         <div className="assets-summary-card">
           <div className="assets-summary-heading"><strong>ASSET SUMMARY</strong><button type="button" onClick={() => { setActiveType("All Types"); setActiveFolder(null); setActiveTag(null); setPage(1); }}>View all <ChevronRight size={17} /></button></div>
           <div className="assets-summary-grid">
-            <SummaryMetric icon={<ImageIcon />} value={assetsData.summary.total} label="Total Assets" color="#d700e8" />
-            <SummaryMetric icon={<ImageIcon />} value={assetsData.summary.images} label="Images" color="#ff3113" />
-            <SummaryMetric icon={<Video />} value={assetsData.summary.videos} label="Videos" color="#e80091" />
-            <SummaryMetric icon={<FileText />} value={assetsData.summary.documents} label="Documents" color="#ffd000" />
-            <SummaryMetric icon={<Info />} value={assetsData.summary.others} label="Others" color="#9994a8" />
+            <SummaryMetric icon={<Image src={summaryIconPaths.total} alt="" width={23} height={23} />} value={assetsData.summary.total} label="Total Assets" color="#d700e8" />
+            <SummaryMetric icon={<Image src={summaryIconPaths.images} alt="" width={23} height={23} />} value={assetsData.summary.images} label="Images" color="#ff3113" />
+            <SummaryMetric icon={<Image src={summaryIconPaths.videos} alt="" width={23} height={23} />} value={assetsData.summary.videos} label="Videos" color="#e80091" />
+            <SummaryMetric icon={<Image src={summaryIconPaths.documents} alt="" width={23} height={23} />} value={assetsData.summary.documents} label="Documents" color="#ffd000" />
+            <SummaryMetric icon={<Image src={summaryIconPaths.other} alt="" width={23} height={23} />} value={assetsData.summary.others} label="Others" color="#9994a8" />
           </div>
         </div>
 
@@ -534,28 +618,40 @@ export default function AssetsPage() {
           </div>
           <div className="assets-filters">
             <FilterSelect
+              key="type"
               label={activeType}
               value={activeType}
               options={filterOptions.map((option) => ({ value: option, label: option }))}
               onSelect={(value) => { setActiveType(value as FilterType); setPage(1); }}
+              open={openFilter === "type"}
+              onToggle={(nextOpen) => setOpenFilter(nextOpen ? "type" : null)}
             />
             <FilterSelect
+              key="folder"
               label={activeFolderLabel}
               value={activeFolder ?? ""}
               options={[{ value: "", label: "All Folders" }, ...assetsData.filters.folders.filter((item) => item.id !== "all").map((item) => ({ value: item.id, label: formatLabel(item.name), count: item.count }))]}
-              onSelect={(value) => { setActiveFolder(value || null); setPage(1); }}
+              onSelect={(value) => { setActiveFolder(value || null); setShowAllFolders(Boolean(value)); setPage(1); }}
+              open={openFilter === "folder"}
+              onToggle={(nextOpen) => setOpenFilter(nextOpen ? "folder" : null)}
             />
             <FilterSelect
+              key="tag"
               label={activeTagLabel}
               value={activeTag ?? ""}
               options={[{ value: "", label: "All Tags" }, ...assetsData.filters.tags.map((item) => ({ value: item.id, label: formatLabel(item.name), count: item.count }))]}
-              onSelect={(value) => { setActiveTag(value || null); setPage(1); }}
+              onSelect={(value) => { setActiveTag(value || null); setShowAllTags(Boolean(value)); setPage(1); }}
+              open={openFilter === "tag"}
+              onToggle={(nextOpen) => setOpenFilter(nextOpen ? "tag" : null)}
             />
             <FilterSelect
+              key="sort"
               label={`Sort by: ${activeSort}`}
               value={activeSort}
               options={[{ value: "Newest", label: "Sort by: Newest" }, { value: "Oldest", label: "Sort by: Oldest" }]}
               onSelect={(value) => { setActiveSort(value as AssetSort); setPage(1); }}
+              open={openFilter === "sort"}
+              onToggle={(nextOpen) => setOpenFilter(nextOpen ? "sort" : null)}
             />
             <div className="assets-view-toggle" aria-label="Change asset view">
               <button type="button" aria-label="Grid view" className={view === "grid" ? "is-active" : ""} onClick={() => setView("grid")}><Grid2X2 size={18} /></button>
@@ -577,15 +673,21 @@ export default function AssetsPage() {
               <div className="assets-folder-delete-actions"><button type="button" onClick={() => setPendingDeleteFolder(null)} disabled={busyFolderName !== null}>Cancel</button><button type="button" onClick={() => void handleDeleteFolder(pendingDeleteFolder)} disabled={busyFolderName !== null}>Delete</button></div>
             </div> : null}
             <div className="assets-folder-list">
-              {folderItems.length ? <FilterList items={folderItems} activeId={activeFolder ?? "all"} onSelect={(id) => { setActiveFolder(id === "all" ? null : id); setPage(1); }} kind="folder" /> : <span className="assets-sidebar-empty">No folders yet</span>}
+              {visibleFolderItems.length ? <FilterList items={visibleFolderItems} activeId={activeFolder ?? "all"} onSelect={(id) => { setActiveFolder(id === "all" ? null : id); setPage(1); }} kind="folder" /> : <span className="assets-sidebar-empty">No folders yet</span>}
             </div>
-            <button type="button" className="assets-show-more">Show more <ChevronDown size={14} /></button>
+            {folderItems.length > SIDEBAR_GROUP_LIMIT ? <button type="button" className={`assets-show-more ${showAllFolders ? "is-expanded" : ""}`} aria-expanded={showAllFolders} onClick={() => setShowAllFolders((current) => !current)}>{showAllFolders ? "Show less" : "Show more"} <ChevronDown size={14} /></button> : null}
             <div className="assets-panel-divider" />
-            <div className="assets-panel-heading"><strong>TAGS</strong><button type="button" aria-label="Add tag" onClick={() => openGroupDialog("tag")}><Plus size={17} /></button></div>
-            <div className="assets-tag-grid">
-              {assetsData.filters.tags.length ? <FilterList items={assetsData.filters.tags} activeId={activeTag} onSelect={(id) => { setActiveTag(id); setPage(1); }} kind="tag" /> : <span className="assets-sidebar-empty">No tags yet</span>}
+            <div className="assets-tags-section">
+              <div className="assets-panel-heading"><strong>TAGS</strong><div className="assets-panel-actions"><button type="button" aria-label="Delete selected tag" title={selectedTag ? `Delete ${formatLabel(selectedTag.name)}` : "Select a tag to delete"} disabled={!selectedTag || busyTagName !== null} onClick={() => { if (selectedTag) setPendingDeleteTag(selectedTag); }}><Trash2 size={16} /></button><button type="button" aria-label="Add tag" onClick={() => openGroupDialog("tag")}><Plus size={17} /></button></div></div>
+              {pendingDeleteTag ? <div className="assets-folder-delete-popover assets-tag-delete-popover" role="dialog" aria-label={`Confirm delete ${formatLabel(pendingDeleteTag.name)}`}>
+                <div className="assets-folder-delete-copy"><span className="assets-folder-delete-icon"><Trash2 size={16} /></span><div><strong>Delete tag?</strong><p>“{formatLabel(pendingDeleteTag.name)}” will be removed from your assets.</p></div></div>
+                <div className="assets-folder-delete-actions"><button type="button" onClick={() => setPendingDeleteTag(null)} disabled={busyTagName !== null}>Cancel</button><button type="button" onClick={() => void handleDeleteTag(pendingDeleteTag)} disabled={busyTagName !== null}>Delete</button></div>
+              </div> : null}
+              <div className="assets-tag-grid">
+                {visibleTagItems.length ? <FilterList items={visibleTagItems} activeId={activeTag} onSelect={(id) => { setActiveTag(id); setPage(1); }} kind="tag" /> : <span className="assets-sidebar-empty">No tags yet</span>}
+              </div>
+              {assetsData.filters.tags.length > SIDEBAR_GROUP_LIMIT ? <button type="button" className={`assets-show-more ${showAllTags ? "is-expanded" : ""}`} aria-expanded={showAllTags} onClick={() => setShowAllTags((current) => !current)}>{showAllTags ? "Show less" : "Show more"} <ChevronDown size={14} /></button> : null}
             </div>
-            <button type="button" className="assets-show-more">Show more <ChevronDown size={14} /></button>
           </aside>
 
           <div className={view === "grid" ? "assets-grid" : "assets-list"}>

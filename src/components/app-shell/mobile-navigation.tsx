@@ -3,15 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { AudioLines, BarChart3, Boxes, ChevronDown, FileText, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, Users, UsersRound, Video, WandSparkles, X } from "lucide-react";
+import { AudioLines, BarChart3, Boxes, ChevronDown, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, UsersRound, Video, WandSparkles, X } from "lucide-react";
 import { useHydrated } from "./use-hydrated";
 
 const links = [
   { label: "Home", href: "/home", icon: Home },
   { label: "Projects", href: "/projects", icon: LayoutTemplate },
   { label: "Templates", href: "/templates", icon: LayoutTemplate },
-  { label: "Brand Kit", href: "/brand-kit", icon: Palette },
-  { label: "Team & Approval", href: "/team", icon: Users },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -19,7 +17,6 @@ const createItems = [
   { label: "Image", href: "/create/image", icon: ImageIcon },
   { label: "Video", href: "/create/video", icon: Video },
   { label: "Audio", href: "/create/audio", icon: AudioLines },
-  { label: "Document", href: "/create/document", icon: FileText },
 ];
 
 const adminItems = [

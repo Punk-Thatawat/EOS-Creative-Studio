@@ -1,55 +1,43 @@
-# Design QA — Assets generated artwork integration
+# Design QA — Video Mode Tabs
 
-## Source visual truth
+## Comparison target
 
-- Primary source: `C:/Users/Thatawat.T/AppData/Local/Temp/codex-clipboard-eda9c112-60bd-4f79-91f2-c6f14aef9e11.png` (attached hero reference, 250 × 150 pixels).
-- Full-page context: `C:/Work/eos-creative-studio/docs/reference/MOCKUP Assets - EOS CREATIVE STUDIO.png` (1536 × 1024 pixels).
-- Rendered implementation: `C:/Work/eos-creative-studio/tmp/assets-mockup-implementation.png` (1536 × 1024 pixels).
-- Focused implementation comparison: `C:/Work/eos-creative-studio/tmp/assets-hero-implementation.png` (440 × 225 pixels).
+- Source visual truth: `C:\Users\Thatawat.T\AppData\Local\Temp\codex-clipboard-2d802858-badc-40b8-b863-16c2f95ae140.png`
+- Implementation page: `http://localhost:3000/create/video`
+- Implementation full-page capture: `C:\Work\eos-creative-studio\qa-video-tabs-page.png`
+- Focused implementation capture: `C:\Work\eos-creative-studio\qa-video-tabs-focused.png`
+- Combined comparison input: `C:\Work\eos-creative-studio\qa-video-tabs-comparison.png`
 
-## Comparison setup
+## Capture normalization
 
-- Viewport: 1536 × 1024 CSS px.
-- Implementation screenshot: 1536 × 1024 pixels at device scale 1; no density normalization required.
-- Focused region: Assets hero copy, title, brush strip, description, and pink annotation.
-- State: `My Assets`, `All Types`, `All Folders`, `All Tags`, `Newest`, grid view; generated API data loaded with 27 total assets, 20 images, and 7 videos.
-- The full reference contains an Upload Asset card. The implementation intentionally omits it because Assets is generated-output-only by product requirement; generated results still render from the API.
+- Source capture: 1217 × 77 px; the relevant tab strip is the visible upper region.
+- Implementation viewport: 1265 × 712 px.
+- Implementation tab strip: 1007 × 49 px in the captured viewport.
+- CSS/device density: compared at the captured browser density without rescaling; the source is a cropped reference while the implementation includes the existing studio sidebar.
+- State: Image to Video selected; empty/default Video workspace.
 
 ## Evidence
 
-The source and rendered implementation were reviewed together at full-page and focused-hero level. The implementation preserves the reference hierarchy while using actual repository-generated artwork: the crown annotation, textured black brush strip, pink reuse annotation, existing EOS/sidebar artwork, and generated API previews. The wider summary card fills the space left by the intentionally removed upload card.
+The combined comparison shows the same visual pattern: text-only tabs, equal flexible tab widths, 1px outer border, rounded top corners, vertical dividers, and an active tab with a raised rounded border and orange bottom rule. The Video labels remain feature-specific: Image to Video, Text to Video, People Video, Motion Transfer, Lipsync, and Extend Video.
 
-## Primary interactions tested
+The implementation's computed tab styles match the Image page: 12px font size, 600 weight, `12px 10px` padding, 125px minimum width, and `10px 10px 0 0` active radius.
 
-- `/assets` loaded the generated asset list and rendered the populated grid.
-- Summary counts, folder/tag filters, grid/list controls, and generated preview cards remained visible after the visual changes.
-- Browser logs: 0 console errors. One existing Next Image performance warning remains for the sidebar CTA `sizes` value; it does not affect rendering.
+Focused region comparison was required because the requested change is limited to the tab strip; the full page was also captured to check that the new tab border does not break the hero, workspace columns, or settings rail.
 
-## Required fidelity surfaces
+## Interaction checks
 
-- Fonts and typography: condensed black display treatment, small supporting copy, and pink emphasis remain aligned with the source; the available Impact fallback is used for the distressed-style display treatment.
-- Spacing and layout rhythm: hero title, brush strip, description, tabs, filters, summary, asset grid, and CTA keep the mockup's hierarchy; the summary expands to occupy the no-upload layout.
-- Colors and visual tokens: white canvas with black, orange, and hot-pink accents matches the EOS visual language.
-- Image quality and asset fidelity: `annotation-crown-pink.png`, `cta-brush-only-transparent-cropped.png`, `annotation-speed-lines.png`, CTA artwork, and generated API media are used instead of CSS-drawn or placeholder artwork.
-- Copy and content: hero copy remains `All your creative assets in one place. Easy to manage, search, and reuse across your projects.`; API-driven counts and card metadata remain intact.
+- Clicked Text to Video: `TEXT TO VIDEO` workspace became visible.
+- Clicked Image to Video: `GENERATION MODE` workspace became visible again.
+- Console errors during the check: 0.
 
 ## Findings
 
-No actionable P0, P1, or P2 visual findings remain.
+No actionable P0, P1, or P2 differences remain for the requested tab layout.
 
-- [P3] The source's distressed display lettering is raster-like while the implementation uses the available Impact fallback. The hierarchy and proportions are preserved; a dedicated brand font can be substituted later if one is supplied.
+## Follow-up polish
 
-## Comparison history
+- The source reference has a wider cropped presentation than the implementation because the Video page intentionally retains the studio sidebar. This is an expected page-shell difference, not a tab component mismatch.
 
-1. Initial comparison: the hero strip was a clean CSS rectangle and the summary retained the narrower two-column width.
-2. Fix: replaced the strip background with the generated brush artwork and isolated the text above it.
-3. Fix: expanded the summary column to balance the layout after the upload card was removed.
-4. Fix: recolored the generated speed-line annotation pink to match the supplied hero reference.
-5. Post-fix comparison at 1536 × 1024: no actionable P0/P1/P2 findings remain; populated API cards loaded successfully.
+## Final result
 
-## Validation notes
-
-- Browser-rendered implementation captured from `http://localhost:3000/assets`.
-- Production build is the remaining handoff check after this CSS-only visual adjustment.
-
-final result: passed
+passed
