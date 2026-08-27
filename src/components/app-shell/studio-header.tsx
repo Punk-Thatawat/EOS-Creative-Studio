@@ -5,6 +5,7 @@ import { Bell, Database, Layers3, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { GenerationProgressFloating } from "@/components/app-shell/generation-progress-floating";
 import { MobileNavigation } from "@/components/app-shell/mobile-navigation";
+import { useHydrated } from "@/components/app-shell/use-hydrated";
 import { useHeaderAccount } from "@/components/app-shell/use-header-account";
 import { AccountMenu } from "@/components/auth/account-menu";
 
@@ -12,7 +13,9 @@ export function StudioHeader() {
   const [isSticky, setIsSticky] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const account = useHeaderAccount();
-  const pathname = usePathname();
+  const pathnameFromRouter = usePathname();
+  const hydrated = useHydrated();
+  const pathname = hydrated ? pathnameFromRouter : "";
   const isAudioStudio = pathname.startsWith("/create/audio");
   const isAssets = pathname.startsWith("/assets");
   const isUsage = pathname === "/usage";

@@ -5,6 +5,7 @@ import { CheckCircle2, Clock3, Minus, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { listGenerationHistory, resumeGeneration, type GenerationHistoryItem, type GenerationProgress, type PendingGeneration } from "@/lib/api/generations";
 import { emitGenerationCompleted } from "@/lib/generation-progress-events";
+import { useHydrated } from "@/components/app-shell/use-hydrated";
 import styles from "./generation-progress-floating.module.css";
 
 const generationFeatureOptions = [
@@ -292,7 +293,9 @@ async function loadActiveGenerations(): Promise<ActivePendingGeneration[]> {
 }
 
 export function GenerationProgressFloating() {
-  const pathname = usePathname();
+  const pathnameFromRouter = usePathname();
+  const hydrated = useHydrated();
+  const pathname = hydrated ? pathnameFromRouter : "";
   const isImageCreatePage = pathname === "/create/image";
   const router = useRouter();
   const [active, setActive] = useState<ActivePendingGeneration[]>([]);

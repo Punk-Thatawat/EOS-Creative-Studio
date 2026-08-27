@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AudioLines, BarChart3, Boxes, ChevronDown, FileText, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, Users, UsersRound, Video, WandSparkles, X } from "lucide-react";
+import { useHydrated } from "./use-hydrated";
 
 const links = [
   { label: "Home", href: "/home", icon: Home },
@@ -36,7 +37,9 @@ const adminOperations = [
 ];
 
 export function MobileNavigation() {
-  const pathname = usePathname();
+  const pathnameFromRouter = usePathname();
+  const hydrated = useHydrated();
+  const pathname = hydrated ? pathnameFromRouter : "";
   const [open, setOpen] = useState(false);
   const isCreateRoute = pathname.startsWith("/create/");
   const isAdminRoute = pathname.startsWith("/admin");

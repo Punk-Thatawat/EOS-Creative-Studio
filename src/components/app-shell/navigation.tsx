@@ -8,6 +8,7 @@ import { ArrowLeft, AudioLines, BarChart3, Boxes, ChevronDown, ChevronUp, Clock3
 import { EosLogo } from "@/components/brand/eos-logo";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import type { NavigationItem } from "@/types/navigation";
+import { useHydrated } from "./use-hydrated";
 
 const primaryItems: NavigationItem[] = [
   { label: "Home", href: "/home", icon: Home },
@@ -66,9 +67,9 @@ const adminCreativeFeatures = [
   { id: "document", label: "Document", description: "Create documents and presentations", icon: FileText },
 ] as const;
 
-function AdminFeatureNavigationTree({ pathname }: { pathname: string }) {
+function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; hydrated: boolean }) {
   const searchParams = useSearchParams();
-  const requestedFeature = searchParams.get("feature");
+  const requestedFeature = hydrated ? searchParams.get("feature") : null;
   const selectedFeature = requestedFeature === "video" ? "image-to-video" : requestedFeature ?? "text-to-image";
   const isImageFeature = adminImageFeatures.some((item) => item.id === selectedFeature);
   const isVideoFeature = adminVideoFeatures.some((item) => item.id === selectedFeature);
@@ -84,7 +85,7 @@ function AdminFeatureNavigation({ pathname }: { pathname: string }) {
   return <SidebarGroup className="px-0"><SidebarMenu><SidebarMenuItem><details open={isImageFeature} className="group"><summary className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isImageFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}><WandSparkles size={18} strokeWidth={isImageFeature ? 2.5 : 2} /><span>Create</span><span className="ml-auto"><ChevronDown size={15} className="transition-transform group-open:rotate-180" /></span></summary><SidebarMenu className="ml-5 mt-1 gap-1 border-l border-[#f1d7cc] pl-2"><SidebarMenuItem><SidebarMenuButton render={<Link href="/admin/model-routes?feature=text-to-image" aria-current={isImageFeature ? "page" : undefined} />} isActive={isImageFeature} className="h-8 rounded-[9px] px-2.5 text-xs font-medium text-muted-foreground data-active:bg-[#fff0e9] data-active:text-primary hover:bg-surface-muted hover:text-foreground"><ImageIcon size={15} strokeWidth={isImageFeature ? 2.4 : 2} /><span>Image</span></SidebarMenuButton></SidebarMenuItem>{adminCreativeFeatures.map((item) => { const active = pathname === "/admin/model-routes" && selectedFeature === item.id; return <SidebarMenuItem key={item.id}><SidebarMenuButton render={<Link href={`/admin/model-routes?feature=${item.id}`} aria-current={active ? "page" : undefined} />} isActive={active} className="h-8 rounded-[9px] px-2.5 text-xs font-medium text-muted-foreground data-active:bg-[#fff0e9] data-active:text-primary hover:bg-surface-muted hover:text-foreground"><item.icon size={15} strokeWidth={active ? 2.4 : 2} /><span>{item.label}</span></SidebarMenuButton></SidebarMenuItem>; })}</SidebarMenu></details></SidebarMenuItem></SidebarMenu></SidebarGroup>;
 }
 
-function AdminSidebarNavigation({ pathname }: { pathname: string }) {
+function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydrated: boolean }) {
   const adminItems = [
     { label: "Model routes", href: "/admin/model-routes", icon: Settings2 },
     { label: "Style presets", href: "/admin/style-presets", icon: Palette },
@@ -98,7 +99,7 @@ function AdminSidebarNavigation({ pathname }: { pathname: string }) {
     { label: "System settings", href: "/admin/settings", icon: Settings, disabled: true },
   ] satisfies Array<NavigationItem & { disabled?: boolean }>;
 
-  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 md:flex md:px-5"><SidebarHeader className="mb-8 px-2"><EosLogo /></SidebarHeader><SidebarContent className="gap-0"><AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} /><AdminFeatureNavigationTree pathname={pathname} /><AdminNavigationGroup label="Operations" items={operations} pathname={pathname} /><SidebarGroup className="mt-2 px-0"><SidebarGroupContent><SidebarMenu><SidebarMenuItem><SidebarMenuButton render={<Link href="/home" />} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"><ArrowLeft size={18} /><span>Back to workspace</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent></Sidebar>;
+  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 md:flex md:px-5"><SidebarHeader className="mb-8 px-2"><EosLogo /></SidebarHeader><SidebarContent className="gap-0"><AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} /><AdminFeatureNavigationTree pathname={pathname} hydrated={hydrated} /><AdminNavigationGroup label="Operations" items={operations} pathname={pathname} /><SidebarGroup className="mt-2 px-0"><SidebarGroupContent><SidebarMenu><SidebarMenuItem><SidebarMenuButton render={<Link href="/home" />} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"><ArrowLeft size={18} /><span>Back to workspace</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent></Sidebar>;
 }
 
 function WorkspaceSidebarHeader() {
@@ -132,8 +133,10 @@ function AudioSidebarNavigation({ pathname }: { pathname: string }) {
 }
 
 export function SidebarNavigation() {
-  const pathname = usePathname();
-  if (pathname.startsWith("/admin")) return <AdminSidebarNavigation pathname={pathname} />;
+  const pathnameFromRouter = usePathname();
+  const hydrated = useHydrated();
+  const pathname = hydrated ? pathnameFromRouter : "";
+  if (pathname.startsWith("/admin")) return <AdminSidebarNavigation pathname={pathname} hydrated={hydrated} />;
   if (pathname.startsWith("/create/audio")) return <AudioSidebarNavigation pathname={pathname} />;
   const isCreateRoute = pathname.startsWith("/create/");
 
