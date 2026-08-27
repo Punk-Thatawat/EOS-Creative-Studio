@@ -29,7 +29,6 @@ type PromptPanelProps = {
   imageStrength: number;
   contentPreservation: number;
   facePreservation: boolean;
-  seed: string;
   onPromptChange: (prompt: string) => void;
   onNegativePromptChange: (prompt: string) => void;
   onSmartEnhanceChange: (enabled: boolean) => void;
@@ -44,7 +43,6 @@ type PromptPanelProps = {
   onImageStrengthChange: (strength: number) => void;
   onContentPreservationChange: (preservation: number) => void;
   onFacePreservationChange: (enabled: boolean) => void;
-  onSeedChange: (seed: string) => void;
   imageToImageSupportsStrength?: boolean;
   styleTransferSupportsInput?: boolean;
   styleTransferSupportsReference?: boolean;
@@ -82,7 +80,7 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, seed, onPromptChange, onNegativePromptChange, onSmartEnhanceChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, onSeedChange, imageToImageSupportsStrength = true, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
+export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, onNegativePromptChange, onSmartEnhanceChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, imageToImageSupportsStrength = true, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
   const imageToImage = activeTab === "Image to Image";
   const styleTransfer = activeTab === "AI Style Transfer";
   const background = activeTab === "AI Background";
@@ -176,7 +174,6 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
         <summary><span>ADVANCED</span><ChevronDown size={15} /></summary>
         <div className={cx("gen-advanced-body")}>
           <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-style">Negative prompt</label><input id="gen-negative-prompt-style" value={negativePrompt} onChange={(event) => onNegativePromptChange(event.target.value)} placeholder="blurry, distorted, low quality" /></div>
-          <div className={cx("gen-advanced-field")}><label htmlFor="gen-seed">Seed <small>(Optional)</small></label><input id="gen-seed" value={seed} onChange={(event) => onSeedChange(event.target.value)} inputMode="numeric" placeholder="Random" /></div>
           <div className={cx("gen-face-preservation")}><span><b>Face preservation</b><small>Protect facial identity where possible</small></span><button type="button" className={cx("gen-toggle", facePreservation && "is-on")} aria-label={`Face preservation ${facePreservation ? "on" : "off"}`} aria-pressed={facePreservation} onClick={() => onFacePreservationChange(!facePreservation)}><i /></button></div>
         </div>
       </details>

@@ -110,7 +110,7 @@ export function ImageGenerationPage() {
   const generateCurrentTab = isTextToImageTab ? generateTextToImage : isImageToImageTab ? generateImageToImage : isStyleTransferTab ? generateStyleTransfer : isBackgroundTab ? generateBackground : isUpscaleTab ? generateUpscale : generateExtend;
 
   return <div className={cx("gen-image-page")} data-page="gen-image">
-    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><source media="(max-width: 700px)" srcSet="/generated-assets/gen-image-hero-mobile.png" /><Image src="/generated-assets/gen-image-hero.png" alt="Gen Image creative studio hero artwork" width={1976} height={391} priority className={cx("gen-hero-artwork")} /></picture></section>
+    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><Image src="/generated-assets/gen-image-hero.png" alt="Gen Image creative studio hero artwork" width={1976} height={391} priority className={cx("gen-hero-artwork")} /></picture></section>
     <ImageGenerationTabs activeTab={state.activeTab} onTabChange={(nextTab) => { setPreviewDisplayMode("current"); state.setActiveTab(nextTab); if (requestedTab) router.replace("/create/image", { scroll: false }); }} />
     <div className={cx("gen-workspace")}>
       <PromptPanel
@@ -132,7 +132,6 @@ export function ImageGenerationPage() {
         imageStrength={state.imageStrength}
         contentPreservation={state.contentPreservation}
         facePreservation={state.facePreservation}
-        seed={state.seed}
         imageToImageSupportsStrength={state.imageToImageSupportsStrength}
         styleTransferSupportsInput={state.styleTransferSupportsInput}
         styleTransferSupportsReference={state.styleTransferSupportsReference}
@@ -208,7 +207,6 @@ export function ImageGenerationPage() {
         onImageStrengthChange={state.setImageStrength}
         onContentPreservationChange={state.setContentPreservation}
         onFacePreservationChange={state.setFacePreservation}
-        onSeedChange={state.setSeed}
         onBackgroundModeChange={state.setBackgroundMode}
         onBackgroundReferenceImageChange={state.setBackgroundReferenceImage}
         onBackgroundReferenceImageClear={() => state.setBackgroundReferenceImage(null)}

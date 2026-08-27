@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import {
   ArrowUpRight,
@@ -29,6 +29,16 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import {
+  createBillingPortalSession,
+  createCreditCheckoutSession,
+  fetchBilling,
+  fetchCheckoutCatalog,
+  fetchUsageDashboard,
+  type BillingSnapshot,
+  type CheckoutCatalog,
+  type UsageDashboard,
+} from "@/lib/api/usage";
 import { Card } from "@/components/ui/card";
 import styles from "./usage-page.module.css";
 
@@ -45,7 +55,7 @@ type ToolUsage = {
   iconClass: string;
 };
 
-const tabs: UsageTab[] = ["Overview", "Usage Details", "Credit History", "Team Usage", "Billing & Plan"];
+const tabs: UsageTab[] = ["Overview", "Usage Details", "Credit History", "Billing & Plan"];
 
 const toolUsage: ToolUsage[] = [
   { name: "AI Video", description: "Generate engaging videos", credits: "650", percent: 37, color: "#f51591", icon: Video, iconClass: "video" },
@@ -91,6 +101,53 @@ const teamMembers = [
   { name: "Ploy K.", email: "ploy@eoscreative.studio", role: "Viewer", credits: "140", percent: 8, color: "#5d1db8", initials: "PK" },
 ];
 
+const toolColors: Record<string, string> = { video: "#f51591", image: "#ff6b18", presenter: "#13c9b2", audio: "#5d1db8", document: "#1687d9", custom: "#e8bd35" };
+const toolIcons: Record<string, { icon: LucideIcon; iconClass: string }> = {
+  video: { icon: Video, iconClass: "video" },
+  image: { icon: ImageIcon, iconClass: "image" },
+  presenter: { icon: UserRound, iconClass: "presenter" },
+  audio: { icon: AudioLines, iconClass: "audio" },
+  document: { icon: FileText, iconClass: "document" },
+  custom: { icon: Sparkles, iconClass: "custom" },
+};
+
+function formatCredits(value: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+function formatActivityDate(value: string): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function formatMoney(amountMinor: number | null, currency: string | null): string {
+  if (amountMinor === null || !currency) return "—";
+  return new Intl.NumberFormat("th-TH", { style: "currency", currency, maximumFractionDigits: 2 }).format(amountMinor / 100);
+}
+
+function getToolUsageRows(dashboard: UsageDashboard | null): ToolUsage[] {
+  if (!dashboard) return toolUsage;
+  return dashboard.usageByTool.items.map((item) => {
+    const visual = toolIcons[item.key] ?? toolIcons.custom;
+    return { name: item.label, description: item.description, credits: formatCredits(item.credits), percent: item.percent, color: toolColors[item.key] ?? toolColors.custom, icon: visual.icon, iconClass: visual.iconClass };
+  });
+}
+
+function getActivityVisual(title: string): { icon: LucideIcon; iconClass: string } {
+  const lower = title.toLowerCase();
+  if (lower.includes("video")) return toolIcons.video;
+  if (lower.includes("image")) return toolIcons.image;
+  if (lower.includes("presenter")) return toolIcons.presenter;
+  if (lower.includes("audio")) return toolIcons.audio;
+  if (lower.includes("document") || lower.includes("ocr")) return toolIcons.document;
+  if (lower.includes("added") || lower.includes("purchased")) return { icon: Plus, iconClass: "added" };
+  return toolIcons.custom;
+}
+
 function SelectControl({ value, options, onChange }: { value: SelectValue; options: SelectValue[]; onChange: (value: SelectValue) => void }) {
   return (
     <label className={styles.selectControl}>
@@ -118,7 +175,8 @@ function SectionHeading({ title, description, info = false, action }: { title: s
   );
 }
 
-function UsageByTool({ period, onPeriodChange }: { period: SelectValue; onPeriodChange: (value: SelectValue) => void }) {
+function UsageByTool({ period, onPeriodChange, dashboard }: { period: SelectValue; onPeriodChange: (value: SelectValue) => void; dashboard: UsageDashboard | null }) {
+  const rows = getToolUsageRows(dashboard);
   return (
     <Card className={styles.panel}>
       <SectionHeading
@@ -127,7 +185,7 @@ function UsageByTool({ period, onPeriodChange }: { period: SelectValue; onPeriod
         action={<SelectControl value={period} options={["This billing cycle", "Last billing cycle"]} onChange={onPeriodChange} />}
       />
       <div className={styles.toolList}>
-        {toolUsage.map((tool) => {
+        {rows.map((tool) => {
           const Icon = tool.icon;
           return (
             <div className={styles.toolRow} key={tool.name}>
@@ -145,20 +203,27 @@ function UsageByTool({ period, onPeriodChange }: { period: SelectValue; onPeriod
       </div>
       <div className={styles.toolTotal}>
         <span>Total Used</span>
-        <strong>1,750 <small>Credits</small></strong>
+        <strong>{formatCredits(dashboard?.usageByTool.totalUsed ?? 1750)} <small>Credits</small></strong>
       </div>
     </Card>
   );
 }
 
-function UsageChart({ range, onRangeChange }: { range: SelectValue; onRangeChange: (value: SelectValue) => void }) {
-  const points = useMemo(() => chartValues.map((value, index) => `${24 + index * 83},${190 - (value / 700) * 150}`).join(" "), []);
+function UsageChart({ range, onRangeChange, dashboard }: { range: SelectValue; onRangeChange: (value: SelectValue) => void; dashboard: UsageDashboard | null }) {
+  const trendPoints = dashboard?.trend.points ?? chartValues.map((credits, index) => ({ date: `2025-05-${String(index + 1).padStart(2, "0")}`, label: chartLabels[index], credits }));
+  const maxCredits = Math.max(800, ...trendPoints.map((point) => point.credits));
+  const points = useMemo(() => trendPoints.map((point, index) => {
+    const x = trendPoints.length === 1 ? 24 : 24 + (index * 498) / (trendPoints.length - 1);
+    return `${x},${190 - (point.credits / maxCredits) * 150}`;
+  }).join(" "), [maxCredits, trendPoints]);
+  const labels = trendPoints.length > 7 ? trendPoints.filter((_, index) => index === 0 || index === trendPoints.length - 1 || index % Math.ceil(trendPoints.length / 6) === 0).map((point) => point.label) : trendPoints.map((point) => point.label);
+  const peak = dashboard?.trend.peakAt ? { date: dashboard.trend.peakAt, credits: dashboard.trend.peakCredits } : trendPoints.reduce((best, point) => point.credits > best.credits ? point : best, trendPoints[0]);
   return (
     <Card className={cn(styles.panel, styles.trendPanel)}>
       <SectionHeading title="Usage trend" info action={<SelectControl value={range} options={["Daily", "Weekly"]} onChange={onRangeChange} />} />
       <div className={styles.chartWrap}>
         <div className={styles.chartYAxis}><span>800</span><span>600</span><span>400</span><span>200</span><span>0</span></div>
-        <svg className={styles.chart} viewBox="0 0 560 220" role="img" aria-label="Usage trend from 26 April to 2 May">
+        <svg className={styles.chart} viewBox="0 0 560 220" role="img" aria-label={`Usage trend for ${range.toLowerCase()}`}>
           <defs>
             <linearGradient id="usage-area-gradient" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0" stopColor="#ffb269" stopOpacity=".42" />
@@ -168,72 +233,81 @@ function UsageChart({ range, onRangeChange }: { range: SelectValue; onRangeChang
           {[25, 65, 105, 145, 185].map((y) => <line key={y} x1="24" x2="540" y1={y} y2={y} stroke="#ece9e5" strokeDasharray="2 3" />)}
           <polygon points={`24,190 ${points} 522,190`} fill="url(#usage-area-gradient)" />
           <polyline points={points} fill="none" stroke="#ff6414" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
-          {chartValues.map((value, index) => {
-            const x = 24 + index * 83;
-            const y = 190 - (value / 700) * 150;
-            return <circle key={value + index} cx={x} cy={y} fill="#fff" r="4.5" stroke="#ff6414" strokeWidth="3" />;
+          {trendPoints.map((point, index) => {
+            const x = trendPoints.length === 1 ? 24 : 24 + (index * 498) / (trendPoints.length - 1);
+            const y = 190 - (point.credits / maxCredits) * 150;
+            return <circle key={point.date + index} cx={x} cy={y} fill="#fff" r="4.5" stroke="#ff6414" strokeWidth="3" />;
           })}
           <g className={styles.chartTooltip} transform="translate(386 13)">
             <rect width="111" height="43" rx="7" fill="#111" />
-            <text x="11" y="17" fill="#fff" fontSize="10" fontWeight="700">1 May 2025</text>
-            <text x="11" y="32" fill="#fff" fontSize="10">620 Credits</text>
+            <text x="11" y="17" fill="#fff" fontSize="10" fontWeight="700">{formatDate(peak?.date ?? null)}</text>
+            <text x="11" y="32" fill="#fff" fontSize="10">{formatCredits(peak?.credits ?? 0)} Credits</text>
           </g>
         </svg>
-        <div className={styles.chartXAxis}>{chartLabels.map((label) => <span key={label}>{label}</span>)}</div>
+        <div className={styles.chartXAxis}>{labels.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>
       </div>
       <div className={styles.chartStats}>
-        <div><span>Daily average</span><strong>250 <small>Credits</small></strong><div className={styles.sparklinePink}>⌁⌁⌁</div></div>
-        <div><span>Peak usage</span><strong>620 <small>Credits</small></strong><small>1 May 2025</small><div className={styles.sparklineOrange}>⌁⌁⌁</div></div>
+        <div><span>{range === "Weekly" ? "Weekly average" : "Daily average"}</span><strong>{formatCredits(dashboard?.trend.averageCredits ?? 250)} <small>Credits</small></strong><div className={styles.sparklinePink}>⌁⌁⌁</div></div>
+        <div><span>Peak usage</span><strong>{formatCredits(peak?.credits ?? 0)} <small>Credits</small></strong><small>{formatDate(peak?.date ?? null)}</small><div className={styles.sparklineOrange}>⌁⌁⌁</div></div>
       </div>
     </Card>
   );
 }
 
-function SummaryCard() {
+function SummaryCard({ dashboard }: { dashboard: UsageDashboard | null }) {
+  const summary = dashboard?.summary ?? { totalCredits: 4250, creditsUsed: 1750, creditsRemaining: 4250, creditsAdded: 2000, planCredits: 10000, usedPercent: 42, remainingPercent: 58, walletValueThb: 4250, walletUpdatedAt: null, transactionCount: 28 };
+  const usedPercent = summary.usedPercent;
   return (
     <Card className={styles.summaryCard}>
       <div className={styles.summaryHeader}>
-        <div><p>Total credits</p><strong>4,250</strong><span>≈ ฿4,250.00</span><b>Available</b><small>Expires on 1 Jun 2025</small></div>
-        <div className={styles.donut} aria-label="42 percent credits used"><div><strong>42%</strong><span>Used</span></div></div>
-        <div className={styles.summaryMetric}><span>Credits used</span><strong>1,750 <em>42%</em></strong><small>This billing cycle</small></div>
-        <div className={styles.summaryMetric}><span>Credits remaining</span><strong>4,250 <em>58%</em></strong><small>Out of 10,000</small></div>
-        <div className={styles.summaryMetric}><span>Resets on</span><strong className={styles.resetDate}><CalendarDays size={18} /> 1 Jun 2025</strong><small>13 days left</small></div>
+        <div><p>Total credits</p><strong>{formatCredits(summary.totalCredits)}</strong><span>≈ ฿{formatCredits(summary.walletValueThb)}</span><b>Available</b><small>Updated {formatDate(summary.walletUpdatedAt)}</small></div>
+        <div className={styles.donut} style={{ background: `conic-gradient(#ff6414 0 ${usedPercent}%, #4b4b4b ${usedPercent}% 100%)` }} aria-label={`${usedPercent} percent credits used`}><div><strong>{usedPercent}%</strong><span>Used</span></div></div>
+        <div className={styles.summaryMetric}><span>Credits used</span><strong>{formatCredits(summary.creditsUsed)} <em>{usedPercent}%</em></strong><small>{dashboard?.period.label ?? "This billing cycle"}</small></div>
+        <div className={styles.summaryMetric}><span>Credits remaining</span><strong>{formatCredits(summary.creditsRemaining)} <em>{summary.remainingPercent}%</em></strong><small>{summary.planCredits > 0 ? `Out of ${formatCredits(summary.planCredits)}` : "Wallet balance"}</small></div>
+        <div className={styles.summaryMetric}><span>Resets on</span><strong className={styles.resetDate}><CalendarDays size={18} /> {formatDate(dashboard?.period.endAt ?? null)}</strong><small>{dashboard?.period.endAt ? "End of billing cycle" : "—"}</small></div>
       </div>
     </Card>
   );
 }
 
-function PlanCard() {
+function PlanCard({ dashboard, onManage, onBuy, catalog, busy }: { dashboard: UsageDashboard | null; onManage: () => void; onBuy: (packageId: string) => void; catalog: CheckoutCatalog | null; busy: boolean }) {
+  const plan = dashboard?.plan;
+  const topup = catalog?.topups.find((item) => item.featured) ?? catalog?.topups[0];
   return (
     <Card className={styles.planCard}>
       <SectionHeading title="Plan & credit summary" />
       <div className={styles.planInner}>
-        <div className={styles.planTopline}><span>Enterprise plan</span><span className={styles.planSpark}>✦</span></div>
-        <p className={styles.planAllowance}>10,000 Credits <span>/ month</span></p>
-        <strong className={styles.planCredits}>4,250</strong>
+        <div className={styles.planTopline}><span>{plan?.name ?? "Stripe plan"}</span><span className={styles.planSpark}>✦</span></div>
+        <p className={styles.planAllowance}>{plan?.creditsPerCycle ? `${formatCredits(plan.creditsPerCycle)} Credits` : "Credits"} <span>{plan?.cycle ? `/ ${plan.cycle}` : ""}</span></p>
+        <strong className={styles.planCredits}>{formatCredits(dashboard?.summary.creditsRemaining ?? 4250)}</strong>
         <p className={styles.planAvailable}>Credits Available</p>
-        <div className={styles.planProgress}><span /></div>
-        <p className={styles.planRenew}>Renews on 1 Jun 2025</p>
+        <div className={styles.planProgress}><span style={{ width: `${dashboard?.summary.usedPercent ?? 42}%` }} /></div>
+        <p className={styles.planRenew}>{plan?.renewsAt ? `Renews on ${formatDate(plan.renewsAt)}` : "Stripe billing is not configured"}</p>
         <div className={styles.planAsset} aria-hidden="true"><Image src="/generated-icons-v2/icon-6-custom-v2.png" alt="" fill sizes="96px" /></div>
-        <button className={styles.outlineButton}>Manage plan</button>
-        <button className={styles.gradientButton}>Buy more credits <ArrowUpRight size={16} /></button>
+        <button type="button" className={styles.outlineButton} onClick={onManage}>Manage plan</button>
+        <button type="button" className={styles.gradientButton} onClick={() => topup && onBuy(topup.id)} disabled={!topup || busy}>Buy more credits <ArrowUpRight size={16} /></button>
       </div>
     </Card>
   );
 }
 
-function ActivityCard() {
+function ActivityCard({ dashboard }: { dashboard: UsageDashboard | null }) {
+  const items = dashboard?.recentActivity.items;
   return (
     <Card className={styles.activityCard}>
       <div className={styles.activityHeader}><h2>Recent credit activity</h2><button>View all</button></div>
       <div className={styles.activityList}>
-        {activities.map((activity) => {
-          const Icon = activity.icon;
-          const isAdded = activity.iconClass === "added";
-          return <div className={styles.activityRow} key={`${activity.title}-${activity.time}`}><span className={cn(styles.toolIcon, styles[activity.iconClass])}><Icon size={16} /></span><div><strong>{activity.title}</strong><span>{activity.project}</span></div><div className={cn(styles.activityAmount, isAdded && styles.positive)}><strong>{activity.credits}</strong><span>{activity.time}</span></div></div>;
+        {(items ?? activities).map((activity) => {
+          const title = activity.title;
+          const visual = "icon" in activity ? { icon: activity.icon, iconClass: activity.iconClass } : getActivityVisual(title);
+          const Icon = visual.icon;
+          const amount = "amount" in activity ? activity.amount : Number(activity.credits.replace(",", ""));
+          const subtitle = "subtitle" in activity ? activity.subtitle : activity.project;
+          const createdAt = "createdAt" in activity ? formatActivityDate(activity.createdAt) : activity.time;
+          return <div className={styles.activityRow} key={"id" in activity ? activity.id : `${activity.title}-${createdAt}`}><span className={cn(styles.toolIcon, styles[visual.iconClass])}><Icon size={16} /></span><div><strong>{title}</strong><span>{subtitle}</span></div><div className={cn(styles.activityAmount, amount >= 0 && styles.positive)}><strong>{amount >= 0 ? "+" : ""}{formatCredits(amount)}</strong><span>{createdAt}</span></div></div>;
         })}
       </div>
-      <p className={styles.activityFooter}>Showing 1–5 of 28 activities</p>
+      <p className={styles.activityFooter}>Showing {items?.length ?? 5} of {dashboard?.recentActivity.pagination.total ?? 28} activities</p>
     </Card>
   );
 }
@@ -335,31 +409,35 @@ function TeamUsageTab({ period, onPeriodChange }: { period: SelectValue; onPerio
   </div>;
 }
 
-function BillingPlanTab() {
+function BillingPlanTab({ dashboard, billing, catalog, onManage, onBuy, busy, error }: { dashboard: UsageDashboard | null; billing: BillingSnapshot | null; catalog: CheckoutCatalog | null; onManage: () => void; onBuy: (packageId: string) => void; busy: boolean; error: string | null }) {
+  const plan = dashboard?.plan;
+  const summary = dashboard?.summary;
+  const currentBilling = billing ?? dashboard?.billing;
+  const topups = catalog?.topups ?? [];
   return <div className={styles.tabContent}>
-    <TabHeader title="Billing & plan" description="Manage your plan, payment method, and credit top-ups." action={<button type="button" className={styles.lightAction}><CreditCard size={14} /> Manage billing</button>} />
+    <TabHeader title="Billing & plan" description="Manage your plan, payment method, and credit top-ups." action={<button type="button" className={styles.lightAction} onClick={onManage}><CreditCard size={14} /> Manage billing</button>} />
     <div className={styles.billingGrid}>
       <Card className={styles.currentPlanPanel}>
-        <div className={styles.billingPanelTop}><div><span className={styles.eyebrow}>Current plan</span><h3>Enterprise</h3><p>10,000 credits / month</p></div><span className={styles.planBadge}>Active</span></div>
-        <div className={styles.billingPlanPrice}><strong>฿10,000</strong><span>/ month</span></div>
-        <div className={styles.billingProgress}><span /></div><div className={styles.billingProgressMeta}><span>4,250 credits remaining</span><strong>42% used</strong></div>
-        <div className={styles.billingRenew}><CalendarDays size={15} /><span>Renews on 1 Jun 2025</span><Check size={15} /></div>
-        <button type="button" className={styles.gradientButton}>Change plan <ArrowUpRight size={15} /></button>
+        <div className={styles.billingPanelTop}><div><span className={styles.eyebrow}>Current plan</span><h3>{plan?.name ?? "No active plan"}</h3><p>{plan?.creditsPerCycle ? `${formatCredits(plan.creditsPerCycle)} credits / ${plan.cycle ?? "cycle"}` : "Stripe subscription not configured"}</p></div><span className={styles.planBadge}>{currentBilling?.status ?? "—"}</span></div>
+        <div className={styles.billingPlanPrice}><strong>{formatMoney(currentBilling?.unitAmount ?? null, currentBilling?.currency ?? null)}</strong><span>{currentBilling?.interval ? `/ ${currentBilling.interval}` : ""}</span></div>
+        <div className={styles.billingProgress}><span style={{ width: `${summary?.usedPercent ?? 0}%` }} /></div><div className={styles.billingProgressMeta}><span>{formatCredits(summary?.creditsRemaining ?? 0)} credits remaining</span><strong>{summary?.usedPercent ?? 0}% used</strong></div>
+        <div className={styles.billingRenew}><CalendarDays size={15} /><span>{plan?.renewsAt ? `Renews on ${formatDate(plan.renewsAt)}` : "No renewal date"}</span><Check size={15} /></div>
+        <button type="button" className={styles.gradientButton} onClick={onManage}>Manage Stripe billing <ArrowUpRight size={15} /></button>
       </Card>
       <Card className={styles.billingInfoPanel}>
-        <div className={styles.dataPanelHeading}><div><h3>Payment method</h3><p>Your default billing details</p></div><span className={styles.qrPill}>QR code</span></div>
-        <div className={styles.paymentMethodQr}><span className={styles.paymentQrIcon}><QrCode size={20} /></span><div><strong>QR code payment</strong><span>Scan a QR code to pay your invoice securely.</span></div><span className={styles.qrAvailable}>Available</span></div>
-        <div className={styles.invoiceRow}><ReceiptLine /><div><strong>Next invoice</strong><span>1 Jun 2025</span></div><strong>฿10,000</strong></div>
-        <button type="button" className={styles.outlineLightButton}>View payment QR code</button>
+        <div className={styles.dataPanelHeading}><div><h3>PromptPay QR</h3><p>Secure payment through Stripe Checkout</p></div><span className={styles.qrPill}>QR code</span></div>
+        <div className={styles.paymentMethodQr}><span className={styles.paymentQrIcon}><QrCode size={20} /></span><div><strong>Pay with PromptPay</strong><span>Stripe will show a QR code after you select a credit pack.</span></div><span className={styles.qrAvailable}>{catalog?.promptPay ? "Available" : "Setup needed"}</span></div>
+        <div className={styles.invoiceRow}><ReceiptLine /><div><strong>Payment provider</strong><span>Stripe · PromptPay</span></div><strong>THB</strong></div>
+        <button type="button" className={styles.outlineLightButton} onClick={() => topups[0] && onBuy(topups[0].id)} disabled={!topups[0] || busy}><QrCode size={14} /> View payment QR code</button>
       </Card>
     </div>
     <Card className={styles.dataPanel}>
       <div className={styles.dataPanelHeading}><div><h3>Buy more credits</h3><p>Top up your workspace when you need extra creative power.</p></div><span className={styles.creditHint}>Credits never expire</span></div>
       <div className={styles.creditPackGrid}>
-        <button type="button" className={styles.creditPack}><strong>1,000</strong><span>Credits</span><b>฿1,000</b></button>
-        <button type="button" className={cn(styles.creditPack, styles.featuredPack)}><em>Most popular</em><strong>5,000</strong><span>Credits</span><b>฿4,500</b></button>
-        <button type="button" className={styles.creditPack}><strong>10,000</strong><span>Credits</span><b>฿8,000</b></button>
+        {topups.map((topup) => <button key={topup.id} type="button" className={cn(styles.creditPack, topup.featured && styles.featuredPack)} onClick={() => onBuy(topup.id)} disabled={busy}><>{topup.featured ? <em>Most popular</em> : null}</><strong>{formatCredits(topup.credits)}</strong><span>Credits</span><b>฿{formatCredits(topup.amountThb)} · PromptPay QR</b></button>)}
       </div>
+      {topups.length === 0 ? <p className={styles.billingError}>No credit packages are available yet.</p> : null}
+      {error ? <p className={styles.billingError}>{error}</p> : null}
     </Card>
   </div>;
 }
@@ -368,18 +446,70 @@ function ReceiptLine() {
   return <span className={styles.receiptIcon}><FileText size={16} /></span>;
 }
 
-function PlaceholderTab({ tab }: { tab: Exclude<UsageTab, "Overview"> }) {
+function PlaceholderTab({ tab, dashboard, billing, catalog, onManage, onBuy, busy, error }: { tab: Exclude<UsageTab, "Overview">; dashboard: UsageDashboard | null; billing: BillingSnapshot | null; catalog: CheckoutCatalog | null; onManage: () => void; onBuy: (packageId: string) => void; busy: boolean; error: string | null }) {
   const [period, setPeriod] = useState<SelectValue>("This billing cycle");
   if (tab === "Usage Details") return <UsageDetailsTab period={period} onPeriodChange={setPeriod} />;
   if (tab === "Credit History") return <CreditHistoryTab period={period} onPeriodChange={setPeriod} />;
   if (tab === "Team Usage") return <TeamUsageTab period={period} onPeriodChange={setPeriod} />;
-  return <BillingPlanTab />;
+  return <BillingPlanTab dashboard={dashboard} billing={billing} catalog={catalog} onManage={onManage} onBuy={onBuy} busy={busy} error={error} />;
 }
 
 export function UsagePage() {
   const [activeTab, setActiveTab] = useState<UsageTab>("Overview");
   const [toolPeriod, setToolPeriod] = useState<SelectValue>("This billing cycle");
   const [chartRange, setChartRange] = useState<SelectValue>("Daily");
+  const [dashboard, setDashboard] = useState<UsageDashboard | null>(null);
+  const [billing, setBilling] = useState<BillingSnapshot | null>(null);
+  const [catalog, setCatalog] = useState<CheckoutCatalog | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const period = toolPeriod === "Last billing cycle" ? "previous" : "current";
+    const trend = chartRange === "Weekly" ? "weekly" : "daily";
+
+    void Promise.allSettled([fetchUsageDashboard(period, trend), fetchBilling(), fetchCheckoutCatalog()]).then(([usageResult, billingResult, catalogResult]) => {
+      if (cancelled) return;
+      if (usageResult.status === "fulfilled") {
+        setDashboard(usageResult.value);
+        setBilling(usageResult.value.billing);
+      } else {
+        setLoadError(usageResult.reason instanceof Error ? usageResult.reason.message : "Unable to load usage data");
+      }
+      if (billingResult.status === "fulfilled") setBilling(billingResult.value);
+      if (catalogResult.status === "fulfilled") setCatalog(catalogResult.value);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [chartRange, toolPeriod]);
+
+  const handleManageBilling = async () => {
+    setBillingError(null);
+    setBusyAction(true);
+    try {
+      const session = await createBillingPortalSession();
+      window.location.assign(session.url);
+    } catch (error) {
+      setBillingError(error instanceof Error ? error.message : "Unable to open Stripe billing");
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleBuyCredits = async (packageId: string) => {
+    setBillingError(null);
+    setBusyAction(true);
+    try {
+      const session = await createCreditCheckoutSession(packageId);
+      window.location.assign(session.url);
+    } catch (error) {
+      setBillingError(error instanceof Error ? error.message : "Unable to open PromptPay checkout");
+      setBusyAction(false);
+    }
+  };
 
   return (
     <div className={styles.usagePage} data-page="usage">
@@ -397,13 +527,15 @@ export function UsagePage() {
             {tabs.map((tab) => <button key={tab} role="tab" aria-selected={activeTab === tab} className={cn(activeTab === tab && styles.activeTab)} onClick={() => setActiveTab(tab)}>{tab}</button>)}
           </div>
 
+          {loadError ? <Card className={styles.dataPanel}><p className={styles.billingError}>{loadError}</p></Card> : null}
           {activeTab === "Overview" ? <>
-            <SummaryCard />
-            <div className={styles.twoColumnPanels}><UsageByTool period={toolPeriod} onPeriodChange={setToolPeriod} /><UsageChart range={chartRange} onRangeChange={setChartRange} /></div>
-          </> : <PlaceholderTab tab={activeTab as Exclude<UsageTab, "Overview">} />}
+            {loading && !dashboard ? <Card className={styles.dataPanel}><p>Loading live usage data…</p></Card> : null}
+            <SummaryCard dashboard={dashboard} />
+            <div className={styles.twoColumnPanels}><UsageByTool period={toolPeriod} onPeriodChange={setToolPeriod} dashboard={dashboard} /><UsageChart range={chartRange} onRangeChange={setChartRange} dashboard={dashboard} /></div>
+          </> : <PlaceholderTab tab={activeTab as Exclude<UsageTab, "Overview">} dashboard={dashboard} billing={billing} catalog={catalog} onManage={handleManageBilling} onBuy={handleBuyCredits} busy={busyAction} error={billingError} />}
         </div>
 
-        <div className={styles.sideColumn}><PlanCard /><ActivityCard /></div>
+        <div className={styles.sideColumn}><PlanCard dashboard={dashboard} onManage={handleManageBilling} onBuy={handleBuyCredits} catalog={catalog} busy={busyAction} /><ActivityCard dashboard={dashboard} /></div>
       </div>
 
       {activeTab === "Overview" ? <div className={styles.upgradeBanner}>

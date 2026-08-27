@@ -26,7 +26,7 @@
 .gen-selected-check { position: absolute; top: 3px; right: 3px; display: grid; width: 17px; height: 17px; place-items: center; color: #fff; background: #f26b38; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
 .gen-dial { width: 104px; height: 46px; padding: 0; color: transparent !important; background: url('/generated-assets/dial-it-in.png') center / contain no-repeat; font-size: 0; }
 .gen-generated-image { width: 100%; height: 100%; object-fit: contain; background: #101820; }.gen-image-actions button:disabled { cursor: not-allowed; opacity: .45; }.gen-generation-error { margin: 12px 0 -8px; color: #b42318; font-size: 10px; line-height: 1.4; }
-.gen-tabs { width: calc((100% - 16px) * .7714286 + 8px); margin-top: -30px; margin-right: auto; margin-left: 0; }
+.gen-tabs { width: calc((100% - 16px) * .7714286 + 8px); margin-top: 0; margin-right: auto; margin-left: 0; }
 @media (max-width: 1100px) and (min-width: 701px) { .gen-tabs { width: 100%; margin-left: 0; } }
 .gen-live-badge { top: 0; left: -8px; width: 116px; height: auto; padding: 0; color: transparent; background: transparent; border: 0; border-radius: 0; transform: rotate(-3deg); object-fit: contain; }
 .gen-prompt-annotation { display: block; width: 145px; height: auto; object-fit: contain; }
@@ -45,17 +45,16 @@
 .gen-segmented button.is-selected { color: #202124; background: transparent; box-shadow: inset 0 0 0 1px #f26b38; }
 .gen-segmented button.is-selected { font-weight: 700; }
 .gen-select b { font-weight: 700; }
-.gen-image-hero { min-height: 0; aspect-ratio: 5.5 / 1; padding: 0; display: block; }.gen-hero-picture { display: block; width: 100%; height: 100%; }.gen-hero-artwork { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.gen-image-hero { min-height: 0; aspect-ratio: 5.5 / 1; padding: 0; display: block; }.gen-hero-picture { display: block; width: 100%; height: 100%; }.gen-hero-artwork { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; }
 .gen-image-hero { position: relative; background: transparent; border: 0; border-radius: 0; margin-top: 0; pointer-events: none; }
 .gen-image-hero * { pointer-events: none; }
-@media (max-width: 700px) { .gen-image-hero { min-height: 0; aspect-ratio: 5.5 / 1; }.gen-hero-artwork { width: 100%; height: 100%; object-fit: cover; object-position: center; } }
+@media (max-width: 700px) { .gen-image-hero { min-height: 0; aspect-ratio: 5.5 / 1; }.gen-hero-artwork { width: 100%; height: 100%; object-fit: contain; object-position: center; } }
 .gen-select-wrap { position: relative; }
 .gen-select { min-height: 44px; padding: 10px 12px; text-align: left; }
 .gen-model-loading { cursor: wait; }
 .gen-model-loading > span { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; }
 .gen-skeleton-line { display: block; height: 10px; border-radius: 4px; background: linear-gradient(90deg, #ececec 25%, #f7f7f7 50%, #ececec 75%); background-size: 200% 100%; animation: gen-skeleton-shimmer 1.2s ease-in-out infinite; }
 .gen-skeleton-model-name { width: 48%; }
-.gen-skeleton-model-provider { width: 30%; height: 7px; }
 @keyframes gen-skeleton-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .gen-size-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .gen-single-size-control { grid-template-columns: minmax(0, 1fr); }
@@ -74,7 +73,7 @@
 @media (max-width: 700px) { .gen-gallery-grid { grid-template-columns: 1fr; gap: 12px; }.gen-recent-column { padding-top: 10px; padding-left: 0; border-top: 1px solid #e5e5e5; border-left: 0; }.gen-gallery-column { padding-right: 0; }.gen-recent-column .gen-thumb-row { grid-template-columns: repeat(5, 1fr) 24px; } }
 @media (max-width: 700px) { .gen-image-page { width: 100%; min-width: 0; overflow-x: clip; }.gen-image-hero, .gen-tabs, .gen-workspace, .gen-tools { width: 100%; max-width: 100%; }.gen-image-hero { margin-bottom: 0; }.gen-workspace { min-width: 0; }.gen-panel { width: 100%; min-width: 0; padding: 12px; } }
 @media (max-width: 700px) { .gen-image-hero { margin-top: -35px; } }
-@media (max-width: 700px) { .gen-tabs { width: 100%; margin-top: 20px; margin-right: 0; margin-left: 0; } }
+@media (max-width: 700px) { .gen-tabs { width: 100%; margin-top: 0; margin-right: 0; margin-left: 0; } }
 @media (max-width: 700px) { .gen-settings-panel .gen-dial { top: -28px; right: -8px; width: 140px; height: 63px; } }
 .gen-upload.is-dragging { border-color: #f26b38; background: #fff7f3; }
 .gen-source-preview { position: relative; display: grid; aspect-ratio: 4 / 3; overflow: hidden; isolation: isolate; border: 1px solid #e2e2e2; border-radius: 8px; background: #f4f4f4; }

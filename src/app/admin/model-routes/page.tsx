@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import {
   listAdminModelRoutesOverview,
   syncGenerationModels,
+  updateModelDisplayName,
   updateModelInputLimits,
   updateGenerationModelRoute,
   type AdminModelRoutesOverview,
@@ -100,7 +101,7 @@ function displaySchemaValue(value: unknown): string {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
 
-function ModelDetailsDialog({ item, onClose, onSaveInputLimits }: { item: GenerationModelOption; onClose: () => void; onSaveInputLimits: (model: string, provider: string, limits: ModelUploadConstraints) => Promise<void> }) {
+function ModelDetailsDialog({ item, onClose, onSaveDisplayName, onSaveInputLimits }: { item: GenerationModelOption; onClose: () => void; onSaveDisplayName: (model: string, provider: string, displayName: string) => Promise<void>; onSaveInputLimits: (model: string, provider: string, limits: ModelUploadConstraints) => Promise<void> }) {
   const capabilities = item.capabilities;
   const isVideoModel = item.kind === "video" || capabilities.kind === "video";
   const supportedOutputValues = isVideoModel ? capabilities.supportedResolutions ?? [] : capabilities.supportedSizes;
@@ -116,6 +117,28 @@ function ModelDetailsDialog({ item, onClose, onSaveInputLimits }: { item: Genera
   });
   const [savingLimits, setSavingLimits] = useState(false);
   const [limitsMessage, setLimitsMessage] = useState("");
+  const [displayNameDraft, setDisplayNameDraft] = useState(item.displayName);
+  const [savingDisplayName, setSavingDisplayName] = useState(false);
+  const [displayNameMessage, setDisplayNameMessage] = useState("");
+
+  const saveDisplayName = async () => {
+    const displayName = displayNameDraft.trim();
+    if (!displayName) {
+      setDisplayNameMessage("Display name cannot be empty");
+      return;
+    }
+    try {
+      setSavingDisplayName(true);
+      setDisplayNameMessage("");
+      await onSaveDisplayName(item.model, item.provider, displayName);
+      setDisplayNameDraft(displayName);
+      setDisplayNameMessage("Display name saved.");
+    } catch (reason) {
+      setDisplayNameMessage(reason instanceof Error ? reason.message : "Unable to save display name");
+    } finally {
+      setSavingDisplayName(false);
+    }
+  };
 
   const saveLimits = async () => {
     const parsePositive = (value: string, label: string): number | undefined => {
@@ -153,6 +176,8 @@ function ModelDetailsDialog({ item, onClose, onSaveInputLimits }: { item: Genera
       </header>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
+        <section className="rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-bold">Display name</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">ชื่อนี้จะแสดงในหน้า Create แทนชื่อที่ระบบสร้างจาก model ID</p></div><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold text-primary">Admin</span></div><div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="flex-1 text-[11px] font-semibold text-muted-foreground">Model display name<input value={displayNameDraft} onChange={(event) => setDisplayNameDraft(event.target.value)} maxLength={160} className="mt-1.5 h-9 w-full rounded-lg border border-border bg-white px-2.5 text-xs font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><Button size="sm" onClick={() => void saveDisplayName()} disabled={savingDisplayName || !displayNameDraft.trim()}>{savingDisplayName ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} {savingDisplayName ? "Saving..." : "Save display name"}</Button></div>{displayNameMessage ? <p className={`mt-2 text-[11px] font-semibold ${displayNameMessage.endsWith("saved.") ? "text-[#347454]" : "text-[#9f3b3b]"}`} role="status">{displayNameMessage}</p> : null}</section>
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-border bg-white p-4"><p className="text-[11px] text-muted-foreground">Kind</p><p className="mt-1 font-semibold">{item.kind ?? capabilities.kind ?? "image"}</p></div>
           <div className="rounded-2xl border border-border bg-white p-4"><p className="text-[11px] text-muted-foreground">{isVideoModel ? "Supported resolutions" : "Supported sizes"}</p><p className="mt-1 font-semibold">{supportedOutputValues.length} presets</p></div>
@@ -901,6 +926,26 @@ function AdminModelRoutesContent() {
     }
   };
 
+  const saveModelDisplayName = async (model: string, provider: string, displayName: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      const overview = await updateModelDisplayName(model, provider, displayName);
+      setCatalog(overview.catalog);
+      setCatalogCount(overview.catalog.length);
+      setRouteOverview(overview.routes);
+      const next = overview.routes[routeKey] ?? overview.routes[feature] ?? [];
+      setModels(next.filter((item) => item.enabled));
+      const updated = overview.catalog.find((item) => item.model === model && item.provider === provider);
+      if (updated) setDetailsModel(updated);
+      setMessage(`${updated?.displayName ?? displayName} display name saved.`);
+    } catch (reason) {
+      throw reason instanceof Error ? reason : new Error("Unable to save display name");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen w-full min-w-0 bg-background">
@@ -934,7 +979,7 @@ function AdminModelRoutesContent() {
 
       {feature !== "audio" ? <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div> : null}
       {assignmentOpen ? <MultiTargetModelAssignmentDialog feature={assignmentFeature} catalog={assignmentFeature === "background-removal" ? assignmentCatalog : [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()]} assignments={assignmentDrafts} backgroundMode={assignmentBackgroundMode} onFeatureChange={setAssignmentFeature} onBackgroundModeChange={changeAssignmentBackgroundMode} onAdd={addAssignment} onRemove={removeAssignment} onSetDefault={setAssignmentDefault} onClose={() => setAssignmentOpen(false)} onSave={saveAssignment} saving={assignmentSaving} /> : null}
-      {detailsModel ? <ModelDetailsDialog item={detailsModel} onClose={() => setDetailsModel(null)} onSaveInputLimits={saveModelInputLimits} /> : null}
+      {detailsModel ? <ModelDetailsDialog item={detailsModel} onClose={() => setDetailsModel(null)} onSaveDisplayName={saveModelDisplayName} onSaveInputLimits={saveModelInputLimits} /> : null}
             </div>
           </main>
         </div>

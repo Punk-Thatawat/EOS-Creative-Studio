@@ -4,7 +4,26 @@ const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://loc
 const backendOrigin = configuredBackendUrl.replace(/\/api\/v1$/, "");
 const backendApiUrl = `${backendOrigin}/api/v1`;
 
-export const promptTemplateFeatureOptions = ["text-to-image", "image-to-image", "style-transfer", "background-remove", "background-replace", "background-generate", "background-solid", "extend-image"] as const;
+export const promptTemplateFeatureOptions = [
+  "text-to-image",
+  "image-to-image",
+  "style-transfer",
+  "background-remove",
+  "background-replace",
+  "background-generate",
+  "background-solid",
+  "extend-image",
+  "image-to-video",
+  "image-to-video:single-image",
+  "image-to-video:multi-scene",
+  "image-to-video:continuous",
+  "image-to-video:flexible",
+  "text-to-video",
+  "people-video",
+  "motion-transfer",
+  "lipsync",
+  "extend-video",
+] as const;
 export type PromptTemplateFeature = typeof promptTemplateFeatureOptions[number];
 
 export type PromptTemplate = {

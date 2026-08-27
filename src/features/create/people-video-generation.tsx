@@ -765,12 +765,12 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label>
         <div className={styles.modelDropdown}>
           <button type="button" className={styles.modelDropdownTrigger} aria-haspopup="listbox" aria-expanded={isModelMenuOpen} disabled={modelsLoading || models.length === 0} onClick={() => setIsModelMenuOpen((open) => !open)}>
-            <span><strong>{modelsLoading ? `Loading ${workspaceLabel} models…` : selectedModelOption?.displayName ?? `No ${workspaceLabel} model`}</strong><span className={styles.modelProviderRow}><small>{selectedModelOption?.provider ?? ""}</small>{selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span></span>
+            <span><strong>{modelsLoading ? `Loading ${workspaceLabel} models…` : selectedModelOption?.displayName ?? `No ${workspaceLabel} model`}</strong><span className={styles.modelProviderRow}>{selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span></span>
             <ChevronDown size={17} />
           </button>
           {isModelMenuOpen ? (
             <div className={styles.modelDropdownMenu} role="listbox" aria-label={`${workspaceLabel} model options`}>
-              {models.map((option, index) => <button key={option.model} type="button" role="option" aria-selected={option.model === selectedModel} onClick={() => { setSelectedModel(option.model); setIsModelMenuOpen(false); }}><span><strong>{option.displayName}</strong><span className={styles.modelProviderRow}><small>{option.provider}</small><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, index))]}`}>{modelTier(option, index)}</b></span></span></button>)}
+              {models.map((option, index) => <button key={option.model} type="button" role="option" aria-selected={option.model === selectedModel} onClick={() => { setSelectedModel(option.model); setIsModelMenuOpen(false); }}><span><strong>{option.displayName}</strong><span className={styles.modelProviderRow}><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, index))]}`}>{modelTier(option, index)}</b></span></span></button>)}
             </div>
           ) : null}
         </div>

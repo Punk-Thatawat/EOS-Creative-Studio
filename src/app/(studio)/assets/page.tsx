@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import {
   deleteAsset,
+  deleteAssetFolder,
   emptyTrash,
   fetchAssets,
   createAssetFolder,
@@ -93,6 +94,7 @@ const filterByApiType: Record<AssetsApiType, Exclude<FilterType, "All Types">> =
 };
 
 const filterOptions: FilterType[] = ["All Types", "Images", "Videos", "Documents", "Audio", "Other"];
+const defaultAssetFolderNames = new Set(["image", "videos", "voice", "document"]);
 
 const previewFallbacks: Record<AssetsApiType, string> = {
   image: "/generated-assets/creative-studio-hero-with-text.png",
@@ -180,6 +182,8 @@ type GroupDialog = {
   assetId: string | null;
 };
 
+type SelectOption = { value: string; label: string; count?: number };
+
 function TypeIcon({ kind }: { kind: AssetsApiType }) {
   if (kind === "video") return <Video size={15} strokeWidth={2.5} />;
   if (kind === "audio") return <AudioLines size={15} strokeWidth={2.5} />;
@@ -187,8 +191,23 @@ function TypeIcon({ kind }: { kind: AssetsApiType }) {
   return <ImageIcon size={15} strokeWidth={2.5} />;
 }
 
-function SelectButton({ label, onClick }: { label: string; onClick?: () => void }) {
-  return <button type="button" className="assets-select-button" onClick={onClick}>{label}<ChevronDown size={15} /></button>;
+function FilterSelect({
+  label,
+  options,
+  value,
+  onSelect,
+}: {
+  label: string;
+  options: SelectOption[];
+  value: string;
+  onSelect: (value: string) => void;
+}) {
+  return <div className="assets-select">
+    <select className="assets-select-native" aria-label={label} value={value} onChange={(event) => onSelect(event.target.value)}>
+      {options.map((option) => <option value={option.value} key={option.value || "all"}>{option.label}</option>)}
+    </select>
+    <ChevronDown className="assets-select-chevron" size={15} aria-hidden="true" />
+  </div>;
 }
 
 function SummaryMetric({ icon, value, label, color }: { icon: ReactNode; value: number; label: string; color: string }) {
@@ -232,7 +251,7 @@ function AssetPreviewPopup({ asset, onClose }: { asset: Asset; onClose: () => vo
 
 function FilterList({ items, activeId, onSelect, kind }: { items: AssetsApiFilter[]; activeId: string | null; onSelect: (id: string | null) => void; kind: "folder" | "tag" }) {
   return <>{items.map((item) => <button type="button" key={item.id} className={activeId === item.id ? "is-active" : ""} onClick={() => onSelect(activeId === item.id ? null : item.id)}>
-    {kind === "folder" ? <Folder size={17} /> : null}<span>{formatLabel(item.name)}</span><b>{formatCount(item.count)}</b>
+      {kind === "folder" ? <Folder size={17} /> : null}<span>{formatLabel(item.name)}</span><b>{formatCount(item.count)}</b>
   </button>)}</>;
 }
 
@@ -251,6 +270,8 @@ export default function AssetsPage() {
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [openMenuAsset, setOpenMenuAsset] = useState<string | null>(null);
   const [busyAssetId, setBusyAssetId] = useState<string | null>(null);
+  const [busyFolderName, setBusyFolderName] = useState<string | null>(null);
+  const [pendingDeleteFolder, setPendingDeleteFolder] = useState<AssetsApiFilter | null>(null);
   const [groupDialog, setGroupDialog] = useState<GroupDialog | null>(null);
   const [groupName, setGroupName] = useState("");
   const [groupSaving, setGroupSaving] = useState(false);
@@ -325,6 +346,18 @@ export default function AssetsPage() {
   const cta = ctaByTab[activeTab];
   const activeFolderLabel = activeFolder ? formatLabel(folderItems.find((item) => item.id === activeFolder)?.name ?? activeFolder) : "All Folders";
   const activeTagLabel = activeTag ? formatLabel(assetsData.filters.tags.find((item) => item.id === activeTag)?.name ?? activeTag) : "All Tags";
+  const groupAsset = groupDialog?.assetId ? assets.find((asset) => asset.id === groupDialog.assetId) : null;
+  const groupAssetTags = new Set((groupAsset?.tags ?? []).map((tag) => tag.trim().toLocaleLowerCase()));
+  const groupOptions = groupDialog?.assetId
+    ? (groupDialog.kind === "tag"
+      ? assetsData.filters.tags.filter((item) => !groupAssetTags.has(item.name.trim().toLocaleLowerCase()))
+      : assetsData.filters.folders.filter((item) => !defaultAssetFolderNames.has(item.name.trim().toLocaleLowerCase())))
+    : [];
+  const duplicateTag = groupDialog?.kind === "tag" && Boolean(groupDialog.assetId) && groupAssetTags.has(groupName.trim().toLocaleLowerCase());
+  const defaultFolderSelected = groupDialog?.kind === "folder" && Boolean(groupDialog.assetId) && defaultAssetFolderNames.has(groupName.trim().toLocaleLowerCase());
+  const selectedCustomFolder = activeFolder
+    ? assetsData.filters.folders.find((item) => item.id === activeFolder && !defaultAssetFolderNames.has(item.name.trim().toLocaleLowerCase()))
+    : undefined;
   const startItem = assetsData.pagination.total === 0 ? 0 : ((assetsData.pagination.page - 1) * assetsData.pagination.limit) + 1;
   const endItem = Math.min(assetsData.pagination.total, startItem + assetsData.pagination.limit - 1);
   const rangeLabel = assetsData.pagination.total === 0
@@ -340,18 +373,14 @@ export default function AssetsPage() {
     setSearch("");
     window.dispatchEvent(new Event("assets-search-clear"));
     setPage(1);
+    setPendingDeleteFolder(null);
     setSelectedAsset(null);
     setOpenMenuAsset(null);
     window.history.replaceState(null, "", "/assets");
   };
 
-  const handleTypeChange = () => {
-    const nextIndex = (filterOptions.indexOf(activeType) + 1) % filterOptions.length;
-    setActiveType(filterOptions[nextIndex]);
-    setPage(1);
-  };
-
   const openGroupDialog = (kind: GroupDialog["kind"], assetId: string | null = null) => {
+    setPendingDeleteFolder(null);
     setOpenMenuAsset(null);
     setGroupName("");
     setGroupDialog({ kind, assetId });
@@ -380,6 +409,7 @@ export default function AssetsPage() {
 
   const handleSaveGroup = async () => {
     if (!groupDialog || !groupName.trim()) return;
+    if (duplicateTag || defaultFolderSelected) return;
     const name = groupName.trim();
     setGroupSaving(true);
     setError(null);
@@ -403,6 +433,33 @@ export default function AssetsPage() {
       setError(groupError instanceof Error ? groupError.message : "Unable to save folder or tag");
     } finally {
       setGroupSaving(false);
+    }
+  };
+
+  const handleDeleteFolder = async (folder: AssetsApiFilter) => {
+    const normalizedName = folder.name.trim().toLocaleLowerCase();
+    if (folder.id === "all" || defaultAssetFolderNames.has(normalizedName) || busyFolderName) return;
+    setBusyFolderName(folder.name);
+    setPendingDeleteFolder(null);
+    setError(null);
+    try {
+      await deleteAssetFolder(folder.name);
+      if (activeFolder === folder.id) {
+        setAssetsData((current) => ({
+          ...current,
+          filters: { ...current.filters, folders: current.filters.folders.filter((item) => item.id !== folder.id) },
+        }));
+        window.requestAnimationFrame(() => {
+          setActiveFolder(null);
+          setPage(1);
+        });
+      } else {
+        setRefreshKey((current) => current + 1);
+      }
+    } catch (folderError) {
+      setError(folderError instanceof Error ? folderError.message : "Unable to delete folder");
+    } finally {
+      setBusyFolderName(null);
     }
   };
 
@@ -476,10 +533,30 @@ export default function AssetsPage() {
             {tabs.map((tab) => <button type="button" role="tab" aria-selected={activeTab === tab} key={tab} className={activeTab === tab ? "is-active" : ""} onClick={() => handleTabChange(tab)}>{tab}</button>)}
           </div>
           <div className="assets-filters">
-            <SelectButton label={activeType} onClick={handleTypeChange} />
-            <SelectButton label={activeFolderLabel} onClick={() => { setActiveFolder(activeFolder ? null : folderItems[1]?.id ?? null); setPage(1); }} />
-            <SelectButton label={activeTagLabel} onClick={() => { setActiveTag(activeTag ? null : assetsData.filters.tags[0]?.id ?? null); setPage(1); }} />
-            <SelectButton label={`Sort by: ${activeSort}`} onClick={() => { setActiveSort(activeSort === "Newest" ? "Oldest" : "Newest"); setPage(1); }} />
+            <FilterSelect
+              label={activeType}
+              value={activeType}
+              options={filterOptions.map((option) => ({ value: option, label: option }))}
+              onSelect={(value) => { setActiveType(value as FilterType); setPage(1); }}
+            />
+            <FilterSelect
+              label={activeFolderLabel}
+              value={activeFolder ?? ""}
+              options={[{ value: "", label: "All Folders" }, ...assetsData.filters.folders.filter((item) => item.id !== "all").map((item) => ({ value: item.id, label: formatLabel(item.name), count: item.count }))]}
+              onSelect={(value) => { setActiveFolder(value || null); setPage(1); }}
+            />
+            <FilterSelect
+              label={activeTagLabel}
+              value={activeTag ?? ""}
+              options={[{ value: "", label: "All Tags" }, ...assetsData.filters.tags.map((item) => ({ value: item.id, label: formatLabel(item.name), count: item.count }))]}
+              onSelect={(value) => { setActiveTag(value || null); setPage(1); }}
+            />
+            <FilterSelect
+              label={`Sort by: ${activeSort}`}
+              value={activeSort}
+              options={[{ value: "Newest", label: "Sort by: Newest" }, { value: "Oldest", label: "Sort by: Oldest" }]}
+              onSelect={(value) => { setActiveSort(value as AssetSort); setPage(1); }}
+            />
             <div className="assets-view-toggle" aria-label="Change asset view">
               <button type="button" aria-label="Grid view" className={view === "grid" ? "is-active" : ""} onClick={() => setView("grid")}><Grid2X2 size={18} /></button>
               <button type="button" aria-label="List view" className={view === "list" ? "is-active" : ""} onClick={() => setView("list")}><List size={18} /></button>
@@ -494,7 +571,11 @@ export default function AssetsPage() {
 
         <div className="assets-content-grid">
           <aside className="assets-sidebar-panel">
-            <div className="assets-panel-heading"><strong>FOLDERS</strong><button type="button" aria-label="Add folder" onClick={() => openGroupDialog("folder")}><Plus size={17} /></button></div>
+            <div className="assets-panel-heading"><strong>FOLDERS</strong><div className="assets-panel-actions"><button type="button" aria-label="Delete selected folder" title={selectedCustomFolder ? `Delete ${formatLabel(selectedCustomFolder.name)}` : "Select a custom folder to delete"} disabled={!selectedCustomFolder || busyFolderName !== null} onClick={() => { if (selectedCustomFolder) setPendingDeleteFolder(selectedCustomFolder); }}><Trash2 size={16} /></button><button type="button" aria-label="Add folder" onClick={() => openGroupDialog("folder")}><Plus size={17} /></button></div></div>
+            {pendingDeleteFolder ? <div className="assets-folder-delete-popover" role="dialog" aria-label={`Confirm delete ${formatLabel(pendingDeleteFolder.name)}`}>
+              <div className="assets-folder-delete-copy"><span className="assets-folder-delete-icon"><Trash2 size={16} /></span><div><strong>Delete folder?</strong><p>“{formatLabel(pendingDeleteFolder.name)}” will be removed. Assets stay in All Assets.</p></div></div>
+              <div className="assets-folder-delete-actions"><button type="button" onClick={() => setPendingDeleteFolder(null)} disabled={busyFolderName !== null}>Cancel</button><button type="button" onClick={() => void handleDeleteFolder(pendingDeleteFolder)} disabled={busyFolderName !== null}>Delete</button></div>
+            </div> : null}
             <div className="assets-folder-list">
               {folderItems.length ? <FilterList items={folderItems} activeId={activeFolder ?? "all"} onSelect={(id) => { setActiveFolder(id === "all" ? null : id); setPage(1); }} kind="folder" /> : <span className="assets-sidebar-empty">No folders yet</span>}
             </div>
@@ -539,9 +620,13 @@ export default function AssetsPage() {
       {groupDialog ? <div className="assets-group-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeGroupDialog(); }}>
         <div className="assets-group-dialog" role="dialog" aria-modal="true" aria-labelledby="assets-group-dialog-title">
           <div className="assets-group-dialog-heading"><strong id="assets-group-dialog-title">{groupDialog.assetId ? groupDialog.kind === "folder" ? "Move to folder" : "Add tag" : groupDialog.kind === "folder" ? "Create folder" : "Create tag"}</strong><button type="button" onClick={closeGroupDialog} disabled={groupSaving} aria-label="Close">×</button></div>
-          {groupDialog.assetId ? <div className="assets-group-options">{(groupDialog.kind === "folder" ? assetsData.filters.folders : assetsData.filters.tags).map((item) => <button type="button" key={item.id} className={groupName === item.name ? "is-selected" : ""} onClick={() => setGroupName(item.name)}>{formatLabel(item.name)}<span>{formatCount(item.count)}</span></button>)}</div> : null}
+          {groupDialog.assetId ? <div className="assets-group-options">
+            {groupOptions.length ? groupOptions.map((item) => <button type="button" key={item.id} className={groupName === item.name ? "is-selected" : ""} onClick={() => setGroupName(item.name)}>{formatLabel(item.name)}<span>{formatCount(item.count)}</span></button>) : <span className="assets-group-options-empty">{groupDialog.kind === "tag" ? "No available tags for this asset." : "No custom folders yet."}</span>}
+          </div> : null}
           <input autoFocus value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder={groupDialog.kind === "folder" ? "Folder name" : "Tag name"} maxLength={120} onKeyDown={(event) => { if (event.key === "Enter") void handleSaveGroup(); }} />
-          <div className="assets-group-dialog-actions"><button type="button" onClick={closeGroupDialog} disabled={groupSaving}>Cancel</button><button type="button" onClick={() => void handleSaveGroup()} disabled={groupSaving || !groupName.trim()}>{groupSaving ? "Saving..." : groupDialog.assetId ? "Save" : "Create"}</button></div>
+          {duplicateTag ? <span className="assets-group-dialog-error" role="alert">This asset already has this tag.</span> : null}
+          {defaultFolderSelected ? <span className="assets-group-dialog-error" role="alert">Default folders cannot be selected here.</span> : null}
+          <div className="assets-group-dialog-actions"><button type="button" onClick={closeGroupDialog} disabled={groupSaving}>Cancel</button><button type="button" onClick={() => void handleSaveGroup()} disabled={groupSaving || !groupName.trim() || duplicateTag || defaultFolderSelected}>{groupSaving ? "Saving..." : groupDialog.assetId ? "Save" : "Create"}</button></div>
         </div>
       </div> : null}
       {previewAsset ? <AssetPreviewPopup asset={previewAsset} onClose={() => setPreviewAsset(null)} /> : null}

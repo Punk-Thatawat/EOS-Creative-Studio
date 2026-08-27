@@ -648,7 +648,7 @@ export function TextToVideoWorkspace() {
           <button type="button" className={styles.modelDropdownTrigger} aria-haspopup="listbox" aria-expanded={isModelMenuOpen} disabled={modelsLoading || models.length === 0} onClick={() => setIsModelMenuOpen((open) => !open)}>
             <span>
               <strong>{modelsLoading ? "Loading text-to-video models…" : selectedModelOption?.displayName ?? "No compatible model"}</strong>
-              <span className={styles.modelProviderRow}><small>{selectedModelOption?.provider ?? ""}</small>{selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span>
+              <span className={styles.modelProviderRow}>{selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span>
             </span>
             <ChevronDown size={17} />
           </button>
@@ -656,7 +656,7 @@ export function TextToVideoWorkspace() {
             <div className={styles.modelDropdownMenu} role="listbox" aria-label="Text-to-video model options">
               {models.map((option) => (
                 <button key={option.model} type="button" role="option" aria-selected={option.model === selectedModel} onClick={() => { setSelectedModel(option.model); setIsModelMenuOpen(false); }}>
-                  <span><strong>{option.displayName}</strong><span className={styles.modelProviderRow}><small>{option.provider}</small><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, models.indexOf(option)))]}`}>{modelTier(option, models.indexOf(option))}</b></span></span>
+                  <span><strong>{option.displayName}</strong><span className={styles.modelProviderRow}><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, models.indexOf(option)))]}`}>{modelTier(option, models.indexOf(option))}</b></span></span>
                 </button>
               ))}
             </div>
@@ -667,7 +667,6 @@ export function TextToVideoWorkspace() {
         {resolutionProperty ? <TextSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride="Resolution" onChange={setResolutionValue} /> : null}
         {aspectRatioProperty ? <TextSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride="Aspect Ratio" choices onChange={setAspectRatioValue} /> : null}
         {fpsProperty ? <TextSchemaField name={fpsProperty[0]} property={fpsProperty[1]} value={fpsValue} required={requiredProperties.has(fpsProperty[0])} labelOverride="FPS" onChange={setFpsValue} /> : null}
-        {seedProperty ? <TextSchemaField name={seedProperty[0]} property={seedProperty[1]} value={seedValue} required={requiredProperties.has(seedProperty[0])} labelOverride="Seed" onChange={setSeedValue} /> : null}
         {cameraMotionProperty ? <TextSchemaField name={cameraMotionProperty[0]} property={cameraMotionProperty[1]} value={cameraMotionValue} required={requiredProperties.has(cameraMotionProperty[0])} labelOverride="Camera Motion" onChange={setCameraMotionValue} /> : null}
         {audioProperty && !audioInputMode ? <TextSchemaField name={audioProperty[0]} property={audioProperty[1]} value={audioValue} required={requiredProperties.has(audioProperty[0])} labelOverride="Generate Audio" onChange={setAudioValue} /> : null}
         {audioInputMode ? (

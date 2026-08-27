@@ -20,7 +20,7 @@ export type VideoGenerationInput = {
   workspaceId?: string | null;
   projectId?: string | null;
   model: string;
-  mode: "storyboard" | "continuous" | "hybrid";
+  mode: "storyboard" | "continuous" | "flexible";
   duration?: number;
   resolution?: string;
   aspectRatio?: string;
@@ -50,7 +50,7 @@ export type VideoStoryboardResponse = {
 export type VideoCreditQuoteResponse = {
   model?: string;
   provider?: string;
-  mode?: "storyboard" | "continuous" | "hybrid" | string;
+  mode?: "storyboard" | "continuous" | "flexible" | string;
   totalScenes?: number;
   totalDuration?: number | null;
   totalCreditCost?: number;
@@ -112,7 +112,7 @@ export type VideoStoryboardHistoryItem = {
   workspaceId?: string;
   provider?: string;
   model?: string;
-  mode?: "storyboard" | "continuous" | "hybrid" | string;
+  mode?: "storyboard" | "continuous" | "flexible" | string;
   status: "completed" | string;
   totalScenes?: number;
   totalDuration?: number | null;

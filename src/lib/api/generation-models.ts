@@ -158,6 +158,11 @@ export async function updateModelInputLimits(model: string, provider: string, op
   return payload.data ?? { catalog: [], routes: {} };
 }
 
+export async function updateModelDisplayName(model: string, provider: string, displayName: string): Promise<AdminModelRoutesOverview> {
+  const payload = await adminRequest("/api/v1/admin/model-routes/model/display-name", { method: "PATCH", body: JSON.stringify({ model, provider, displayName }) }) as { data?: AdminModelRoutesOverview };
+  return payload.data ?? { catalog: [], routes: {} };
+}
+
 export async function syncGenerationModels(): Promise<{ synced: number; skipped: number }> {
   return await adminRequest("/api/v1/admin/model-routes/sync", { method: "POST" }) as { synced: number; skipped: number };
 }

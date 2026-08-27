@@ -87,8 +87,8 @@ const videoModeOptions = [
     description: "Continue from the previous scene",
   },
   {
-    value: "hybrid",
-    label: "Hybrid",
+    value: "flexible",
+    label: "Flexible Storyboard",
     description: "Choose the start frame per scene",
   },
 ] as const;
@@ -109,9 +109,9 @@ const generationModeOptions = [
     description: "Continue each scene from the previous frame",
   },
   {
-    value: "hybrid",
-    label: "Hybrid",
-    description: "Choose a new image or previous frame per scene",
+    value: "flexible",
+    label: "Flexible Storyboard",
+    description: "Use one image, multiple scenes, or previous frames",
   },
 ] as const;
 const sceneSourceOptions = [
@@ -725,8 +725,8 @@ export function VideoGenerationPage() {
     setSceneSourceMenuPosition(null);
     const nextVideoMode = nextMode === "continuous"
       ? "continuous"
-      : nextMode === "hybrid"
-        ? "hybrid"
+      : nextMode === "flexible"
+        ? "flexible"
         : "storyboard";
     setVideoMode(nextVideoMode);
     setStoryboardScenes((current) =>
@@ -1299,7 +1299,7 @@ export function VideoGenerationPage() {
                       ? "Native Extend will continue scenes in order"
                       : "No Native Extend; continuation may not be seamless"}</span>
                   </div>
-                ) : generationMode === "hybrid" ? (
+                ) : generationMode === "flexible" ? (
                   <div className={`${styles.sequenceNotice} ${hasNativeExtend ? styles.sequenceNoticeNative : styles.sequenceNoticeWarning}`}>
                     <Link2 size={13} />
                     <span>{hasNativeExtend
@@ -1712,7 +1712,7 @@ export function VideoGenerationPage() {
                             </div>
                           )}
                           <div className={styles.sceneCardFooter}>
-                            {index > 0 && videoMode === "hybrid" ? (
+                            {index > 0 && videoMode === "flexible" ? (
                               <div className={styles.sceneSourceDropdown}>
                                 <button
                                   ref={(element) => {
@@ -1843,7 +1843,7 @@ export function VideoGenerationPage() {
                       : selectedModelOption?.displayName ?? "No compatible model"}
                   </strong>
                   <span className={styles.modelProviderRow}>
-                      <span className={styles.modelProviderRow}><small>{selectedModelOption?.provider ?? ""}</small>{selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span>
+                    {selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}
                     {!modelsLoading && selectedModelOption ? (
                       <b className={`${styles.modelCapabilityBadge} ${nativeExtendModel ? styles.modelCapabilityBadgeNative : styles.modelCapabilityBadgeContinuation}`}>
                         {nativeExtendModel ? "Native Extend" : "Frame Continuation"}
@@ -1881,7 +1881,7 @@ export function VideoGenerationPage() {
                         <span>
                           <strong>{option.displayName}</strong>
                           <span className={styles.modelProviderRow}>
-                            <span className={styles.modelProviderRow}><small>{option.provider}</small><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, models.indexOf(option)))]}`}>{modelTier(option, models.indexOf(option))}</b></span>
+                            <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, models.indexOf(option)))]}`}>{modelTier(option, models.indexOf(option))}</b>
                             <b className={`${styles.modelCapabilityBadge} ${optionHasNativeExtend ? styles.modelCapabilityBadgeNative : styles.modelCapabilityBadgeContinuation}`}>
                               {optionHasNativeExtend ? "Native Extend" : "Frame Continuation"}
                             </b>
@@ -2111,7 +2111,7 @@ export function VideoGenerationPage() {
                 <p>
                   {videoMode === "continuous"
                     ? "Describe the motion. The previous scene's last frame is used automatically."
-                    : videoMode === "hybrid"
+                    : videoMode === "flexible"
                       ? "Choose how this scene starts, then describe the motion."
                       : "Upload a storyboard image and describe the motion."}
                 </p>
@@ -2195,7 +2195,7 @@ export function VideoGenerationPage() {
                 }}
               />
             </div>
-            {videoMode === "hybrid" ? (
+            {videoMode === "flexible" ? (
               <div className={styles.sceneModalSourceField}>
                 <div className={styles.sceneModalSourceHeader}>
                   <span>Start frame</span>
