@@ -238,6 +238,8 @@ export function ImageGenerationPage() {
         previewDisplayMode={previewDisplayMode}
         onPreviewDisplayModeChange={(mode) => { if (mode === "current") state.clearRecentSelection(); setPreviewDisplayMode(mode); }}
         sourceImage={state.sourceImage}
+        modelPreviewUrl={selectedModelOption?.previewUrl ?? null}
+        modelPreviewType={selectedModelOption?.previewType ?? null}
         backgroundMask={state.backgroundMask}
         backgroundMode={state.backgroundMode}
         backgroundColor={state.backgroundColor}
@@ -286,7 +288,7 @@ export function ImageGenerationPage() {
         onCountChange={state.setCount}
         onGenerate={generateCurrentTab}
         onImageSizeToggle={state.toggleImageSize}
-        onModelChange={(model) => { state.setOutputFormat(null); if (isImageToImageTab) state.setSelectedImageToImageModel(model); else if (isStyleTransferTab) state.setSelectedStyleTransferModel(model); else if (isBackgroundTab) state.setSelectedBackgroundModel(model); else if (isUpscaleTab) state.setSelectedUpscaleModel(model); else if (isExtendTab) state.setSelectedExtendModel(model); else state.setSelectedModel(model); }}
+        onModelChange={(model) => { state.clearRecentSelection(); setPreviewDisplayMode("current"); state.setOutputFormat(null); if (isImageToImageTab) state.setSelectedImageToImageModel(model); else if (isStyleTransferTab) state.setSelectedStyleTransferModel(model); else if (isBackgroundTab) state.setSelectedBackgroundModel(model); else if (isUpscaleTab) state.setSelectedUpscaleModel(model); else if (isExtendTab) state.setSelectedExtendModel(model); else state.setSelectedModel(model); }}
         onQualityChange={state.setQuality}
         onOutputFormatChange={state.setOutputFormat}
         onResolutionChange={state.setResolution}

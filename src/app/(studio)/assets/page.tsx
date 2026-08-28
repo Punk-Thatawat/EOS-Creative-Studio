@@ -34,6 +34,7 @@ import {
   deleteAsset,
   deleteAssetFolder,
   deleteAssetTag,
+  downloadAsset,
   emptyTrash,
   fetchAssets,
   createAssetFolder,
@@ -560,6 +561,28 @@ export default function AssetsPage() {
     }
   };
 
+  const handleDownload = async (asset: Asset) => {
+    if (busyAssetId) return;
+    setBusyAssetId(asset.id);
+    setError(null);
+    try {
+      const downloaded = await downloadAsset(asset.id);
+      const objectUrl = URL.createObjectURL(downloaded.blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = downloaded.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      setOpenMenuAsset(null);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Unable to download asset");
+    } finally {
+      setBusyAssetId(null);
+    }
+  };
+
   const handleEmptyTrash = async () => {
     if (!window.confirm("Permanently delete all assets in Trash?")) return;
     setBusyAssetId("trash");
@@ -701,7 +724,7 @@ export default function AssetsPage() {
                 {asset.duration ? <span className="asset-duration">{asset.duration}</span> : null}
               </div>
               <div className="asset-card-footer"><div><strong>{asset.title}</strong><span>{asset.date} <i>•</i> {asset.size}</span></div><div className="asset-card-actions"><button type="button" aria-label={`More options for ${asset.title}`} onClick={(event) => { event.stopPropagation(); setOpenMenuAsset(openMenuAsset === asset.id ? null : asset.id); }} disabled={busyAssetId === asset.id}><MoreVertical size={18} /></button>{openMenuAsset === asset.id ? <div className="asset-card-menu" role="menu" onClick={(event) => event.stopPropagation()}>
-                {asset.downloadUrl ? <a href={asset.downloadUrl} target="_blank" rel="noreferrer" role="menuitem" onClick={() => setOpenMenuAsset(null)}><Download size={14} />Download</a> : null}
+                <button type="button" role="menuitem" onClick={() => void handleDownload(asset)} disabled={busyAssetId === asset.id}><Download size={14} />{busyAssetId === asset.id ? "Downloading..." : "Download"}</button>
                 {activeTab !== "Trash" ? <><button type="button" role="menuitem" onClick={() => openGroupDialog("folder", asset.id)}><Folder size={14} />Move to folder</button><button type="button" role="menuitem" onClick={() => openGroupDialog("tag", asset.id)}><Plus size={14} />Add tag</button></> : null}
                 {activeTab === "Trash" ? <button type="button" role="menuitem" onClick={() => void handleAssetAction(asset.id, "restore")}><RotateCcw size={14} />Restore</button> : <button type="button" role="menuitem" onClick={() => void handleAssetAction(asset.id, "trash")}><Trash2 size={14} />Move to trash</button>}
               </div> : null}</div></div>

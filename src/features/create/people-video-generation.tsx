@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, CloudUpload, Info, LoaderCircle, Mic2, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import {
   createPeopleVideoGeneration,
@@ -746,6 +747,8 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
               </div>
             ) : displayedVideoUrl ? (
               <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} ariaLabel={`Generated ${workspaceLabel}`} />
+            ) : selectedModelOption?.previewUrl ? (
+              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} />
             ) : (
               <VideoPreviewPlaceholder />
             )}

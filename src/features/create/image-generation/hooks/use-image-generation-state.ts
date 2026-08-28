@@ -871,7 +871,8 @@ export function useImageGenerationState() {
   const imageCreditQuoteInput: ImageCreditQuoteInput | null = (() => {
     // Credit estimates should be visible before the user fills the form. The
     // backend can quote the selected/default route from the current settings;
-    // source images and prompts are still required only when generating.
+    // once media is uploaded, include it so provider-native edit pricing is
+    // calculated from the same inputs that the generation job will use.
     const shared = {
       model: activeSelectedModel || undefined,
       ratio: effectiveRatio,

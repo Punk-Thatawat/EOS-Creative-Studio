@@ -96,6 +96,14 @@
   right: 34px;
 }
 
+.cardCompleted .collapse {
+  right: 64px;
+}
+
+.cardCompleted .dismiss {
+  right: 91px;
+}
+
 .collapse:hover,
 .collapse:focus-visible,
 .dismiss:hover,
@@ -134,7 +142,7 @@
 .cardCompleted {
   border-left-color: #4c9b72;
   background: #fbfffc;
-  padding-right: 68px;
+  padding-right: 14px;
 }
 
 .heading,

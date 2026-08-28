@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, CloudUpload, Info, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { uploadImageAsset } from "@/lib/api/storage";
 import {
@@ -407,7 +408,7 @@ export function MotionTransferWorkspace() {
       <div className={styles.centerColumn}>
         <section className={styles.previewPanel}>
           <div className={styles.sectionTitle}><h2>PREVIEW</h2></div>
-           <div className={styles.videoPreview}>{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><WandSparkles size={26} /><strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong><span>{notice ?? "Transferring motion…"}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div><small>{generationProgress ? `${generationProgress}% complete` : "Working…"}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} ariaLabel="Generated motion transfer video" /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div>
+           <div className={styles.videoPreview}>{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><WandSparkles size={26} /><strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong><span>{notice ?? "Transferring motion…"}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div><small>{generationProgress ? `${generationProgress}% complete` : "Working…"}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} ariaLabel="Generated motion transfer video" /> : selectedModelOption?.previewUrl ? <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div>
         </section>
         <VideoResultLibrary feature="motion-transfer" currentVideoUrl={finalVideoUrl} selectedVideoUrl={displayedVideoUrl} refreshKey={libraryRefreshKey} onVideoSelect={(url) => setPreviewVideoUrl(url)} />
       </div>

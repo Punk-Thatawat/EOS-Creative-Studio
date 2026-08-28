@@ -103,6 +103,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return payload.data;
 }
 
+async function requestDownload(path: string): Promise<{ blob: Blob; filename: string }> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in before using assets");
+
+  const response = await fetch(`${backendApiUrl}${path}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as ApiPayload<unknown> | null;
+    throw new Error(errorMessage(payload, `Asset download failed (${response.status})`));
+  }
+
+  const contentDisposition = response.headers.get("content-disposition") ?? "";
+  const encodedFilename = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plainFilename = contentDisposition.match(/filename="([^"]+)"/i)?.[1];
+  let filename = encodedFilename ? decodeURIComponent(encodedFilename) : plainFilename;
+  if (!filename?.trim()) filename = "asset-download";
+  return { blob: await response.blob(), filename };
+}
+
 export type FetchAssetsInput = {
   tab: AssetsApiTab;
   type?: AssetsApiType;
@@ -133,6 +157,11 @@ export async function fetchAssets(input: FetchAssetsInput): Promise<AssetsApiLis
 export async function fetchAsset(assetId: string, workspaceId?: string): Promise<AssetsApiAsset> {
   const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
   return request<AssetsApiAsset>(`/assets/${encodeURIComponent(assetId)}${query}`);
+}
+
+export async function downloadAsset(assetId: string, workspaceId?: string): Promise<{ blob: Blob; filename: string }> {
+  const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
+  return requestDownload(`/assets/${encodeURIComponent(assetId)}/download${query}`);
 }
 
 export async function createAssetFolder(name: string, workspaceId?: string): Promise<AssetsApiFilter> {

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { CloudUpload, ChevronDown, Info, Mic2, RotateCcw, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { uploadImageAsset } from "@/lib/api/storage";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
@@ -627,6 +628,8 @@ export function TextToVideoWorkspace() {
               </div>
             ) : displayedVideoUrl ? (
               <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={styles.generatedVideoPlayer} ariaLabel="Generated text-to-video" />
+            ) : selectedModelOption?.previewUrl ? (
+              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={styles.generatedVideoPlayer} />
             ) : (
               <VideoPreviewPlaceholder />
             )}

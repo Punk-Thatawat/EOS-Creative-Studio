@@ -120,6 +120,7 @@ export type ImageCreditQuoteInput = {
   feature: "text-to-image" | "image-to-image" | "style-transfer" | "background-removal" | "extend-image" | "upscale";
   model?: string;
   sourceImage?: string | null;
+  sourceImages?: string[];
   styleReferenceImage?: string | null;
   backgroundReferenceImage?: string | null;
   mask?: string | null;

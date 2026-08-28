@@ -34,6 +34,7 @@ type ActivePendingGeneration = {
 
 const floatingProgressStorageKey = "eos.generation.progress.cards";
 const dismissedProgressStorageKey = "eos.generation.progress.dismissed";
+const completedAutoCollapseDelayMs = 5_000;
 
 function featureConfig(feature?: string) {
   return generationFeatureOptions.find((item) => item.feature === feature) ?? {
@@ -301,6 +302,8 @@ export function GenerationProgressFloating() {
   const [active, setActive] = useState<ActivePendingGeneration[]>([]);
   const [collapsedGenerationIds, setCollapsedGenerationIds] = useState<Set<string>>(new Set());
   const pollingRef = useRef(new Map<string, AbortController>());
+  const autoCollapseTimersRef = useRef(new Map<string, number>());
+  const autoCollapseHandledRef = useRef(new Set<string>());
   const activeRef = useRef(active);
   const dismissedGenerationIdsRef = useRef(new Set<string>());
   const completedGenerationIdsRef = useRef(new Set<string>());
@@ -309,6 +312,51 @@ export function GenerationProgressFloating() {
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
+
+  useEffect(() => {
+    const timers = autoCollapseTimersRef.current;
+    const handled = autoCollapseHandledRef.current;
+    const activeIds = new Set(active.map((item) => item.pending.generationId));
+    const completedIds = new Set(
+      active
+        .filter((item) => item.pending.status === "completed")
+        .map((item) => item.pending.generationId),
+    );
+
+    for (const generationId of handled) {
+      if (!activeIds.has(generationId)) handled.delete(generationId);
+    }
+
+    for (const [generationId, timerId] of timers) {
+      if (!completedIds.has(generationId)) {
+        window.clearTimeout(timerId);
+        timers.delete(generationId);
+      }
+    }
+
+    for (const item of active) {
+      const generationId = item.pending.generationId;
+      if (item.pending.status !== "completed" || handled.has(generationId) || timers.has(generationId)) continue;
+
+      const timerId = window.setTimeout(() => {
+        handled.add(generationId);
+        setCollapsedGenerationIds((current) => {
+          if (current.has(generationId)) return current;
+          const next = new Set(current);
+          next.add(generationId);
+          return next;
+        });
+        timers.delete(generationId);
+      }, completedAutoCollapseDelayMs);
+
+      timers.set(generationId, timerId);
+    }
+  }, [active]);
+
+  useEffect(() => () => {
+    for (const timerId of autoCollapseTimersRef.current.values()) window.clearTimeout(timerId);
+    autoCollapseTimersRef.current.clear();
+  }, []);
 
   useEffect(() => {
     const handleGenerationStarted = (event: Event) => {
@@ -499,7 +547,7 @@ export function GenerationProgressFloating() {
           <div className={styles.heading}>
             <span className={styles.headingLabel}><i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />GENERATION PROGRESS</span>
             <span className={styles.feature}>{label}</span>
-            <b className={`${styles.status} ${statusClass}`}>{isCompleted ? "COMPLETED" : isQueued ? "QUEUED" : "PROCESSING"}</b>
+          {!isCompleted && <b className={`${styles.status} ${statusClass}`}>{isQueued ? "QUEUED" : "PROCESSING"}</b>}
           </div>
           <div className={styles.track} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage} aria-label={`${label}: ${percentage}% complete`}>
             <span className={`${styles.bar} ${percentage === 0 ? styles.barIndeterminate : ""}`} style={{ width: `${visiblePercentage}%` }} />

@@ -124,7 +124,11 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
   const selectedModelOption = modelOptions.find((item) => item.model === selectedModel);
   const modelSelectionLabel = selectedModelOption?.displayName ?? "Select a model";
   const modelControl = isLoadingModels ? <button type="button" className={cx("gen-select", "gen-model-select", "gen-model-loading")} disabled aria-busy="true"><span><i className={cx("gen-skeleton-line", "gen-skeleton-model-name")} /></span><ChevronDown size={15} /></button> : <><button type="button" className={cx("gen-select", "gen-model-select")} onClick={() => setModelOpen((open) => !open)} aria-haspopup="listbox" aria-expanded={modelOpen}><span><b>{modelSelectionLabel}</b></span><ChevronDown size={15} /></button>{modelOpen && <div className={cx("gen-select-menu", "gen-model-menu")} role="listbox" aria-label="Model options">{modelOptions.map((item) => { const disabled = isImageInputTab && !supportsImageInput(item); return <button type="button" role="option" key={`${item.provider}:${item.model}`} aria-selected={selectedModel === item.model} disabled={disabled} title={disabled ? "This model does not support image input" : undefined} className={cx(selectedModel === item.model && "is-selected", disabled && "is-disabled")} onClick={() => { if (disabled) return; onModelChange(item.model); setModelOpen(false); }}><span><b>{item.displayName}</b>{disabled ? <small>Image input not supported</small> : null}</span>{selectedModel === item.model && <Check size={15} />}</button>; })}</div>}</>;
-  const estimatedCreditsValue = imageCreditEstimateLoading ? <span className={cx("gen-estimate-recalculating")}><LoaderCircle size={12} aria-hidden="true" /> Recalculating price...</span> : imageCreditEstimate !== null && !imageCreditEstimateError ? `= ${imageCreditEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits` : "Pricing unavailable";
+  const canSubmit = canGenerate && !imageCreditEstimateLoading;
+  const formattedCreditEstimate = imageCreditEstimate?.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const estimatedCreditsValue = imageCreditEstimateLoading
+    ? <span className={cx("gen-estimate-recalculating")}><LoaderCircle size={12} aria-hidden="true" /> {formattedCreditEstimate ? <>Updating price · = {formattedCreditEstimate} Credits</> : "Calculating price..."}</span>
+    : imageCreditEstimate !== null && !imageCreditEstimateError ? `= ${formattedCreditEstimate} Credits` : "Pricing unavailable";
   const generationLabel = activeTab === "AI Background" ? backgroundMode === "remove" ? "REMOVE BACKGROUND" : backgroundMode === "replace" ? "REPLACE BACKGROUND" : backgroundMode === "generate" ? "GENERATE BACKGROUND" : "APPLY COLOR" : isImageToImage ? "TRANSFORM IMAGE" : activeTab === "AI Style Transfer" ? "APPLY STYLE" : isUpscale ? "UPSCALE IMAGE" : activeTab === "Extend Image" ? "EXTEND IMAGE" : "GENERATE IMAGE";
 
   const handleRatioChange = (nextRatio: ImageRatio) => {
@@ -148,7 +152,7 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
     {generationStatus === "cancelled" && <p className={cx("gen-generation-status")} role="status">Generation cancelled</p>}
     {generationError && <p className={cx("gen-generation-error")} role="alert">{generationError}</p>}
     {isGenerating && <button type="button" className={cx("gen-cancel-button")} onClick={onCancel}>Cancel generation</button>}
-    <button type="button" className={cx("gen-generate-button")} onClick={onGenerate} disabled={!canGenerate} aria-busy={isGenerating}>{isGenerating ? <LoaderCircle size={20} className={cx("gen-generating-icon")} aria-hidden="true" /> : <Sparkles size={20} aria-hidden="true" />} {isGenerating ? "GENERATING..." : generationLabel}</button>
+    <button type="button" className={cx("gen-generate-button")} onClick={onGenerate} disabled={!canSubmit} aria-busy={isGenerating}>{isGenerating ? <LoaderCircle size={20} className={cx("gen-generating-icon")} aria-hidden="true" /> : <Sparkles size={20} aria-hidden="true" />} {isGenerating ? "GENERATING..." : generationLabel}</button>
     <p className={cx("gen-private")}><LockKeyhole size={12} /> Your generation is private and secure</p>
   </aside>;
 }

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { ModelPreviewMedia } from "./model-preview-media";
 import { uploadImageAsset } from "@/lib/api/storage";
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
 import {
@@ -117,6 +118,7 @@ const sceneSourceOptions = [
   { value: "manual", label: "New image" },
   { value: "previous_last_frame", label: "Previous frame" },
 ] as const;
+const MAX_STORYBOARD_SCENES = 12;
 
 function SectionTitle({
   number,
@@ -853,7 +855,11 @@ export function VideoGenerationPage() {
       : `${creditEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits`;
   const firstScene = storyboardScenes[0];
   const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
-  const canAddScene = generationMode !== "single-image" && Boolean(firstScene?.image && firstSceneHasPrompt);
+  const sceneLimitReached = storyboardScenes.length >= MAX_STORYBOARD_SCENES;
+  const canAddScene = generationMode !== "single-image" && !sceneLimitReached && Boolean(firstScene?.image && firstSceneHasPrompt);
+  const addSceneDisabledReason = sceneLimitReached
+    ? `Storyboard supports up to ${MAX_STORYBOARD_SCENES} scenes.`
+    : "Complete Scene 1 with a start image and prompt first";
   const selectedGenerationMode =
     generationModeOptions.find((option) => option.value === generationMode) ??
     generationModeOptions[0];
@@ -1459,10 +1465,17 @@ export function VideoGenerationPage() {
                     className={styles.generatedVideoPlayer}
                     ariaLabel="Generated video"
                   />
+                ) : selectedModelOption?.previewUrl ? (
+                  <ModelPreviewMedia
+                    url={selectedModelOption.previewUrl}
+                    type={selectedModelOption.previewType}
+                    alt={`${selectedModelOption.displayName} model preview`}
+                    className={styles.generatedVideoPlayer}
+                  />
                 ) : (
                   <VideoPreviewPlaceholder showActions={false} />
                 )}
-                <div className={styles.videoPreviewOverlayActions}>
+                {displayedVideoUrl ? <div className={styles.videoPreviewOverlayActions}>
                   <button
                     type="button"
                     onClick={() => void downloadDisplayedVideo()}
@@ -1482,7 +1495,7 @@ export function VideoGenerationPage() {
                   >
                     <Heart size={16} fill={isVideoFavorite ? "currentColor" : "none"} />
                   </button>
-                </div>
+                </div> : null}
               </div>
               <div className={styles.previewViewTabs} role="tablist" aria-label="Video preview views">
                     <button
@@ -1757,12 +1770,12 @@ export function VideoGenerationPage() {
                     className={styles.addScene}
                     onClick={openSceneModal}
                     disabled={!canAddScene}
-                    title={canAddScene ? "Add another scene" : "Complete Scene 1 with a start image and prompt first"}
+                    title={canAddScene ? "Add another scene" : addSceneDisabledReason}
                   >
                     <Plus size={16} /> Add Scene
                   </button>
                 </div>
-                {!canAddScene ? <p className={styles.sceneRequirement}>Complete Scene 1 with a start image and prompt before adding another scene.</p> : null}
+                {!canAddScene ? <p className={styles.sceneRequirement}>{sceneLimitReached ? `You can create up to ${MAX_STORYBOARD_SCENES} scenes in one storyboard.` : "Complete Scene 1 with a start image and prompt before adding another scene."}</p> : null}
                 {sceneScrollState.canScrollLeft ||
                 sceneScrollState.canScrollRight ? (
                   <>

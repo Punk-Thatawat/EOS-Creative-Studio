@@ -13,7 +13,6 @@ import {
   Search,
   ServerCog,
   Settings2,
-  Video,
   X,
 } from "lucide-react";
 import { SidebarNavigation } from "@/components/app-shell/navigation";
@@ -23,6 +22,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   listAdminModelRoutesOverview,
+  updateAdminModelPreview,
+  uploadAdminModelPreview,
+  deleteAdminModelPreviewUpload,
   syncGenerationModels,
   updateModelDisplayName,
   updateModelInputLimits,
@@ -31,6 +33,7 @@ import {
   type AiBackgroundMode,
   type GenerationModelOption,
   type ModelUploadConstraints,
+  type ModelPreviewType,
 } from "@/lib/api/generation-models";
 import { generateAdminAudioVoicePreview, getAdminAudioSettings, testAdminElevenLabsConnection, testAdminWaveSpeedConnection, updateAdminAudioSettings, type AdminAudioBackgroundMusicPreset, type AdminAudioFeature, type AdminAudioProvider, type AdminAudioSettings, type AdminAudioVoiceProfile, type AdminAudioVoiceSettings } from "@/lib/api/audio";
 import { useSearchParams } from "next/navigation";
@@ -101,7 +104,7 @@ function displaySchemaValue(value: unknown): string {
   try { return JSON.stringify(value); } catch { return String(value); }
 }
 
-function ModelDetailsDialog({ item, onClose, onSaveDisplayName, onSaveInputLimits }: { item: GenerationModelOption; onClose: () => void; onSaveDisplayName: (model: string, provider: string, displayName: string) => Promise<void>; onSaveInputLimits: (model: string, provider: string, limits: ModelUploadConstraints) => Promise<void> }) {
+function ModelDetailsDialog({ item, feature, backgroundMode, onClose, onSaveDisplayName, onSaveInputLimits, onSavePreview }: { item: GenerationModelOption; feature: FeatureId; backgroundMode?: AiBackgroundMode; onClose: () => void; onSaveDisplayName: (model: string, provider: string, displayName: string) => Promise<void>; onSaveInputLimits: (model: string, provider: string, limits: ModelUploadConstraints) => Promise<void>; onSavePreview: (model: string, provider: string, preview: { previewUrl: string | null; previewStorageKey: string | null; previewType: ModelPreviewType | null }, backgroundMode?: AiBackgroundMode) => Promise<void> }) {
   const capabilities = item.capabilities;
   const isVideoModel = item.kind === "video" || capabilities.kind === "video";
   const supportedOutputValues = isVideoModel ? capabilities.supportedResolutions ?? [] : capabilities.supportedSizes;
@@ -120,6 +123,13 @@ function ModelDetailsDialog({ item, onClose, onSaveDisplayName, onSaveInputLimit
   const [displayNameDraft, setDisplayNameDraft] = useState(item.displayName);
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   const [displayNameMessage, setDisplayNameMessage] = useState("");
+  const [previewUrlDraft, setPreviewUrlDraft] = useState(item.previewUrl ?? "");
+  const [previewStorageKeyDraft, setPreviewStorageKeyDraft] = useState(item.previewStorageKey ?? "");
+  const [previewTypeDraft, setPreviewTypeDraft] = useState<ModelPreviewType>(item.previewType === "video" ? "video" : "image");
+  const [pendingPreviewKeys, setPendingPreviewKeys] = useState<string[]>([]);
+  const [uploadingPreview, setUploadingPreview] = useState(false);
+  const [savingPreview, setSavingPreview] = useState(false);
+  const [previewMessage, setPreviewMessage] = useState("");
 
   const saveDisplayName = async () => {
     const displayName = displayNameDraft.trim();
@@ -168,11 +178,44 @@ function ModelDetailsDialog({ item, onClose, onSaveDisplayName, onSaveInputLimit
     }
   };
 
+  const uploadPreview = async (file: File) => {
+    if (file.size > 100 * 1024 * 1024) { setPreviewMessage("Preview must be 100 MB or smaller"); return; }
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"]);
+    if (!allowed.has(file.type)) { setPreviewMessage("Use JPG, PNG, WebP, MP4, WebM, or MOV"); return; }
+    try {
+      setUploadingPreview(true); setPreviewMessage("");
+      const uploaded = await uploadAdminModelPreview(file);
+      setPreviewUrlDraft(uploaded.previewUrl ?? ""); setPreviewStorageKeyDraft(uploaded.storageKey); setPreviewTypeDraft(uploaded.mediaType);
+      setPendingPreviewKeys((current) => current.includes(uploaded.storageKey) ? current : [...current, uploaded.storageKey]);
+      setPreviewMessage("Preview uploaded. Save it to apply this feature/model setting.");
+    } catch (reason) { setPreviewMessage(reason instanceof Error ? reason.message : "Unable to upload model preview"); }
+    finally { setUploadingPreview(false); }
+  };
+
+  const savePreview = async () => {
+    const previewUrl = previewUrlDraft.trim() || null;
+    const previewStorageKey = previewStorageKeyDraft.trim() || null;
+    try {
+      setSavingPreview(true); setPreviewMessage("");
+      await onSavePreview(item.model, item.provider, { previewUrl: previewStorageKey ? null : previewUrl, previewStorageKey, previewType: previewUrl || previewStorageKey ? previewTypeDraft : null }, backgroundMode);
+      const staleKeys = pendingPreviewKeys.filter((key) => key !== previewStorageKey);
+      await Promise.all(staleKeys.map((key) => deleteAdminModelPreviewUpload(key).catch(() => undefined)));
+      setPendingPreviewKeys(previewStorageKey ? [previewStorageKey] : []); setPreviewMessage("Model preview saved.");
+    } catch (reason) { setPreviewMessage(reason instanceof Error ? reason.message : "Unable to save model preview"); }
+    finally { setSavingPreview(false); }
+  };
+
+  const closeDialog = () => {
+    const staleKeys = pendingPreviewKeys.filter((key) => key !== item.previewStorageKey);
+    if (staleKeys.length) void Promise.all(staleKeys.map((key) => deleteAdminModelPreviewUpload(key).catch(() => undefined)));
+    onClose();
+  };
+
   return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#201d1b]/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="model-details-title">
     <div className="flex max-h-[min(820px,calc(100vh-32px))] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]">
       <header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4 sm:px-7 sm:py-5">
         <div className="flex min-w-0 items-center gap-3"><ModelInitials name={item.displayName} /><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Model details</p><h2 id="model-details-title" className="mt-1 truncate text-xl font-bold tracking-tight">{item.displayName}</h2><p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">{item.provider} · {item.model}</p></div></div>
-        <button type="button" onClick={onClose} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground" aria-label="Close model details"><X size={19} /></button>
+        <button type="button" onClick={closeDialog} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground" aria-label="Close model details"><X size={19} /></button>
       </header>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
@@ -187,6 +230,8 @@ function ModelDetailsDialog({ item, onClose, onSaveDisplayName, onSaveInputLimit
 
         {capabilities.description ? <section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Description</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{capabilities.description}</p></section> : null}
 
+        <section className="rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-bold">Model preview</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">กำหนด preview แยกตาม {formatFeature(feature)} + model นี้ เมื่อผู้ใช้เลือก model จะเห็นใน Current preview</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">รองรับทั้งภาพและวิดีโอ อัปโหลดแล้วต้องกด Save preview เพื่อเผยแพร่</p></div><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold text-primary">Admin</span></div><div className="mt-4 grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]"><div className="flex min-h-32 items-center justify-center overflow-hidden rounded-xl border border-border bg-[#201d1b]">{previewUrlDraft ? previewTypeDraft === "video" ? <video src={previewUrlDraft} muted autoPlay loop playsInline className="h-full max-h-40 w-full object-contain" /> : <img src={previewUrlDraft} alt={`${item.displayName} preview`} className="h-full max-h-40 w-full object-contain" /> : <span className="px-4 text-center text-[11px] text-white/60">No preview configured</span>}</div><div className="space-y-3"><label className="block text-[11px] font-semibold text-muted-foreground">Preview media URL<input type="url" value={previewUrlDraft} onChange={(event) => { setPreviewUrlDraft(event.target.value); setPreviewStorageKeyDraft(""); }} placeholder="https://.../preview.png or preview.mp4" className="mt-1.5 h-9 w-full rounded-lg border border-border bg-white px-2.5 text-xs text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><div className="flex flex-wrap items-center gap-2"><label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-primary/50 bg-white px-3 text-[11px] font-bold text-primary hover:bg-[#fff0e9]"><CloudDownload size={14} /> {uploadingPreview ? "Uploading..." : "Upload preview"}<input type="file" className="hidden" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" disabled={uploadingPreview} onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPreview(file); event.currentTarget.value = ""; }} /></label><select value={previewTypeDraft} onChange={(event) => setPreviewTypeDraft(event.target.value as ModelPreviewType)} className="h-9 rounded-lg border border-border bg-white px-2.5 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="Preview media type"><option value="image">Image preview</option><option value="video">Video preview</option></select><Button size="sm" onClick={() => void savePreview()} disabled={savingPreview || uploadingPreview}>{savingPreview ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} {savingPreview ? "Saving..." : "Save preview"}</Button><Button variant="ghost" size="sm" onClick={() => { setPreviewUrlDraft(""); setPreviewStorageKeyDraft(""); setPreviewMessage("Preview will be cleared after Save preview."); }}>Clear</Button></div>{previewMessage ? <p className={`text-[11px] font-semibold ${previewMessage.includes("saved") || previewMessage.includes("uploaded") ? "text-[#347454]" : "text-[#9f3b3b]"}`} role="status">{previewMessage}</p> : null}</div></div></section>
+
         <section className="rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-bold">Upload limits</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">กำหนด limit ของไฟล์ input สำหรับ model นี้โดยตรง เว้นว่างเพื่อใช้ค่าเริ่มต้นของระบบ</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">Sync จะดึงค่าที่ provider ประกาศใน schema เช่น จำนวนรูปสูงสุด ส่วนขนาดไฟล์และพิกเซลต้องกำหนดเองเมื่อ provider ไม่ได้ส่งมา</p></div><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold text-primary">Admin</span></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="text-[11px] font-semibold text-muted-foreground">Max file size (MB)<input type="number" min="0.1" step="0.1" value={limitDraft.maxFileSizeMb} onChange={(event) => setLimitDraft((current) => ({ ...current, maxFileSizeMb: event.target.value }))} placeholder="System default" className="mt-1.5 h-9 w-full rounded-lg border border-border bg-white px-2.5 text-xs font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><label className="text-[11px] font-semibold text-muted-foreground">Max width (px)<input type="number" min="1" step="1" value={limitDraft.maxWidth} onChange={(event) => setLimitDraft((current) => ({ ...current, maxWidth: event.target.value }))} placeholder="Not published" className="mt-1.5 h-9 w-full rounded-lg border border-border bg-white px-2.5 text-xs font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><label className="text-[11px] font-semibold text-muted-foreground">Max height (px)<input type="number" min="1" step="1" value={limitDraft.maxHeight} onChange={(event) => setLimitDraft((current) => ({ ...current, maxHeight: event.target.value }))} placeholder="Not published" className="mt-1.5 h-9 w-full rounded-lg border border-border bg-white px-2.5 text-xs font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label><label className="text-[11px] font-semibold text-muted-foreground">Max input images<input type="number" min="1" step="1" value={limitDraft.maxImages} onChange={(event) => setLimitDraft((current) => ({ ...current, maxImages: event.target.value }))} placeholder="Schema default" className="mt-1.5 h-9 w-full rounded-lg border border-border bg-white px-2.5 text-xs font-semibold text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label></div><div className="mt-3 flex flex-wrap items-center gap-3"><Button size="sm" onClick={() => void saveLimits()} disabled={savingLimits}>{savingLimits ? <LoaderCircle size={14} className="animate-spin" /> : <Check size={14} />} {savingLimits ? "Saving..." : "Save upload limits"}</Button>{limitsMessage ? <p className="text-[11px] font-semibold text-[#347454]" role="status">{limitsMessage}</p> : null}</div></section>
 
         <section className="rounded-2xl border border-border bg-white p-4"><div className="flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold">{isVideoModel ? "Supported resolutions" : "Supported sizes"}</h3><p className="mt-1 text-[11px] text-muted-foreground">The values accepted by this model</p></div><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold text-primary">{supportedOutputValues.length}</span></div>{supportedOutputValues.length ? <div className="mt-3 flex flex-wrap gap-2">{supportedOutputValues.map((value) => <span key={value} className="rounded-lg bg-surface-muted px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground">{value}</span>)}</div> : <p className="mt-3 text-xs text-muted-foreground">This model does not publish a fixed preset list. Use its input schema controls.</p>}</section>
@@ -196,7 +241,7 @@ function ModelDetailsDialog({ item, onClose, onSaveDisplayName, onSaveInputLimit
         <section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Backend behavior</h3><div className="mt-3 grid gap-2 text-xs sm:grid-cols-2"><p className="rounded-lg bg-[#fcfaf8] p-3"><span className="text-muted-foreground">Quality parameter: </span><strong>{capabilities.qualityParameter ?? "none; appended to prompt"}</strong></p><p className="rounded-lg bg-[#fcfaf8] p-3"><span className="text-muted-foreground">Negative prompt: </span><strong>{capabilities.negativePromptParameter ?? "none; fallback handling"}</strong></p><p className="rounded-lg bg-[#fcfaf8] p-3"><span className="text-muted-foreground">Provider type: </span><strong>{capabilities.providerType ?? "—"}</strong></p><p className="rounded-lg bg-[#fcfaf8] p-3"><span className="text-muted-foreground">Base price: </span><strong>{displaySchemaValue(capabilities.basePrice)}</strong></p></div></section>
       </div>
 
-      <footer className="flex justify-end border-t border-border bg-white px-5 py-4 sm:px-7"><Button variant="outline" size="sm" onClick={onClose}>Close</Button></footer>
+      <footer className="flex justify-end border-t border-border bg-white px-5 py-4 sm:px-7"><Button variant="outline" size="sm" onClick={closeDialog}>Close</Button></footer>
     </div>
   </div>;
 }
@@ -946,6 +991,26 @@ function AdminModelRoutesContent() {
     }
   };
 
+  const saveModelPreview = async (model: string, provider: string, preview: { previewUrl: string | null; previewStorageKey: string | null; previewType: ModelPreviewType | null }, previewBackgroundMode?: AiBackgroundMode) => {
+    setBusy(true);
+    setError("");
+    try {
+      const overview = await updateAdminModelPreview(model, provider, feature, feature === "background-removal" ? previewBackgroundMode ?? backgroundMode : undefined, preview);
+      setCatalog(overview.catalog);
+      setCatalogCount(overview.catalog.length);
+      setRouteOverview(overview.routes);
+      const next = overview.routes[routeKey] ?? overview.routes[feature] ?? [];
+      setModels(next.filter((item) => item.enabled));
+      const updated = next.find((item) => item.model === model && item.provider === provider);
+      if (updated) setDetailsModel(updated);
+      setMessage(`${updated?.displayName ?? model} preview saved.`);
+    } catch (reason) {
+      throw reason instanceof Error ? reason : new Error("Unable to save model preview");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen w-full min-w-0 bg-background">
@@ -979,7 +1044,7 @@ function AdminModelRoutesContent() {
 
       {feature !== "audio" ? <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div> : null}
       {assignmentOpen ? <MultiTargetModelAssignmentDialog feature={assignmentFeature} catalog={assignmentFeature === "background-removal" ? assignmentCatalog : [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()]} assignments={assignmentDrafts} backgroundMode={assignmentBackgroundMode} onFeatureChange={setAssignmentFeature} onBackgroundModeChange={changeAssignmentBackgroundMode} onAdd={addAssignment} onRemove={removeAssignment} onSetDefault={setAssignmentDefault} onClose={() => setAssignmentOpen(false)} onSave={saveAssignment} saving={assignmentSaving} /> : null}
-      {detailsModel ? <ModelDetailsDialog item={detailsModel} onClose={() => setDetailsModel(null)} onSaveDisplayName={saveModelDisplayName} onSaveInputLimits={saveModelInputLimits} /> : null}
+      {detailsModel ? <ModelDetailsDialog key={`${feature}:${backgroundMode}:${detailsModel.model}:${detailsModel.provider}`} item={detailsModel} feature={feature} backgroundMode={feature === "background-removal" ? backgroundMode : undefined} onClose={() => setDetailsModel(null)} onSaveDisplayName={saveModelDisplayName} onSaveInputLimits={saveModelInputLimits} onSavePreview={saveModelPreview} /> : null}
             </div>
           </main>
         </div>
