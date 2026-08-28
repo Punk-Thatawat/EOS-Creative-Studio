@@ -92,6 +92,7 @@ export type VideoStoryboardStatus = {
   totalScenes?: number;
   completedScenes?: number;
   failedScenes?: number;
+  totalDuration?: number | null;
   finalVideoUrl?: string;
   continuation?: {
     strategy?: string;
@@ -118,6 +119,12 @@ export type VideoStoryboardHistoryItem = {
   totalDuration?: number | null;
   finalVideoUrl: string;
   createdAt?: string;
+};
+
+export type VideoStoryboardSettings = {
+  maxScenes: number;
+  hardMaxScenes: number;
+  updatedAt?: string;
 };
 
 async function authenticatedRequest(path: string, init: RequestInit = {}) {
@@ -154,6 +161,10 @@ export async function createVideoStoryboard(input: VideoGenerationInput): Promis
     method: "POST",
     body: JSON.stringify(input),
   }) as VideoStoryboardResponse;
+}
+
+export async function getVideoStoryboardSettings(): Promise<VideoStoryboardSettings> {
+  return await authenticatedRequest("/generations/video/image-to-video/settings") as VideoStoryboardSettings;
 }
 
 export async function quoteVideoStoryboard(input: Omit<VideoGenerationInput, "idempotencyKey">): Promise<VideoCreditQuoteResponse> {

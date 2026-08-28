@@ -36,6 +36,7 @@ import {
   type ModelPreviewType,
 } from "@/lib/api/generation-models";
 import { generateAdminAudioVoicePreview, getAdminAudioSettings, testAdminElevenLabsConnection, testAdminWaveSpeedConnection, updateAdminAudioSettings, type AdminAudioBackgroundMusicPreset, type AdminAudioFeature, type AdminAudioProvider, type AdminAudioSettings, type AdminAudioVoiceProfile, type AdminAudioVoiceSettings } from "@/lib/api/audio";
+import { getAdminVideoStoryboardSettings, updateAdminVideoStoryboardSettings, type AdminVideoStoryboardSettings } from "@/lib/api/video-settings";
 import { useSearchParams } from "next/navigation";
 
 const imageFunctions = [
@@ -510,6 +511,70 @@ function AudioSettingsCard() {
       </div>
       <div className="mt-5 flex flex-col justify-between gap-3 border-t border-border pt-4 sm:flex-row sm:items-center"><p className="max-w-2xl text-[11px] leading-5 text-muted-foreground">API key ตั้งใน backend secret เท่านั้น เพื่อไม่ให้หลุดไปยัง browser — หน้านี้จัดการเฉพาะ model และ voice mapping</p><Button size="sm" onClick={() => void save()} disabled={saving || !isDirty || !draft.modelId.trim()}>{saving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {saving ? "Saving..." : "Save audio settings"}</Button></div>
     </>}
+  </section>;
+}
+
+function VideoStoryboardSettingsPanel() {
+  const [settings, setSettings] = useState<AdminVideoStoryboardSettings | null>(null);
+  const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAdminVideoStoryboardSettings().then((next) => {
+      if (cancelled) return;
+      setSettings(next);
+      setDraft(String(next.maxScenes));
+    }).catch((reason) => {
+      if (!cancelled) setError(reason instanceof Error ? reason.message : "Unable to load video settings");
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const save = async () => {
+    const maxScenes = Number(draft);
+    const hardMax = settings?.hardMaxScenes ?? 100;
+    if (!Number.isInteger(maxScenes) || maxScenes < 1 || maxScenes > hardMax) {
+      setError(`Maximum scenes must be an integer from 1 to ${hardMax}.`);
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    setError("");
+    try {
+      const next = await updateAdminVideoStoryboardSettings(maxScenes);
+      setSettings(next);
+      setDraft(String(next.maxScenes));
+      setMessage("Video storyboard settings saved.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to save video settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isDirty = Boolean(settings && Number(draft) !== settings.maxScenes);
+
+  return <section aria-labelledby="video-storyboard-settings-heading" className="mb-7 rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Video generation settings</p>
+        <h2 id="video-storyboard-settings-heading" className="mt-1 text-xl font-bold tracking-tight">Storyboard scene limit</h2>
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">กำหนดจำนวน Scene สูงสุดที่ผู้ใช้เพิ่มได้ใน Image to Video ทุก mode ค่าใหม่นี้มีผลกับหน้า Create และ API สำหรับงานใหม่</p>
+      </div>
+      <span className="rounded-full bg-[#fff0e9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">Admin configurable</span>
+    </div>
+    {error ? <div className="mt-4 rounded-xl border border-[#efc2c2] bg-[#fff6f6] p-3 text-xs text-[#9f3b3b]" role="alert">{error}</div> : null}
+    {message ? <div className="mt-4 rounded-xl border border-[#bfe1cc] bg-[#f3fbf5] p-3 text-xs font-semibold text-[#347454]" role="status">{message}</div> : null}
+    {loading || !settings ? <div className="mt-5 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">Loading video settings...</div> : <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <label className="block w-full max-w-xs"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Maximum scenes</span><input type="number" min={1} max={settings.hardMaxScenes} step={1} value={draft} onChange={(event) => setDraft(event.target.value)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 font-mono text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="Maximum storyboard scenes" /><span className="mt-1 block text-[10px] text-muted-foreground">Allowed range: 1–{settings.hardMaxScenes}. Default: 12.</span></label>
+      <div className="flex flex-col items-start gap-2 sm:items-end"><Button size="sm" onClick={() => void save()} disabled={saving || !isDirty}>{saving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {saving ? "Saving..." : "Save scene limit"}</Button><span className="text-[10px] text-muted-foreground">Current limit: {settings.maxScenes} scenes</span></div>
+    </div>}
   </section>;
 }
 
@@ -1031,6 +1096,7 @@ function AdminModelRoutesContent() {
          {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
 
         {feature === "audio" ? <AudioProviderSettingsPanel /> : null}
+        {feature === "image-to-video" ? <VideoStoryboardSettingsPanel /> : null}
 
         {feature === "audio" ? null : <div className="grid gap-6 lg:grid-cols-1 lg:items-start">
           <section aria-labelledby="route-heading" className="min-w-0">

@@ -31,6 +31,7 @@ import { uploadImageAsset } from "@/lib/api/storage";
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
 import {
   createVideoStoryboard,
+  getVideoStoryboardSettings,
   getVideoStoryboardStatus,
   listVideoStoryboardHistory,
   quoteVideoStoryboard,
@@ -96,7 +97,7 @@ const generationModeOptions = [
   {
     value: "single-image",
     label: "Single Storyboard Image",
-    description: "Use the full uploaded storyboard as one reference",
+    description: "Split the uploaded sheet into scenes automatically",
   },
   {
     value: "multi-scene",
@@ -118,7 +119,8 @@ const sceneSourceOptions = [
   { value: "manual", label: "New image" },
   { value: "previous_last_frame", label: "Previous frame" },
 ] as const;
-const MAX_STORYBOARD_SCENES = 12;
+const DEFAULT_MAX_STORYBOARD_SCENES = 12;
+const HARD_MAX_STORYBOARD_SCENES = 100;
 
 function SectionTitle({
   number,
@@ -149,6 +151,286 @@ type StoryboardScene = {
   startFrameSource: StartFrameSource;
   modelParams: Record<string, unknown>;
 };
+
+type StoryboardSlice = {
+  id: string;
+  image: string;
+  file: File;
+};
+
+type AxisGap = {
+  start: number;
+  end: number;
+};
+
+function findStoryboardContentBounds(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+): { x: number; y: number; width: number; height: number } {
+  const columnContent = Array.from({ length: width }, () => 0);
+  const rowContent = Array.from({ length: height }, () => 0);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 4;
+      const alpha = pixels[offset + 3];
+      const isWhite = pixels[offset] > 245 && pixels[offset + 1] > 245 && pixels[offset + 2] > 245;
+      if (alpha >= 16 && !isWhite) {
+        columnContent[x] += 1;
+        rowContent[y] += 1;
+      }
+    }
+  }
+
+  const minimumColumnContent = Math.max(2, Math.round(height * 0.02));
+  const minimumRowContent = Math.max(2, Math.round(width * 0.02));
+  const firstX = columnContent.findIndex((count) => count >= minimumColumnContent);
+  const firstY = rowContent.findIndex((count) => count >= minimumRowContent);
+  const lastX = columnContent.findLastIndex((count) => count >= minimumColumnContent);
+  const lastY = rowContent.findLastIndex((count) => count >= minimumRowContent);
+  if (firstX < 0 || firstY < 0 || lastX <= firstX || lastY <= firstY) {
+    return { x: 0, y: 0, width, height };
+  }
+
+  return {
+    x: firstX,
+    y: firstY,
+    width: lastX - firstX + 1,
+    height: lastY - firstY + 1,
+  };
+}
+
+function findStoryboardGaps(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  axis: "x" | "y",
+): AxisGap[] {
+  const length = axis === "x" ? width : height;
+  const otherLength = axis === "x" ? height : width;
+  const sampleStep = Math.max(1, Math.floor(otherLength / 64));
+  const scores = Array.from({ length }, (_, coordinate) => {
+    let lightPixels = 0;
+    let samples = 0;
+    for (let other = 0; other < otherLength; other += sampleStep) {
+      const x = axis === "x" ? coordinate : other;
+      const y = axis === "x" ? other : coordinate;
+      const offset = (y * width + x) * 4;
+      const alpha = pixels[offset + 3];
+      const isEmpty = alpha < 16;
+      const isWhite = pixels[offset] > 245 && pixels[offset + 1] > 245 && pixels[offset + 2] > 245;
+      if (isEmpty || isWhite) lightPixels += 1;
+      samples += 1;
+    }
+    return samples > 0 ? lightPixels / samples : 0;
+  });
+
+  const minimumGapWidth = Math.max(3, Math.round(length * 0.006));
+  const gaps: AxisGap[] = [];
+  let start: number | null = null;
+  for (let coordinate = 0; coordinate <= scores.length; coordinate += 1) {
+    // Storyboard gutters are often not pure white because anti-aliasing or
+    // artwork shadows bleed into the separator. Keep the threshold tolerant,
+    // while requiring a contiguous gap across the axis.
+    const isGap = coordinate < scores.length && scores[coordinate] >= 0.7;
+    if (isGap && start === null) {
+      start = coordinate;
+      continue;
+    }
+    if (start === null) continue;
+    const end = coordinate;
+    if (end - start >= minimumGapWidth) gaps.push({ start, end });
+    start = null;
+  }
+
+  const edgePadding = Math.max(4, Math.round(length * 0.03));
+  return gaps.filter((gap) => gap.start > edgePadding && gap.end < length - edgePadding);
+}
+
+function findStoryboardGridGaps(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  axis: "x" | "y",
+  parts: number,
+): AxisGap[] {
+  const length = axis === "x" ? width : height;
+  const otherLength = axis === "x" ? height : width;
+  const sampleStep = Math.max(1, Math.floor(otherLength / 64));
+  const scores = Array.from({ length }, (_, coordinate) => {
+    let lightPixels = 0;
+    let samples = 0;
+    for (let other = 0; other < otherLength; other += sampleStep) {
+      const x = axis === "x" ? coordinate : other;
+      const y = axis === "x" ? other : coordinate;
+      const offset = (y * width + x) * 4;
+      const alpha = pixels[offset + 3];
+      const isWhite = pixels[offset] > 245 && pixels[offset + 1] > 245 && pixels[offset + 2] > 245;
+      if (alpha < 16 || isWhite) lightPixels += 1;
+      samples += 1;
+    }
+    return samples > 0 ? lightPixels / samples : 0;
+  });
+
+  const minimumGapWidth = Math.max(3, Math.round(length * 0.004));
+  const searchRadius = Math.max(12, Math.round(length * 0.12));
+  const gaps: AxisGap[] = [];
+  for (let part = 1; part < parts; part += 1) {
+    const expected = Math.round((length * part) / parts);
+    const searchStart = Math.max(1, expected - searchRadius);
+    const searchEnd = Math.min(length - 1, expected + searchRadius);
+    let currentStart: number | null = null;
+    let bestGap: AxisGap | null = null;
+    for (let coordinate = searchStart; coordinate <= searchEnd + 1; coordinate += 1) {
+      const isGap = coordinate <= searchEnd && scores[coordinate] >= 0.7;
+      if (isGap && currentStart === null) {
+        currentStart = coordinate;
+        continue;
+      }
+      if (currentStart === null) continue;
+      const candidate = { start: currentStart, end: coordinate };
+      if (candidate.end - candidate.start >= minimumGapWidth && (!bestGap || candidate.end - candidate.start > bestGap.end - bestGap.start)) {
+        bestGap = candidate;
+      }
+      currentStart = null;
+    }
+    if (bestGap) gaps.push(bestGap);
+  }
+  return gaps;
+}
+
+function axisCells(length: number, gaps: AxisGap[]): Array<{ start: number; end: number }> {
+  if (gaps.length === 0) return [{ start: 0, end: length }];
+  const cells: Array<{ start: number; end: number }> = [];
+  let start = 0;
+  for (const gap of gaps) {
+    if (gap.start > start) cells.push({ start, end: gap.start });
+    start = gap.end;
+  }
+  if (start < length) cells.push({ start, end: length });
+  return cells;
+}
+
+function evenlyDividedCells(length: number, count: number): Array<{ start: number; end: number }> {
+  return Array.from({ length: count }, (_, index) => ({
+    start: Math.round((length * index) / count),
+    end: Math.round((length * (index + 1)) / count),
+  }));
+}
+
+async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_SCENES): Promise<{
+  slices: Array<{ file: File; previewUrl: string }>;
+  rows: number;
+  columns: number;
+}> {
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new window.Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Unable to read storyboard image"));
+      element.src = sourceUrl;
+    });
+    const sourceCanvas = document.createElement("canvas");
+    sourceCanvas.width = image.naturalWidth;
+    sourceCanvas.height = image.naturalHeight;
+    const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    if (!sourceContext) throw new Error("Storyboard splitting is not supported in this browser");
+    sourceContext.drawImage(image, 0, 0);
+    const sourcePixels = sourceContext.getImageData(0, 0, sourceCanvas.width, sourceCanvas.height).data;
+    const contentBounds = findStoryboardContentBounds(sourcePixels, sourceCanvas.width, sourceCanvas.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = contentBounds.width;
+    canvas.height = contentBounds.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Storyboard splitting is not supported in this browser");
+    context.drawImage(
+      image,
+      contentBounds.x,
+      contentBounds.y,
+      contentBounds.width,
+      contentBounds.height,
+      0,
+      0,
+      contentBounds.width,
+      contentBounds.height,
+    );
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let detectedColumns = axisCells(canvas.width, findStoryboardGaps(pixels, canvas.width, canvas.height, "x"));
+    let detectedRows = axisCells(canvas.height, findStoryboardGaps(pixels, canvas.width, canvas.height, "y"));
+    let columns = detectedColumns.length;
+    let rows = detectedRows.length;
+    let cellCount = columns * rows;
+    // Most storyboard contact sheets are landscape 3x3 sheets. Some WebP
+    // encoders leave a faint or uneven second gutter, so use an even 3x3
+    // split when the detected grid is not usable instead of sending the full
+    // contact sheet as a single scene.
+    if ((cellCount < 2 || cellCount > maxScenes) && canvas.width / canvas.height >= 1.4 && canvas.width / canvas.height <= 2.2) {
+      detectedColumns = evenlyDividedCells(canvas.width, 3);
+      detectedRows = evenlyDividedCells(canvas.height, 3);
+      columns = 3;
+      rows = 3;
+      cellCount = 9;
+    }
+    // A detected 3x3 contact sheet is more reliable when split on the grid
+    // itself. The artwork in a panel can contain bright areas that make a
+    // gutter look wider or narrower, which can otherwise leak pixels from a
+    // neighbouring row/column into the scene crop.
+    if (columns === 3 && rows === 3 && canvas.width / canvas.height >= 1.4 && canvas.width / canvas.height <= 2.2) {
+      const gridGapsX = findStoryboardGridGaps(pixels, canvas.width, canvas.height, "x", 3);
+      const gridGapsY = findStoryboardGridGaps(pixels, canvas.width, canvas.height, "y", 3);
+      detectedColumns = gridGapsX.length === 2 ? axisCells(canvas.width, gridGapsX) : evenlyDividedCells(canvas.width, 3);
+      detectedRows = gridGapsY.length === 2 ? axisCells(canvas.height, gridGapsY) : evenlyDividedCells(canvas.height, 3);
+    }
+    if (cellCount < 2 || cellCount > maxScenes) {
+      throw new Error(`ไม่พบตาราง storyboard ที่รองรับ (ระบบรองรับสูงสุด ${maxScenes} ฉาก)`);
+    }
+
+    const slices: Array<{ file: File; previewUrl: string }> = [];
+    for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+      for (let columnIndex = 0; columnIndex < columns; columnIndex += 1) {
+        const rawCell = document.createElement("canvas");
+        const x = detectedColumns[columnIndex];
+        const y = detectedRows[rowIndex];
+        const cellWidth = Math.max(1, x.end - x.start);
+        const cellHeight = Math.max(1, y.end - y.start);
+        rawCell.width = cellWidth;
+        rawCell.height = cellHeight;
+        const rawCellContext = rawCell.getContext("2d", { willReadFrequently: true });
+        if (!rawCellContext) throw new Error("Unable to prepare storyboard scene");
+        rawCellContext.drawImage(canvas, x.start, y.start, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight);
+        const cellPixels = rawCellContext.getImageData(0, 0, cellWidth, cellHeight).data;
+        const cellBounds = findStoryboardContentBounds(cellPixels, cellWidth, cellHeight);
+        const cell = document.createElement("canvas");
+        cell.width = cellBounds.width;
+        cell.height = cellBounds.height;
+        const cellContext = cell.getContext("2d");
+        if (!cellContext) throw new Error("Unable to prepare storyboard scene");
+        cellContext.drawImage(
+          rawCell,
+          cellBounds.x,
+          cellBounds.y,
+          cellBounds.width,
+          cellBounds.height,
+          0,
+          0,
+          cellBounds.width,
+          cellBounds.height,
+        );
+        const blob = await new Promise<Blob | null>((resolve) => {
+          cell.toBlob(resolve, file.type === "image/png" ? "image/png" : "image/jpeg", 0.95);
+        });
+        if (!blob) throw new Error("Unable to prepare storyboard scene");
+        const extension = blob.type === "image/png" ? "png" : "jpg";
+        const sceneFile = new File([blob], `storyboard-scene-${slices.length + 1}.${extension}`, { type: blob.type });
+        slices.push({ file: sceneFile, previewUrl: URL.createObjectURL(sceneFile) });
+      }
+    }
+    return { slices, rows, columns };
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
 
 type SchemaProperty = {
   type?: string;
@@ -308,6 +590,11 @@ export function VideoGenerationPage() {
   const searchParams = useSearchParams();
   const [activeVideoTab, setActiveVideoTab] = useState<"image-to-video" | "text-to-video" | "people-video" | "motion-transfer" | "lipsync" | "extend-video">("image-to-video");
   const [sourceImage, setSourceImage] = useState<string | null>(null);
+  const [storyboardSlices, setStoryboardSlices] = useState<StoryboardSlice[]>([]);
+  const [storyboardSlicesSourceFile, setStoryboardSlicesSourceFile] = useState<File | null>(null);
+  const [storyboardSheetFile, setStoryboardSheetFile] = useState<File | null>(null);
+  const [storyboardGridLabel, setStoryboardGridLabel] = useState<string | null>(null);
+  const [storyboardSplitting, setStoryboardSplitting] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [duration, setDuration] = useState(5);
@@ -324,6 +611,7 @@ export function VideoGenerationPage() {
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [maxStoryboardScenes, setMaxStoryboardScenes] = useState(DEFAULT_MAX_STORYBOARD_SCENES);
   const [modelParams, setModelParams] = useState<Record<string, unknown>>({});
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -371,8 +659,6 @@ export function VideoGenerationPage() {
   const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [sceneImageFile, setSceneImageFile] = useState<File | null>(null);
-  const [sceneEndImage, setSceneEndImage] = useState<string | null>(null);
-  const [sceneEndImageFile, setSceneEndImageFile] = useState<File | null>(null);
   const [sceneStartFrameSource, setSceneStartFrameSource] =
     useState<StartFrameSource>("manual");
   const [scenePrompt, setScenePrompt] = useState("");
@@ -394,13 +680,13 @@ export function VideoGenerationPage() {
   const frameInputRef = useRef<HTMLInputElement | null>(null);
   const sourceInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
-  const sourceLastImageInputRef = useRef<HTMLInputElement | null>(null);
   const sceneInputRef = useRef<HTMLInputElement | null>(null);
-  const sceneEndInputRef = useRef<HTMLInputElement | null>(null);
   const sceneRowRef = useRef<HTMLDivElement | null>(null);
   const sceneSourceButtonRefs = useRef<
     Record<number, HTMLButtonElement | null>
   >({});
+  const storyboardSplitRequestRef = useRef(0);
+  const storyboardPreparedFileRef = useRef<File | null>(null);
   const selectedModelOption = models.find((model) => model.model === selectedModel);
   const capabilities = selectedModelOption?.capabilities;
   const properties = schemaProperties(selectedModelOption);
@@ -415,7 +701,6 @@ export function VideoGenerationPage() {
     lastImageParameterAliases,
   );
   const supportsReferenceImages = Boolean(referenceImagesParameter);
-  const supportsLastImage = Boolean(lastImageParameter);
   const requiredProperties = new Set(requiredSchemaParameters(selectedModelOption));
   const durationProperty = findSchemaProperty(properties, ["duration", "duration_seconds", "durationSeconds"]);
   const resolutionProperty = findSchemaProperty(properties, ["resolution"]);
@@ -460,6 +745,23 @@ export function VideoGenerationPage() {
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [loadVideoHistory]);
+  useEffect(() => {
+    let active = true;
+    void getVideoStoryboardSettings()
+      .then((settings) => {
+        if (!active || !Number.isInteger(settings.maxScenes) || settings.maxScenes < 1) return;
+        const hardMax = Number.isInteger(settings.hardMaxScenes) && settings.hardMaxScenes > 0
+          ? settings.hardMaxScenes
+          : HARD_MAX_STORYBOARD_SCENES;
+        setMaxStoryboardScenes(Math.min(settings.maxScenes, hardMax));
+      })
+      .catch(() => {
+        // Keep the backend default while an older deployment is still migrating.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     let active = true;
     Promise.all([
@@ -528,6 +830,72 @@ export function VideoGenerationPage() {
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [models, selectedModel]);
+  useEffect(() => {
+    return () => {
+      storyboardSlices.forEach((slice) => URL.revokeObjectURL(slice.image));
+    };
+  }, [storyboardSlices]);
+  const prepareStoryboardSlices = useCallback(async (file: File) => {
+    const requestId = storyboardSplitRequestRef.current + 1;
+    storyboardSplitRequestRef.current = requestId;
+    storyboardPreparedFileRef.current = file;
+    setStoryboardSheetFile(file);
+    setStoryboardSplitting(true);
+    setStoryboardSlicesSourceFile(null);
+    setStoryboardGridLabel(null);
+    setStoryboardSlices([]);
+    try {
+      const result = await splitStoryboardSheet(file, maxStoryboardScenes);
+      if (storyboardSplitRequestRef.current !== requestId) {
+        result.slices.forEach((slice) => URL.revokeObjectURL(slice.previewUrl));
+        return false;
+      }
+      const slices = result.slices.map((slice, index) => ({
+        id: `storyboard-slice-${index + 1}`,
+        image: slice.previewUrl,
+        file: slice.file,
+      }));
+      setStoryboardSlices(slices);
+      setStoryboardSlicesSourceFile(file);
+      setStoryboardGridLabel(`${result.rows} × ${result.columns} · ${result.slices.length} scenes`);
+      setStoryboardScenes((current) => {
+        const firstScene = current[0];
+        const sharedPrompt = prompt.trim() || firstScene?.prompt || "";
+        const sharedDuration = firstScene?.duration || duration;
+        const sharedModelParams = firstScene?.modelParams ?? modelParams;
+        return slices.map((slice) => ({
+          id: slice.id,
+          image: slice.image,
+          imageFile: slice.file,
+          endImage: null,
+          endImageFile: null,
+          prompt: sharedPrompt,
+          duration: sharedDuration,
+          startFrameSource: "manual" as const,
+          modelParams: sharedModelParams,
+        }));
+      });
+      return true;
+    } catch (error: unknown) {
+      if (storyboardSplitRequestRef.current === requestId) {
+        setStoryboardSlices([]);
+        setStoryboardSlicesSourceFile(null);
+        setGenerationError(error instanceof Error ? error.message : "Unable to split storyboard image");
+      }
+      return false;
+    } finally {
+      if (storyboardSplitRequestRef.current === requestId) setStoryboardSplitting(false);
+    }
+  }, [duration, maxStoryboardScenes, modelParams, prompt]);
+  useEffect(() => {
+    if (generationMode !== "single-image") {
+      storyboardSplitRequestRef.current += 1;
+      storyboardPreparedFileRef.current = null;
+      return;
+    }
+    const file = storyboardSheetFile ?? storyboardScenes[0]?.imageFile;
+    if (file && storyboardPreparedFileRef.current !== file && !storyboardSplitting) void prepareStoryboardSlices(file);
+  }, [generationMode, prepareStoryboardSlices, storyboardScenes, storyboardSheetFile, storyboardSplitting]);
   const uploadSource = async (file: File) => {
     const validationError = await validateMediaFile(file, "image", capabilities?.uploadConstraints);
     if (validationError) {
@@ -539,38 +907,55 @@ export function VideoGenerationPage() {
       if (current) URL.revokeObjectURL(current);
       return nextUrl;
     });
-    setStoryboardScenes((current) => current.map((scene, index) => (
-      index === 0 ? { ...scene, image: nextUrl, imageFile: file, startFrameSource: "manual" } : scene
-    )));
+    setStoryboardScenes((current) => generationMode === "single-image"
+      ? [{
+        ...(current[0] ?? {
+          id: "scene-1",
+          image: null,
+          imageFile: null,
+          endImage: null,
+          endImageFile: null,
+          prompt,
+          duration,
+          startFrameSource: "manual" as const,
+          modelParams,
+        }),
+        image: nextUrl,
+        imageFile: file,
+        startFrameSource: "manual" as const,
+      }]
+      : current.map((scene, index) => (
+        index === 0 ? { ...scene, image: nextUrl, imageFile: file, startFrameSource: "manual" } : scene
+      )));
+    setStoryboardSheetFile(generationMode === "single-image" ? file : null);
     setGenerationError(null);
+    if (generationMode === "single-image") void prepareStoryboardSlices(file);
   };
   const clearSource = () => {
+    storyboardSplitRequestRef.current += 1;
+    storyboardPreparedFileRef.current = null;
     if (sourceImage?.startsWith("blob:")) URL.revokeObjectURL(sourceImage);
     setSourceImage(null);
-    setStoryboardScenes((current) => current.map((scene, index) => (
-      index === 0 ? { ...scene, image: null, imageFile: null, startFrameSource: "manual" } : scene
-    )));
-  };
-  const uploadSourceLastImage = async (file: File) => {
-    const validationError = await validateMediaFile(file, "image", capabilities?.uploadConstraints);
-    if (validationError) {
-      setGenerationError(validationError);
-      return;
-    }
-    const currentImage = storyboardScenes[0]?.endImage;
-    if (currentImage?.startsWith("blob:")) URL.revokeObjectURL(currentImage);
-    const nextUrl = URL.createObjectURL(file);
-    setStoryboardScenes((current) => current.map((scene, index) => (
-      index === 0 ? { ...scene, endImage: nextUrl, endImageFile: file } : scene
-    )));
-    setGenerationError(null);
-  };
-  const clearSourceLastImage = () => {
-    const currentImage = storyboardScenes[0]?.endImage;
-    if (currentImage?.startsWith("blob:")) URL.revokeObjectURL(currentImage);
-    setStoryboardScenes((current) => current.map((scene, index) => (
-      index === 0 ? { ...scene, endImage: null, endImageFile: null } : scene
-    )));
+    setStoryboardSlices([]);
+    setStoryboardSlicesSourceFile(null);
+    setStoryboardSheetFile(null);
+    setStoryboardGridLabel(null);
+    setStoryboardSplitting(false);
+    setStoryboardScenes((current) => generationMode === "single-image"
+      ? [{ ...(current[0] ?? {
+        id: "scene-1",
+        image: null,
+        imageFile: null,
+        endImage: null,
+        endImageFile: null,
+        prompt,
+        duration,
+        startFrameSource: "manual" as const,
+        modelParams,
+      }), image: null, imageFile: null, startFrameSource: "manual" }]
+      : current.map((scene, index) => (
+        index === 0 ? { ...scene, image: null, imageFile: null, startFrameSource: "manual" } : scene
+      )));
   };
   const updateDuration = (value: number) => {
     setDuration(value);
@@ -603,21 +988,15 @@ export function VideoGenerationPage() {
     setGenerationError(null);
   };
 
-  const handleSceneImageFile = async (file: File, endImage = false) => {
+  const handleSceneImageFile = async (file: File) => {
     const validationError = await validateMediaFile(file, "image", capabilities?.uploadConstraints);
     if (validationError) {
       setSceneError(validationError);
       return;
     }
-    if (endImage) {
-      if (editingSceneIndex === null && sceneEndImage?.startsWith("blob:")) URL.revokeObjectURL(sceneEndImage);
-      setSceneEndImage(URL.createObjectURL(file));
-      setSceneEndImageFile(file);
-    } else {
-      if (editingSceneIndex === null && sceneImage?.startsWith("blob:")) URL.revokeObjectURL(sceneImage);
-      setSceneImage(URL.createObjectURL(file));
-      setSceneImageFile(file);
-    }
+    if (editingSceneIndex === null && sceneImage?.startsWith("blob:")) URL.revokeObjectURL(sceneImage);
+    setSceneImage(URL.createObjectURL(file));
+    setSceneImageFile(file);
     setSceneError(null);
   };
   const clearFrameReferences = () => {
@@ -724,6 +1103,31 @@ export function VideoGenerationPage() {
     setIsGenerationModeMenuOpen(false);
     setOpenSceneSourceMenu(null);
     setSceneSourceMenuPosition(null);
+    if (nextMode !== "single-image" && storyboardSheetFile) {
+      const originalSheet = storyboardSheetFile;
+      setStoryboardScenes((current) => [{
+        ...(current[0] ?? {
+          id: "scene-1",
+          image: null,
+          imageFile: null,
+          endImage: null,
+          endImageFile: null,
+          prompt,
+          duration,
+          startFrameSource: "manual" as const,
+          modelParams,
+        }),
+        image: sourceImage,
+        imageFile: originalSheet,
+        endImage: null,
+        endImageFile: null,
+        startFrameSource: "manual" as const,
+      }]);
+      setStoryboardSheetFile(null);
+      setStoryboardSlices([]);
+      setStoryboardSlicesSourceFile(null);
+      setStoryboardGridLabel(null);
+    }
     const nextVideoMode = nextMode === "continuous"
       ? "continuous"
       : nextMode === "flexible"
@@ -758,13 +1162,17 @@ export function VideoGenerationPage() {
     if (videoMode === "continuous") return "previous_last_frame";
     return scene.startFrameSource;
   };
-  const sourcePreviewImage = storyboardScenes[0]?.image ?? sourceImage;
+  const sourcePreviewImage = generationMode === "single-image"
+    ? sourceImage
+    : storyboardScenes[0]?.image ?? sourceImage;
   const nativeExtendModel = selectedModelOption
     ? extendModels.find((model) => modelFamily(model.model) === modelFamily(selectedModelOption.model))
     : undefined;
   const hasNativeExtend = Boolean(nativeExtendModel);
+  const hasCurrentStoryboardSlices = storyboardSlicesSourceFile !== null
+    && storyboardSlicesSourceFile === storyboardSheetFile
   const generationScenes = generationMode === "single-image"
-    ? storyboardScenes.slice(0, 1)
+    ? hasCurrentStoryboardSlices && storyboardScenes.length > 0 ? storyboardScenes : storyboardScenes.slice(0, 1)
     : storyboardScenes;
   const creditQuoteInput: Omit<VideoGenerationInput, "idempotencyKey"> | null = (() => {
     if (activeVideoTab !== "image-to-video" || !selectedModel || generationScenes.length === 0) return null;
@@ -779,7 +1187,6 @@ export function VideoGenerationPage() {
         prompt: scene.prompt.trim() || prompt.trim() || "Video generation",
       };
       if (startFrameSource === "manual" && scene.image && !scene.image.startsWith("blob:")) sceneInput.storyboardImage = scene.image;
-      if (scene.endImage && !scene.endImage.startsWith("blob:") && lastImageParameter) sceneInput[lastImageParameter] = scene.endImage;
       if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
       if (durationProperty) sceneInput.duration = scene.duration;
       if (Object.keys(scene.modelParams).length) sceneInput.modelParams = scene.modelParams;
@@ -844,7 +1251,7 @@ export function VideoGenerationPage() {
   const estimateTotalDuration = estimateDurations.reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0);
   const allScenesShareDuration = estimateDurations.every((value) => value === estimateDurations[0]);
   const estimateDescription = generationMode === "single-image"
-    ? `1 video x ${estimateDurations[0] ?? 0} sec`
+    ? `${estimateSceneCount} ${estimateSceneCount === 1 ? "scene" : "scenes"} x ${estimateDurations[0] ?? 0} sec`
     : allScenesShareDuration
     ? `${estimateSceneCount} ${estimateSceneCount === 1 ? "scene" : "scenes"} x ${estimateDurations[0] ?? 0} sec`
     : `${estimateSceneCount} scenes x ${estimateTotalDuration} sec total`;
@@ -855,10 +1262,10 @@ export function VideoGenerationPage() {
       : `${creditEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits`;
   const firstScene = storyboardScenes[0];
   const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
-  const sceneLimitReached = storyboardScenes.length >= MAX_STORYBOARD_SCENES;
+  const sceneLimitReached = storyboardScenes.length >= maxStoryboardScenes;
   const canAddScene = generationMode !== "single-image" && !sceneLimitReached && Boolean(firstScene?.image && firstSceneHasPrompt);
   const addSceneDisabledReason = sceneLimitReached
-    ? `Storyboard supports up to ${MAX_STORYBOARD_SCENES} scenes.`
+    ? `Storyboard supports up to ${maxStoryboardScenes} scenes.`
     : "Complete Scene 1 with a start image and prompt first";
   const selectedGenerationMode =
     generationModeOptions.find((option) => option.value === generationMode) ??
@@ -874,8 +1281,6 @@ export function VideoGenerationPage() {
     setSceneDuration(durationProperty ? duration : 0);
     setSceneImage(null);
     setSceneImageFile(null);
-    setSceneEndImage(null);
-    setSceneEndImageFile(null);
     setSceneStartFrameSource(
       videoMode === "continuous" ? "previous_last_frame" : "manual",
     );
@@ -892,8 +1297,6 @@ export function VideoGenerationPage() {
     setSceneDuration(scene.duration);
     setSceneImage(sceneSource === "manual" ? scene.image : null);
     setSceneImageFile(sceneSource === "manual" ? scene.imageFile : null);
-    setSceneEndImage(scene.endImage);
-    setSceneEndImageFile(scene.endImageFile);
     setSceneStartFrameSource(sceneSource);
     setSceneModelParams({
       ...modelSpecificDefaults(models.find((model) => model.model === selectedModel)),
@@ -902,7 +1305,7 @@ export function VideoGenerationPage() {
     setIsSceneModalOpen(true);
   };
   const deleteScene = (index: number) => {
-    if (index === 0) return;
+    if (generationMode === "single-image" || index === 0) return;
     const scene = storyboardScenes[index];
     if (!scene) return;
     setDeleteSceneIndex(index);
@@ -917,7 +1320,6 @@ export function VideoGenerationPage() {
       return;
     }
     if (scene.image?.startsWith("blob:")) URL.revokeObjectURL(scene.image);
-    if (scene.endImage?.startsWith("blob:")) URL.revokeObjectURL(scene.endImage);
     setStoryboardScenes((current) => current.filter((_, sceneIndex) => sceneIndex !== index));
     closeDeleteSceneDialog();
   };
@@ -933,8 +1335,6 @@ export function VideoGenerationPage() {
     if (editingSceneIndex === null && sceneImage?.startsWith("blob:")) URL.revokeObjectURL(sceneImage);
     setSceneImage(null);
     setSceneImageFile(null);
-    setSceneEndImage(null);
-    setSceneEndImageFile(null);
     setSceneStartFrameSource("manual");
     setScenePrompt("");
     setSceneModelParams({});
@@ -943,15 +1343,10 @@ export function VideoGenerationPage() {
     setIsSceneModalOpen(false);
   };
   const clearSceneModalImage = () => {
+    if (generationMode === "single-image" && editingSceneIndex !== null) return;
     if (editingSceneIndex === null && sceneImage?.startsWith("blob:")) URL.revokeObjectURL(sceneImage);
     setSceneImage(null);
     setSceneImageFile(null);
-    setSceneError(null);
-  };
-  const clearSceneEndImage = () => {
-    if (editingSceneIndex === null && sceneEndImage?.startsWith("blob:")) URL.revokeObjectURL(sceneEndImage);
-    setSceneEndImage(null);
-    setSceneEndImageFile(null);
     setSceneError(null);
   };
   const saveScene = () => {
@@ -966,12 +1361,14 @@ export function VideoGenerationPage() {
     });
     if (missingSceneParam)
       return setSceneError(`${labelFromParameterName(missingSceneParam[0])} is required for this scene.`);
+    const existingScene = editingSceneIndex === null ? undefined : storyboardScenes[editingSceneIndex];
+    const lockStartImage = generationMode === "single-image" && Boolean(existingScene);
     const nextScene: StoryboardScene = {
       id: editingSceneIndex === null ? crypto.randomUUID() : storyboardScenes[editingSceneIndex]?.id ?? crypto.randomUUID(),
-      image: sceneStartFrameSource === "manual" ? sceneImage : null,
-      imageFile: sceneStartFrameSource === "manual" ? sceneImageFile : null,
-      endImage: supportsLastImage ? sceneEndImage : null,
-      endImageFile: supportsLastImage ? sceneEndImageFile : null,
+      image: lockStartImage ? existingScene?.image ?? null : sceneStartFrameSource === "manual" ? sceneImage : null,
+      imageFile: lockStartImage ? existingScene?.imageFile ?? null : sceneStartFrameSource === "manual" ? sceneImageFile : null,
+      endImage: null,
+      endImageFile: null,
       prompt: scenePrompt.trim(),
       duration: sceneDuration,
       startFrameSource: sceneStartFrameSource,
@@ -987,8 +1384,6 @@ export function VideoGenerationPage() {
     setEditingSceneIndex(null);
     setSceneImage(null);
     setSceneImageFile(null);
-    setSceneEndImage(null);
-    setSceneEndImageFile(null);
     setSceneStartFrameSource("manual");
     setScenePrompt("");
     setSceneModelParams({});
@@ -998,6 +1393,19 @@ export function VideoGenerationPage() {
     scenePrompt.trim().length > 0 &&
     (sceneStartFrameSource === "previous_last_frame" || Boolean(sceneImage));
   const isGeneratingVideo = generationStatus === "uploading" || generationStatus === "processing";
+  const allGenerationScenesHavePrompts = generationScenes.length > 0
+    && generationScenes.every((scene) => scene.prompt.trim().length > 0);
+  const allManualScenesHaveImages = generationScenes.every((scene, index) => (
+    getSceneSource(scene, index) !== "manual" || Boolean(scene.image)
+  ));
+  const storyboardReady = generationMode !== "single-image"
+    || (!storyboardSplitting && hasCurrentStoryboardSlices);
+  const canGenerate = Boolean(selectedModel)
+    && !modelsLoading
+    && !isGeneratingVideo
+    && storyboardReady
+    && allGenerationScenesHavePrompts
+    && allManualScenesHaveImages;
   const safeVideoLibraryIndex = Math.min(videoLibraryIndex, Math.max(videoHistory.length - 1, 0));
   const galleryVideoUrl = videoHistory[safeVideoLibraryIndex]?.finalVideoUrl ?? null;
   const latestVideoUrl = finalVideoUrl ?? videoHistory[0]?.finalVideoUrl ?? null;
@@ -1031,8 +1439,16 @@ export function VideoGenerationPage() {
       setGenerationError("Select a video model first.");
       return;
     }
-    if (!prompt.trim()) {
+    if (generationMode !== "single-image" && !prompt.trim()) {
       setGenerationError("Add a prompt before generating.");
+      return;
+    }
+    if (generationMode === "single-image" && storyboardSplitting) {
+      setGenerationError("กำลังแยก storyboard เป็นฉาก กรุณารอสักครู่ก่อน Generate");
+      return;
+    }
+    if (generationMode === "single-image" && !hasCurrentStoryboardSlices) {
+      setGenerationError("กรุณารอให้ระบบสร้างฉากจาก storyboard ให้เสร็จก่อน Generate");
       return;
     }
     const missingRequiredParam = modelParameterEntries.find(([name]) => {
@@ -1072,25 +1488,13 @@ export function VideoGenerationPage() {
     setGenerationStatus("uploading");
     try {
       const uploadedImages: Array<string | undefined> = [];
-      const uploadedEndImages: Array<string | undefined> = [];
       const uploadedReferenceImages: string[] = [];
       for (let index = 0; index < generationScenes.length; index += 1) {
         const scene = generationScenes[index];
         if (sceneSources[index] === "manual") {
-          setNotice(generationMode === "single-image"
-            ? "Uploading storyboard image…"
-            : `Uploading Scene ${index + 1} of ${generationScenes.length}…`);
+          setNotice(`Uploading Scene ${index + 1} of ${generationScenes.length}…`);
           const file = await fileFromSceneImage(scene.image as string, index, scene.imageFile);
           uploadedImages[index] = await uploadImageAsset(file, {
-            purpose: "content",
-            feature: "image-to-video",
-            uploadConstraints: capabilities?.uploadConstraints,
-          });
-        }
-        if (supportsLastImage && scene.endImage) {
-          setNotice(`Uploading Scene ${index + 1} last image…`);
-          const file = await fileFromSceneImage(scene.endImage, index, scene.endImageFile, "last-image");
-          uploadedEndImages[index] = await uploadImageAsset(file, {
             purpose: "content",
             feature: "image-to-video",
             uploadConstraints: capabilities?.uploadConstraints,
@@ -1115,7 +1519,6 @@ export function VideoGenerationPage() {
           prompt: scene.prompt.trim(),
         };
         if (sceneSources[index] === "manual" && uploadedImages[index]) sceneInput.storyboardImage = uploadedImages[index];
-        if (uploadedEndImages[index] && lastImageParameter) sceneInput[lastImageParameter] = uploadedEndImages[index];
         if (uploadedReferenceImages.length > 0) sceneInput.referenceImages = uploadedReferenceImages;
         if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
         if (durationProperty) sceneInput.duration = scene.duration;
@@ -1184,7 +1587,29 @@ export function VideoGenerationPage() {
       setGenerationStatus("completed");
       setNotice("Video ready");
       requestCreditBalanceSync(acceptedCreditCost);
-      void loadVideoHistory(status.workspaceId ?? workspaceId);
+      const completedWorkspaceId = status.workspaceId ?? workspaceId ?? undefined;
+      const completedHistoryItem: VideoStoryboardHistoryItem = {
+        storyboardId: created.storyboardId,
+        ...(completedWorkspaceId ? { workspaceId: completedWorkspaceId } : {}),
+        provider: selectedModelOption?.provider,
+        model: selectedModel,
+        mode: request.mode,
+        status: "completed",
+        totalScenes: status.totalScenes ?? scenes.length,
+        totalDuration: status.totalDuration ?? request.duration ?? null,
+        finalVideoUrl: status.finalVideoUrl,
+        createdAt: new Date().toISOString(),
+      };
+      setVideoHistory((current) => [
+        completedHistoryItem,
+        ...current.filter((item) => item.storyboardId !== completedHistoryItem.storyboardId),
+      ]);
+      setVideoLibraryIndex(0);
+      void loadVideoHistory(completedWorkspaceId).then(() => {
+        setVideoHistory((current) => current.some((item) => item.storyboardId === completedHistoryItem.storyboardId)
+          ? current
+          : [completedHistoryItem, ...current]);
+      });
     } catch (error: unknown) {
       setGenerationStatus("failed");
       setGenerationError(error instanceof Error ? error.message : "Unable to generate video");
@@ -1293,7 +1718,7 @@ export function VideoGenerationPage() {
                 {generationMode === "single-image" ? (
                   <div className={`${styles.sequenceNotice} ${styles.sequenceNoticeNative}`}>
                     <ImageIcon size={13} />
-                    <span>The full storyboard image is sent as one reference with one prompt.</span>
+                    <span>The storyboard sheet is split into scenes, generated in order, and merged into one video.</span>
                   </div>
                 ) : null}
                 {generationMode === "continuous" ? (
@@ -1320,7 +1745,7 @@ export function VideoGenerationPage() {
                 ) : null}
               </section>
             </section>
-            <section className={styles.panel}>
+            {generationMode !== "single-image" ? <section className={styles.panel}>
               <SectionTitle number="1">PROMPT</SectionTitle>
               <label className="block text-[10px] font-bold">
                 Prompt <small>(Required)</small>
@@ -1329,7 +1754,9 @@ export function VideoGenerationPage() {
                   onChange={(event) => {
                     const value = event.target.value;
                     setPrompt(value);
-                    setStoryboardScenes((current) => current.map((scene, index) => index === 0 ? { ...scene, prompt: value } : scene));
+                    setStoryboardScenes((current) => current.map((scene, index) => (
+                      index === 0 ? { ...scene, prompt: value } : scene
+                    )));
                   }}
                   placeholder="Describe your video"
                 />
@@ -1343,9 +1770,9 @@ export function VideoGenerationPage() {
                   placeholder="e.g. blurry, low quality, watermark"
                 />
               </label>
-            </section>
+            </section> : null}
             <section className={styles.panel}>
-              <SectionTitle number="2">{generationMode === "single-image" ? "STORYBOARD IMAGE" : "SOURCE"}</SectionTitle>
+              <SectionTitle number={generationMode === "single-image" ? "1" : "2"}>{generationMode === "single-image" ? "STORYBOARD IMAGE" : "SOURCE"}</SectionTitle>
               <label className="mb-2 block text-[10px] font-bold">
                 {generationMode === "single-image" ? "Storyboard Sheet" : "Start Frame"} <small>(Required)</small>
               </label>
@@ -1366,8 +1793,10 @@ export function VideoGenerationPage() {
               ) : (
                 <label className={styles.upload}>
                   <CloudUpload size={22} />
-                  <strong>{generationMode === "single-image" ? "Upload Storyboard Sheet" : "Upload Image"}</strong>
-                  <small>PNG / JPG / WEBP</small>
+                  <span className={styles.uploadCopy}>
+                    <strong>{generationMode === "single-image" ? "Upload Storyboard Sheet" : "Upload Image"}</strong>
+                    <small>PNG / JPG / WEBP</small>
+                  </span>
                   <input
                     ref={sourceInputRef}
                     type="file"
@@ -1395,50 +1824,27 @@ export function VideoGenerationPage() {
                 />
               ) : null}
               {generationMode === "single-image" ? (
-                <p className={styles.sourceModeNote}>The uploaded storyboard image is sent as one reference image with your prompt.</p>
-              ) : null}
-              {supportsLastImage ? (
-                <div className={styles.sourceLastImage}>
-                  <label className={styles.sourceLastImageLabel}>
-                    Last image <small>(Optional · Scene 1)</small>
-                  </label>
-                  {storyboardScenes[0]?.endImage ? (
-                    <div className={styles.sourcePreview}>
-                      <Image
-                        src={storyboardScenes[0].endImage}
-                        alt="Scene 1 last image"
-                        fill
-                        unoptimized
-                        className="object-cover"
-                      />
-                      <div className={styles.sourceImageActions}>
-                        <button type="button" onClick={() => sourceLastImageInputRef.current?.click()}>Replace</button>
-                        <button type="button" onClick={clearSourceLastImage}>Remove</button>
+                <>
+                  <p className={styles.sourceModeNote}>The sheet is split into separate scenes before generation, then merged into one video.</p>
+                  {sourcePreviewImage ? (
+                    <div className={styles.storyboardSplitSummary} aria-live="polite">
+                      <div className={styles.storyboardSplitHeader}>
+                        <strong>{storyboardSplitting ? "Detecting storyboard grid…" : hasCurrentStoryboardSlices ? storyboardGridLabel ?? "Upload a storyboard sheet to detect scenes" : "Preparing storyboard scenes…"}</strong>
+                        <small>{storyboardSplitting ? "Preparing scene images" : hasCurrentStoryboardSlices && storyboardSlices.length > 0 ? "Each panel becomes one video scene" : "Use a sheet with clear gutters between panels"}</small>
                       </div>
+                      {hasCurrentStoryboardSlices && storyboardSlices.length > 0 ? (
+                        <div className={styles.storyboardSliceRow}>
+                          {storyboardSlices.map((slice, index) => (
+                            <div key={slice.id} className={styles.storyboardSlice}>
+                              <Image src={slice.image} alt={`Storyboard scene ${index + 1}`} fill unoptimized />
+                              <span>{index + 1}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.upload}
-                      onClick={() => sourceLastImageInputRef.current?.click()}
-                    >
-                      <CloudUpload size={22} />
-                      <strong>Upload Image</strong>
-                      <small>PNG / JPG / WEBP</small>
-                    </button>
-                  )}
-                  <input
-                    ref={sourceLastImageInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void uploadSourceLastImage(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </div>
+                  ) : null}
+                </>
               ) : null}
             </section>
           </div>
@@ -1451,12 +1857,12 @@ export function VideoGenerationPage() {
                     <WandSparkles size={26} />
                     <strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong>
                     <span>{generationStatus === "uploading"
-                      ? generationMode === "single-image" ? "Uploading storyboard image…" : "Uploading scene assets…"
-                      : generationMode === "single-image" ? "Generating from the storyboard image…" : "Your scenes are being generated in order…"}</span>
+                      ? generationMode === "single-image" ? "Splitting and uploading storyboard scenes…" : "Uploading scene assets…"
+                      : generationMode === "single-image" ? "Generating scenes from the storyboard sheet…" : "Your scenes are being generated in order…"}</span>
                     <div className={styles.videoGenerationProgress}>
                       <i style={{ width: `${generationProgress.total ? Math.round((generationProgress.completed / generationProgress.total) * 100) : 12}%` }} />
                     </div>
-                    <small>{generationProgress.completed}/{generationProgress.total || generationScenes.length} {generationMode === "single-image" ? "video" : "scenes"} complete</small>
+                    <small>{generationProgress.completed}/{generationProgress.total || generationScenes.length} scenes complete</small>
                   </div>
                 ) : displayedVideoUrl ? (
                   <EosVideoPlayer
@@ -1618,11 +2024,11 @@ export function VideoGenerationPage() {
                   </div>
               </div>
             </section>
-            <section className={styles.stripSection}>
-              <div className={styles.subheading}>
-                SHOT / FRAME REFERENCES <small>{supportsReferenceImages ? "(Optional · shared across scenes)" : "(Not supported by this model)"}</small>
-              </div>
-              {supportsReferenceImages ? (
+            {supportsReferenceImages ? (
+              <section className={styles.stripSection}>
+                <div className={styles.subheading}>
+                  SHOT / FRAME REFERENCES <small>(Optional · shared across scenes)</small>
+                </div>
                 <div className={styles.thumbRow}>
                   <button
                     type="button"
@@ -1655,13 +2061,11 @@ export function VideoGenerationPage() {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className={styles.referenceHint}>Reference images are hidden because the selected model does not expose a reference-image input.</p>
-              )}
-            </section>
-            {generationMode !== "single-image" ? <section className={styles.stripSection}>
+              </section>
+            ) : null}
+            <section className={styles.stripSection}>
               <div className={styles.subheading}>
-                STORYBOARD <small>(Optional)</small>
+                STORYBOARD {generationMode === "single-image" ? <small>(Auto-created from uploaded sheet)</small> : <small>(Optional)</small>}
               </div>
               <div className={styles.sceneScroller}>
                 <div ref={sceneRowRef} className={styles.sceneRow}>
@@ -1689,7 +2093,7 @@ export function VideoGenerationPage() {
                               >
                                 <Pencil size={10} />
                               </button>
-                              {index > 0 ? (
+                              {index > 0 && generationMode !== "single-image" ? (
                                 <button
                                   type="button"
                                   className={styles.sceneDelete}
@@ -1765,38 +2169,42 @@ export function VideoGenerationPage() {
                       </div>
                     );
                   })}
-                  <button
-                    type="button"
-                    className={styles.addScene}
-                    onClick={openSceneModal}
-                    disabled={!canAddScene}
-                    title={canAddScene ? "Add another scene" : addSceneDisabledReason}
-                  >
-                    <Plus size={16} /> Add Scene
-                  </button>
+                  {generationMode !== "single-image" ? (
+                    <button
+                      type="button"
+                      className={styles.addScene}
+                      onClick={openSceneModal}
+                      disabled={!canAddScene}
+                      title={canAddScene ? "Add another scene" : addSceneDisabledReason}
+                    >
+                      <Plus size={16} /> Add Scene
+                    </button>
+                  ) : null}
                 </div>
-                {!canAddScene ? <p className={styles.sceneRequirement}>{sceneLimitReached ? `You can create up to ${MAX_STORYBOARD_SCENES} scenes in one storyboard.` : "Complete Scene 1 with a start image and prompt before adding another scene."}</p> : null}
+                {generationMode !== "single-image" && !canAddScene ? <p className={styles.sceneRequirement}>{sceneLimitReached ? `You can create up to ${maxStoryboardScenes} scenes in one storyboard.` : "Complete Scene 1 with a start image and prompt before adding another scene."}</p> : null}
                 {sceneScrollState.canScrollLeft ||
                 sceneScrollState.canScrollRight ? (
                   <>
-                    <button
-                      type="button"
-                      className={styles.scenePrev}
-                      onClick={() => scrollScenes("left")}
-                      aria-label="Scroll storyboard scenes left"
-                      disabled={!sceneScrollState.canScrollLeft}
-                    >
-                      <ChevronLeft size={20} />
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.sceneNext}
-                      onClick={() => scrollScenes("right")}
-                      aria-label="Scroll storyboard scenes"
-                      aria-disabled={!sceneScrollState.canScrollRight}
-                    >
-                      <ChevronRight size={20} />
-                    </button>
+                    {sceneScrollState.canScrollLeft ? (
+                      <button
+                        type="button"
+                        className={styles.scenePrev}
+                        onClick={() => scrollScenes("left")}
+                        aria-label="Scroll storyboard scenes left"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+                    ) : null}
+                    {sceneScrollState.canScrollRight ? (
+                      <button
+                        type="button"
+                        className={styles.sceneNext}
+                        onClick={() => scrollScenes("right")}
+                        aria-label="Scroll storyboard scenes right"
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -1831,10 +2239,10 @@ export function VideoGenerationPage() {
                   ))}
                 </div>
               ) : null}
-            </section> : null}
+            </section>
           </div>
           <aside className={styles.settings}>
-            <SectionTitle number="3">SETTINGS</SectionTitle>
+            <SectionTitle number={generationMode === "single-image" ? "2" : "3"}>SETTINGS</SectionTitle>
             <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">
               Model <Info size={11} />
             </label>
@@ -1905,7 +2313,7 @@ export function VideoGenerationPage() {
               ) : null}
             </div>
             {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
-            {durationProperty ? (
+            {generationMode !== "single-image" && durationProperty ? (
               <DurationControl
                 property={durationProperty[1]}
                 value={duration}
@@ -2059,7 +2467,7 @@ export function VideoGenerationPage() {
                 type="button"
                 className={styles.generate}
                 onClick={handleGenerate}
-                disabled={modelsLoading || !selectedModel || generationStatus === "uploading" || generationStatus === "processing"}
+                disabled={!canGenerate}
               >
                 <WandSparkles size={18} /> {generationStatus === "uploading" || generationStatus === "processing" ? "GENERATING…" : "GENERATE VIDEO"}
               </button>
@@ -2068,7 +2476,7 @@ export function VideoGenerationPage() {
               </p>
             </div>
             {generationProgress.total > 0 && (generationStatus === "uploading" || generationStatus === "processing" || generationStatus === "completed") ? (
-              <p className={styles.generationProgress}>{generationProgress.completed}/{generationProgress.total} {generationMode === "single-image" ? "video" : "scenes"} complete</p>
+              <p className={styles.generationProgress}>{generationProgress.completed}/{generationProgress.total} scenes complete</p>
             ) : null}
             {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
           </aside>
@@ -2152,8 +2560,8 @@ export function VideoGenerationPage() {
               <div className={styles.sceneModalError}>{sceneError}</div>
             ) : null}
             <div className={styles.sceneModalUpload}>
-              {sceneStartFrameSource === "manual" && sceneImage ? (
-                <div className={styles.sceneModalImagePreview}>
+                  {sceneStartFrameSource === "manual" && sceneImage ? (
+                    <div className={styles.sceneModalImagePreview}>
                   <Image
                     src={sceneImage}
                     alt="New scene"
@@ -2162,22 +2570,24 @@ export function VideoGenerationPage() {
                     className="object-cover"
                     onError={clearSceneModalImage}
                   />
-                  <div className={styles.sceneModalImageActions}>
-                    <button
-                      type="button"
-                      onClick={() => sceneInputRef.current?.click()}
-                    >
-                      Replace
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        clearSceneModalImage();
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
+                      {generationMode !== "single-image" ? (
+                        <div className={styles.sceneModalImageActions}>
+                          <button
+                            type="button"
+                            onClick={() => sceneInputRef.current?.click()}
+                          >
+                            Replace
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              clearSceneModalImage();
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : null}
                 </div>
               ) : sceneStartFrameSource === "previous_last_frame" ? (
                 <div className={styles.sceneModalPreviousFrame}>
@@ -2253,53 +2663,6 @@ export function VideoGenerationPage() {
               <div className={styles.sceneModalPreviousNote}>
                 <Link2 size={13} /> This scene will use the previous
                 scene&apos;s last frame.
-              </div>
-            ) : null}
-            {supportsLastImage ? (
-              <div className={styles.sceneModalSourceField}>
-                <div className={styles.sceneModalSourceHeader}>
-                  <span>Last image <small>(Optional)</small></span>
-                  <small>{lastImageParameter ? labelFromParameterName(lastImageParameter) : "Model-supported"}</small>
-                </div>
-                <div className={`${styles.sceneModalUpload} ${styles.sceneModalLastImageUpload}`}>
-                  {sceneEndImage ? (
-                    <div className={styles.sceneModalImagePreview}>
-                      <Image
-                        src={sceneEndImage}
-                        alt="Last image"
-                        fill
-                        unoptimized
-                        className="object-cover"
-                        onError={clearSceneEndImage}
-                      />
-                      <div className={styles.sceneModalImageActions}>
-                        <button type="button" onClick={() => sceneEndInputRef.current?.click()}>Replace</button>
-                        <button type="button" onClick={clearSceneEndImage}>Remove</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      className={styles.sceneModalUploadButton}
-                      onClick={() => sceneEndInputRef.current?.click()}
-                    >
-                      <CloudUpload size={22} />
-                      <strong>Upload Image</strong>
-                      <small>PNG / JPG / WEBP</small>
-                    </button>
-                  )}
-                  <input
-                    ref={sceneEndInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void handleSceneImageFile(file, true);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </div>
               </div>
             ) : null}
             <label className={styles.sceneModalField}>
