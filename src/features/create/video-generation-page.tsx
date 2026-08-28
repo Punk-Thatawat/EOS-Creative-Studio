@@ -163,6 +163,40 @@ type AxisGap = {
   end: number;
 };
 
+function findLightRuns(
+  scores: number[],
+  minimumGapWidth: number,
+  start = 0,
+  end = scores.length,
+): AxisGap[] {
+  const mergeTolerance = Math.max(2, Math.round(scores.length * 0.002));
+  const gaps: AxisGap[] = [];
+  let currentStart: number | null = null;
+  let gapBreak = 0;
+
+  for (let coordinate = start; coordinate <= end; coordinate += 1) {
+    const isGap = coordinate < end && scores[coordinate] >= 0.7;
+    if (isGap) {
+      if (currentStart === null) currentStart = coordinate;
+      gapBreak = 0;
+      continue;
+    }
+    if (currentStart === null) continue;
+
+    if (coordinate < end && gapBreak < mergeTolerance) {
+      gapBreak += 1;
+      continue;
+    }
+
+    const gapEnd = coordinate - gapBreak;
+    if (gapEnd - currentStart >= minimumGapWidth) gaps.push({ start: currentStart, end: gapEnd });
+    currentStart = null;
+    gapBreak = 0;
+  }
+
+  return gaps;
+}
+
 function findStoryboardContentBounds(
   pixels: Uint8ClampedArray,
   width: number,
@@ -225,23 +259,10 @@ function findStoryboardGaps(
     return samples > 0 ? lightPixels / samples : 0;
   });
 
-  const minimumGapWidth = Math.max(3, Math.round(length * 0.006));
-  const gaps: AxisGap[] = [];
-  let start: number | null = null;
-  for (let coordinate = 0; coordinate <= scores.length; coordinate += 1) {
-    // Storyboard gutters are often not pure white because anti-aliasing or
-    // artwork shadows bleed into the separator. Keep the threshold tolerant,
-    // while requiring a contiguous gap across the axis.
-    const isGap = coordinate < scores.length && scores[coordinate] >= 0.7;
-    if (isGap && start === null) {
-      start = coordinate;
-      continue;
-    }
-    if (start === null) continue;
-    const end = coordinate;
-    if (end - start >= minimumGapWidth) gaps.push({ start, end });
-    start = null;
-  }
+  // Gutter widths vary by exporter. Allow a small number of non-white pixels
+  // inside a separator so a 3x2 sheet is not split through the middle row.
+  const minimumGapWidth = Math.max(2, Math.round(length * 0.004));
+  const gaps = findLightRuns(scores, minimumGapWidth);
 
   const edgePadding = Math.max(4, Math.round(length * 0.03));
   return gaps.filter((gap) => gap.start > edgePadding && gap.end < length - edgePadding);
@@ -272,28 +293,18 @@ function findStoryboardGridGaps(
     return samples > 0 ? lightPixels / samples : 0;
   });
 
-  const minimumGapWidth = Math.max(3, Math.round(length * 0.004));
+  const minimumGapWidth = Math.max(2, Math.round(length * 0.003));
   const searchRadius = Math.max(12, Math.round(length * 0.12));
   const gaps: AxisGap[] = [];
   for (let part = 1; part < parts; part += 1) {
     const expected = Math.round((length * part) / parts);
     const searchStart = Math.max(1, expected - searchRadius);
     const searchEnd = Math.min(length - 1, expected + searchRadius);
-    let currentStart: number | null = null;
-    let bestGap: AxisGap | null = null;
-    for (let coordinate = searchStart; coordinate <= searchEnd + 1; coordinate += 1) {
-      const isGap = coordinate <= searchEnd && scores[coordinate] >= 0.7;
-      if (isGap && currentStart === null) {
-        currentStart = coordinate;
-        continue;
-      }
-      if (currentStart === null) continue;
-      const candidate = { start: currentStart, end: coordinate };
-      if (candidate.end - candidate.start >= minimumGapWidth && (!bestGap || candidate.end - candidate.start > bestGap.end - bestGap.start)) {
-        bestGap = candidate;
-      }
-      currentStart = null;
-    }
+    const candidates = findLightRuns(scores, minimumGapWidth, searchStart, searchEnd + 1);
+    const bestGap = candidates.reduce<AxisGap | null>(
+      (best, candidate) => (!best || candidate.end - candidate.start > best.end - best.start ? candidate : best),
+      null,
+    );
     if (bestGap) gaps.push(bestGap);
   }
   return gaps;
@@ -372,15 +383,14 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
       rows = 3;
       cellCount = 9;
     }
-    // A detected 3x3 contact sheet is more reliable when split on the grid
-    // itself. The artwork in a panel can contain bright areas that make a
-    // gutter look wider or narrower, which can otherwise leak pixels from a
-    // neighbouring row/column into the scene crop.
-    if (columns === 3 && rows === 3 && canvas.width / canvas.height >= 1.4 && canvas.width / canvas.height <= 2.2) {
-      const gridGapsX = findStoryboardGridGaps(pixels, canvas.width, canvas.height, "x", 3);
-      const gridGapsY = findStoryboardGridGaps(pixels, canvas.width, canvas.height, "y", 3);
-      detectedColumns = gridGapsX.length === 2 ? axisCells(canvas.width, gridGapsX) : evenlyDividedCells(canvas.width, 3);
-      detectedRows = gridGapsY.length === 2 ? axisCells(canvas.height, gridGapsY) : evenlyDividedCells(canvas.height, 3);
+    // Once both axes are detected, re-check each expected grid boundary. This
+    // prevents bright artwork or a partially visible separator inside a panel
+    // from shifting the split. It also handles 3x2 sheets, not only 3x3.
+    if (columns >= 2 && rows >= 2 && columns <= 6 && rows <= 6) {
+      const gridGapsX = findStoryboardGridGaps(pixels, canvas.width, canvas.height, "x", columns);
+      const gridGapsY = findStoryboardGridGaps(pixels, canvas.width, canvas.height, "y", rows);
+      if (gridGapsX.length === columns - 1) detectedColumns = axisCells(canvas.width, gridGapsX);
+      if (gridGapsY.length === rows - 1) detectedRows = axisCells(canvas.height, gridGapsY);
     }
     if (cellCount < 2 || cellCount > maxScenes) {
       throw new Error(`ไม่พบตาราง storyboard ที่รองรับ (ระบบรองรับสูงสุด ${maxScenes} ฉาก)`);
