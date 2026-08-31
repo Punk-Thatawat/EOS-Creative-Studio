@@ -6,21 +6,25 @@
   --audio-line: #e6e8ec;
   --audio-soft: #f7f8fa;
   margin-top: 0;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  overflow-x: clip;
   padding-bottom: 10px;
   color: var(--audio-ink);
 }
 
 .heroBanner { position: relative; isolation: isolate; z-index: 40; height: auto; aspect-ratio: 5.5 / 1; margin-inline: -2px; overflow: hidden; background: #fff; pointer-events: none; }
 .heroBanner img { position: absolute !important; inset: 0; z-index: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; transform: scale(1); pointer-events: none; }
-.featureTabs { display: flex; align-items: center; gap: 3px; height: 47px; overflow-x: auto; border-bottom: 1px solid var(--audio-line); scrollbar-width: none; }
+.featureTabs { display: flex; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; border: 1px solid var(--audio-line); border-radius: 13px 13px 0 0; background: #fff; scrollbar-width: none; }
 .featureTabs::-webkit-scrollbar { display: none; }
-.tab, .tabActive { display: inline-flex; height: 47px; flex: none; align-items: center; gap: 8px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 12px; color: #263043; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.tab, .tabActive { position: relative; display: inline-flex; min-width: 125px; flex: 1; align-items: center; justify-content: center; border: 0; border-right: 1px solid #ece9e6; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; padding: 12px 10px; color: #515866; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.tab:last-child, .tabActive:last-child { border-right: 0; }
 .tab:hover { color: var(--audio-orange); }
-.tabActive { border-bottom-color: var(--audio-orange); color: var(--audio-orange); }
+.tabActive { margin-top: 0; border: 1px solid #e5e1de; border-bottom: 3px solid #f26b38; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 -1px 5px rgba(58, 42, 30, .04); color: #ef5c29; }
 
-.audioGrid { display: grid; grid-template-columns: minmax(300px, 344px) minmax(0, 1fr) minmax(286px, 320px); column-gap: 14px; row-gap: 0; align-items: start; }
-.scriptPanel, .previewPanel, .settingsPanel { border: 1px solid var(--audio-line); background: #fff; }
+.audioGrid { display: grid; width: 100%; max-width: 100%; min-width: 0; grid-template-columns: minmax(300px, 344px) minmax(0, 1fr) minmax(286px, 320px); column-gap: 14px; row-gap: 0; align-items: start; }
+.scriptPanel, .previewPanel, .settingsPanel { min-width: 0; border: 1px solid var(--audio-line); background: #fff; }
 .scriptPanel { min-height: 452px; padding: 17px 16px 14px; border-radius: 10px; }
 .panelHeading, .previewHeader, .sectionHeading, .settingsTitle, .speedHeader, .musicHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panelHeading { margin-bottom: 11px; }
@@ -79,7 +83,7 @@
 .playButton:hover { background: var(--audio-orange); }
 .pauseGlyph { display: block; width: 12px; height: 17px; border-right: 4px solid currentColor; border-left: 4px solid currentColor; }
 .skipButton { position: relative; display: grid; width: 26px; height: 30px; place-items: center; border: 0; background: transparent; color: #1a2029; cursor: pointer; }
-.skipButton small { position: absolute; top: 9px; font-size: 7px; font-weight: 850; }
+.skipButton small { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); font-size: 7px; font-weight: 850; line-height: 1; }
 .skipButton:hover { color: var(--audio-orange); }
 .timeLabel { flex: none; color: #202936; font-size: 10px; font-weight: 650; }
 .scrubber, .volumeSlider, .speedSlider { min-width: 0; accent-color: var(--audio-orange); cursor: pointer; }
@@ -203,7 +207,7 @@
 .shortcutCard small { margin-top: 3px; color: #777e87; font-size: 8px; }
 .shortcutCard:hover { border-color: #ffb18d; background: #fffaf7; }
 
-.settingsPanel { position: sticky; top: 84px; grid-column: 3; grid-row: 1 / span 3; min-height: 660px; margin-top: -25px; border-radius: 10px; padding: 16px 16px 13px; }
+.settingsPanel { position: static; grid-column: 3; grid-row: 1 / span 3; min-height: 660px; margin-top: 0; border-radius: 10px; padding: 16px 16px 13px; }
 .settingsTitle { justify-content: flex-start; margin-bottom: 20px; }
 .settingsTitle h2 { font-size: 14px; }
 .settingsTitle svg { margin-left: auto; color: var(--audio-pink); transform: rotate(-10deg); }
@@ -304,7 +308,7 @@
 .cleanupToolList { display: grid; gap: 7px; }.cleanupToolList label { display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid #e4e6e9; border-radius: 8px; background: #fff; }.cleanupToolList input { accent-color: var(--audio-orange); }.cleanupToolList label > span { display: flex; flex-direction: column; }.cleanupToolList strong { color: #3a414b; font-size: 10px; }.cleanupToolList small { margin-top: 3px; color: #858b95; font-size: 8px; }.cleanupCompare { display: grid; gap: 10px; }.cleanupCompare > div > span { display: block; color: #7b818a; font-size: 8px; font-weight: 850; letter-spacing: .1em; }.cleanupCompare .altWaveform { height: 72px; margin-top: 5px; }.cleanupCompare > div:nth-child(2) .altWaveform { border-color: #c7ead9; background: #f7fffb; }.cleanupCompare > div:nth-child(2) .altWaveform span { color: #2e9567; }.cleanupStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 15px; }.cleanupStats > div { padding: 9px 5px; border-radius: 7px; background: #f7f8fa; text-align: center; }.cleanupStats strong, .cleanupStats small { display: block; }.cleanupStats strong { color: #2f805d; font-size: 11px; }.cleanupStats small { margin-top: 4px; color: #7d848e; font-size: 7px; }
 .alternatePanel :is(button, input, select, textarea):disabled, .alternateSettings :is(button, input, select, textarea):disabled { cursor: not-allowed; opacity: .48; }
 
-@media (max-width: 1170px) {
+@media (max-width: 1240px) {
   .alternateLayout { grid-template-columns: minmax(280px, .9fr) minmax(0, 1.35fr); }
   .alternateSettings { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(4, 1fr); gap: 0 14px; min-height: 0; }
   .alternateSettings .altPanelHeader, .alternateSettings .altGenerateButton { grid-column: 1 / -1; }
@@ -335,14 +339,13 @@
   .shortcutCard { padding-inline: 6px; }
 }
 
-@media (max-width: 1170px) {
-  .audioGrid { grid-template-columns: minmax(280px, 320px) minmax(0, 1fr); column-gap: 11px; row-gap: 14px; }
-  .settingsPanel { grid-column: 1 / -1; grid-row: auto; position: static; min-height: auto; margin-top: 0; }
+@media (max-width: 1240px) {
+  .audioGrid { grid-template-columns: minmax(230px, .95fr) minmax(0, 1.45fr) minmax(230px, .95fr); column-gap: 10px; row-gap: 0; }
+  .settingsPanel { grid-column: 3; grid-row: 1 / span 3; position: static; min-height: 660px; margin-top: 0; }
   .tutorialRow, .shortcutRow { grid-column: auto; grid-row: auto; }
-  .settingsPanel { display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 15px; align-items: start; }
-  .settingsTitle { grid-column: 1 / -1; margin-bottom: 0; }
-  .creditEstimate { margin-top: 18px; }
-  .generateButton { margin-top: 36px; }
+  .settingsTitle { margin-bottom: 20px; }
+  .creditEstimate { margin-top: 17px; }
+  .generateButton { margin-top: 12px; }
 }
 
 @media (max-width: 820px) {
@@ -351,7 +354,7 @@
   .heroBanner img { transform: scale(1.08); }
   .audioGrid { grid-template-columns: 1fr; }
   .scriptPanel, .settingsPanel { min-height: 0; }
-  .settingsPanel { display: block; }
+  .settingsPanel { display: block; grid-column: auto; grid-row: auto; position: static; margin-top: 0; }
   .generateButton { margin-top: 12px; }
   .voiceRow { overflow-x: auto; padding-bottom: 3px; }
   .voiceCard, .voiceCardActive { flex-basis: 126px; }
@@ -367,7 +370,8 @@
 @media (max-width: 540px) {
   .heroBanner { height: auto; aspect-ratio: 5.5 / 1; }
   .heroBanner img { object-fit: cover; transform: none; }
-  .featureTabs { margin-inline: -6px; padding-inline: 3px; }
+  .heroBanner { margin-inline: 0; }
+  .featureTabs { margin-inline: 0; padding-inline: 0; }
   .tab, .tabActive { padding-inline: 9px; font-size: 11px; }
   .twoColumnFields { grid-template-columns: 1fr; }
   .playerRow { flex-wrap: wrap; }

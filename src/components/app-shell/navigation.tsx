@@ -56,6 +56,8 @@ const adminVideoFeatures = [
   { id: "motion-transfer", label: "Motion Transfer" },
   { id: "lipsync", label: "Lipsync" },
   { id: "extend-video", label: "Extend Video" },
+  { id: "video-to-sfx", label: "Video to SFX" },
+  { id: "video-to-music", label: "Video to Music" },
 ] as const;
 
 const adminCreativeFeatures = [

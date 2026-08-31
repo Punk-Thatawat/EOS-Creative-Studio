@@ -55,6 +55,8 @@ const videoFunctions = [
   { id: "motion-transfer", label: "Motion Transfer", description: "Transfer motion to a subject" },
   { id: "lipsync", label: "Lipsync", description: "Synchronize speech and mouth movement" },
   { id: "extend-video", label: "Extend Video", description: "Continue an existing video" },
+  { id: "video-to-sfx", label: "Video to SFX", description: "Generate sound effects from a video" },
+  { id: "video-to-music", label: "Video to Music", description: "Generate music from a video" },
 ] as const;
 
 const features = [
@@ -323,6 +325,7 @@ function ModelGrid({ models, selectedModel, onSelect, onToggleEnabled, onDetails
 }
 
 function modelKindForFeature(feature: FeatureId): string {
+  if (feature === "video-to-sfx" || feature === "video-to-music") return "audio";
   if (videoFunctions.some((item) => item.id === feature)) return "video";
   if (feature === "audio") return "audio";
   if (feature === "document") return "document";
@@ -335,6 +338,7 @@ function isFeatureCompatible(item: GenerationModelOption, feature: FeatureId): b
   if (feature === "text-to-image") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter);
   if (feature === "image-to-image") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && (capabilities.imageParameter || capabilities.referenceImagesParameter));
   if (feature === "image-to-video") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && (capabilities.imageParameter || capabilities.referenceImagesParameter));
+  if (feature === "video-to-sfx" || feature === "video-to-music") return capabilities.parameters.length > 0 && Boolean(capabilities.videoParameter);
   if (videoFunctions.some((item) => item.id === feature)) return capabilities.parameters.length > 0;
   if (feature === "style-transfer") return capabilities.styleTransferCompatible === true;
   if (feature === "background-removal") {

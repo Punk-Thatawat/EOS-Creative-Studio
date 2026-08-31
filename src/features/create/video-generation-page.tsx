@@ -28,9 +28,11 @@ import { listGenerationModels, type GenerationModelOption } from "@/lib/api/gene
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { uploadImageAsset } from "@/lib/api/storage";
+import { createUpscale, quoteImageGeneration } from "@/lib/api/generations";
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
 import {
   createVideoStoryboard,
+  cancelVideoStoryboard,
   getVideoStoryboardSettings,
   getVideoStoryboardStatus,
   listVideoStoryboardHistory,
@@ -333,6 +335,8 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
   slices: Array<{ file: File; previewUrl: string }>;
   rows: number;
   columns: number;
+  minSceneWidth: number;
+  minSceneHeight: number;
 }> {
   const sourceUrl = URL.createObjectURL(file);
   try {
@@ -397,6 +401,8 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
     }
 
     const slices: Array<{ file: File; previewUrl: string }> = [];
+    let minSceneWidth = Number.POSITIVE_INFINITY;
+    let minSceneHeight = Number.POSITIVE_INFINITY;
     for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
       for (let columnIndex = 0; columnIndex < columns; columnIndex += 1) {
         const rawCell = document.createElement("canvas");
@@ -414,6 +420,8 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
         const cell = document.createElement("canvas");
         cell.width = cellBounds.width;
         cell.height = cellBounds.height;
+        minSceneWidth = Math.min(minSceneWidth, cellBounds.width);
+        minSceneHeight = Math.min(minSceneHeight, cellBounds.height);
         const cellContext = cell.getContext("2d");
         if (!cellContext) throw new Error("Unable to prepare storyboard scene");
         cellContext.drawImage(
@@ -427,16 +435,18 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
           cellBounds.width,
           cellBounds.height,
         );
+        // Keep every extracted panel lossless. Re-encoding a JPEG/WebP crop as
+        // another lossy image makes small text and fine edges softer before the
+        // video provider even receives the scene.
         const blob = await new Promise<Blob | null>((resolve) => {
-          cell.toBlob(resolve, file.type === "image/png" ? "image/png" : "image/jpeg", 0.95);
+          cell.toBlob(resolve, "image/png");
         });
         if (!blob) throw new Error("Unable to prepare storyboard scene");
-        const extension = blob.type === "image/png" ? "png" : "jpg";
-        const sceneFile = new File([blob], `storyboard-scene-${slices.length + 1}.${extension}`, { type: blob.type });
+        const sceneFile = new File([blob], `storyboard-scene-${slices.length + 1}.png`, { type: "image/png" });
         slices.push({ file: sceneFile, previewUrl: URL.createObjectURL(sceneFile) });
       }
     }
-    return { slices, rows, columns };
+    return { slices, rows, columns, minSceneWidth, minSceneHeight };
   } finally {
     URL.revokeObjectURL(sourceUrl);
   }
@@ -604,6 +614,7 @@ export function VideoGenerationPage() {
   const [storyboardSlicesSourceFile, setStoryboardSlicesSourceFile] = useState<File | null>(null);
   const [storyboardSheetFile, setStoryboardSheetFile] = useState<File | null>(null);
   const [storyboardGridLabel, setStoryboardGridLabel] = useState<string | null>(null);
+  const [storyboardQualityNote, setStoryboardQualityNote] = useState<string | null>(null);
   const [storyboardSplitting, setStoryboardSplitting] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
@@ -612,7 +623,16 @@ export function VideoGenerationPage() {
   const [aspectRatio, setAspectRatio] = useState("");
   const [autoSound, setAutoSound] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
-  const [generationMode, setGenerationMode] = useState<(typeof generationModeOptions)[number]["value"]>("multi-scene");
+  const [postAudioSfxEnabled, setPostAudioSfxEnabled] = useState(false);
+  const [postAudioMusicEnabled, setPostAudioMusicEnabled] = useState(false);
+  const postAudioMode = postAudioSfxEnabled && postAudioMusicEnabled
+    ? "both"
+    : postAudioSfxEnabled
+      ? "sfx"
+      : postAudioMusicEnabled
+        ? "music"
+        : "none";
+  const [generationMode, setGenerationMode] = useState<(typeof generationModeOptions)[number]["value"]>("single-image");
   const [videoMode, setVideoMode] =
     useState<(typeof videoModeOptions)[number]["value"]>("storyboard");
   const [isGenerationModeMenuOpen, setIsGenerationModeMenuOpen] = useState(false);
@@ -626,6 +646,8 @@ export function VideoGenerationPage() {
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<VideoGenerationStatus>("idle");
+  const [activeStoryboardId, setActiveStoryboardId] = useState<string | null>(null);
+  const [isCancellingVideo, setIsCancellingVideo] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ completed: 0, total: 0 });
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewView, setPreviewView] = useState<"latest" | "library">("latest");
@@ -649,6 +671,9 @@ export function VideoGenerationPage() {
   const [creditEstimate, setCreditEstimate] = useState<number | null>(null);
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
+  const [storyboardUpscaleCreditEstimate, setStoryboardUpscaleCreditEstimate] = useState<number | null>(null);
+  const [storyboardUpscaleCreditLoading, setStoryboardUpscaleCreditLoading] = useState(false);
+  const [storyboardUpscaleCreditError, setStoryboardUpscaleCreditError] = useState<string | null>(null);
   const [frameReferences, setFrameReferences] = useState<string[]>([]);
   const [frameReferenceFiles, setFrameReferenceFiles] = useState<File[]>([]);
   const [storyboardScenes, setStoryboardScenes] = useState<StoryboardScene[]>([
@@ -697,6 +722,7 @@ export function VideoGenerationPage() {
   >({});
   const storyboardSplitRequestRef = useRef(0);
   const storyboardPreparedFileRef = useRef<File | null>(null);
+  const cancelRequestedRef = useRef(false);
   const selectedModelOption = models.find((model) => model.model === selectedModel);
   const capabilities = selectedModelOption?.capabilities;
   const properties = schemaProperties(selectedModelOption);
@@ -853,6 +879,7 @@ export function VideoGenerationPage() {
     setStoryboardSplitting(true);
     setStoryboardSlicesSourceFile(null);
     setStoryboardGridLabel(null);
+    setStoryboardQualityNote(null);
     setStoryboardSlices([]);
     try {
       const result = await splitStoryboardSheet(file, maxStoryboardScenes);
@@ -868,6 +895,9 @@ export function VideoGenerationPage() {
       setStoryboardSlices(slices);
       setStoryboardSlicesSourceFile(file);
       setStoryboardGridLabel(`${result.rows} × ${result.columns} · ${result.slices.length} scenes`);
+      setStoryboardQualityNote(result.minSceneWidth < 768 || result.minSceneHeight < 768
+        ? `แต่ละ scene มีขนาดประมาณ ${result.minSceneWidth}×${result.minSceneHeight}px — ระบบจะอัปสเกลเป็น 2K อัตโนมัติก่อนสร้างวิดีโอ`
+        : null);
       setStoryboardScenes((current) => {
         const firstScene = current[0];
         const sharedPrompt = prompt.trim() || firstScene?.prompt || "";
@@ -890,6 +920,7 @@ export function VideoGenerationPage() {
       if (storyboardSplitRequestRef.current === requestId) {
         setStoryboardSlices([]);
         setStoryboardSlicesSourceFile(null);
+        setStoryboardQualityNote(null);
         setGenerationError(error instanceof Error ? error.message : "Unable to split storyboard image");
       }
       return false;
@@ -950,6 +981,7 @@ export function VideoGenerationPage() {
     setStoryboardSlicesSourceFile(null);
     setStoryboardSheetFile(null);
     setStoryboardGridLabel(null);
+    setStoryboardQualityNote(null);
     setStoryboardSplitting(false);
     setStoryboardScenes((current) => generationMode === "single-image"
       ? [{ ...(current[0] ?? {
@@ -1184,6 +1216,7 @@ export function VideoGenerationPage() {
   const generationScenes = generationMode === "single-image"
     ? hasCurrentStoryboardSlices && storyboardScenes.length > 0 ? storyboardScenes : storyboardScenes.slice(0, 1)
     : storyboardScenes;
+  const shouldAutoUpscaleStoryboard = generationMode === "single-image" && Boolean(storyboardQualityNote) && generationScenes.length > 0;
   const creditQuoteInput: Omit<VideoGenerationInput, "idempotencyKey"> | null = (() => {
     if (activeVideoTab !== "image-to-video" || !selectedModel || generationScenes.length === 0) return null;
     const scenes = generationScenes.map((scene, index) => {
@@ -1211,6 +1244,9 @@ export function VideoGenerationPage() {
     if (resolutionProperty && resolution) request.resolution = resolution;
     if (aspectRatioProperty && aspectRatio) request.aspectRatio = aspectRatio;
     if (audioProperty) request.generateAudio = autoSound;
+    if (postAudioMode !== "none") {
+      request.audioMode = postAudioMode;
+    }
     if (Object.keys(modelParams).length) request.modelParams = modelParams;
     return request;
   })();
@@ -1256,6 +1292,44 @@ export function VideoGenerationPage() {
     };
   }, [creditQuoteKey]);
 
+  useEffect(() => {
+    let active = true;
+    if (!shouldAutoUpscaleStoryboard) {
+      return;
+    }
+
+    const loadingTimeoutId = window.setTimeout(() => {
+      if (!active) return;
+      setStoryboardUpscaleCreditEstimate(null);
+      setStoryboardUpscaleCreditLoading(true);
+      setStoryboardUpscaleCreditError(null);
+    }, 0);
+    void quoteImageGeneration({
+      feature: "upscale",
+      targetResolution: "2K",
+      outputFormat: "png",
+    })
+      .then((quote) => {
+        if (!active) return;
+        const unitCost = Number(quote.creditCost);
+        if (!Number.isFinite(unitCost)) throw new Error("Upscale pricing unavailable");
+        setStoryboardUpscaleCreditEstimate(unitCost * generationScenes.length);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setStoryboardUpscaleCreditEstimate(null);
+        setStoryboardUpscaleCreditError(error instanceof Error ? error.message : "Upscale pricing unavailable");
+      })
+      .finally(() => {
+        if (active) setStoryboardUpscaleCreditLoading(false);
+      });
+
+    return () => {
+      active = false;
+      window.clearTimeout(loadingTimeoutId);
+    };
+  }, [generationScenes.length, shouldAutoUpscaleStoryboard]);
+
   const estimateSceneCount = generationScenes.length;
   const estimateDurations = generationScenes.map((scene) => durationProperty ? scene.duration : duration);
   const estimateTotalDuration = estimateDurations.reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0);
@@ -1265,11 +1339,21 @@ export function VideoGenerationPage() {
     : allScenesShareDuration
     ? `${estimateSceneCount} ${estimateSceneCount === 1 ? "scene" : "scenes"} x ${estimateDurations[0] ?? 0} sec`
     : `${estimateSceneCount} scenes x ${estimateTotalDuration} sec total`;
-  const formattedCreditEstimate: ReactNode = creditEstimateLoading
+  const effectiveStoryboardUpscaleCreditEstimate = shouldAutoUpscaleStoryboard
+    ? storyboardUpscaleCreditEstimate
+    : null;
+  const effectiveStoryboardUpscaleCreditLoading = shouldAutoUpscaleStoryboard && storyboardUpscaleCreditLoading;
+  const effectiveStoryboardUpscaleCreditError = shouldAutoUpscaleStoryboard ? storyboardUpscaleCreditError : null;
+  const totalCreditEstimateReady = creditEstimate !== null
+    && (!shouldAutoUpscaleStoryboard || effectiveStoryboardUpscaleCreditEstimate !== null);
+  const totalCreditEstimate = totalCreditEstimateReady
+    ? creditEstimate + (effectiveStoryboardUpscaleCreditEstimate ?? 0)
+    : null;
+  const formattedCreditEstimate: ReactNode = creditEstimateLoading || effectiveStoryboardUpscaleCreditLoading
     ? <span className={styles.creditCalculating}><LoaderCircle size={12} className={styles.creditSpinner} />Recalculating price…</span>
-    : creditEstimate === null
+    : totalCreditEstimate === null
       ? "Pricing unavailable"
-      : `${creditEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits`;
+      : `${totalCreditEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits`;
   const firstScene = storyboardScenes[0];
   const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
   const sceneLimitReached = storyboardScenes.length >= maxStoryboardScenes;
@@ -1444,6 +1528,9 @@ export function VideoGenerationPage() {
     const blob = await response.blob();
     return new File([blob], `${prefix}-${index + 1}.png`, { type: blob.type || "image/png" });
   };
+  const throwIfVideoCancellationRequested = () => {
+    if (cancelRequestedRef.current) throw new Error("Video generation was cancelled");
+  };
   const handleGenerate = async () => {
     if (!selectedModel) {
       setGenerationError("Select a video model first.");
@@ -1495,7 +1582,11 @@ export function VideoGenerationPage() {
     setFinalVideoUrl(null);
     setPreviewView("latest");
     setContinuationInfo(null);
+    cancelRequestedRef.current = false;
+    setActiveStoryboardId(null);
+    setIsCancellingVideo(false);
     setGenerationStatus("uploading");
+    let automaticUpscaleCreditCost = 0;
     try {
       const uploadedImages: Array<string | undefined> = [];
       const uploadedReferenceImages: string[] = [];
@@ -1509,8 +1600,61 @@ export function VideoGenerationPage() {
             feature: "image-to-video",
             uploadConstraints: capabilities?.uploadConstraints,
           });
+          throwIfVideoCancellationRequested();
         }
       }
+
+      if (shouldAutoUpscaleStoryboard) {
+        const upscaleScenes = generationScenes
+          .map((scene, index) => ({ index, image: uploadedImages[index] }))
+          .filter((scene): scene is { index: number; image: string } => Boolean(scene.image));
+        if (upscaleScenes.length !== generationScenes.length) {
+          throw new Error("Every storyboard scene must be uploaded before it can be enhanced.");
+        }
+
+        const quotedUpscaleUnitCost = storyboardUpscaleCreditEstimate !== null
+          ? storyboardUpscaleCreditEstimate / generationScenes.length
+          : Number((await quoteImageGeneration({
+            feature: "upscale",
+            targetResolution: "2K",
+            outputFormat: "png",
+          })).creditCost);
+        if (!Number.isFinite(quotedUpscaleUnitCost)) throw new Error("Upscale pricing unavailable");
+        automaticUpscaleCreditCost = quotedUpscaleUnitCost * upscaleScenes.length;
+        setGenerationProgress({ completed: 0, total: upscaleScenes.length });
+        setNotice(`Enhancing storyboard scenes… 0/${upscaleScenes.length}`);
+
+        const upscaleResults = await Promise.allSettled(upscaleScenes.map(async ({ index, image }) => {
+          const result = await createUpscale({
+            workspaceId,
+            sourceImage: image,
+            targetResolution: "2K",
+            outputFormat: "png",
+            idempotencyKey: `video-storyboard-upscale-${crypto.randomUUID()}`,
+          });
+          const output = result.data.output.find((item) => item.type === "image") ?? result.data.output[0];
+          if (!output?.url) throw new Error(`AI Upscale did not return an image for Scene ${index + 1}`);
+          return { index, url: output.url };
+        }));
+        throwIfVideoCancellationRequested();
+        const failedUpscale = upscaleResults.find(
+          (result): result is PromiseRejectedResult => result.status === "rejected",
+        );
+        if (failedUpscale) {
+          throw failedUpscale.reason instanceof Error
+            ? failedUpscale.reason
+            : new Error("AI Upscale failed for a storyboard scene");
+        }
+        let completedUpscales = 0;
+        for (const result of upscaleResults) {
+          if (result.status !== "fulfilled") continue;
+          uploadedImages[result.value.index] = result.value.url;
+          completedUpscales += 1;
+          setGenerationProgress({ completed: completedUpscales, total: upscaleScenes.length });
+          setNotice(`Enhancing storyboard scenes… ${completedUpscales}/${upscaleScenes.length}`);
+        }
+      }
+
       if (supportsReferenceImages) {
         for (let index = 0; index < frameReferences.length; index += 1) {
           setNotice(`Uploading reference image ${index + 1} of ${frameReferences.length}…`);
@@ -1520,6 +1664,7 @@ export function VideoGenerationPage() {
             feature: "image-to-video",
             uploadConstraints: capabilities?.uploadConstraints,
           }));
+          throwIfVideoCancellationRequested();
         }
       }
 
@@ -1548,20 +1693,30 @@ export function VideoGenerationPage() {
       if (audioInputMode && audioFile) {
         setNotice("Uploading audio reference…");
         request.audioUrl = await uploadPeopleMedia(audioFile, undefined, capabilities?.uploadConstraints);
+        throwIfVideoCancellationRequested();
+      }
+      if (postAudioMode !== "none") {
+        request.audioMode = postAudioMode;
       }
       if (Object.keys(modelParams).length) request.modelParams = modelParams;
 
       setNotice("Submitting video generation…");
       const created = await createVideoStoryboard(request);
       if (!created.storyboardId) throw new Error("Video generation did not return a storyboard ID");
+      setActiveStoryboardId(created.storyboardId);
+      if (cancelRequestedRef.current) {
+        await cancelVideoStoryboard(created.storyboardId);
+        throw new Error("Video generation was cancelled");
+      }
       emitGenerationStarted({ feature: "image-to-video", generationId: created.storyboardId, pollUrl: created.pollUrl ?? `/api/v1/generations/video/image-to-video/${encodeURIComponent(created.storyboardId)}/status`, workspaceId: workspaceId ?? undefined, model: selectedModel, status: "queued", totalCount: created.totalScenes ?? scenes.length, completedCount: created.completedScenes ?? 0 });
       const returnedCreditCost = Number(created.totalCreditCost);
-      const quotedCreditCost = Number(creditEstimate);
+      const quotedVideoCreditCost = Number(creditEstimate);
       // The create response may only contain the first scene for continuous
       // jobs, so prefer the full quote shown for this request.
-      const acceptedCreditCost = Number.isFinite(quotedCreditCost) && quotedCreditCost > 0
-        ? quotedCreditCost
+      const acceptedVideoCreditCost = Number.isFinite(quotedVideoCreditCost) && quotedVideoCreditCost > 0
+        ? quotedVideoCreditCost
         : returnedCreditCost;
+      const acceptedCreditCost = acceptedVideoCreditCost + automaticUpscaleCreditCost;
       if (Number.isFinite(acceptedCreditCost) && acceptedCreditCost > 0) {
         emitCreditBalanceChanged(acceptedCreditCost);
       }
@@ -1580,6 +1735,7 @@ export function VideoGenerationPage() {
           ? "Generating video from storyboard image…"
           : `Generating video… ${status.completedScenes ?? 0}/${status.totalScenes ?? scenes.length} scenes complete`);
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
+        throwIfVideoCancellationRequested();
         status = await getVideoStoryboardStatus(created.storyboardId);
       }
       setGenerationProgress({ completed: status.completedScenes ?? scenes.length, total: status.totalScenes ?? scenes.length });
@@ -1596,6 +1752,8 @@ export function VideoGenerationPage() {
       setPreviewView("latest");
       setGenerationStatus("completed");
       setNotice("Video ready");
+      setActiveStoryboardId(null);
+      setIsCancellingVideo(false);
       requestCreditBalanceSync(acceptedCreditCost);
       const completedWorkspaceId = status.workspaceId ?? workspaceId ?? undefined;
       const completedHistoryItem: VideoStoryboardHistoryItem = {
@@ -1621,8 +1779,42 @@ export function VideoGenerationPage() {
           : [completedHistoryItem, ...current]);
       });
     } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unable to generate video";
+      if (cancelRequestedRef.current || message === "Video generation was cancelled") {
+        if (automaticUpscaleCreditCost > 0) requestCreditBalanceSync(automaticUpscaleCreditCost);
+        setGenerationStatus("cancelled");
+        setGenerationError(null);
+        setNotice("Video generation cancelled");
+        setActiveStoryboardId(null);
+        setIsCancellingVideo(false);
+        return;
+      }
+      if (automaticUpscaleCreditCost > 0) requestCreditBalanceSync(automaticUpscaleCreditCost);
       setGenerationStatus("failed");
-      setGenerationError(error instanceof Error ? error.message : "Unable to generate video");
+      setGenerationError(message);
+      setActiveStoryboardId(null);
+      setIsCancellingVideo(false);
+      setNotice(null);
+    }
+  };
+
+  const handleCancelVideo = async () => {
+    if (!isGeneratingVideo || isCancellingVideo) return;
+    cancelRequestedRef.current = true;
+    setIsCancellingVideo(true);
+    setGenerationError(null);
+    setNotice("Cancelling video generation…");
+    const storyboardId = activeStoryboardId;
+    if (!storyboardId) return;
+    try {
+      await cancelVideoStoryboard(storyboardId);
+      setGenerationStatus("cancelled");
+      setActiveStoryboardId(null);
+      setNotice("Video generation cancelled");
+    } catch (error: unknown) {
+      cancelRequestedRef.current = false;
+      setIsCancellingVideo(false);
+      setGenerationError(error instanceof Error ? error.message : "Unable to cancel video generation");
       setNotice(null);
     }
   };
@@ -1755,7 +1947,7 @@ export function VideoGenerationPage() {
                 ) : null}
               </section>
             </section>
-            {generationMode !== "single-image" ? <section className={styles.panel}>
+            {generationMode !== "single-image" ? <section className={`${styles.panel} ${styles.promptPanel}`}>
               <SectionTitle number="1">PROMPT</SectionTitle>
               <label className="block text-[10px] font-bold">
                 Prompt <small>(Required)</small>
@@ -1781,7 +1973,7 @@ export function VideoGenerationPage() {
                 />
               </label>
             </section> : null}
-            <section className={styles.panel}>
+            <section className={`${styles.panel} ${generationMode === "single-image" ? styles.storyboardImagePanel : ""}`}>
               <SectionTitle number={generationMode === "single-image" ? "1" : "2"}>{generationMode === "single-image" ? "STORYBOARD IMAGE" : "SOURCE"}</SectionTitle>
               <label className="mb-2 block text-[10px] font-bold">
                 {generationMode === "single-image" ? "Storyboard Sheet" : "Start Frame"} <small>(Required)</small>
@@ -1841,6 +2033,7 @@ export function VideoGenerationPage() {
                       <div className={styles.storyboardSplitHeader}>
                         <strong>{storyboardSplitting ? "Detecting storyboard grid…" : hasCurrentStoryboardSlices ? storyboardGridLabel ?? "Upload a storyboard sheet to detect scenes" : "Preparing storyboard scenes…"}</strong>
                         <small>{storyboardSplitting ? "Preparing scene images" : hasCurrentStoryboardSlices && storyboardSlices.length > 0 ? "Each panel becomes one video scene" : "Use a sheet with clear gutters between panels"}</small>
+                        {storyboardQualityNote ? <small className={styles.storyboardQualityNote} role="status">{storyboardQualityNote}</small> : null}
                       </div>
                       {hasCurrentStoryboardSlices && storyboardSlices.length > 0 ? (
                         <div className={styles.storyboardSliceRow}>
@@ -2388,6 +2581,40 @@ export function VideoGenerationPage() {
                 <input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAudioFile(file); event.currentTarget.value = ""; }} />
               </div>
             ) : null}
+            {activeVideoTab === "image-to-video" ? (
+              <div className={styles.postAudioCard}>
+                <div className={styles.settingLabel}><span>ADD AUDIO AFTER VIDEO</span><small>Optional</small></div>
+                <div className={styles.postAudioOptions} role="group" aria-label="Add audio after video">
+                  <div className={styles.toggleRow}>
+                    <span>Video to SFX</span>
+                    <button
+                      type="button"
+                      className={`${styles.toggle} ${postAudioSfxEnabled ? "" : styles.toggleOff}`}
+                      onClick={() => setPostAudioSfxEnabled((value) => !value)}
+                      aria-pressed={postAudioSfxEnabled}
+                      aria-label="Enable Video to SFX"
+                    >
+                      <i />
+                    </button>
+                  </div>
+                  <div className={styles.toggleRow}>
+                    <span>Video to Music</span>
+                    <button
+                      type="button"
+                      className={`${styles.toggle} ${postAudioMusicEnabled ? "" : styles.toggleOff}`}
+                      onClick={() => setPostAudioMusicEnabled((value) => !value)}
+                      aria-pressed={postAudioMusicEnabled}
+                      aria-label="Enable Video to Music"
+                    >
+                      <i />
+                    </button>
+                  </div>
+                </div>
+                {postAudioMode !== "none" ? (
+                  <small className={styles.postAudioHint}>ระบบจะใช้โมเดล default ที่ตั้งไว้ใน Admin ของแต่ละประเภท และรวมเสียงที่เลือกเข้ากับวิดีโอ</small>
+                ) : null}
+              </div>
+            ) : null}
             {modelParameterEntries.map(([name, property]) => {
               const value = modelParams[name];
               const isRequired = requiredProperties.has(name);
@@ -2467,12 +2694,31 @@ export function VideoGenerationPage() {
               );
             })}
             <div className={styles.estimateBlock}>
-              <div className={styles.estimate} title={creditEstimateError ?? undefined}>
+              <div className={styles.estimate} title={creditEstimateError ?? effectiveStoryboardUpscaleCreditError ?? undefined}>
                 <div>
                   ESTIMATED CREDITS <Info size={11} />
                 </div>
-                <span>{estimateDescription}<strong>{creditEstimateLoading || creditEstimate === null ? formattedCreditEstimate : `= ${formattedCreditEstimate}`}</strong></span>
+                <span>
+                  {estimateDescription}
+                  <strong>{creditEstimateLoading || effectiveStoryboardUpscaleCreditLoading || totalCreditEstimate === null ? formattedCreditEstimate : `= ${formattedCreditEstimate}`}</strong>
+                </span>
+                {shouldAutoUpscaleStoryboard ? (
+                  <small className={styles.autoUpscaleNote}>
+                    Includes automatic 2K AI Upscale for {generationScenes.length} storyboard scenes.
+                  </small>
+                ) : null}
               </div>
+              {isGeneratingVideo ? (
+                <button
+                  type="button"
+                  className={styles.textVideoCancel}
+                  onClick={() => void handleCancelVideo()}
+                  disabled={isCancellingVideo}
+                >
+                  {isCancellingVideo ? <LoaderCircle size={14} className={styles.creditSpinner} /> : <X size={14} />}
+                  {isCancellingVideo ? "CANCELLING…" : "CANCEL GENERATION"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={styles.generate}

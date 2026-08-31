@@ -69,7 +69,7 @@ type Asset = {
   tags: string[];
 };
 
-const tabs: AssetTab[] = ["My Assets", "Shared with me", "Team Assets", "Trash"];
+const tabs: AssetTab[] = ["My Assets"];
 
 const apiTabByLabel: Record<AssetTab, AssetsApiTab> = {
   "My Assets": "mine",
@@ -98,6 +98,7 @@ const filterByApiType: Record<AssetsApiType, Exclude<FilterType, "All Types">> =
 const filterOptions: FilterType[] = ["All Types", "Images", "Videos", "Documents", "Audio", "Other"];
 const defaultAssetFolderNames = new Set(["image", "videos", "voice", "document"]);
 const SIDEBAR_GROUP_LIMIT = 5;
+const ASSETS_CACHE_TTL_MS = 15_000;
 
 const previewFallbacks: Record<AssetsApiType, string> = {
   image: "/generated-assets/creative-studio-hero-with-text.png",
@@ -135,6 +136,8 @@ const emptyData: AssetsApiListData = {
   filters: { folders: [], tags: [] },
   pagination: { page: 1, limit: 12, total: 0, totalPages: 1, hasNext: false, hasPrevious: false },
 };
+
+type AssetsCacheEntry = { data: AssetsApiListData; cachedAt: number };
 
 function formatLabel(value: string): string {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
@@ -257,10 +260,7 @@ function SummaryMetric({ icon, value, label, color }: { icon: ReactNode; value: 
 }
 
 function AssetPreview({ asset }: { asset: Asset }) {
-  if (asset.mediaKind === "video" && asset.url) {
-    return <video src={asset.url} poster={asset.image} muted playsInline preload="metadata" aria-label={asset.title} />;
-  }
-  return <Image src={asset.image} alt="" fill sizes="(max-width: 1100px) 50vw, 22vw" unoptimized />;
+  return <Image src={asset.image} alt="" fill sizes="(max-width: 1100px) 50vw, 22vw" loading="lazy" unoptimized />;
 }
 
 function AssetPreviewPopup({ asset, onClose }: { asset: Asset; onClose: () => void }) {
@@ -324,8 +324,11 @@ export default function AssetsPage() {
   const [groupSaving, setGroupSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assetsData, setAssetsData] = useState<AssetsApiListData>(emptyData);
+  const assetsCacheRef = useRef(new Map<string, AssetsCacheEntry>());
+  const hasLoadedAssetsRef = useRef(false);
 
   useEffect(() => {
     const syncHeaderSearch = () => {
@@ -335,39 +338,75 @@ export default function AssetsPage() {
       setSearch(nextSearch);
       setPage(1);
     };
-    const intervalId = window.setInterval(syncHeaderSearch, 150);
-    return () => window.clearInterval(intervalId);
+    window.addEventListener("assets-search", syncHeaderSearch);
+    window.addEventListener("popstate", syncHeaderSearch);
+    return () => {
+      window.removeEventListener("assets-search", syncHeaderSearch);
+      window.removeEventListener("popstate", syncHeaderSearch);
+    };
   }, []);
 
   useEffect(() => {
+    const cacheKey = JSON.stringify({
+      tab: apiTabByLabel[activeTab],
+      type: apiTypeByFilter[activeType] ?? null,
+      search: search.trim(),
+      folder: activeFolder,
+      tag: activeTag,
+      sort: activeSort,
+      page,
+      refreshKey,
+    });
+    const cached = assetsCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < ASSETS_CACHE_TTL_MS) {
+      hasLoadedAssetsRef.current = true;
+      setAssetsData(cached.data);
+      setLoading(false);
+      setIsRefreshing(false);
+      setError(null);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const hadPreviousData = hasLoadedAssetsRef.current;
     let cancelled = false;
     const load = async () => {
-      setLoading(true);
+      setLoading(!hadPreviousData);
+      setIsRefreshing(hadPreviousData);
       setError(null);
       try {
         const nextData = await fetchAssets({
           tab: apiTabByLabel[activeTab],
           type: apiTypeByFilter[activeType],
-          search,
+          search: search.trim(),
           folder: activeFolder ?? undefined,
           tag: activeTag ?? undefined,
           sort: activeSort.toLowerCase() as "newest" | "oldest",
           page,
           limit: 12,
+          signal: controller.signal,
         });
-        if (!cancelled) setAssetsData(nextData);
-      } catch (requestError) {
         if (!cancelled) {
-          setAssetsData(emptyData);
-          setError(requestError instanceof Error ? requestError.message : "Unable to load assets");
+          assetsCacheRef.current.set(cacheKey, { data: nextData, cachedAt: Date.now() });
+          hasLoadedAssetsRef.current = true;
+          setAssetsData(nextData);
+        }
+      } catch (requestError) {
+        if (!cancelled && !controller.signal.aborted) {
+          if (!hadPreviousData) setAssetsData(emptyData);
+          setError(hadPreviousData ? null : requestError instanceof Error ? requestError.message : "Unable to load assets");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setIsRefreshing(false);
+        }
       }
     };
     const timeoutId = window.setTimeout(() => { void load(); }, search.trim() ? 220 : 0);
     return () => {
       cancelled = true;
+      controller.abort();
       window.clearTimeout(timeoutId);
     };
   }, [activeFolder, activeSort, activeTab, activeTag, activeType, page, refreshKey, search]);
@@ -449,6 +488,7 @@ export default function AssetsPage() {
   };
 
   const refreshAfterGroupMutation = async () => {
+    assetsCacheRef.current.clear();
     const nextMineData = await fetchAssets({
       tab: "mine",
       type: apiTypeByFilter[activeType],
@@ -498,6 +538,7 @@ export default function AssetsPage() {
     setBusyFolderName(folder.name);
     setPendingDeleteFolder(null);
     setError(null);
+    assetsCacheRef.current.clear();
     try {
       await deleteAssetFolder(folder.name);
       if (activeFolder === folder.id) {
@@ -524,6 +565,7 @@ export default function AssetsPage() {
     setBusyTagName(tag.name);
     setPendingDeleteTag(null);
     setError(null);
+    assetsCacheRef.current.clear();
     try {
       await deleteAssetTag(tag.name);
       if (activeTag === tag.id) {
@@ -713,7 +755,7 @@ export default function AssetsPage() {
             </div>
           </aside>
 
-          <div className={view === "grid" ? "assets-grid" : "assets-list"}>
+          <div className={`${view === "grid" ? "assets-grid" : "assets-list"} ${isRefreshing ? "is-refreshing" : ""}`} aria-busy={loading || isRefreshing}>
             {loading ? Array.from({ length: 8 }, (_, index) => <div className="asset-card assets-loading-card" key={`loading-${index}`} aria-hidden="true" />) : null}
             {!loading && error ? <div className="assets-error" role="alert"><AlertCircle size={24} /><strong>Unable to load assets</strong><span>{error}</span><button type="button" onClick={() => setRefreshKey((current) => current + 1)}>TRY AGAIN</button></div> : null}
             {!loading && !error ? assets.map((asset) => <article key={asset.id} className={`asset-card ${selectedAsset === asset.id ? "is-selected" : ""} ${openMenuAsset === asset.id ? "is-menu-open" : ""}`} onClick={() => openAssetPreview(asset)}>

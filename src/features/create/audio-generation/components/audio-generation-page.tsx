@@ -39,11 +39,11 @@ import styles from "./audio-generation-page.module.css";
 import { createDialogue, createSoundEffects, createTextToSpeech, createTextToSpeechScenes, createVoiceClone, deleteAudioHistory, fetchAudioHistoryAudio, getAudioCreditBalance, listAudioBackgroundMusic, listAudioHistory, listAudioModels, listAudioVoices, previewVoiceClone, quoteTextToSpeech, quoteTextToSpeechScenes, saveAudioHistory, type AudioBackgroundMusic, type AudioCreditQuote, type AudioHistoryEntry, type AudioModel, type AudioVoice, type SaveAudioHistoryInput, type SoundEffectVariant, type TextToSpeechResponse } from "@/lib/api/audio";
 
 const tabs = [
-  { label: "Text to Speech", icon: AudioWaveform },
-  { label: "Podcast & Dialogue", icon: Mic2 },
-  { label: "Voice Clone", icon: WandSparkles },
-  { label: "Sound Effects", icon: AudioLines },
-  { label: "Audio Cleanup", icon: Waves },
+  "Text to Speech",
+  "Podcast & Dialogue",
+  "Voice Clone",
+  "Sound Effects",
+  "Audio Cleanup",
 ] as const;
 
 const tones = [
@@ -404,7 +404,7 @@ function AudioCleanupLayout() {
 }
 
 export function AudioGenerationPage() {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]["label"]>("Text to Speech");
+  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Text to Speech");
   const [prompt, setPrompt] = useState(DEFAULT_AUDIO_PROMPT);
   const [tone, setTone] = useState("Energetic");
   const [language, setLanguage] = useState("English (US)");
@@ -1028,8 +1028,8 @@ export function AudioGenerationPage() {
     </section>
 
     <nav className={styles.featureTabs} aria-label="Audio tools">
-      {tabs.map(({ label, icon: Icon }) => <button key={label} type="button" className={activeTab === label ? styles.tabActive : styles.tab} onClick={() => setActiveTab(label)} aria-pressed={activeTab === label}>
-        <Icon size={16} strokeWidth={activeTab === label ? 2.5 : 1.9} />{label}
+      {tabs.map((label) => <button key={label} type="button" className={activeTab === label ? styles.tabActive : styles.tab} onClick={() => setActiveTab(label)} aria-pressed={activeTab === label}>
+        {label}
       </button>)}
     </nav>
 
@@ -1080,7 +1080,7 @@ export function AudioGenerationPage() {
         </div>
 
         <div className={styles.previewPanel}>
-           <div className={styles.previewHeader}><h2>AUDIO PREVIEW</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> Download</button><button type="button" className={styles.outlineAction} onClick={() => void handleGenerate()} disabled={status === "generating"}><RotateCcw size={15} /> Regenerate</button><button type="button" className={styles.iconAction} aria-label="More preview actions"><MoreHorizontal size={17} /></button></div></div>
+           <div className={styles.previewHeader}><h2>AUDIO PREVIEW</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> Download</button><button type="button" className={styles.iconAction} aria-label="More preview actions"><MoreHorizontal size={17} /></button></div></div>
            <PreviewWaveform audioUrl={audioUrl} progress={progress} isPlaying={isPlaying} />
            <div className={styles.playerRow}>
              <button type="button" className={styles.playButton} onClick={togglePlayback} aria-label={isPlaying ? "Pause audio" : "Play audio"} disabled={!audioUrl}>{isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}</button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Clock3, Minus, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Clock3, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { listGenerationHistory, resumeGeneration, type GenerationHistoryItem, type GenerationProgress, type PendingGeneration } from "@/lib/api/generations";
 import { emitGenerationCompleted } from "@/lib/generation-progress-events";
@@ -34,8 +34,6 @@ type ActivePendingGeneration = {
 
 const floatingProgressStorageKey = "eos.generation.progress.cards";
 const dismissedProgressStorageKey = "eos.generation.progress.dismissed";
-const completedAutoCollapseDelayMs = 5_000;
-
 function featureConfig(feature?: string) {
   return generationFeatureOptions.find((item) => item.feature === feature) ?? {
     feature: feature ?? "image-generation",
@@ -300,10 +298,8 @@ export function GenerationProgressFloating() {
   const isImageCreatePage = pathname === "/create/image";
   const router = useRouter();
   const [active, setActive] = useState<ActivePendingGeneration[]>([]);
-  const [collapsedGenerationIds, setCollapsedGenerationIds] = useState<Set<string>>(new Set());
+  const [isCenterOpen, setIsCenterOpen] = useState(false);
   const pollingRef = useRef(new Map<string, AbortController>());
-  const autoCollapseTimersRef = useRef(new Map<string, number>());
-  const autoCollapseHandledRef = useRef(new Set<string>());
   const activeRef = useRef(active);
   const dismissedGenerationIdsRef = useRef(new Set<string>());
   const completedGenerationIdsRef = useRef(new Set<string>());
@@ -312,51 +308,6 @@ export function GenerationProgressFloating() {
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
-
-  useEffect(() => {
-    const timers = autoCollapseTimersRef.current;
-    const handled = autoCollapseHandledRef.current;
-    const activeIds = new Set(active.map((item) => item.pending.generationId));
-    const completedIds = new Set(
-      active
-        .filter((item) => item.pending.status === "completed")
-        .map((item) => item.pending.generationId),
-    );
-
-    for (const generationId of handled) {
-      if (!activeIds.has(generationId)) handled.delete(generationId);
-    }
-
-    for (const [generationId, timerId] of timers) {
-      if (!completedIds.has(generationId)) {
-        window.clearTimeout(timerId);
-        timers.delete(generationId);
-      }
-    }
-
-    for (const item of active) {
-      const generationId = item.pending.generationId;
-      if (item.pending.status !== "completed" || handled.has(generationId) || timers.has(generationId)) continue;
-
-      const timerId = window.setTimeout(() => {
-        handled.add(generationId);
-        setCollapsedGenerationIds((current) => {
-          if (current.has(generationId)) return current;
-          const next = new Set(current);
-          next.add(generationId);
-          return next;
-        });
-        timers.delete(generationId);
-      }, completedAutoCollapseDelayMs);
-
-      timers.set(generationId, timerId);
-    }
-  }, [active]);
-
-  useEffect(() => () => {
-    for (const timerId of autoCollapseTimersRef.current.values()) window.clearTimeout(timerId);
-    autoCollapseTimersRef.current.clear();
-  }, []);
 
   useEffect(() => {
     const handleGenerationStarted = (event: Event) => {
@@ -486,80 +437,102 @@ export function GenerationProgressFloating() {
 
   if (isAssetsPage || active.length === 0) return null;
 
+  const inProgress = active.filter((item) => item.pending.status !== "completed");
+  const completedItems = active.filter((item) => item.pending.status === "completed");
+
+  const removeProgressForItem = (item: ActivePendingGeneration) => {
+    const generationId = item.pending.generationId;
+    dismissedGenerationIdsRef.current.add(generationId);
+    dismissGeneration(generationId);
+    removePersistedProgress(generationId);
+    pollingRef.current.get(generationId)?.abort();
+    pollingRef.current.delete(generationId);
+    const stored = window.sessionStorage.getItem(item.key);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as { generationId?: string };
+        if (parsed.generationId === generationId) window.sessionStorage.removeItem(item.key);
+      } catch {
+        // Ignore malformed stale progress storage and still dismiss the visible item.
+      }
+    }
+  };
+
+  const handleDismiss = (item: ActivePendingGeneration) => {
+    removeProgressForItem(item);
+    setActive((current) => current.filter((entry) => entry.pending.generationId !== item.pending.generationId));
+  };
+
+  const handleClearCompleted = () => {
+    const completedIds = new Set(completedItems.map((item) => item.pending.generationId));
+    completedItems.forEach(removeProgressForItem);
+    setActive((current) => current.filter((item) => !completedIds.has(item.pending.generationId)));
+  };
+
+  const renderGenerationItem = (item: ActivePendingGeneration) => {
+    const { label, tab, kind, pending } = item;
+    const generationId = pending.generationId;
+    const total = Math.max(1, pending.totalCount);
+    const completed = Math.min(total, Math.max(0, pending.completedCount));
+    const isCompleted = pending.status === "completed";
+    const isQueued = pending.status === "queued";
+    const percentage = isCompleted ? 100 : Math.round((completed / total) * 100);
+    const statusClass = isCompleted ? styles.statusCompleted : isQueued ? styles.statusQueued : styles.statusProcessing;
+    const visiblePercentage = percentage > 0 ? percentage : isQueued ? 10 : 22;
+
+    const handleCardClick = () => {
+      setIsCenterOpen(false);
+      router.push(`${kind === "video" ? "/create/video" : "/create/image"}?tab=${encodeURIComponent(tab)}`);
+    };
+
+    return <div className={styles.itemShell} key={generationId}>
+      <button type="button" className={styles.item} onClick={handleCardClick} aria-label={`Open ${label} generation`} title={`Open ${label} in ${kind === "video" ? "Video Studio" : "Image Studio"}`}>
+        <div className={styles.itemHeading}>
+          <span className={styles.itemLabel}><i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />{label}</span>
+          <b className={`${styles.status} ${statusClass}`}>{isCompleted ? "DONE" : isQueued ? "QUEUED" : "PROCESSING"}</b>
+        </div>
+        <div className={styles.track} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage} aria-label={`${label}: ${percentage}% complete`}>
+          <span className={`${styles.bar} ${percentage === 0 ? styles.barIndeterminate : ""}`} style={{ width: `${visiblePercentage}%` }} />
+        </div>
+        <div className={styles.meta}>
+          <span>{completed}/{total} {kind === "video" ? (total === 1 ? "video" : "videos") : (total === 1 ? "image" : "images")} ready</span>
+          <span className={styles.eta}>{isCompleted ? <><CheckCircle2 size={12} /> <strong>Generation completed</strong></> : <><Clock3 size={12} /> <strong>{isQueued ? "Waiting for a slot" : "Processing"}</strong></>}</span>
+        </div>
+      </button>
+      {isCompleted && <button type="button" className={styles.dismiss} onClick={() => handleDismiss(item)} aria-label={`Dismiss ${label} generation`} title="Dismiss completed generation"><X size={13} /></button>}
+    </div>;
+  };
+
   return <div className={styles.wrapper}>
-    {active.map((item) => {
-      const { label, tab, kind, pending } = item;
-      const generationId = pending.generationId;
-      const total = Math.max(1, pending.totalCount);
-      const completed = Math.min(total, Math.max(0, pending.completedCount));
-      const isCompleted = pending.status === "completed";
-      const isQueued = pending.status === "queued";
-      const percentage = isCompleted ? 100 : Math.round((completed / total) * 100);
-      const statusClass = isCompleted ? styles.statusCompleted : isQueued ? styles.statusQueued : styles.statusProcessing;
-      const visiblePercentage = percentage > 0 ? percentage : isQueued ? 10 : 22;
-      const isCardCollapsed = collapsedGenerationIds.has(generationId);
-
-      const handleCardClick = () => {
-        router.push(`${kind === "video" ? "/create/video" : "/create/image"}?tab=${encodeURIComponent(tab)}`);
-      };
-
-      const handleCollapse = () => setCollapsedGenerationIds((current) => new Set(current).add(generationId));
-      const handleExpand = () => setCollapsedGenerationIds((current) => {
-        const next = new Set(current);
-        next.delete(generationId);
-        return next;
-      });
-
-      const handleDismiss = () => {
-        dismissedGenerationIdsRef.current.add(generationId);
-        dismissGeneration(generationId);
-        removePersistedProgress(generationId);
-        pollingRef.current.get(generationId)?.abort();
-        pollingRef.current.delete(generationId);
-        const stored = window.sessionStorage.getItem(item.key);
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored) as { generationId?: string };
-            if (parsed.generationId === generationId) window.sessionStorage.removeItem(item.key);
-          } catch {
-            // Ignore malformed stale progress storage and still dismiss the visible card.
-          }
-        }
-
-        setCollapsedGenerationIds((current) => {
-          const next = new Set(current);
-          next.delete(generationId);
-          return next;
-        });
-        setActive((current) => current.filter((entry) => entry.pending.generationId !== generationId));
-      };
-
-      if (isCardCollapsed) return <div className={styles.collapsedItem} key={generationId}>
-        <button type="button" className={styles.collapsedCard} onClick={handleExpand} aria-expanded="false" aria-label={`Show ${label} generation progress`} title="Show generation progress">
-          <i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />
-          <span>{label}</span>
-          <b>{isCompleted ? "DONE" : `${completed}/${total}`}</b>
-        </button>
-      </div>;
-
-      return <div className={styles.cardShell} key={generationId}>
-        <button type="button" className={`${styles.card} ${isCompleted ? styles.cardCompleted : ""}`} onClick={handleCardClick} aria-label={`Open ${label} generation`} title={`Open ${label} in ${kind === "video" ? "Video Studio" : "Image Studio"}`}>
-          <div className={styles.heading}>
-            <span className={styles.headingLabel}><i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />GENERATION PROGRESS</span>
-            <span className={styles.feature}>{label}</span>
-          {!isCompleted && <b className={`${styles.status} ${statusClass}`}>{isQueued ? "QUEUED" : "PROCESSING"}</b>}
-          </div>
-          <div className={styles.track} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage} aria-label={`${label}: ${percentage}% complete`}>
-            <span className={`${styles.bar} ${percentage === 0 ? styles.barIndeterminate : ""}`} style={{ width: `${visiblePercentage}%` }} />
-          </div>
-          <div className={styles.meta}>
-            <span>{completed}/{total} {kind === "video" ? (total === 1 ? "video" : "videos") : (total === 1 ? "image" : "images")} ready</span>
-            <span className={styles.eta}>{isCompleted ? <><CheckCircle2 size={12} /> <strong>Generation completed</strong></> : <><Clock3 size={12} /> <strong>{isQueued ? "Waiting for a slot" : "Processing"}</strong></>}</span>
-          </div>
-        </button>
-        <button type="button" className={styles.collapse} onClick={handleCollapse} aria-label="Minimize generation progress" title="Minimize generation progress"><Minus size={13} /></button>
-        {isCompleted && <button type="button" className={styles.dismiss} onClick={handleDismiss} aria-label={`Dismiss ${label} generation`} title="Dismiss completed generation"><X size={13} /></button>}
-      </div>;
-    })}
+    {isCenterOpen && <section className={styles.center} aria-label="Generation center">
+      <div className={styles.centerHeader}>
+        <div>
+          <span className={styles.centerTitle}><i className={`${styles.dot} ${inProgress.length > 0 ? "" : styles.dotCompleted}`} />GENERATION CENTER</span>
+          <small>{active.length} {active.length === 1 ? "generation" : "generations"}</small>
+        </div>
+        <div className={styles.centerActions}>
+          <button type="button" className={styles.panelToggle} onClick={() => setIsCenterOpen(false)} aria-label="Collapse generation center" title="Collapse generation center"><ChevronDown size={15} /></button>
+        </div>
+      </div>
+      {inProgress.length > 0 && <section className={styles.group} aria-labelledby="generation-center-progress">
+        <h3 id="generation-center-progress"><span className={styles.groupLabel}>IN PROGRESS</span><span className={styles.groupCount}>{inProgress.length}</span></h3>
+        {inProgress.map(renderGenerationItem)}
+      </section>}
+      {completedItems.length > 0 && <section className={styles.group} aria-labelledby="generation-center-completed">
+        <h3 id="generation-center-completed">
+          <span className={styles.groupLabel}>COMPLETED</span>
+          <span className={styles.groupHeaderActions}>
+            <button type="button" className={styles.clearCompleted} onClick={handleClearCompleted}>Clear completed</button>
+            <span className={styles.groupCount}>{completedItems.length}</span>
+          </span>
+        </h3>
+        {completedItems.map(renderGenerationItem)}
+      </section>}
+    </section>}
+    <button type="button" className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`} onClick={() => setIsCenterOpen((open) => !open)} aria-expanded={isCenterOpen} aria-label="Open generation center" title="Open generation center">
+      <i className={`${styles.dot} ${inProgress.length === 0 ? styles.dotCompleted : ""}`} />
+      <span className={styles.launcherCopy}><strong>GENERATIONS</strong><small>{active.length} {active.length === 1 ? "generation" : "generations"} · {inProgress.length > 0 ? `${inProgress.length} in progress` : "All complete"}</small></span>
+      {isCenterOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+    </button>
   </div>;
 }

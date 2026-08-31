@@ -38,6 +38,29 @@ No actionable P0, P1, or P2 differences remain for the requested tab layout.
 
 - The source reference has a wider cropped presentation than the implementation because the Video page intentionally retains the studio sidebar. This is an expected page-shell difference, not a tab component mismatch.
 
+## Design QA — Storyboard image upload card
+
+### Comparison target
+
+- Source visual truth: `C:\Users\Thatawat.T\AppData\Local\Temp\codex-clipboard-6398e540-76b8-477a-a33b-196573a5fe88.png`
+- Implementation page: `http://localhost:3000/create/video`
+- Implementation capture: `C:\Work\eos-creative-studio\qa-storyboard-image-card-full.png`
+- Focused comparison input: `C:\Work\eos-creative-studio\qa-storyboard-image-card-comparison.png`
+
+### Capture normalization
+
+- Source capture: 357 × 250 px, focused upload-field crop.
+- Implementation viewport: 1280 × 720 CSS px; browser capture: 1264 × 1158 px full page.
+- Browser device pixel ratio observed: 1.25; the focused implementation region was resized only for side-by-side inspection.
+- State: Image to Video selected, default Single Storyboard Image, empty storyboard upload field.
+
+### Evidence and findings
+
+- Full-view and focused comparisons show the storyboard input now uses the same rounded white card treatment, orange annotation, neutral dashed upload border, centered upload icon/copy, and compact helper copy as the surrounding creation panels.
+- Earlier issue: the upload area was too tall and the title could wrap beside the annotation at the tested width. Fix: reduced the upload/source preview height to 120px, tightened card spacing, and kept the section title on one line with a responsive annotation width.
+- Console errors during the browser check: 0.
+- No actionable P0, P1, or P2 differences remain for this focused UI change.
+
 ## Final result
 
 passed

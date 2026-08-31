@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, Database, Layers3, Search } from "lucide-react";
+import { Bell, Layers3, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { GenerationProgressFloating } from "@/components/app-shell/generation-progress-floating";
 import { MobileNavigation } from "@/components/app-shell/mobile-navigation";
@@ -16,7 +16,6 @@ export function StudioHeader() {
   const pathnameFromRouter = usePathname();
   const hydrated = useHydrated();
   const pathname = hydrated ? pathnameFromRouter : "";
-  const isAudioStudio = pathname.startsWith("/create/audio");
   const isAssets = pathname.startsWith("/assets");
   const isUsage = pathname === "/usage";
 
@@ -52,10 +51,10 @@ export function StudioHeader() {
             {isAssets ? <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-[#f6f7f9] px-2 py-1 text-[10px] font-semibold text-[#4c4e5c]">⌘ K</span> : null}
           </div>
           <button className="rounded-xl p-2.5 text-muted-foreground hover:bg-surface-muted md:hidden" aria-label="Search projects, assets, templates"><Search size={18} /></button>
-          {isAssets || isUsage ? null : <div className="header-credits-badge hidden h-9 items-center gap-2 rounded-full border border-border bg-white px-3.5 text-[13px] font-semibold text-foreground sm:flex">{isAudioStudio ? <Database size={18} className="text-foreground" strokeWidth={2.4} /> : <Layers3 size={18} className="text-primary" strokeWidth={2.4} />}<span>{isAudioStudio ? "4,250 Credits" : account.creditsLabel}</span></div>}
+          {isAssets || isUsage ? null : <div className="header-credits-badge hidden h-9 items-center gap-2 rounded-full border border-border bg-white px-3.5 text-[13px] font-semibold text-foreground sm:flex"><Layers3 size={18} className="text-primary" strokeWidth={2.4} /><span>{account.creditsLabel}</span></div>}
           <button className="relative rounded-xl p-2.5 text-muted-foreground hover:bg-surface-muted" aria-label="Open notifications"><Bell size={18} /><span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">2</span></button>
           <div className="hidden h-7 w-px bg-border sm:block" />
-          <AccountMenu displayName={isAssets || isAudioStudio || isUsage ? "EOS Admin" : account.displayName} role="Owner" useUserIcon onOpenChange={setIsAccountMenuOpen} />
+          <AccountMenu displayName={account.displayName} role="Owner" useUserIcon onOpenChange={setIsAccountMenuOpen} />
         </div>
       </header>
       <GenerationProgressFloating />

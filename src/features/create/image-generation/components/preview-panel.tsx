@@ -275,7 +275,7 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
           <div className={cx("gen-thumb-row")} ref={variationRowRef}>
             {variationSources.length ? variationSources.map((src, index) => {
               const originalIndex = generatedImageUrls.indexOf(src);
-              return <button type="button" key={src} onClick={() => { onVariationSelect(originalIndex); selectCurrentImage(variationSources, index, "variation"); }} className={selectedVariation === originalIndex ? cx("is-selected") : undefined} aria-label={`Variation ${index + 1}`} aria-pressed={selectedVariation === originalIndex}>
+              return <button type="button" key={src} onClick={() => { selectCurrentImage(variationSources, index, "variation"); onVariationSelect(originalIndex); }} className={selectedVariation === originalIndex ? cx("is-selected") : undefined} aria-label={`Variation ${index + 1}`} aria-pressed={selectedVariation === originalIndex}>
                 <img src={src} alt={`Generated variation ${index + 1}`} className={cx("gen-generated-thumbnail-image")} onError={() => markImageUnavailable(src)} />
               </button>;
             }) : <div className={cx("gen-gallery-status")}>{isGenerating ? "Generating variations..." : "Generated variations will appear here."}</div>}

@@ -137,6 +137,7 @@ export type FetchAssetsInput = {
   page?: number;
   limit?: number;
   workspaceId?: string;
+  signal?: AbortSignal;
 };
 
 export async function fetchAssets(input: FetchAssetsInput): Promise<AssetsApiListData> {
@@ -151,7 +152,7 @@ export async function fetchAssets(input: FetchAssetsInput): Promise<AssetsApiLis
   if (input.tag) query.set("tag", input.tag);
   if (input.sort) query.set("sort", input.sort);
   if (input.workspaceId) query.set("workspaceId", input.workspaceId);
-  return request<AssetsApiListData>(`/assets?${query.toString()}`);
+  return request<AssetsApiListData>(`/assets?${query.toString()}`, { signal: input.signal });
 }
 
 export async function fetchAsset(assetId: string, workspaceId?: string): Promise<AssetsApiAsset> {

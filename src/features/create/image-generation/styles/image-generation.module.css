@@ -194,11 +194,13 @@
 .gen-style-transfer-panel .gen-panel-title { margin-bottom: 8px; }
 .gen-style-transfer-panel .gen-style-transfer-badge { padding: 3px 7px; color: #fff; background: #f51591; border-radius: 999px; font-size: 8px; font-style: normal; letter-spacing: .08em; }
 .gen-inline-helper { margin: 6px 0 0; color: #7a818b; font-size: 9px; line-height: 1.45; }
-.gen-style-source-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; background: #f6f5f4; border-radius: 8px; }
+.gen-style-source-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 8px; padding: 3px; background: #f6f5f4; border-radius: 8px; }
 .gen-style-source-switch button { min-height: 30px; padding: 5px 7px; color: #727780; background: transparent; border: 0; border-radius: 6px; font-size: 9px; font-weight: 700; cursor: pointer; }
 .gen-style-source-switch button.is-selected { color: #202124; background: #fff; box-shadow: 0 1px 5px rgba(43, 35, 28, .1); }
-.gen-style-transfer-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.gen-style-transfer-grid button { min-width: 0; padding: 0; color: #464b53; background: transparent; border: 0; text-align: center; cursor: pointer; }
+.gen-style-transfer-gallery { position: relative; min-width: 0; }
+.gen-style-transfer-grid { display: flex; min-width: 0; gap: 6px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; scroll-snap-type: x proximity; }
+.gen-style-transfer-grid::-webkit-scrollbar { display: none; }
+.gen-style-transfer-grid button { min-width: calc((100% - 18px) / 4); flex: 0 0 calc((100% - 18px) / 4); padding: 0; color: #464b53; background: transparent; border: 0; text-align: center; cursor: pointer; scroll-snap-align: start; }
 .gen-style-transfer-grid button.is-selected { color: #f15b20; }
 .gen-style-transfer-thumb { position: relative; display: block; height: 64px; overflow: hidden; border: 2px solid transparent; border-radius: 8px; background: #f1f1f1; }
 .gen-style-transfer-grid button.is-selected .gen-style-transfer-thumb { border-color: #f26b38; box-shadow: 0 3px 10px rgba(242, 107, 56, .2); }

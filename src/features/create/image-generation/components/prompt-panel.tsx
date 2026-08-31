@@ -115,7 +115,7 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
       row.removeEventListener("scroll", updateScrollState);
       window.removeEventListener("resize", updateScrollState);
     };
-  }, [activeTab]);
+  }, [activeTab, stylePresetOptions.length, styleTransferPresetOptions.length]);
 
   const scrollStylePresets = (direction: 1 | -1) => {
     const row = stylePresetRowRef.current;
@@ -155,11 +155,15 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
         <button type="button" role="tab" aria-selected={styleSourceMode === "preset"} className={styleSourceMode === "preset" ? cx("is-selected") : undefined} onClick={() => onStyleSourceModeChange("preset")}>Style preset</button>
         <button type="button" role="tab" aria-selected={styleSourceMode === "reference"} className={styleSourceMode === "reference" ? cx("is-selected") : undefined} onClick={() => onStyleSourceModeChange("reference")} disabled={!styleTransferSupportsReference}>Upload reference</button>
       </div>
-      {styleSourceMode === "preset" ? <div className={cx("gen-style-transfer-grid")}>
-        {styleTransferPresetOptions.map((item) => <button type="button" key={item.id} onClick={() => onStyleTransferPresetChange(item.name)} className={styleTransferPreset === item.name ? cx("is-selected") : undefined} aria-pressed={styleTransferPreset === item.name}>
-          <span className={cx("gen-style-transfer-thumb")} style={presetThumbStyle(item.imageUrl)} role="img" aria-label={`${item.name} style preset`}>{styleTransferPreset === item.name && <span className={cx("gen-selected-check")}><Check size={11} strokeWidth={3} /></span>}</span>
-          <small>{item.name}</small>
-        </button>)}
+      {styleSourceMode === "preset" ? <div className={cx("gen-style-transfer-gallery")}>
+        <div className={cx("gen-style-transfer-grid")} ref={stylePresetRowRef}>
+          {styleTransferPresetOptions.map((item) => <button type="button" key={item.id} onClick={() => onStyleTransferPresetChange(item.name)} className={styleTransferPreset === item.name ? cx("is-selected") : undefined} aria-pressed={styleTransferPreset === item.name}>
+            <span className={cx("gen-style-transfer-thumb")} style={presetThumbStyle(item.imageUrl)} role="img" aria-label={`${item.name} style preset`}>{styleTransferPreset === item.name && <span className={cx("gen-selected-check")}><Check size={11} strokeWidth={3} /></span>}</span>
+            <small>{item.name}</small>
+          </button>)}
+        </div>
+        {stylePresetScrollState.canGoBack && <button type="button" className={cx("gen-gallery-prev")} onClick={() => scrollStylePresets(-1)} aria-label="Previous style transfer presets"><ChevronLeft size={18} /></button>}
+        {stylePresetScrollState.canGoForward && <button type="button" className={cx("gen-gallery-next")} onClick={() => scrollStylePresets(1)} aria-label="Next style transfer presets"><ChevronRight size={18} /></button>}
       </div> : <div className={cx("gen-style-transfer-reference")}>
         <SourceImageUpload imageUrl={styleReferenceImage} onImageChange={onStyleReferenceImageChange} onClear={onStyleReferenceImageClear} purpose="style-reference" feature="ai-style-transfer" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} disabled={!styleTransferSupportsReference} />
         <p className={cx("gen-inline-helper")}>Use another image as the visual style reference.</p>
@@ -184,7 +188,7 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
     {!imageToImage && <div className={cx("gen-panel-title")}><h2>PROMPT</h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>}
     {imageToImage && <div className={cx("gen-section-heading", "gen-annotated-prompt-heading")}><h3>PROMPT</h3><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>}
     <label className={cx("gen-textarea-wrap")}><textarea id="gen-prompt-input" value={prompt} onChange={(event) => onPromptChange(event.target.value)} placeholder={imageToImage ? "Describe how you want to transform the image" : undefined} aria-label={imageToImage ? "Describe how you want to transform the image" : "Prompt"} /></label>
-    {imageToImage && <><div className={cx("gen-section-heading")}><h3>SOURCE IMAGE <em>(Required{maxSourceImages > 1 ? ` · up to ${maxSourceImages}` : ""})</em></h3></div><SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} imageUrls={sourceImages} onImagesChange={onSourceImagesChange} maxImages={maxSourceImages} purpose="content" feature="image-to-image" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} /></>}
+    {imageToImage && <><div className={cx("gen-section-heading")}><h3>REFERENCE IMAGES <em>(Required{maxSourceImages > 1 ? ` · up to ${maxSourceImages}` : ""})</em></h3></div><SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} imageUrls={sourceImages} onImagesChange={onSourceImagesChange} maxImages={maxSourceImages} purpose="content" feature="image-to-image" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} /></>}
     {imageToImage && <div className={cx("gen-strength-control", !imageToImageSupportsStrength && "is-disabled")}><div><span>IMAGE STRENGTH <Info size={12} /></span><strong>{imageStrength}%</strong></div><input type="range" min="0" max="100" step="1" value={imageStrength} onChange={(event) => onImageStrengthChange(Number(event.target.value))} aria-label="Image strength" disabled={!imageToImageSupportsStrength} /><p><span>0% keeps the original image</span><span>100% follows the prompt more</span></p>{!imageToImageSupportsStrength && <small>This model does not support strength control.</small>}</div>}
     <div className={cx("gen-toggle-row")}><span>Smart Enhance <Info size={12} /></span><button type="button" className={cx("gen-toggle", smartEnhance && "is-on")} aria-label={`Smart Enhance ${smartEnhance ? "on" : "off"}`} aria-pressed={smartEnhance} onClick={() => onSmartEnhanceChange(!smartEnhance)}><i /></button></div>
     <div className={cx("gen-section-heading")}><h3>STYLE PRESETS</h3><button type="button">View all</button></div>

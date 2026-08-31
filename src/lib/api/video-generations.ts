@@ -26,6 +26,9 @@ export type VideoGenerationInput = {
   aspectRatio?: string;
   generateAudio?: boolean;
   audioUrl?: string;
+  audioMode?: "none" | "sfx" | "music" | "both";
+  audioModel?: string;
+  audioPrompt?: string;
   modelParams?: Record<string, unknown>;
   scenes: VideoGenerationSceneInput[];
   idempotencyKey: string;
@@ -39,6 +42,15 @@ export type VideoStoryboardResponse = {
   completedScenes?: number;
   failedScenes?: number;
   totalCreditCost?: number;
+  audioMode?: "none" | "sfx" | "music" | "both" | string;
+  audioModel?: string;
+  audioProvider?: string;
+  audioCreditCost?: number;
+  audio?: {
+    mode?: "none" | "sfx" | "music" | "both" | string;
+    model?: string;
+    provider?: string;
+  };
   continuation?: {
     strategy?: string;
     nativeExtend?: boolean;
@@ -53,6 +65,10 @@ export type VideoCreditQuoteResponse = {
   mode?: "storyboard" | "continuous" | "flexible" | string;
   totalScenes?: number;
   totalDuration?: number | null;
+  audioMode?: "none" | "sfx" | "music" | "both" | string;
+  audioModel?: string;
+  audioProvider?: string;
+  audioCreditCost?: number;
   totalCreditCost?: number;
   scenes?: Array<{
     sceneIndex?: number;
@@ -93,6 +109,9 @@ export type VideoStoryboardStatus = {
   completedScenes?: number;
   failedScenes?: number;
   totalDuration?: number | null;
+  audioMode?: "none" | "sfx" | "music" | "both" | string;
+  audioModel?: string;
+  audioProvider?: string;
   finalVideoUrl?: string;
   continuation?: {
     strategy?: string;
@@ -195,6 +214,12 @@ export async function quoteDirectVideoGeneration(input: DirectVideoQuoteInput): 
 
 export async function getVideoStoryboardStatus(storyboardId: string): Promise<VideoStoryboardStatus> {
   return await authenticatedRequest(`/generations/video/image-to-video/${encodeURIComponent(storyboardId)}/status`) as VideoStoryboardStatus;
+}
+
+export async function cancelVideoStoryboard(storyboardId: string): Promise<VideoStoryboardStatus> {
+  return await authenticatedRequest(`/generations/video/image-to-video/${encodeURIComponent(storyboardId)}/cancel`, {
+    method: "POST",
+  }) as VideoStoryboardStatus;
 }
 
 export async function listVideoStoryboardHistory(workspaceId?: string | null, limit = 12): Promise<VideoStoryboardHistoryItem[]> {
