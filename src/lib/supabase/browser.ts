@@ -20,6 +20,17 @@ export function getSupabaseBrowserClient() {
       autoRefreshToken: true,
       detectSessionInUrl: true,
     },
+    // Scoped to the shared parent domain (not just creative.eoslabs.tech)
+    // so EOS CUT (cut.eoslabs.tech) can read the same session cookie and
+    // recognize an already-signed-in user automatically, without a
+    // separate login step.
+    cookieOptions: {
+      domain: ".eoslabs.tech",
+      path: "/",
+      sameSite: "lax",
+      secure: true,
+      maxAge: 60 * 60 * 24 * 365,
+    },
   });
 
   return browserClient;
