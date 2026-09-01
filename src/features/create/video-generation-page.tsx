@@ -77,6 +77,7 @@ const tutorialImages = [
   "/generated-assets/recent-5.png",
   "/generated-assets/preview-live.png",
 ];
+const floatingGenerationProgressStorageKey = "eos.generation.progress.cards";
 const videoModeOptions = [
   {
     value: "storyboard",
@@ -529,7 +530,15 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
       if (gridGapsX.length === columns - 1) detectedColumns = axisCells(canvas.width, gridGapsX);
       if (gridGapsY.length === rows - 1) detectedRows = axisCells(canvas.height, gridGapsY);
     }
-    if (cellCount < 2 || cellCount > maxScenes) {
+    // A single full-frame image is also a valid one-scene storyboard. Keep
+    // the same crop/zoom pipeline while allowing a one-panel test or upload.
+    if (cellCount === 1) {
+      detectedColumns = [{ start: 0, end: canvas.width }];
+      detectedRows = [{ start: 0, end: canvas.height }];
+      columns = 1;
+      rows = 1;
+    }
+    if (cellCount < 1 || cellCount > maxScenes) {
       throw new Error(`ไม่พบตาราง storyboard ที่รองรับ (ระบบรองรับสูงสุด ${maxScenes} ฉาก)`);
     }
 
@@ -933,6 +942,96 @@ export function VideoGenerationPage() {
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [loadVideoHistory]);
+  useEffect(() => {
+    if (searchParams.get("tab") !== "image-to-video") return;
+
+    let disposed = false;
+
+    const waitForNextPoll = () => new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 2500);
+    });
+
+    const readPersistedStoryboard = (): { generationId: string; completed: number; total: number } | null => {
+      try {
+        const raw = window.localStorage.getItem(floatingGenerationProgressStorageKey);
+        const parsed = raw ? JSON.parse(raw) as unknown : null;
+        if (!Array.isArray(parsed)) return null;
+        const candidates = parsed.filter((item): item is {
+          feature?: unknown;
+          pending?: { generationId?: unknown; pollUrl?: unknown; status?: unknown; completedCount?: unknown; totalCount?: unknown };
+        } => Boolean(item) && typeof item === "object")
+          .filter((item) => item.feature === "image-to-video" && item.pending?.status !== "completed"
+            && typeof item.pending?.generationId === "string"
+            && typeof item.pending?.pollUrl === "string"
+            && item.pending.pollUrl.includes("/generations/video/image-to-video/"));
+        const item = candidates[candidates.length - 1];
+        const pending = item?.pending;
+        if (!pending || typeof pending.generationId !== "string") return null;
+        return {
+          generationId: pending.generationId,
+          completed: typeof pending.completedCount === "number" ? pending.completedCount : 0,
+          total: typeof pending.totalCount === "number" ? pending.totalCount : 0,
+        };
+      } catch {
+        return null;
+      }
+    };
+
+    const applyProcessingStatus = (status: Awaited<ReturnType<typeof getVideoStoryboardStatus>>, generationId: string) => {
+      if (disposed) return;
+      setActiveStoryboardId(status.storyboardId ?? generationId);
+      setGenerationStatus("processing");
+      setGenerationError(null);
+      setIsCancellingVideo(false);
+      setGenerationProgress({
+        completed: status.completedScenes ?? 0,
+        total: status.totalScenes ?? 0,
+      });
+      setNotice("Generating video…");
+    };
+
+    const restoreProcessingStoryboard = async () => {
+      const persisted = readPersistedStoryboard();
+      if (!persisted) return;
+
+      let status = await getVideoStoryboardStatus(persisted.generationId);
+      if (disposed) return;
+      if (status.status !== "processing" && status.status !== "queued") return;
+
+      applyProcessingStatus(status, persisted.generationId);
+      while (!disposed && status.status !== "completed" && status.status !== "failed" && status.status !== "cancelled") {
+        await waitForNextPoll();
+        if (disposed) return;
+        status = await getVideoStoryboardStatus(persisted.generationId);
+        if (status.status === "processing" || status.status === "queued") applyProcessingStatus(status, persisted.generationId);
+      }
+      if (disposed) return;
+
+      setGenerationProgress({
+        completed: status.completedScenes ?? (status.status === "completed" ? status.totalScenes ?? persisted.total : persisted.completed),
+        total: status.totalScenes ?? persisted.total,
+      });
+      setIsCancellingVideo(false);
+      if (status.status === "completed" && status.finalVideoUrl) {
+        setFinalVideoUrl(status.finalVideoUrl);
+        setLatestCompletedStoryboardId(persisted.generationId);
+        setGenerationStatus("completed");
+        setNotice("Video ready");
+        void loadVideoHistory(status.workspaceId ?? undefined);
+        return;
+      }
+      setActiveStoryboardId(null);
+      setGenerationStatus(status.status === "cancelled" ? "cancelled" : "failed");
+      setNotice(status.status === "cancelled" ? "Video generation cancelled" : null);
+    };
+
+    void restoreProcessingStoryboard().catch(() => {
+      if (!disposed) setActiveStoryboardId(null);
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [loadVideoHistory, searchParams]);
   useEffect(() => {
     let active = true;
     void getVideoStoryboardSettings()
