@@ -297,6 +297,7 @@ export function useImageGenerationState() {
   const [upscaleModelOptions, setUpscaleModelOptions] = useState<GenerationModelOption[]>([]);
   const [extendModelOptions, setExtendModelOptions] = useState<GenerationModelOption[]>([]);
   const [stylePresetOptions, setStylePresetOptions] = useState<GenerationStylePreset[]>(fallbackStylePresetOptions);
+  const [styleTransferPresetOptions, setStyleTransferPresetOptions] = useState<GenerationStylePreset[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedImageToImageModel, setSelectedImageToImageModel] = useState("");
   const [selectedStyleTransferModel, setSelectedStyleTransferModel] = useState("");
@@ -756,10 +757,17 @@ export function useImageGenerationState() {
     }).catch(() => {
       // The UI remains available while the backend route is being configured.
     }).finally(finishModelLoad);
-    void listStylePresets().then((presets) => {
+    const stylePresetFeatures: StylePresetFeature[] = ["text-to-image", "image-to-image", "style-transfer", "background-removal"];
+    void Promise.all(stylePresetFeatures.map((feature) => listStylePresets(feature).catch(() => []))).then((presetGroups) => {
+      const styleTransferPresetsFromApi = presetGroups[2].filter((preset) => preset.enabled).sort((left, right) => left.sortOrder - right.sortOrder);
+      setStyleTransferPresetOptions(styleTransferPresetsFromApi);
+      const presetsById = new Map<string, GenerationStylePreset>();
+      presetGroups.flat().forEach((preset) => {
+        const existing = presetsById.get(preset.id);
+        presetsById.set(preset.id, existing ? { ...existing, ...preset, features: Array.from(new Set([...existing.features, ...preset.features])) } : preset);
+      });
+      const presets = Array.from(presetsById.values()).sort((left, right) => left.sortOrder - right.sortOrder);
       if (presets.length > 0) setStylePresetOptions(presets);
-    }).catch(() => {
-      // Keep the local presets as a short-lived fallback while the API is unavailable.
     });
     return () => {
       isMounted = false;
@@ -1649,6 +1657,7 @@ export function useImageGenerationState() {
     upscaleModelOptions,
     extendModelOptions,
     stylePresetOptions,
+    styleTransferPresetOptions,
     modelCapabilities: selectedModelCapabilities,
     modelParams,
     selectedModel,

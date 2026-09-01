@@ -1,7 +1,12 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import LoginPageClient from "./login-page-client";
 
 export const metadata = { title: "Log in" };
 
 export default function LoginPage() {
-  redirect("/?login=1");
+  return (
+    <Suspense fallback={null}>
+      <LoginPageClient />
+    </Suspense>
+  );
 }

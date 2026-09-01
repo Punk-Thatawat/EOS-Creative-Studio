@@ -25,6 +25,8 @@ export type VideoGenerationInput = {
   resolution?: string;
   aspectRatio?: string;
   generateAudio?: boolean;
+  /** Ask the backend to upscale each manual storyboard frame before video generation. */
+  autoUpscale?: boolean;
   audioUrl?: string;
   audioMode?: "none" | "sfx" | "music" | "both";
   audioModel?: string;
@@ -46,6 +48,9 @@ export type VideoStoryboardResponse = {
   audioModel?: string;
   audioProvider?: string;
   audioCreditCost?: number;
+  upscaleModel?: string;
+  upscaleProvider?: string;
+  upscaleCreditCost?: number;
   audio?: {
     mode?: "none" | "sfx" | "music" | "both" | string;
     model?: string;
@@ -69,6 +74,9 @@ export type VideoCreditQuoteResponse = {
   audioModel?: string;
   audioProvider?: string;
   audioCreditCost?: number;
+  upscaleModel?: string;
+  upscaleProvider?: string;
+  upscaleCreditCost?: number;
   totalCreditCost?: number;
   scenes?: Array<{
     sceneIndex?: number;

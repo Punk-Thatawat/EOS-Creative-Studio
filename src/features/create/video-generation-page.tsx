@@ -28,7 +28,6 @@ import { listGenerationModels, type GenerationModelOption } from "@/lib/api/gene
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { uploadImageAsset } from "@/lib/api/storage";
-import { createUpscale, quoteImageGeneration } from "@/lib/api/generations";
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
 import {
   createVideoStoryboard,
@@ -236,6 +235,118 @@ function findStoryboardContentBounds(
   };
 }
 
+type StoryboardFrameSide = "left" | "right" | "top" | "bottom";
+
+type StoryboardEdgeStats = {
+  mean: number;
+  stdev: number;
+  saturation: number;
+};
+
+function storyboardEdgeStats(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  side: StoryboardFrameSide,
+  offset: number,
+  bounds: { x: number; y: number; width: number; height: number },
+): StoryboardEdgeStats {
+  const horizontal = side === "top" || side === "bottom";
+  const length = horizontal ? bounds.width : bounds.height;
+  const sampleStep = Math.max(1, Math.floor(length / 96));
+  let count = 0;
+  let sum = 0;
+  let sumSquares = 0;
+  let saturation = 0;
+  for (let position = 0; position < length; position += sampleStep) {
+    const x = side === "left"
+      ? bounds.x + offset
+      : side === "right"
+        ? bounds.x + bounds.width - 1 - offset
+        : bounds.x + position;
+    const y = side === "top"
+      ? bounds.y + offset
+      : side === "bottom"
+        ? bounds.y + bounds.height - 1 - offset
+        : bounds.y + position;
+    const pixelOffset = (y * width + x) * 4;
+    const red = pixels[pixelOffset];
+    const green = pixels[pixelOffset + 1];
+    const blue = pixels[pixelOffset + 2];
+    const brightness = (red + green + blue) / 3;
+    sum += brightness;
+    sumSquares += brightness * brightness;
+    saturation += Math.max(red, green, blue) - Math.min(red, green, blue);
+    count += 1;
+  }
+  const mean = count > 0 ? sum / count : 0;
+  return {
+    mean,
+    stdev: count > 0 ? Math.sqrt(Math.max(0, sumSquares / count - mean * mean)) : 0,
+    saturation: count > 0 ? saturation / count : 0,
+  };
+}
+
+function trimStoryboardFrameBounds(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  bounds: { x: number; y: number; width: number; height: number },
+): { x: number; y: number; width: number; height: number } {
+  // Generated contact sheets often carry a subtle 1–10px neutral frame. Keep
+  // the trim conservative, but allow enough room for a light gray export edge.
+  const maxTrim = Math.min(16, Math.max(2, Math.floor(Math.min(bounds.width, bounds.height) * 0.02)));
+  const frameRun = (side: StoryboardFrameSide): number => {
+    const length = side === "left" || side === "right" ? bounds.width : bounds.height;
+    const limit = Math.min(maxTrim, Math.max(0, length - 2));
+    let run = 0;
+    for (let offset = 0; offset < limit; offset += 1) {
+      const stats = storyboardEdgeStats(pixels, width, height, side, offset, bounds);
+      const isNeutralUniformLine = stats.stdev <= 12
+        && stats.saturation <= 18
+        && (stats.mean >= 190 || stats.mean <= 55);
+      if (!isNeutralUniformLine) break;
+      run += 1;
+    }
+    if (run === 0 || run >= length - 1) return 0;
+    const edge = storyboardEdgeStats(pixels, width, height, side, run - 1, bounds);
+    const content = storyboardEdgeStats(pixels, width, height, side, run, bounds);
+    return Math.abs(edge.mean - content.mean) >= 18 ? run : 0;
+  };
+
+  const left = frameRun("left");
+  const right = frameRun("right");
+  const top = frameRun("top");
+  const bottom = frameRun("bottom");
+  return {
+    x: bounds.x + left,
+    y: bounds.y + top,
+    width: Math.max(1, bounds.width - left - right),
+    height: Math.max(1, bounds.height - top - bottom),
+  };
+}
+
+function zoomStoryboardFrameBounds(
+  bounds: { x: number; y: number; width: number; height: number },
+): { x: number; y: number; width: number; height: number } {
+  // A small centered zoom hides export frames that survive detection.
+  // Keep it around 2% per side so the scene composition remains intact.
+  const insetX = Math.min(
+    Math.floor(Math.max(0, bounds.width - 1) / 2),
+    Math.min(16, Math.max(2, Math.round(bounds.width * 0.02))),
+  );
+  const insetY = Math.min(
+    Math.floor(Math.max(0, bounds.height - 1) / 2),
+    Math.min(16, Math.max(2, Math.round(bounds.height * 0.02))),
+  );
+  return {
+    x: bounds.x + insetX,
+    y: bounds.y + insetY,
+    width: Math.max(1, bounds.width - insetX * 2),
+    height: Math.max(1, bounds.height - insetY * 2),
+  };
+}
+
 function findStoryboardGaps(
   pixels: Uint8ClampedArray,
   width: number,
@@ -387,6 +498,28 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
       rows = 3;
       cellCount = 9;
     }
+    // Portrait contact sheets can have a very subtle horizontal gutter. When
+    // the vertical separators clearly identify the columns, infer the row
+    // count from the sheet geometry and split evenly instead of treating the
+    // whole portrait sheet as one scene.
+    if (rows === 1 && columns >= 2 && columns <= 6 && canvas.width / canvas.height < 1) {
+      const inferredRows = Math.round((canvas.height * columns) / canvas.width);
+      const inferredCellAspectRatio = (canvas.width / columns) / (canvas.height / Math.max(1, inferredRows));
+      if (
+        inferredRows >= 2
+        && inferredRows <= 6
+        && columns * inferredRows <= maxScenes
+        && inferredCellAspectRatio >= 0.55
+        && inferredCellAspectRatio <= 1.8
+      ) {
+        const gridGapsY = findStoryboardGridGaps(pixels, canvas.width, canvas.height, "y", inferredRows);
+        detectedRows = gridGapsY.length === inferredRows - 1
+          ? axisCells(canvas.height, gridGapsY)
+          : evenlyDividedCells(canvas.height, inferredRows);
+        rows = inferredRows;
+        cellCount = columns * rows;
+      }
+    }
     // Once both axes are detected, re-check each expected grid boundary. This
     // prevents bright artwork or a partially visible separator inside a panel
     // from shifting the split. It also handles 3x2 sheets, not only 3x3.
@@ -416,7 +549,13 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
         if (!rawCellContext) throw new Error("Unable to prepare storyboard scene");
         rawCellContext.drawImage(canvas, x.start, y.start, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight);
         const cellPixels = rawCellContext.getImageData(0, 0, cellWidth, cellHeight).data;
-        const cellBounds = findStoryboardContentBounds(cellPixels, cellWidth, cellHeight);
+        const trimmedCellBounds = trimStoryboardFrameBounds(
+          cellPixels,
+          cellWidth,
+          cellHeight,
+          findStoryboardContentBounds(cellPixels, cellWidth, cellHeight),
+        );
+        const cellBounds = zoomStoryboardFrameBounds(trimmedCellBounds);
         const cell = document.createElement("canvas");
         cell.width = cellBounds.width;
         cell.height = cellBounds.height;
@@ -578,6 +717,18 @@ function findSchemaProperty(properties: Record<string, SchemaProperty>, names: s
   return undefined;
 }
 
+function modelAspectRatioOptions(model: GenerationModelOption | undefined): string[] {
+  const property = findSchemaProperty(schemaProperties(model), ["aspectRatio", "aspect_ratio"]);
+  const values = [
+    ...(property?.[1].enum ?? []),
+    ...(model?.capabilities.supportedRatios ?? []),
+    ...(model?.capabilities.supportedAspectRatios ?? []),
+  ]
+    .map((value) => String(value).trim())
+    .filter((value) => /^\d+(?::\d+)$/.test(value));
+  return Array.from(new Set(values));
+}
+
 function findModelInputParameter(
   model: GenerationModelOption | undefined,
   configured: string | undefined,
@@ -650,6 +801,7 @@ export function VideoGenerationPage() {
   const [isCancellingVideo, setIsCancellingVideo] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ completed: 0, total: 0 });
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+  const [latestCompletedStoryboardId, setLatestCompletedStoryboardId] = useState<string | null>(null);
   const [previewView, setPreviewView] = useState<"latest" | "library">("latest");
   const [videoLibraryIndex, setVideoLibraryIndex] = useState(0);
   const [isVideoFavorite, setIsVideoFavorite] = useState(false);
@@ -671,9 +823,6 @@ export function VideoGenerationPage() {
   const [creditEstimate, setCreditEstimate] = useState<number | null>(null);
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
-  const [storyboardUpscaleCreditEstimate, setStoryboardUpscaleCreditEstimate] = useState<number | null>(null);
-  const [storyboardUpscaleCreditLoading, setStoryboardUpscaleCreditLoading] = useState(false);
-  const [storyboardUpscaleCreditError, setStoryboardUpscaleCreditError] = useState<string | null>(null);
   const [frameReferences, setFrameReferences] = useState<string[]>([]);
   const [frameReferenceFiles, setFrameReferenceFiles] = useState<File[]>([]);
   const [storyboardScenes, setStoryboardScenes] = useState<StoryboardScene[]>([
@@ -692,6 +841,7 @@ export function VideoGenerationPage() {
   const [isSceneModalOpen, setIsSceneModalOpen] = useState(false);
   const [deleteSceneIndex, setDeleteSceneIndex] = useState<number | null>(null);
   const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null);
+  const [activeSceneIndex, setActiveSceneIndex] = useState(0);
   const [sceneImage, setSceneImage] = useState<string | null>(null);
   const [sceneImageFile, setSceneImageFile] = useState<File | null>(null);
   const [sceneStartFrameSource, setSceneStartFrameSource] =
@@ -741,6 +891,8 @@ export function VideoGenerationPage() {
   const durationProperty = findSchemaProperty(properties, ["duration", "duration_seconds", "durationSeconds"]);
   const resolutionProperty = findSchemaProperty(properties, ["resolution"]);
   const aspectRatioProperty = findSchemaProperty(properties, ["aspectRatio", "aspect_ratio"]);
+  const aspectRatioOptions = modelAspectRatioOptions(selectedModelOption);
+  const supportsAspectRatio = Boolean(aspectRatioProperty || capabilities?.aspectRatioParameter || aspectRatioOptions.length > 0);
   const audioProperty = findSchemaProperty(properties, ["generateAudio", "generate_audio", "audio", "audio_enabled"]);
   const audioInputMode = Boolean(audioProperty && audioProperty[1].type !== "boolean");
   const modelParameterEntries = Object.entries(properties).filter(([name]) => {
@@ -842,6 +994,7 @@ export function VideoGenerationPage() {
     const nextDuration = findSchemaProperty(nextProperties, ["duration", "duration_seconds", "durationSeconds"]);
     const nextResolution = findSchemaProperty(nextProperties, ["resolution"]);
     const nextAspectRatio = findSchemaProperty(nextProperties, ["aspectRatio", "aspect_ratio"]);
+    const nextAspectRatioOptions = modelAspectRatioOptions(selected);
     const nextAudio = findSchemaProperty(nextProperties, ["generateAudio", "generate_audio", "audio", "audio_enabled"]);
     const durationDefault = schemaDefault(nextDuration?.[1]);
     const nextDurationValue = typeof durationDefault === "number"
@@ -856,7 +1009,7 @@ export function VideoGenerationPage() {
       setModelParams(nextParams);
       setDuration(nextDurationValue);
       setResolution(typeof resolutionDefault === "string" ? resolutionDefault : "");
-      setAspectRatio(typeof aspectDefault === "string" ? aspectDefault : "");
+      setAspectRatio(typeof aspectDefault === "string" ? aspectDefault : nextAspectRatioOptions[0] ?? "");
       setAutoSound(typeof audioDefault === "boolean" ? audioDefault : false);
       setAudioFile(null);
       setStoryboardScenes((current) => current.map((scene) => ({
@@ -881,6 +1034,7 @@ export function VideoGenerationPage() {
     setStoryboardGridLabel(null);
     setStoryboardQualityNote(null);
     setStoryboardSlices([]);
+    setActiveSceneIndex(0);
     try {
       const result = await splitStoryboardSheet(file, maxStoryboardScenes);
       if (storyboardSplitRequestRef.current !== requestId) {
@@ -948,6 +1102,7 @@ export function VideoGenerationPage() {
       if (current) URL.revokeObjectURL(current);
       return nextUrl;
     });
+    setActiveSceneIndex(0);
     setStoryboardScenes((current) => generationMode === "single-image"
       ? [{
         ...(current[0] ?? {
@@ -998,6 +1153,7 @@ export function VideoGenerationPage() {
       : current.map((scene, index) => (
         index === 0 ? { ...scene, image: null, imageFile: null, startFrameSource: "manual" } : scene
       )));
+    setActiveSceneIndex(0);
   };
   const updateDuration = (value: number) => {
     setDuration(value);
@@ -1145,6 +1301,7 @@ export function VideoGenerationPage() {
     setIsGenerationModeMenuOpen(false);
     setOpenSceneSourceMenu(null);
     setSceneSourceMenuPosition(null);
+    setActiveSceneIndex(0);
     if (nextMode !== "single-image" && storyboardSheetFile) {
       const originalSheet = storyboardSheetFile;
       setStoryboardScenes((current) => [{
@@ -1239,10 +1396,11 @@ export function VideoGenerationPage() {
       model: selectedModel,
       mode: videoMode,
       scenes,
+      autoUpscale: shouldAutoUpscaleStoryboard,
     };
     if (durationProperty) request.duration = duration;
     if (resolutionProperty && resolution) request.resolution = resolution;
-    if (aspectRatioProperty && aspectRatio) request.aspectRatio = aspectRatio;
+    if (supportsAspectRatio && aspectRatio) request.aspectRatio = aspectRatio;
     if (audioProperty) request.generateAudio = autoSound;
     if (postAudioMode !== "none") {
       request.audioMode = postAudioMode;
@@ -1292,44 +1450,6 @@ export function VideoGenerationPage() {
     };
   }, [creditQuoteKey]);
 
-  useEffect(() => {
-    let active = true;
-    if (!shouldAutoUpscaleStoryboard) {
-      return;
-    }
-
-    const loadingTimeoutId = window.setTimeout(() => {
-      if (!active) return;
-      setStoryboardUpscaleCreditEstimate(null);
-      setStoryboardUpscaleCreditLoading(true);
-      setStoryboardUpscaleCreditError(null);
-    }, 0);
-    void quoteImageGeneration({
-      feature: "upscale",
-      targetResolution: "2K",
-      outputFormat: "png",
-    })
-      .then((quote) => {
-        if (!active) return;
-        const unitCost = Number(quote.creditCost);
-        if (!Number.isFinite(unitCost)) throw new Error("Upscale pricing unavailable");
-        setStoryboardUpscaleCreditEstimate(unitCost * generationScenes.length);
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setStoryboardUpscaleCreditEstimate(null);
-        setStoryboardUpscaleCreditError(error instanceof Error ? error.message : "Upscale pricing unavailable");
-      })
-      .finally(() => {
-        if (active) setStoryboardUpscaleCreditLoading(false);
-      });
-
-    return () => {
-      active = false;
-      window.clearTimeout(loadingTimeoutId);
-    };
-  }, [generationScenes.length, shouldAutoUpscaleStoryboard]);
-
   const estimateSceneCount = generationScenes.length;
   const estimateDurations = generationScenes.map((scene) => durationProperty ? scene.duration : duration);
   const estimateTotalDuration = estimateDurations.reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0);
@@ -1339,17 +1459,8 @@ export function VideoGenerationPage() {
     : allScenesShareDuration
     ? `${estimateSceneCount} ${estimateSceneCount === 1 ? "scene" : "scenes"} x ${estimateDurations[0] ?? 0} sec`
     : `${estimateSceneCount} scenes x ${estimateTotalDuration} sec total`;
-  const effectiveStoryboardUpscaleCreditEstimate = shouldAutoUpscaleStoryboard
-    ? storyboardUpscaleCreditEstimate
-    : null;
-  const effectiveStoryboardUpscaleCreditLoading = shouldAutoUpscaleStoryboard && storyboardUpscaleCreditLoading;
-  const effectiveStoryboardUpscaleCreditError = shouldAutoUpscaleStoryboard ? storyboardUpscaleCreditError : null;
-  const totalCreditEstimateReady = creditEstimate !== null
-    && (!shouldAutoUpscaleStoryboard || effectiveStoryboardUpscaleCreditEstimate !== null);
-  const totalCreditEstimate = totalCreditEstimateReady
-    ? creditEstimate + (effectiveStoryboardUpscaleCreditEstimate ?? 0)
-    : null;
-  const formattedCreditEstimate: ReactNode = creditEstimateLoading || effectiveStoryboardUpscaleCreditLoading
+  const totalCreditEstimate = creditEstimate;
+  const formattedCreditEstimate: ReactNode = creditEstimateLoading
     ? <span className={styles.creditCalculating}><LoaderCircle size={12} className={styles.creditSpinner} />Recalculating price…</span>
     : totalCreditEstimate === null
       ? "Pricing unavailable"
@@ -1385,6 +1496,7 @@ export function VideoGenerationPage() {
     const scene = storyboardScenes[index];
     if (!scene) return;
     const sceneSource = getSceneSource(scene, index);
+    setActiveSceneIndex(index);
     setEditingSceneIndex(index);
     setSceneError(null);
     setScenePrompt(scene.prompt);
@@ -1415,6 +1527,7 @@ export function VideoGenerationPage() {
     }
     if (scene.image?.startsWith("blob:")) URL.revokeObjectURL(scene.image);
     setStoryboardScenes((current) => current.filter((_, sceneIndex) => sceneIndex !== index));
+    setActiveSceneIndex((current) => current === index ? Math.max(0, index - 1) : current > index ? current - 1 : current);
     closeDeleteSceneDialog();
   };
   useEffect(() => {
@@ -1470,8 +1583,10 @@ export function VideoGenerationPage() {
     };
     if (editingSceneIndex === null) {
       setStoryboardScenes((current) => [...current, nextScene]);
+      setActiveSceneIndex(storyboardScenes.length);
     } else {
       setStoryboardScenes((current) => current.map((scene, index) => index === editingSceneIndex ? nextScene : scene));
+      setActiveSceneIndex(editingSceneIndex);
       if (editingSceneIndex === 0) setPrompt(nextScene.prompt);
     }
     setIsSceneModalOpen(false);
@@ -1504,6 +1619,12 @@ export function VideoGenerationPage() {
   const galleryVideoUrl = videoHistory[safeVideoLibraryIndex]?.finalVideoUrl ?? null;
   const latestVideoUrl = finalVideoUrl ?? videoHistory[0]?.finalVideoUrl ?? null;
   const displayedVideoUrl = previewView === "library" ? galleryVideoUrl ?? latestVideoUrl : latestVideoUrl;
+  const displayedStoryboardId = previewView === "library"
+    ? videoHistory[safeVideoLibraryIndex]?.storyboardId ?? latestCompletedStoryboardId
+    : latestCompletedStoryboardId ?? videoHistory[0]?.storyboardId ?? null;
+  const editInEosCutUrl = displayedStoryboardId
+    ? `https://cut.eoslabs.tech/projects?importSceneSet=${encodeURIComponent(displayedStoryboardId)}`
+    : null;
   const downloadDisplayedVideo = async () => {
     if (!displayedVideoUrl) return;
     try {
@@ -1580,13 +1701,13 @@ export function VideoGenerationPage() {
 
     setGenerationError(null);
     setFinalVideoUrl(null);
+    setLatestCompletedStoryboardId(null);
     setPreviewView("latest");
     setContinuationInfo(null);
     cancelRequestedRef.current = false;
     setActiveStoryboardId(null);
     setIsCancellingVideo(false);
     setGenerationStatus("uploading");
-    let automaticUpscaleCreditCost = 0;
     try {
       const uploadedImages: Array<string | undefined> = [];
       const uploadedReferenceImages: string[] = [];
@@ -1601,57 +1722,6 @@ export function VideoGenerationPage() {
             uploadConstraints: capabilities?.uploadConstraints,
           });
           throwIfVideoCancellationRequested();
-        }
-      }
-
-      if (shouldAutoUpscaleStoryboard) {
-        const upscaleScenes = generationScenes
-          .map((scene, index) => ({ index, image: uploadedImages[index] }))
-          .filter((scene): scene is { index: number; image: string } => Boolean(scene.image));
-        if (upscaleScenes.length !== generationScenes.length) {
-          throw new Error("Every storyboard scene must be uploaded before it can be enhanced.");
-        }
-
-        const quotedUpscaleUnitCost = storyboardUpscaleCreditEstimate !== null
-          ? storyboardUpscaleCreditEstimate / generationScenes.length
-          : Number((await quoteImageGeneration({
-            feature: "upscale",
-            targetResolution: "2K",
-            outputFormat: "png",
-          })).creditCost);
-        if (!Number.isFinite(quotedUpscaleUnitCost)) throw new Error("Upscale pricing unavailable");
-        automaticUpscaleCreditCost = quotedUpscaleUnitCost * upscaleScenes.length;
-        setGenerationProgress({ completed: 0, total: upscaleScenes.length });
-        setNotice(`Enhancing storyboard scenes… 0/${upscaleScenes.length}`);
-
-        const upscaleResults = await Promise.allSettled(upscaleScenes.map(async ({ index, image }) => {
-          const result = await createUpscale({
-            workspaceId,
-            sourceImage: image,
-            targetResolution: "2K",
-            outputFormat: "png",
-            idempotencyKey: `video-storyboard-upscale-${crypto.randomUUID()}`,
-          });
-          const output = result.data.output.find((item) => item.type === "image") ?? result.data.output[0];
-          if (!output?.url) throw new Error(`AI Upscale did not return an image for Scene ${index + 1}`);
-          return { index, url: output.url };
-        }));
-        throwIfVideoCancellationRequested();
-        const failedUpscale = upscaleResults.find(
-          (result): result is PromiseRejectedResult => result.status === "rejected",
-        );
-        if (failedUpscale) {
-          throw failedUpscale.reason instanceof Error
-            ? failedUpscale.reason
-            : new Error("AI Upscale failed for a storyboard scene");
-        }
-        let completedUpscales = 0;
-        for (const result of upscaleResults) {
-          if (result.status !== "fulfilled") continue;
-          uploadedImages[result.value.index] = result.value.url;
-          completedUpscales += 1;
-          setGenerationProgress({ completed: completedUpscales, total: upscaleScenes.length });
-          setNotice(`Enhancing storyboard scenes… ${completedUpscales}/${upscaleScenes.length}`);
         }
       }
 
@@ -1684,11 +1754,12 @@ export function VideoGenerationPage() {
         model: selectedModel,
         mode: generationMode === "single-image" ? "storyboard" : videoMode,
         scenes,
+        autoUpscale: shouldAutoUpscaleStoryboard,
         idempotencyKey: `video-${crypto.randomUUID()}`,
       };
       if (durationProperty) request.duration = duration;
       if (resolutionProperty && resolution) request.resolution = resolution;
-      if (aspectRatioProperty && aspectRatio) request.aspectRatio = aspectRatio;
+      if (supportsAspectRatio && aspectRatio) request.aspectRatio = aspectRatio;
       if (audioProperty && !audioInputMode) request.generateAudio = autoSound;
       if (audioInputMode && audioFile) {
         setNotice("Uploading audio reference…");
@@ -1716,7 +1787,7 @@ export function VideoGenerationPage() {
       const acceptedVideoCreditCost = Number.isFinite(quotedVideoCreditCost) && quotedVideoCreditCost > 0
         ? quotedVideoCreditCost
         : returnedCreditCost;
-      const acceptedCreditCost = acceptedVideoCreditCost + automaticUpscaleCreditCost;
+      const acceptedCreditCost = acceptedVideoCreditCost;
       if (Number.isFinite(acceptedCreditCost) && acceptedCreditCost > 0) {
         emitCreditBalanceChanged(acceptedCreditCost);
       }
@@ -1749,6 +1820,7 @@ export function VideoGenerationPage() {
         throw new Error("Video generation completed without a final video URL");
       }
       setFinalVideoUrl(status.finalVideoUrl);
+      setLatestCompletedStoryboardId(created.storyboardId);
       setPreviewView("latest");
       setGenerationStatus("completed");
       setNotice("Video ready");
@@ -1781,7 +1853,6 @@ export function VideoGenerationPage() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Unable to generate video";
       if (cancelRequestedRef.current || message === "Video generation was cancelled") {
-        if (automaticUpscaleCreditCost > 0) requestCreditBalanceSync(automaticUpscaleCreditCost);
         setGenerationStatus("cancelled");
         setGenerationError(null);
         setNotice("Video generation cancelled");
@@ -1789,7 +1860,6 @@ export function VideoGenerationPage() {
         setIsCancellingVideo(false);
         return;
       }
-      if (automaticUpscaleCreditCost > 0) requestCreditBalanceSync(automaticUpscaleCreditCost);
       setGenerationStatus("failed");
       setGenerationError(message);
       setActiveStoryboardId(null);
@@ -1985,7 +2055,7 @@ export function VideoGenerationPage() {
                     alt="Uploaded start frame"
                     fill
                     unoptimized
-                    className="object-cover"
+                    className={generationMode === "single-image" ? "object-contain" : "object-cover"}
                   />
                   <div className={styles.sourceImageActions}>
                     <button type="button" onClick={() => sourceInputRef.current?.click()}>Replace</button>
@@ -2106,6 +2176,19 @@ export function VideoGenerationPage() {
                   </button>
                 </div> : null}
               </div>
+              {displayedVideoUrl && editInEosCutUrl ? (
+                <div className={styles.videoPreviewActions}>
+                  <a
+                    href={editInEosCutUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={styles.editInEosCutButton}
+                  >
+                    <Pencil size={14} />
+                    <span>แก้ไขใน EOS CUT</span>
+                  </a>
+                </div>
+              ) : null}
               <div className={styles.previewViewTabs} role="tablist" aria-label="Video preview views">
                     <button
                       type="button"
@@ -2281,7 +2364,7 @@ export function VideoGenerationPage() {
                     return (
                       <div className={styles.sceneFlowItem} key={scene.id}>
                         <article
-                          className={`${styles.scene} ${index === 0 ? styles.selected : ""}`}
+                          className={`${styles.scene} ${index === activeSceneIndex ? styles.selected : ""}`}
                         >
                           <div className={styles.sceneCardHeader}>
                             <span>Scene {index + 1}</span>
@@ -2316,7 +2399,7 @@ export function VideoGenerationPage() {
                               width={112}
                               height={58}
                               unoptimized
-                              className="h-[58px] w-full object-cover"
+                              className="h-[58px] w-full object-contain"
                             />
                           ) : source === "manual" ? (
                             <div className={styles.missingFrame}>
@@ -2540,12 +2623,11 @@ export function VideoGenerationPage() {
                 </select>
               </div>
             ) : null}
-            {aspectRatioProperty ? (
+            {supportsAspectRatio && aspectRatioOptions.length > 0 ? (
               <div className={styles.settingBlock}>
-                <div className={styles.settingLabel}>{aspectRatioProperty[1].title ?? "Aspect Ratio"} <Info size={11} /></div>
+                <div className={styles.settingLabel}>{aspectRatioProperty?.[1].title ?? "Aspect Ratio"} <Info size={11} /></div>
                 <div className={styles.ratios}>
-                  {(aspectRatioProperty[1].enum ?? []).map((value) => {
-                    const ratio = String(value);
+                  {aspectRatioOptions.map((ratio) => {
                     return (
                       <button
                         type="button"
@@ -2553,7 +2635,7 @@ export function VideoGenerationPage() {
                         onClick={() => setAspectRatio(ratio)}
                         key={ratio}
                       >
-                        <i className={ratio === "1:1" ? styles.square : styles.landscape} />
+                        <i className={ratio === "1:1" ? styles.square : Number(ratio.split(":")[0]) < Number(ratio.split(":")[1]) ? styles.portrait : styles.landscape} />
                         {ratio}
                       </button>
                     );
@@ -2694,13 +2776,13 @@ export function VideoGenerationPage() {
               );
             })}
             <div className={styles.estimateBlock}>
-              <div className={styles.estimate} title={creditEstimateError ?? effectiveStoryboardUpscaleCreditError ?? undefined}>
+              <div className={styles.estimate} title={creditEstimateError ?? undefined}>
                 <div>
                   ESTIMATED CREDITS <Info size={11} />
                 </div>
                 <span>
                   {estimateDescription}
-                  <strong>{creditEstimateLoading || effectiveStoryboardUpscaleCreditLoading || totalCreditEstimate === null ? formattedCreditEstimate : `= ${formattedCreditEstimate}`}</strong>
+                  <strong>{creditEstimateLoading || totalCreditEstimate === null ? formattedCreditEstimate : `= ${formattedCreditEstimate}`}</strong>
                 </span>
                 {shouldAutoUpscaleStoryboard ? (
                   <small className={styles.autoUpscaleNote}>

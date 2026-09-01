@@ -13,12 +13,30 @@ const stageIndex: Record<AuthStage, number> = {
   ready: 2,
 };
 
+// Only redirect back to eoslabs.tech after login. This prevents the redirect
+// query parameter from being used as an open redirect to an attacker page.
+function resolveSafeRedirect(rawRedirect: string | null): string {
+  if (!rawRedirect) return "/dashboard";
+  try {
+    const target = new URL(rawRedirect);
+    const isAllowedHost =
+      target.hostname === "eoslabs.tech" || target.hostname.endsWith(".eoslabs.tech");
+    return target.protocol === "https:" && isAllowedHost ? target.toString() : "/dashboard";
+  } catch {
+    return "/dashboard";
+  }
+}
+
 export default function AuthCallbackPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stage, setStage] = useState<AuthStage>("authenticating");
 
   useEffect(() => {
     let active = true;
+    const redirectParam = new URLSearchParams(window.location.search).get("redirect");
+    const loginRetryUrl = redirectParam
+      ? `/login?redirect=${encodeURIComponent(redirectParam)}&auth_error=1`
+      : "/login?auth_error=1";
 
     async function completeAuth() {
       const supabase = getSupabaseBrowserClient();
@@ -42,7 +60,7 @@ export default function AuthCallbackPage() {
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
 
       await new Promise((resolve) => window.setTimeout(resolve, 420));
-      window.location.replace("/dashboard");
+      window.location.replace(resolveSafeRedirect(redirectParam));
     }
 
     completeAuth().catch((error: unknown) => {
@@ -51,7 +69,7 @@ export default function AuthCallbackPage() {
       const message = error instanceof Error ? error.message : "Unable to complete login";
       setErrorMessage(message);
       window.sessionStorage.setItem("eos.auth.login-error", message);
-      window.location.replace("/?login=1&auth_error=1");
+      window.location.replace(loginRetryUrl);
     });
 
     return () => {
@@ -67,7 +85,7 @@ export default function AuthCallbackPage() {
             <div className="auth-callback-error-mark" aria-hidden="true">!</div>
             <h1>Login failed</h1>
             <p>{errorMessage}</p>
-            <a href="/?login=1">Back to login</a>
+            <a href="/login">Back to login</a>
           </div>
         ) : (
           <>

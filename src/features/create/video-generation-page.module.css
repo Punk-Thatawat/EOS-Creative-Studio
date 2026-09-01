@@ -139,6 +139,9 @@
 .peopleAudioFile{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:7px 9px;border:1px solid #eaded6;border-radius:7px;background:#fffaf7;color:#8f5c42;font-size:9px}.peopleAudioFile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.peopleAudioFile button{display:grid;width:22px;height:22px;flex:none;place-items:center;border:0;border-radius:5px;background:#fff;color:#8f5c42}.peopleAudioFile button:hover{background:#ffe9df;color:#d94b27}
 .peopleNotice{margin:10px 0 0;padding:8px 9px;border:1px solid #cdebd7;border-radius:8px;background:#f5fcf7;color:#267149;font-size:9px;line-height:1.35}
 .videoResultLibrary{box-sizing:border-box;margin-top:-10px;padding:0 16px 16px}
+.videoPreviewActions{display:flex;justify-content:flex-end;margin-top:8px}
+.editInEosCutButton{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border:1px solid #e4d9d2;border-radius:8px;background:#fff;color:#a24e2d;font-size:9px;font-weight:800;text-decoration:none;transition:border-color .15s ease,background .15s ease,color .15s ease}
+.editInEosCutButton:hover{border-color:#f26b38;background:#fff7f2;color:#ed5c2d}
 .addScene:disabled{cursor:not-allowed;opacity:.45;background:#fafafa}
 .sceneRequirement{margin:7px 0 0;color:#9a6a50;font-size:9px;line-height:1.35}
 .estimate>span{display:flex;align-items:center;justify-content:space-between;gap:8px;white-space:nowrap}.estimate strong{margin:0;color:#202124;font-size:12px;white-space:nowrap}
@@ -185,3 +188,15 @@
 .storyboardImagePanel .storyboardSplitSummary{margin-top:12px}
 @media(max-width:700px){.storyboardImagePanel{margin:0;border-radius:12px}.storyboardImagePanel .upload{min-height:120px}.storyboardImagePanel .sourcePreview{height:120px}}
 .postAudioCard{margin-top:16px;padding-top:14px;border-top:1px dashed #d9d9d9}.postAudioCard .settingLabel{justify-content:space-between}.postAudioCard .settingLabel small{margin-left:auto;color:#8b8f98;font-size:8px;font-weight:500}.postAudioOptions{display:flex;flex-direction:column;gap:10px;margin-top:9px}.postAudioOptions .toggleRow{margin-top:0}.toggleOff{background:#d9d9d9!important;text-align:left}.postAudioHint{display:block;margin-top:7px;color:#6f7680;font-size:8px;line-height:1.35}
+
+/* Keep portrait storyboard sheets and portrait scene thumbnails uncropped. */
+.previewImage{object-fit:contain;background:#10151c}
+.storyboardSlice img{object-fit:contain;background:#f5f5f5}
+.storyboardImagePanel .sourcePreview>img{object-fit:contain;background:#f7f7f7}
+.sceneFlowItem .scene>img{object-fit:contain;background:#f5f5f5}
+.portrait{display:block;width:11px;height:17px;border:1.5px solid currentColor}
+
+/* Keep the edit-scene image frame aligned with the 16:9 video canvas. */
+.sceneModalImagePreview{height:auto;min-height:0;flex:0 0 auto;aspect-ratio:16 / 9}
+.sceneModalImagePreview img{object-fit:contain;background:#f5f5f5}
+@media(max-width:520px){.sceneModalImagePreview{height:auto;min-height:0;flex-basis:auto;aspect-ratio:16 / 9}}

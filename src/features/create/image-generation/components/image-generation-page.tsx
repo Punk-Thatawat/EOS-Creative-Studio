@@ -53,7 +53,7 @@ export function ImageGenerationPage() {
   const isExtendTab = state.activeTab === "Extend Image";
   const stylePresetFeature = isBackgroundTab ? "background-removal" : isImageToImageTab ? "image-to-image" : "text-to-image";
   const activeStylePresetOptions = state.stylePresetOptions.filter((preset) => preset.features.includes(stylePresetFeature));
-  const styleTransferPresetOptions = state.stylePresetOptions.filter((preset) => preset.features.includes("style-transfer"));
+  const styleTransferPresetOptions = state.styleTransferPresetOptions;
   const activeTabIsGenerating = isTextToImageTab ? state.isGenerating : isImageToImageTab ? state.imageToImageIsGenerating : isStyleTransferTab ? state.styleTransferIsGenerating : isBackgroundTab ? state.backgroundIsGenerating : isUpscaleTab ? state.upscaleIsGenerating : isExtendTab ? state.extendIsGenerating : false;
   const hasStyleInstruction = (state.styleSourceMode === "preset" && Boolean(state.styleTransferPreset)) || (state.styleSourceMode === "reference" && Boolean(state.styleReferenceImage)) || Boolean(state.styleTransferPrompt.trim());
   const hasBackgroundInstruction = state.backgroundMode === "remove" || state.backgroundMode === "solid" || (state.backgroundSupportsPrompt && Boolean(state.backgroundPrompt.trim())) || Boolean(state.backgroundReferenceImage);

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, LockKeyhole } from "lucide-react";
 import { useState } from "react";
 import { useEffect } from "react";
@@ -11,6 +12,7 @@ import { signInWithGoogle } from "@/lib/auth/google-login";
 export default function LoginPageClient() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const redirectTarget = useSearchParams().get("redirect") ?? undefined;
 
   useEffect(() => {
     const resetLoadingState = () => {
@@ -28,7 +30,7 @@ export default function LoginPageClient() {
     setLoading(true);
     setErrorMessage(null);
     try {
-      await signInWithGoogle();
+      await signInWithGoogle({ redirectTarget });
     } catch (error: unknown) {
       setLoading(false);
       setErrorMessage(error instanceof Error ? error.message : "Unable to start Google login");
