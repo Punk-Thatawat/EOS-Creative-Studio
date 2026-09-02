@@ -97,6 +97,11 @@ const videoModeOptions = [
 ] as const;
 const generationModeOptions = [
   {
+    value: "image-to-video",
+    label: "Image to Video",
+    description: "Generate one video from one image",
+  },
+  {
     value: "single-image",
     label: "Single Storyboard Image",
     description: "Split the uploaded sheet into scenes automatically",
@@ -110,11 +115,6 @@ const generationModeOptions = [
     value: "continuous",
     label: "Continuous",
     description: "Continue each scene from the previous frame",
-  },
-  {
-    value: "flexible",
-    label: "Flexible Storyboard",
-    description: "Use one image, multiple scenes, or previous frames",
   },
 ] as const;
 const sceneSourceOptions = [
@@ -693,6 +693,27 @@ function labelFromParameterName(name: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function isCameraFixedParameter(name: string, title?: string): boolean {
+  const normalize = (value: string) => value.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return normalize(name) === "camerafixed" || normalize(title ?? "") === "camerafixed";
+}
+
+function isSeedParameter(name: string, title?: string): boolean {
+  const normalize = (value: string) => value.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return normalize(name) === "seed" || normalize(title ?? "") === "seed";
+}
+
+function modelParamsForGeneration(
+  params: Record<string, unknown>,
+  generationMode: (typeof generationModeOptions)[number]["value"],
+  options?: { omitSeed?: boolean },
+): Record<string, unknown> {
+  if (generationMode !== "single-image") return params;
+  return Object.fromEntries(
+    Object.entries(params).filter(([name]) => !isCameraFixedParameter(name) && !(options?.omitSeed && isSeedParameter(name))),
+  );
+}
+
 function schemaProperties(model: GenerationModelOption | undefined): Record<string, SchemaProperty> {
   const properties = (model?.capabilities.apiSchema?.request_schema?.properties ?? {}) as Record<string, SchemaProperty>;
   if (Object.keys(properties).length) return properties;
@@ -804,6 +825,7 @@ export function VideoGenerationPage() {
   const [maxStoryboardScenes, setMaxStoryboardScenes] = useState(DEFAULT_MAX_STORYBOARD_SCENES);
   const [modelParams, setModelParams] = useState<Record<string, unknown>>({});
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const [isResolutionMenuOpen, setIsResolutionMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<VideoGenerationStatus>("idle");
   const [activeStoryboardId, setActiveStoryboardId] = useState<string | null>(null);
@@ -913,8 +935,12 @@ export function VideoGenerationPage() {
       && name !== capabilities?.referenceImagesParameter
       && name !== referenceImagesParameter
       && name !== lastImageParameter
-      && name !== capabilities?.negativePromptParameter;
+      && name !== capabilities?.negativePromptParameter
+      && !(generationMode === "single-image" && isCameraFixedParameter(name, properties[name]?.title));
   });
+  const settingsModelParameterEntries = modelParameterEntries.filter(([name, property]) =>
+    !(generationMode === "single-image" && isSeedParameter(name, property.title))
+  );
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
@@ -1426,11 +1452,10 @@ export function VideoGenerationPage() {
       setStoryboardSlicesSourceFile(null);
       setStoryboardGridLabel(null);
     }
-    const nextVideoMode = nextMode === "continuous"
-      ? "continuous"
-      : nextMode === "flexible"
-        ? "flexible"
-        : "storyboard";
+    if (nextMode === "image-to-video") {
+      setStoryboardScenes((current) => current.slice(0, 1));
+    }
+    const nextVideoMode = nextMode === "continuous" ? "continuous" : "storyboard";
     setVideoMode(nextVideoMode);
     setStoryboardScenes((current) =>
       current.map((scene, index) => ({
@@ -1471,8 +1496,11 @@ export function VideoGenerationPage() {
     && storyboardSlicesSourceFile === storyboardSheetFile
   const generationScenes = generationMode === "single-image"
     ? hasCurrentStoryboardSlices && storyboardScenes.length > 0 ? storyboardScenes : storyboardScenes.slice(0, 1)
-    : storyboardScenes;
+    : generationMode === "image-to-video"
+      ? storyboardScenes.slice(0, 1)
+      : storyboardScenes;
   const shouldAutoUpscaleStoryboard = generationMode === "single-image" && Boolean(storyboardQualityNote) && generationScenes.length > 0;
+  const requestModelParams = modelParamsForGeneration(modelParams, generationMode, { omitSeed: true });
   const creditQuoteInput: Omit<VideoGenerationInput, "idempotencyKey"> | null = (() => {
     if (activeVideoTab !== "image-to-video" || !selectedModel || generationScenes.length === 0) return null;
     const scenes = generationScenes.map((scene, index) => {
@@ -1488,12 +1516,13 @@ export function VideoGenerationPage() {
       if (startFrameSource === "manual" && scene.image && !scene.image.startsWith("blob:")) sceneInput.storyboardImage = scene.image;
       if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
       if (durationProperty) sceneInput.duration = scene.duration;
-      if (Object.keys(scene.modelParams).length) sceneInput.modelParams = scene.modelParams;
+      const sceneModelParams = modelParamsForGeneration(scene.modelParams, generationMode);
+      if (Object.keys(sceneModelParams).length) sceneInput.modelParams = sceneModelParams;
       return sceneInput;
     });
     const request: Omit<VideoGenerationInput, "idempotencyKey"> = {
       model: selectedModel,
-      mode: videoMode,
+      mode: generationMode === "single-image" || generationMode === "image-to-video" ? "storyboard" : videoMode,
       scenes,
       autoUpscale: shouldAutoUpscaleStoryboard,
     };
@@ -1504,7 +1533,7 @@ export function VideoGenerationPage() {
     if (postAudioMode !== "none") {
       request.audioMode = postAudioMode;
     }
-    if (Object.keys(modelParams).length) request.modelParams = modelParams;
+    if (Object.keys(requestModelParams).length) request.modelParams = requestModelParams;
     return request;
   })();
 
@@ -1567,7 +1596,10 @@ export function VideoGenerationPage() {
   const firstScene = storyboardScenes[0];
   const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
   const sceneLimitReached = storyboardScenes.length >= maxStoryboardScenes;
-  const canAddScene = generationMode !== "single-image" && !sceneLimitReached && Boolean(firstScene?.image && firstSceneHasPrompt);
+  const canAddScene = generationMode !== "single-image"
+    && generationMode !== "image-to-video"
+    && !sceneLimitReached
+    && Boolean(firstScene?.image && firstSceneHasPrompt);
   const addSceneDisabledReason = sceneLimitReached
     ? `Storyboard supports up to ${maxStoryboardScenes} scenes.`
     : "Complete Scene 1 with a start image and prompt first";
@@ -1610,7 +1642,7 @@ export function VideoGenerationPage() {
     setIsSceneModalOpen(true);
   };
   const deleteScene = (index: number) => {
-    if (generationMode === "single-image" || index === 0) return;
+    if (generationMode === "single-image" || generationMode === "image-to-video" || index === 0) return;
     const scene = storyboardScenes[index];
     if (!scene) return;
     setDeleteSceneIndex(index);
@@ -1768,7 +1800,7 @@ export function VideoGenerationPage() {
       setGenerationError("กรุณารอให้ระบบสร้างฉากจาก storyboard ให้เสร็จก่อน Generate");
       return;
     }
-    const missingRequiredParam = modelParameterEntries.find(([name]) => {
+    const missingRequiredParam = settingsModelParameterEntries.find(([name]) => {
       if (!requiredProperties.has(name)) return false;
       const value = modelParams[name];
       return value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
@@ -1846,12 +1878,13 @@ export function VideoGenerationPage() {
         if (uploadedReferenceImages.length > 0) sceneInput.referenceImages = uploadedReferenceImages;
         if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
         if (durationProperty) sceneInput.duration = scene.duration;
-        if (Object.keys(scene.modelParams).length) sceneInput.modelParams = scene.modelParams;
+        const sceneModelParams = modelParamsForGeneration(scene.modelParams, generationMode);
+        if (Object.keys(sceneModelParams).length) sceneInput.modelParams = sceneModelParams;
         return sceneInput;
       });
       const request: VideoGenerationInput = {
         model: selectedModel,
-        mode: generationMode === "single-image" ? "storyboard" : videoMode,
+        mode: generationMode === "single-image" || generationMode === "image-to-video" ? "storyboard" : videoMode,
         scenes,
         autoUpscale: shouldAutoUpscaleStoryboard,
         idempotencyKey: `video-${crypto.randomUUID()}`,
@@ -1868,7 +1901,7 @@ export function VideoGenerationPage() {
       if (postAudioMode !== "none") {
         request.audioMode = postAudioMode;
       }
-      if (Object.keys(modelParams).length) request.modelParams = modelParams;
+      if (Object.keys(requestModelParams).length) request.modelParams = requestModelParams;
 
       setNotice("Submitting video generation…");
       const created = await createVideoStoryboard(request);
@@ -2099,13 +2132,6 @@ export function VideoGenerationPage() {
                       ? "Native Extend will continue scenes in order"
                       : "No Native Extend; continuation may not be seamless"}</span>
                   </div>
-                ) : generationMode === "flexible" ? (
-                  <div className={`${styles.sequenceNotice} ${hasNativeExtend ? styles.sequenceNoticeNative : styles.sequenceNoticeWarning}`}>
-                    <Link2 size={13} />
-                    <span>{hasNativeExtend
-                      ? "Previous-frame scenes use Native Extend in order"
-                      : "Previous-frame scenes may not continue seamlessly"}</span>
-                  </div>
                 ) : null}
                 {continuationInfo ? (
                   <div className={styles.continuationResult}>
@@ -2165,7 +2191,7 @@ export function VideoGenerationPage() {
                 <label className={styles.upload}>
                   <CloudUpload size={22} />
                   <span className={styles.uploadCopy}>
-                    <strong>{generationMode === "single-image" ? "Upload Storyboard Sheet" : "Upload Image"}</strong>
+                    <strong>Upload Image</strong>
                     <small>PNG / JPG / WEBP</small>
                   </span>
                   <input
@@ -2221,9 +2247,16 @@ export function VideoGenerationPage() {
             </section>
           </div>
           <div className={styles.centerColumn}>
-            <section className={styles.previewPanel}>
+            <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
               <SectionTitle>PREVIEW</SectionTitle>
               <div className={styles.videoPreview}>
+                <Image
+                  src="/generated-assets/preview-live.png"
+                  alt="Preview live"
+                  width={1536}
+                  height={1024}
+                  className={styles.videoPreviewLiveBadge}
+                />
                 {isGeneratingVideo ? (
                   <div className={styles.videoGeneratingPreview} aria-busy="true">
                     <WandSparkles size={26} />
@@ -2448,6 +2481,7 @@ export function VideoGenerationPage() {
                 </div>
               </section>
             ) : null}
+            {generationMode !== "image-to-video" ? (
             <section className={styles.stripSection}>
               <div className={styles.subheading}>
                 STORYBOARD {generationMode === "single-image" ? <small>(Auto-created from uploaded sheet)</small> : <small>(Optional)</small>}
@@ -2625,6 +2659,7 @@ export function VideoGenerationPage() {
                 </div>
               ) : null}
             </section>
+            ) : null}
           </div>
           <aside className={styles.settings}>
             <SectionTitle number={generationMode === "single-image" ? "2" : "3"}>SETTINGS</SectionTitle>
@@ -2680,6 +2715,7 @@ export function VideoGenerationPage() {
                           if (!optionReferenceParameter) clearFrameReferences();
                           setSelectedModel(option.model);
                           setIsModelMenuOpen(false);
+                          setIsResolutionMenuOpen(false);
                         }}
                       >
                         <span>
@@ -2709,17 +2745,39 @@ export function VideoGenerationPage() {
             {resolutionProperty ? (
               <div className={styles.settingBlock}>
                 <div className={styles.settingLabel}>{resolutionProperty[1].title ?? "Resolution"} <Info size={11} /></div>
-                <select
-                  className={styles.dynamicSelect}
-                  value={resolution}
-                  onChange={(event) => setResolution(event.target.value)}
-                  aria-required={requiredProperties.has(resolutionProperty[0])}
-                >
-                  <option value="" disabled>Select resolution</option>
-                  {(resolutionProperty[1].enum ?? []).map((value) => (
-                    <option key={String(value)} value={String(value)}>{String(value)}</option>
-                  ))}
-                </select>
+                <div className={styles.modelDropdown}>
+                  <button
+                    type="button"
+                    className={`${styles.modelDropdownTrigger} ${styles.resolutionDropdownTrigger} ${isResolutionMenuOpen ? styles.resolutionDropdownTriggerOpen : ""}`}
+                    aria-haspopup="listbox"
+                    aria-expanded={isResolutionMenuOpen}
+                    onClick={() => setIsResolutionMenuOpen((open) => !open)}
+                  >
+                    <span><strong>{resolution || "Select resolution"}</strong></span>
+                    <ChevronDown size={17} />
+                  </button>
+                  {isResolutionMenuOpen ? (
+                    <div className={`${styles.modelDropdownMenu} ${styles.resolutionDropdownMenu}`} role="listbox" aria-label="Resolution options">
+                      {(resolutionProperty[1].enum ?? []).map((value) => {
+                        const optionValue = String(value);
+                        return (
+                          <button
+                            key={optionValue}
+                            type="button"
+                            role="option"
+                            aria-selected={resolution === optionValue}
+                            onClick={() => {
+                              setResolution(optionValue);
+                              setIsResolutionMenuOpen(false);
+                            }}
+                          >
+                            <span><strong>{optionValue}</strong></span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
             {supportsAspectRatio && aspectRatioOptions.length > 0 ? (
@@ -2796,7 +2854,7 @@ export function VideoGenerationPage() {
                 ) : null}
               </div>
             ) : null}
-            {modelParameterEntries.map(([name, property]) => {
+            {settingsModelParameterEntries.map(([name, property]) => {
               const value = modelParams[name];
               const isRequired = requiredProperties.has(name);
               const label = property.title ?? labelFromParameterName(name);

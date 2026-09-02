@@ -13,6 +13,10 @@ export function getSupabaseBrowserClient() {
     throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
   }
 
+  const hostname = typeof window === "undefined" ? "" : window.location.hostname;
+  const isSecureHost = typeof window !== "undefined" && window.location.protocol === "https:";
+  const isEosHost = hostname === "eoslabs.tech" || hostname.endsWith(".eoslabs.tech");
+
   browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       flowType: "pkce",
@@ -20,16 +24,14 @@ export function getSupabaseBrowserClient() {
       autoRefreshToken: true,
       detectSessionInUrl: true,
     },
-    // Scoped to the shared parent domain (not just creative.eoslabs.tech)
-    // so EOS CUT (cut.eoslabs.tech) can read the same session cookie and
-    // recognize an already-signed-in user automatically, without a
-    // separate login step.
+    // Share the session across EOS subdomains in production. Do not set the
+    // production domain or Secure flag on localhost: browsers reject those
+    // cookies over http, which also drops the PKCE code verifier.
     cookieOptions: {
-      domain: ".eoslabs.tech",
       path: "/",
       sameSite: "lax",
-      secure: true,
-      maxAge: 60 * 60 * 24 * 365,
+      secure: isSecureHost,
+      ...(isSecureHost && isEosHost ? { domain: ".eoslabs.tech" } : {}),
     },
   });
 

@@ -43,6 +43,11 @@ const extendSourceImageStorageKey = "eos.generation.source-image.extend";
 const styleReferenceImageStorageKey = "eos.generation.style-reference-image";
 const providerControlledModelParameters = new Set(["enable_sync_mode", "enable_base64_output", "output_format", "outputFormat", "format"]);
 
+function modelParameterValue(parameters: Record<string, unknown>, parameter: string | undefined, aliases: string[]): unknown {
+  const names = [parameter, ...aliases].filter((value): value is string => Boolean(value));
+  return names.map((name) => parameters[name]).find((value) => value !== undefined && value !== "");
+}
+
 const fallbackStylePresetOptions: GenerationStylePreset[] = stylePresets.map((name, index) => ({ id: `fallback-${name}`, slug: name.toLowerCase().replace(/\s+/g, "-"), name, prompt: name, imageUrl: stylePresetImages[index] ?? null, features: ["text-to-image", "image-to-image", "background-removal"], enabled: true, sortOrder: (index + 1) * 10, createdAt: "", updatedAt: "" }));
 fallbackStylePresetOptions.push(...styleTransferPresets.map((preset, index) => ({ id: `fallback-style-${preset.name}`, slug: preset.name.toLowerCase().replace(/\s+/g, "-"), name: preset.name, prompt: preset.name, imageUrl: preset.image, features: ["style-transfer"] as StylePresetFeature[], enabled: true, sortOrder: 110 + index * 10, createdAt: "", updatedAt: "" })));
 
@@ -876,6 +881,8 @@ export function useImageGenerationState() {
   // selected color so their central prompt is applied server-side.
   const providerOutputFormat = isLocalSolidBackground ? "png" : effectiveOutputFormat;
   const requestModelParams = Object.fromEntries(Object.entries(modelParams).filter(([name]) => !providerControlledModelParameters.has(name)));
+  const nativeQuoteRatio = modelParameterValue(modelParams, selectedModelCapabilities?.aspectRatioParameter, ["aspect_ratio", "aspectRatio", "ratio"]);
+  const nativeQuoteResolution = modelParameterValue(modelParams, selectedModelCapabilities?.resolutionParameter, ["resolution", "output_resolution", "outputResolution"]);
   const imageCreditQuoteInput: ImageCreditQuoteInput | null = (() => {
     // Credit estimates should be visible before the user fills the form. The
     // backend can quote the selected/default route from the current settings;
@@ -883,8 +890,15 @@ export function useImageGenerationState() {
     // calculated from the same inputs that the generation job will use.
     const shared = {
       model: activeSelectedModel || undefined,
-      ratio: effectiveRatio,
-      resolution: effectiveResolution,
+      // Text-to-image models such as GPT Image 2 expose native dimension
+      // controls in modelParams. Keep the generic quote fields in sync with
+      // those controls so changing 1K/2K/4K changes the provider quote too.
+      ...(activeTab === "Text to Image" && selectedModelCapabilities?.aspectRatioParameter
+        ? (typeof nativeQuoteRatio === "string" && imageRatios.includes(nativeQuoteRatio as ImageRatio) ? { ratio: nativeQuoteRatio as ImageRatio } : {})
+        : { ratio: effectiveRatio }),
+      ...(activeTab === "Text to Image" && selectedModelCapabilities?.resolutionParameter
+        ? (typeof nativeQuoteResolution === "string" ? { resolution: nativeQuoteResolution } : {})
+        : { resolution: effectiveResolution }),
       ...(qualityEnabled ? { quality: effectiveQuality } : {}),
       ...(providerOutputFormat ? { outputFormat: providerOutputFormat } : {}),
       ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}),

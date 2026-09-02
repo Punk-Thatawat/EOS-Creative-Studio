@@ -29,6 +29,7 @@ export function EosVideoPlayer({
   const [duration, setDuration] = useState(0);
   const [paused, setPaused] = useState(!autoPlay);
   const [muted, setMuted] = useState(initialMuted);
+  const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [videoResolution, setVideoResolution] = useState<string | null>(null);
@@ -97,7 +98,23 @@ export function EosVideoPlayer({
   const toggleMute = () => {
     const video = videoRef.current;
     if (!video) return;
-    video.muted = !video.muted;
+    if (video.muted || video.volume === 0) {
+      const nextVolume = volume > 0 ? volume : 1;
+      video.volume = nextVolume;
+      video.muted = false;
+      setVolume(nextVolume);
+      setMuted(false);
+      return;
+    }
+    video.muted = true;
+    setMuted(true);
+  };
+  const changeVolume = (nextVolume: number) => {
+    const video = videoRef.current;
+    setVolume(nextVolume);
+    if (!video) return;
+    video.volume = nextVolume;
+    video.muted = nextVolume === 0;
     setMuted(video.muted);
   };
   const toggleFullscreen = () => {
@@ -139,6 +156,7 @@ export function EosVideoPlayer({
         }}
         onLoadedData={(event) => {
           event.currentTarget.muted = muted;
+          event.currentTarget.volume = volume;
           if (autoPlay) void event.currentTarget.play().catch(() => undefined);
         }}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
@@ -179,7 +197,18 @@ export function EosVideoPlayer({
           />
         </div>
         <div className="intro-video-control-row">
-          <button type="button" className="intro-video-icon-button" aria-label={muted ? "Unmute video" : "Mute video"} onClick={toggleMute}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+          <div className="intro-video-volume-control">
+            <button type="button" className="intro-video-icon-button" aria-label={muted ? "Unmute video" : "Mute video"} onClick={toggleMute}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={muted ? 0 : volume}
+              aria-label="Volume"
+              onChange={(event) => changeVolume(Number(event.currentTarget.value))}
+            />
+          </div>
           <div className="intro-video-center-controls">
             <div className="intro-video-transport">
               <button type="button" className="intro-video-icon-button intro-video-skip" aria-label="Rewind 10 seconds" onClick={() => seek(-10)}><RotateCcw size={17} /><span>10</span></button>

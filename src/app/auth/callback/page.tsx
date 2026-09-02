@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -34,9 +35,7 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     let active = true;
     const redirectParam = new URLSearchParams(window.location.search).get("redirect");
-    const loginRetryUrl = redirectParam
-      ? `/login?redirect=${encodeURIComponent(redirectParam)}&auth_error=1`
-      : "/login?auth_error=1";
+    const loginRetryUrl = "/?auth_error=1";
 
     async function completeAuth() {
       const supabase = getSupabaseBrowserClient();
@@ -85,7 +84,7 @@ export default function AuthCallbackPage() {
             <div className="auth-callback-error-mark" aria-hidden="true">!</div>
             <h1>Login failed</h1>
             <p>{errorMessage}</p>
-            <a href="/login">Back to login</a>
+            <Link href="/?login=1">Back to login</Link>
           </div>
         ) : (
           <>

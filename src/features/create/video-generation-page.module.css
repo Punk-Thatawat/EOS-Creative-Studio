@@ -117,7 +117,8 @@
 .sceneModalEndImageField{margin-top:14px}.sceneModalEndImageField .sceneModalSourceHeader{margin-bottom:7px}.sceneModalEndImageField .sceneModalSourceHeader span{font-weight:800}.sceneModalEndImageField .sceneModalSourceHeader span small{color:#858990;font-size:9px;font-weight:400}.sceneModalEndImageButton{display:flex;width:100%;min-height:80px;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px dashed #eaa6c9;border-radius:9px;background:#fffafd;color:#ee5d25;font:inherit}.sceneModalEndImageButton strong{color:#3f4651;font-size:10px}.sceneModalEndImageButton small{color:#858990;font-size:8px}.sceneModalEndImagePreview{position:relative;height:105px;overflow:hidden;border:1px solid #ddd;border-radius:9px}.sceneModelParams{margin-top:15px;padding-top:14px;border-top:1px dashed #e5e2df}.sceneModelParamsTitle{margin-bottom:3px;color:#6e737b;font-size:9px;font-weight:900;letter-spacing:.08em}
 .sceneModalHeader{position:sticky;z-index:5;top:-18px;margin:-18px -18px 14px;padding:18px 18px 14px;background:#fff;border-bottom:1px solid #f0ece9}.sceneModalActions{position:sticky;z-index:5;bottom:-18px;margin:16px -18px -18px;padding:12px 18px 18px;background:linear-gradient(#fff 25%,#fff 100%);border-top:1px solid #f0ece9;box-shadow:0 -8px 16px #fff}
 .sceneModalMode{display:flex;align-items:flex-start;gap:8px;margin:-2px 0 14px;padding:9px 10px;border:1px solid #f1d7c8;border-radius:9px;background:#fff8f4;color:#a75b37;font-size:9px;line-height:1.35}.sceneModalMode strong{color:#ef5b20;font-size:10px;white-space:nowrap}.sceneModalMode span{color:#7f6a61}.sceneModalModeContinuous{border-color:#e8d9cf;background:#faf8f6}.sceneModalModeContinuous strong{color:#8f5c42}.sceneModalModeHybrid{border-color:#f2d4e4;background:#fff8fc}.sceneModalModeHybrid strong{color:#d94b91}
-.generatedVideoPlayer{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}.generatedVideoPlayer :global(.video-modal-player){width:100%;height:100%;max-height:none;aspect-ratio:auto;object-fit:contain;background:#10151c}.generatedVideoPlayer :global(.intro-video-controls){padding:32px 12px 10px}.generatedVideoPlayer :global(.intro-video-control-row){min-height:30px}.generatedVideoPlayer :global(.intro-video-center-controls){gap:12px}
+.generatedVideoPlayer{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}.generatedVideoPlayer :global(.video-modal-player){width:100%;height:100%;max-height:none;aspect-ratio:auto;object-fit:cover;background:#10151c}.generatedVideoPlayer :global(.intro-video-controls){padding:32px 12px 10px}.generatedVideoPlayer :global(.intro-video-control-row){min-height:30px}.generatedVideoPlayer :global(.intro-video-center-controls){gap:12px}
+.videoPreviewPanel .sectionTitle{display:none}.videoPreviewPanel .videoPreview{margin-top:0}.videoPreviewLiveBadge{position:absolute;z-index:6;top:0;left:-8px;width:116px;height:auto;pointer-events:none;object-fit:contain;transform:rotate(-3deg)}
 .motionGeneratedVideoPlayer :global(.video-modal-player){object-fit:contain;background:#10151c}
 .peopleGeneratedVideoPlayer :global(.video-modal-player){object-fit:contain;background:#10151c}
 .videoGeneratingPreview{position:absolute;inset:0;display:grid;place-items:center;align-content:center;gap:8px;padding:24px;color:#fff;background:linear-gradient(118deg,#081c2a 0%,#14506a 28%,#c94b2c 54%,#211c31 78%,#5d2b35 100%);background-size:220% 220%;text-align:center;animation:videoGeneratingGradient 6s ease-in-out infinite alternate}.videoGeneratingPreview svg{color:#fff;animation:videoGeneratingPulse 1.4s ease-in-out infinite}.videoGeneratingPreview strong{font-size:13px;letter-spacing:.08em}.videoGeneratingPreview span,.videoGeneratingPreview small{color:#ffffffc9;font-size:10px}.videoGenerationProgress{width:min(260px,80%);height:5px;overflow:hidden;border-radius:999px;background:#ffffff44}.videoGenerationProgress i{display:block;height:100%;min-width:10px;border-radius:inherit;background:linear-gradient(90deg,#f51591,#ff6b1a);transition:width .5s ease}.videoGeneratingPreview small{font-size:9px}@keyframes videoGeneratingGradient{0%{background-position:0% 48%}100%{background-position:100% 52%}}@keyframes videoGeneratingPulse{0%,100%{opacity:.55;transform:scale(.9)}50%{opacity:1;transform:scale(1.06)}}
@@ -177,16 +178,12 @@
 .storyboardImagePanel .sectionTitle{margin-bottom:14px}
 .storyboardImagePanel .sectionTitle h2{white-space:nowrap}
 .storyboardImagePanel .sectionTitle::after{flex:0 0 38px;width:38px;height:26px}
-.storyboardImagePanel>label{display:block;align-items:initial;margin-bottom:10px;font-size:11px;line-height:1.25}
-.storyboardImagePanel>label small{font-size:9px;color:#777;font-weight:400}
-.storyboardImagePanel .upload{box-sizing:border-box;min-height:120px;margin-top:0;padding:18px 16px;border:2px dashed #d3d3d3;border-radius:11px;background:#fff;gap:6px}
-.storyboardImagePanel .upload svg{width:25px;height:25px}
-.storyboardImagePanel .upload strong{font-size:13px}
-.storyboardImagePanel .upload small{font-size:10px}
+.storyboardImagePanel>label:not(.upload){display:block;align-items:initial;margin-bottom:10px;font-size:11px;line-height:1.25}
+.storyboardImagePanel>label:not(.upload) small{font-size:9px;color:#777;font-weight:400}
 .storyboardImagePanel .sourcePreview{aspect-ratio:auto;height:120px}
 .storyboardImagePanel .sourceModeNote{margin:12px 0 0;color:#6f7680;font-size:10px;line-height:1.45}
 .storyboardImagePanel .storyboardSplitSummary{margin-top:12px}
-@media(max-width:700px){.storyboardImagePanel{margin:0;border-radius:12px}.storyboardImagePanel .upload{min-height:120px}.storyboardImagePanel .sourcePreview{height:120px}}
+@media(max-width:700px){.storyboardImagePanel{margin:0;border-radius:12px}.storyboardImagePanel .sourcePreview{height:120px}}
 .postAudioCard{margin-top:16px;padding-top:14px;border-top:1px dashed #d9d9d9}.postAudioCard .settingLabel{justify-content:space-between}.postAudioCard .settingLabel small{margin-left:auto;color:#8b8f98;font-size:8px;font-weight:500}.postAudioOptions{display:flex;flex-direction:column;gap:10px;margin-top:9px}.postAudioOptions .toggleRow{margin-top:0}.toggleOff{background:#d9d9d9!important;text-align:left}.postAudioHint{display:block;margin-top:7px;color:#6f7680;font-size:8px;line-height:1.35}
 
 /* Keep portrait storyboard sheets and portrait scene thumbnails uncropped. */
@@ -200,3 +197,13 @@
 .sceneModalImagePreview{height:auto;min-height:0;flex:0 0 auto;aspect-ratio:16 / 9}
 .sceneModalImagePreview img{object-fit:contain;background:#f5f5f5}
 @media(max-width:520px){.sceneModalImagePreview{height:auto;min-height:0;flex-basis:auto;aspect-ratio:16 / 9}}
+
+/* Match the resolution control to the model dropdown interaction. */
+.modelDropdownTrigger:focus-visible{border-color:#f26b38;box-shadow:0 0 0 3px #f26b3833;outline:none}
+.resolutionDropdownTrigger{min-height:44px;padding:9px 12px}
+.resolutionDropdownTriggerOpen{border-color:#f26b38;box-shadow:0 0 0 3px #f26b3833}
+.resolutionDropdownTriggerOpen svg{color:#f26b38;transform:rotate(180deg)}
+.resolutionDropdownMenu{max-height:190px;overflow-y:auto}
+.resolutionDropdownMenu button{min-height:36px;padding:9px 11px}
+.resolutionDropdownMenu button[aria-selected=true]{background:#fff4ed;color:#263449}
+.resolutionDropdownMenu button[aria-selected=true] strong{color:#263449}
