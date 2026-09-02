@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, CloudUpload, Info, WandSparkles, X } from "lucide-react";
+import { Dropdown } from "@/components/ui/dropdown";
+import { CloudUpload, Info, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
@@ -20,7 +21,8 @@ import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
-import { modelTier, modelTierClass } from "./model-tier";
+import { VideoModelDropdown } from "./video-model-dropdown";
+import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 
 type MotionSchemaProperty = {
   type?: string;
@@ -126,10 +128,20 @@ function MotionSchemaField({
     return (
       <label className={styles.dynamicField}>
         <span>{label}{required ? <b>*</b> : null}</span>
-        <select className={styles.dynamicSelect} value={value === undefined ? "" : String(value)} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-required={required}>
-          {!required ? <option value="">Auto</option> : null}
-          {property.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
-        </select>
+        <Dropdown
+          value={value === undefined ? "" : String(value)}
+          options={[
+            ...(!required ? [{ value: "", label: "Auto" }] : []),
+            ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+          ]}
+          onChange={(nextValue) => onChange(parseMotionValue(nextValue, property))}
+          ariaLabel={label}
+          placeholder="Auto"
+          className={styles.dynamicDropdown}
+          triggerClassName={styles.dynamicSelect}
+          menuClassName={styles.dynamicDropdownMenu}
+          optionClassName={styles.dynamicDropdownOption}
+        />
         {property.description ? <small>{property.description}</small> : null}
       </label>
     );
@@ -171,10 +183,10 @@ export function MotionTransferWorkspace() {
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [sourceImage, setSourceImage] = useState<MotionAsset | null>(null);
   const [motionVideo, setMotionVideo] = useState<MotionAsset | null>(null);
   const [prompt, setPrompt] = useState("");
+  const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [qualityValue, setQualityValue] = useState<unknown>(undefined);
   const [orientationValue, setOrientationValue] = useState<unknown>(undefined);
@@ -187,7 +199,6 @@ export function MotionTransferWorkspace() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
-  const [submitAttempted, setSubmitAttempted] = useState(false);
   const sourceImageInputRef = useRef<HTMLInputElement | null>(null);
   const motionVideoInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -277,7 +288,6 @@ export function MotionTransferWorkspace() {
     }
     const asset = { url: URL.createObjectURL(file), file, kind: type, name: file.name } satisfies MotionAsset;
     if (type === "image") setSourceImage(asset); else setMotionVideo(asset);
-    setSubmitAttempted(false);
   };
 
   const isComplete = Boolean(
@@ -301,7 +311,6 @@ export function MotionTransferWorkspace() {
             : null;
 
   const handleGenerate = async () => {
-    setSubmitAttempted(true);
     if (!isComplete || !sourceImage || !motionVideo) return;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -317,6 +326,7 @@ export function MotionTransferWorkspace() {
       setNotice("Uploading motion video…");
       const motionVideoUrl = await uploadImageAsset(motionVideo.file, { purpose: "content", feature: "motion-transfer", uploadConstraints: capabilities?.uploadConstraints });
       const request: MotionTransferGenerationInput = { sourceImage: sourceImageUrl, motionVideo: motionVideoUrl, model: selectedModel };
+      if (promptOptimizerEnabled) request.promptOptimizerEnabled = true;
       if (qualityProperty && motionHasValue(qualityValue)) request.quality = qualityValue;
       if (promptSupported && prompt.trim()) request.prompt = prompt.trim();
       if (negativePrompt.trim() && negativePromptSupported) request.negativePrompt = negativePrompt.trim();
@@ -371,6 +381,7 @@ export function MotionTransferWorkspace() {
     model: selectedModel,
     prompt: prompt.trim() || undefined,
     negativePrompt: negativePrompt.trim() || undefined,
+    promptOptimizerEnabled,
     modelParams: { ...modelParams, ...(qualityProperty && motionHasValue(qualityValue) ? { [qualityProperty[0]]: qualityValue } : {}) },
   } : null);
   const isGenerating = generationStatus === "uploading" || generationStatus === "processing";
@@ -401,6 +412,7 @@ export function MotionTransferWorkspace() {
           <section className={styles.panel}>
             <MotionSectionTitle number="3">MOTION GUIDANCE</MotionSectionTitle>
             {promptSupported ? <><label className={styles.peopleFieldLabel}>Prompt <small>({promptRequired ? "Required for selected model" : "Optional"})</small><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Natural movement, keep the character's identity" /></label><span className={styles.counter}>{prompt.length} / 2000</span></> : null}
+            {promptSupported ? <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /> : null}
             {negativePromptSupported ? <label className={styles.peopleFieldLabel}>Negative Prompt <small>(Optional)</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="blurry, distorted, unnatural movement" /></label> : null}
           </section>
         ) : null}
@@ -415,10 +427,14 @@ export function MotionTransferWorkspace() {
       <aside className={styles.settings}>
         <MotionSectionTitle number={settingsStep}>SETTINGS</MotionSectionTitle>
         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label>
-        <div className={styles.modelDropdown}>
-          <button type="button" className={styles.modelDropdownTrigger} aria-haspopup="listbox" aria-expanded={isModelMenuOpen} disabled={modelsLoading || models.length === 0} onClick={() => setIsModelMenuOpen((open) => !open)}><span><strong>{modelsLoading ? "Loading motion transfer models…" : selectedModelOption?.displayName ?? "No motion transfer model"}</strong><span className={styles.modelProviderRow}>{selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span></span><ChevronDown size={17} /></button>
-          {isModelMenuOpen ? <div className={styles.modelDropdownMenu} role="listbox" aria-label="Motion transfer model options">{models.map((option, index) => <button key={option.model} type="button" role="option" aria-selected={option.model === selectedModel} onClick={() => { setSelectedModel(option.model); setIsModelMenuOpen(false); }}><span><strong>{option.displayName}</strong><span className={styles.modelProviderRow}><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, index))]}`}>{modelTier(option, index)}</b></span></span></button>)}</div> : null}
-        </div>
+        <VideoModelDropdown
+          models={models}
+          value={selectedModel}
+          loading={modelsLoading}
+          ariaLabel="Motion transfer model options"
+          placeholder="No motion transfer model"
+          onChange={setSelectedModel}
+        />
         <p className={styles.selectedModelRole}>{motionModelRole(selectedModelOption)}</p>
         {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
         {qualityProperty ? <MotionSchemaField name={qualityProperty[0]} property={qualityProperty[1]} value={qualityValue} required={requiredProperties.has(qualityProperty[0])} labelOverride="Quality" onChange={setQualityValue} /> : null}
@@ -426,10 +442,10 @@ export function MotionTransferWorkspace() {
         {keepSoundProperty ? <MotionSchemaField name={keepSoundProperty[0]} property={keepSoundProperty[1]} value={keepOriginalSound} required={requiredProperties.has(keepSoundProperty[0])} labelOverride="Keep Original Sound" onChange={setKeepOriginalSound} /> : null}
         {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>{modelParameterEntries.map(([name, property]) => <MotionSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}
         <VideoCreditEstimate featureLabel="Motion Transfer" estimate={videoCreditEstimate}>
+          {!isComplete ? <p className={styles.settingsError} role="status">{modelsLoading ? "Loading motion transfer models…" : validationMessage}</p> : null}
+          {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
           <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><WandSparkles size={18} /> {isGenerating ? "GENERATING…" : "GENERATE VIDEO"}</button>
         </VideoCreditEstimate>
-        {submitAttempted && !isComplete ? <p className={styles.settingsError}>{modelsLoading ? "Loading motion transfer models…" : validationMessage}</p> : null}
-        {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
         {notice ? <p className={styles.peopleNotice}>{notice}</p> : null}
       </aside>
     </div>

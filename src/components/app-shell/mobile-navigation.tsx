@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { AudioLines, BarChart3, Boxes, ChevronDown, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, UsersRound, Video, WandSparkles, X } from "lucide-react";
+import { EosLogo } from "@/components/brand/eos-logo";
 import { useHydrated } from "./use-hydrated";
 
 const links = [
@@ -51,7 +52,7 @@ export function MobileNavigation() {
           <button className="absolute inset-0 bg-[#201d1b]/40" aria-label="Close navigation menu" onClick={() => setOpen(false)} />
           <nav className="absolute inset-y-0 left-0 w-[280px] bg-surface p-5 shadow-[var(--shadow-md)]" aria-label="Mobile navigation">
             <div className="mb-8 flex items-center justify-between">
-              <span className="text-sm font-black">EOS<span className="text-primary">.</span>studio</span>
+              <EosLogo href="/home" />
               <button className="rounded-lg p-2 text-muted-foreground hover:bg-surface-muted" aria-label="Close navigation menu" onClick={() => setOpen(false)}>
                 <X size={18} />
               </button>

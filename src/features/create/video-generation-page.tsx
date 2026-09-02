@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import {
   CloudUpload,
   AlertTriangle,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -25,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { Dropdown } from "@/components/ui/dropdown";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { uploadImageAsset } from "@/lib/api/storage";
@@ -49,7 +49,8 @@ import { VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import styles from "./video-generation-page.module.css";
-import { modelTier, modelTierClass } from "./model-tier";
+import { VideoModelDropdown } from "./video-model-dropdown";
+import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 
 const videoModes = [
   "Image to Video",
@@ -102,6 +103,11 @@ const generationModeOptions = [
     description: "Generate one video from one image",
   },
   {
+    value: "reference-to-video",
+    label: "Reference to Video",
+    description: "Use reference images to guide one video",
+  },
+  {
     value: "single-image",
     label: "Single Storyboard Image",
     description: "Split the uploaded sheet into scenes automatically",
@@ -117,10 +123,29 @@ const generationModeOptions = [
     description: "Continue each scene from the previous frame",
   },
 ] as const;
+type GenerationMode = (typeof generationModeOptions)[number]["value"];
+
+function videoModeRouteFeature(mode: GenerationMode): string {
+  return mode === "image-to-video" ? "image-to-video" : `image-to-video:${mode}`;
+}
+
+function isSingleSceneGenerationMode(mode: GenerationMode): boolean {
+  return mode === "image-to-video" || mode === "reference-to-video";
+}
+
 const sceneSourceOptions = [
   { value: "manual", label: "New image" },
   { value: "previous_last_frame", label: "Previous frame" },
 ] as const;
+const referenceImageRoles = [
+  { key: "avatar", label: "Avatar", description: "Character or person to keep consistent" },
+  { key: "product", label: "Product", description: "Product shape, logo, and details" },
+] as const;
+type ReferenceImageRole = (typeof referenceImageRoles)[number]["key"];
+type ReferenceImageSlot = {
+  url: string;
+  file: File;
+};
 const DEFAULT_MAX_STORYBOARD_SCENES = 12;
 const HARD_MAX_STORYBOARD_SCENES = 100;
 
@@ -150,6 +175,7 @@ type StoryboardScene = {
   endImageFile: File | null;
   prompt: string;
   duration: number;
+  aspectRatio?: string;
   startFrameSource: StartFrameSource;
   modelParams: Record<string, unknown>;
 };
@@ -606,6 +632,7 @@ type SchemaProperty = {
   description?: string;
   default?: unknown;
   enum?: unknown[];
+  maxItems?: number;
   minimum?: number;
   maximum?: number;
   step?: number;
@@ -693,6 +720,15 @@ function labelFromParameterName(name: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function parseSchemaEnumValue(rawValue: string, property: SchemaProperty): unknown {
+  if (rawValue === "") return undefined;
+  return property.enum?.find((option) => String(option) === rawValue) ?? rawValue;
+}
+
+function hasSchemaValue(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== "" && (!Array.isArray(value) || value.length > 0);
+}
+
 function isCameraFixedParameter(name: string, title?: string): boolean {
   const normalize = (value: string) => value.replace(/[^a-z0-9]/gi, "").toLowerCase();
   return normalize(name) === "camerafixed" || normalize(title ?? "") === "camerafixed";
@@ -705,7 +741,7 @@ function isSeedParameter(name: string, title?: string): boolean {
 
 function modelParamsForGeneration(
   params: Record<string, unknown>,
-  generationMode: (typeof generationModeOptions)[number]["value"],
+  generationMode: GenerationMode,
   options?: { omitSeed?: boolean },
 ): Record<string, unknown> {
   if (generationMode !== "single-image") return params;
@@ -759,6 +795,39 @@ function modelAspectRatioOptions(model: GenerationModelOption | undefined): stri
   return Array.from(new Set(values));
 }
 
+function closestAspectRatio(value: number, options: string[]): string | undefined {
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  return options.reduce<string | undefined>((closest, option) => {
+    const [width, height] = option.split(":").map(Number);
+    const optionValue = width / height;
+    if (!Number.isFinite(optionValue) || optionValue <= 0) return closest;
+    if (!closest) return option;
+    const [closestWidth, closestHeight] = closest.split(":").map(Number);
+    return Math.abs(Math.log(optionValue / value)) < Math.abs(Math.log((closestWidth / closestHeight) / value))
+      ? option
+      : closest;
+  }, undefined);
+}
+
+function readImageAspectRatio(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const image = new window.Image();
+    const objectUrl = URL.createObjectURL(file);
+    const cleanup = () => URL.revokeObjectURL(objectUrl);
+    image.onload = () => {
+      cleanup();
+      const ratio = image.naturalWidth / image.naturalHeight;
+      if (Number.isFinite(ratio) && ratio > 0) resolve(ratio);
+      else reject(new Error("Unable to read image dimensions"));
+    };
+    image.onerror = () => {
+      cleanup();
+      reject(new Error("Unable to read image dimensions"));
+    };
+    image.src = objectUrl;
+  });
+}
+
 function findModelInputParameter(
   model: GenerationModelOption | undefined,
   configured: string | undefined,
@@ -767,6 +836,19 @@ function findModelInputParameter(
   if (configured) return configured;
   return findSchemaProperty(schemaProperties(model), aliases)?.[0];
 }
+
+const referenceAudioParameterAliases = [
+  "reference_audios",
+  "referenceAudios",
+  "reference_audio",
+  "referenceAudio",
+];
+const referenceVideoParameterAliases = [
+  "reference_videos",
+  "referenceVideos",
+  "reference_video",
+  "referenceVideo",
+];
 
 function modelSpecificDefaults(model: GenerationModelOption | undefined): Record<string, unknown> {
   const properties = schemaProperties(model);
@@ -798,6 +880,7 @@ export function VideoGenerationPage() {
   const [storyboardQualityNote, setStoryboardQualityNote] = useState<string | null>(null);
   const [storyboardSplitting, setStoryboardSplitting] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [duration, setDuration] = useState(5);
   const [resolution, setResolution] = useState("");
@@ -813,10 +896,10 @@ export function VideoGenerationPage() {
       : postAudioMusicEnabled
         ? "music"
         : "none";
-  const [generationMode, setGenerationMode] = useState<(typeof generationModeOptions)[number]["value"]>("single-image");
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("single-image");
+  const [generationModeLabels, setGenerationModeLabels] = useState<Record<string, string>>({});
   const [videoMode, setVideoMode] =
     useState<(typeof videoModeOptions)[number]["value"]>("storyboard");
-  const [isGenerationModeMenuOpen, setIsGenerationModeMenuOpen] = useState(false);
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   const [extendModels, setExtendModels] = useState<GenerationModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
@@ -824,8 +907,6 @@ export function VideoGenerationPage() {
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [maxStoryboardScenes, setMaxStoryboardScenes] = useState(DEFAULT_MAX_STORYBOARD_SCENES);
   const [modelParams, setModelParams] = useState<Record<string, unknown>>({});
-  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [isResolutionMenuOpen, setIsResolutionMenuOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<VideoGenerationStatus>("idle");
   const [activeStoryboardId, setActiveStoryboardId] = useState<string | null>(null);
@@ -855,7 +936,9 @@ export function VideoGenerationPage() {
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
   const [frameReferences, setFrameReferences] = useState<string[]>([]);
-  const [frameReferenceFiles, setFrameReferenceFiles] = useState<File[]>([]);
+  const [referenceImageSlots, setReferenceImageSlots] = useState<Partial<Record<ReferenceImageRole, ReferenceImageSlot>>>({});
+  const [detectedImageAspectRatio, setDetectedImageAspectRatio] = useState<number | null>(null);
+  const [storyboardHasMixedAspectRatios, setStoryboardHasMixedAspectRatios] = useState(false);
   const [storyboardScenes, setStoryboardScenes] = useState<StoryboardScene[]>([
     {
       id: "scene-1",
@@ -885,26 +968,32 @@ export function VideoGenerationPage() {
     canScrollLeft: false,
     canScrollRight: false,
   });
-  const [openSceneSourceMenu, setOpenSceneSourceMenu] = useState<number | null>(
-    null,
-  );
-  const [sceneSourceMenuPosition, setSceneSourceMenuPosition] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
   const frameInputRef = useRef<HTMLInputElement | null>(null);
+  const referenceImageInputRefs = useRef<Partial<Record<ReferenceImageRole, HTMLInputElement | null>>>({});
+  const detectedImageAspectRatioRef = useRef<number | null>(null);
+  const selectedModelOptionRef = useRef<GenerationModelOption | undefined>(undefined);
   const sourceInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const sceneInputRef = useRef<HTMLInputElement | null>(null);
   const sceneRowRef = useRef<HTMLDivElement | null>(null);
-  const sceneSourceButtonRefs = useRef<
-    Record<number, HTMLButtonElement | null>
-  >({});
   const storyboardSplitRequestRef = useRef(0);
   const storyboardPreparedFileRef = useRef<File | null>(null);
   const cancelRequestedRef = useRef(false);
+  const referenceImageEntries = referenceImageRoles.flatMap((role) => {
+    const slot = referenceImageSlots[role.key];
+    return slot ? [{ ...role, ...slot }] : [];
+  });
+  const referenceImageUrls = referenceImageEntries.map((entry) => entry.url);
+  const referenceRolePrompt = referenceImageEntries.length > 0
+    ? `Reference image roles: ${referenceImageEntries.map((entry, index) => `Image ${index + 1} = ${entry.label}`).join("; ")}. Use each image according to its role, preserving the avatar identity and product details.`
+    : "";
+  const promptWithReferenceRoles = (value: string) => generationMode === "reference-to-video" && referenceRolePrompt
+    ? `${value}\n\n${referenceRolePrompt}`
+    : value;
   const selectedModelOption = models.find((model) => model.model === selectedModel);
+  useEffect(() => {
+    selectedModelOptionRef.current = selectedModelOption;
+  }, [selectedModelOption]);
   const capabilities = selectedModelOption?.capabilities;
   const properties = schemaProperties(selectedModelOption);
   const referenceImagesParameter = findModelInputParameter(
@@ -918,6 +1007,7 @@ export function VideoGenerationPage() {
     lastImageParameterAliases,
   );
   const supportsReferenceImages = Boolean(referenceImagesParameter);
+  const referenceModeHasNoModel = generationMode === "reference-to-video" && !modelsLoading && models.length === 0;
   const requiredProperties = new Set(requiredSchemaParameters(selectedModelOption));
   const durationProperty = findSchemaProperty(properties, ["duration", "duration_seconds", "durationSeconds"]);
   const resolutionProperty = findSchemaProperty(properties, ["resolution"]);
@@ -926,6 +1016,16 @@ export function VideoGenerationPage() {
   const supportsAspectRatio = Boolean(aspectRatioProperty || capabilities?.aspectRatioParameter || aspectRatioOptions.length > 0);
   const audioProperty = findSchemaProperty(properties, ["generateAudio", "generate_audio", "audio", "audio_enabled"]);
   const audioInputMode = Boolean(audioProperty && audioProperty[1].type !== "boolean");
+  const referenceAudiosParameter = findModelInputParameter(
+    selectedModelOption,
+    undefined,
+    referenceAudioParameterAliases,
+  );
+  const referenceVideosParameter = findModelInputParameter(
+    selectedModelOption,
+    undefined,
+    referenceVideoParameterAliases,
+  );
   const modelParameterEntries = Object.entries(properties).filter(([name]) => {
     const selected = models.find((model) => model.model === selectedModel);
     const capabilities = selected?.capabilities;
@@ -934,6 +1034,8 @@ export function VideoGenerationPage() {
       && name !== capabilities?.imageParameter
       && name !== capabilities?.referenceImagesParameter
       && name !== referenceImagesParameter
+      && name !== referenceAudiosParameter
+      && name !== referenceVideosParameter
       && name !== lastImageParameter
       && name !== capabilities?.negativePromptParameter
       && !(generationMode === "single-image" && isCameraFixedParameter(name, properties[name]?.title));
@@ -1062,11 +1164,14 @@ export function VideoGenerationPage() {
     let active = true;
     void getVideoStoryboardSettings()
       .then((settings) => {
-        if (!active || !Number.isInteger(settings.maxScenes) || settings.maxScenes < 1) return;
+        if (!active) return;
         const hardMax = Number.isInteger(settings.hardMaxScenes) && settings.hardMaxScenes > 0
           ? settings.hardMaxScenes
           : HARD_MAX_STORYBOARD_SCENES;
-        setMaxStoryboardScenes(Math.min(settings.maxScenes, hardMax));
+        if (Number.isInteger(settings.maxScenes) && settings.maxScenes >= 1) {
+          setMaxStoryboardScenes(Math.min(settings.maxScenes, hardMax));
+        }
+        if (settings.modeLabels) setGenerationModeLabels(settings.modeLabels);
       })
       .catch(() => {
         // Keep the backend default while an older deployment is still migrating.
@@ -1077,32 +1182,41 @@ export function VideoGenerationPage() {
   }, []);
   useEffect(() => {
     let active = true;
-    Promise.all([
-      listGenerationModels("image-to-video"),
-      listGenerationModels("extend-video").catch(() => [] as GenerationModelOption[]),
-    ])
-      .then(([items, extendItems]) => {
-        const eligible = items.filter((item) => item.enabled && item.capabilities.promptParameter && (
-          item.capabilities.imageParameter || item.capabilities.referenceImagesParameter
-        ));
-        if (!active) return;
-        setModels(eligible);
-        setExtendModels(extendItems.filter((item) => item.enabled));
-        setSelectedModel((current) => eligible.some((item) => item.model === current)
-          ? current
-          : eligible.find((item) => item.isDefault)?.model ?? eligible[0]?.model ?? "");
-      })
-      .catch((error: unknown) => {
-        if (!active) return;
-        setModelsError(error instanceof Error ? error.message : "Unable to load video models");
-      })
-      .finally(() => {
-        if (active) setModelsLoading(false);
-      });
+    const modelFeature = videoModeRouteFeature(generationMode);
+    const loadTimer = window.setTimeout(() => {
+      if (!active) return;
+      setModelsLoading(true);
+      setModelsError(null);
+      setModels([]);
+      setSelectedModel("");
+      void Promise.all([
+        listGenerationModels(modelFeature),
+        listGenerationModels("extend-video").catch(() => [] as GenerationModelOption[]),
+      ])
+        .then(([items, extendItems]) => {
+          const eligible = items.filter((item) => item.enabled && item.capabilities.promptParameter && (
+            item.capabilities.imageParameter || item.capabilities.referenceImagesParameter
+          ));
+          if (!active) return;
+          setModels(eligible);
+          setExtendModels(extendItems.filter((item) => item.enabled));
+          setSelectedModel((current) => eligible.some((item) => item.model === current)
+            ? current
+            : eligible.find((item) => item.isDefault)?.model ?? eligible[0]?.model ?? "");
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          setModelsError(error instanceof Error ? error.message : "Unable to load video models");
+        })
+        .finally(() => {
+          if (active) setModelsLoading(false);
+        });
+    }, 0);
     return () => {
       active = false;
+      window.clearTimeout(loadTimer);
     };
-  }, []);
+  }, [generationMode]);
   useEffect(() => {
     if (!selectedModel) return;
     const selected = models.find((model) => model.model === selectedModel);
@@ -1134,7 +1248,10 @@ export function VideoGenerationPage() {
       setModelParams(nextParams);
       setDuration(nextDurationValue);
       setResolution(typeof resolutionDefault === "string" ? resolutionDefault : "");
-      setAspectRatio(typeof aspectDefault === "string" ? aspectDefault : nextAspectRatioOptions[0] ?? "");
+      const detectedAspect = detectedImageAspectRatioRef.current === null
+        ? undefined
+        : closestAspectRatio(detectedImageAspectRatioRef.current, nextAspectRatioOptions);
+      setAspectRatio(detectedAspect ?? (typeof aspectDefault === "string" ? aspectDefault : nextAspectRatioOptions[0] ?? ""));
       setAutoSound(typeof audioDefault === "boolean" ? audioDefault : false);
       setAudioFile(null);
       setStoryboardScenes((current) => current.map((scene) => ({
@@ -1159,6 +1276,9 @@ export function VideoGenerationPage() {
     setStoryboardGridLabel(null);
     setStoryboardQualityNote(null);
     setStoryboardSlices([]);
+    detectedImageAspectRatioRef.current = null;
+    setDetectedImageAspectRatio(null);
+    setStoryboardHasMixedAspectRatios(false);
     setActiveSceneIndex(0);
     try {
       const result = await splitStoryboardSheet(file, maxStoryboardScenes);
@@ -1171,6 +1291,32 @@ export function VideoGenerationPage() {
         image: slice.previewUrl,
         file: slice.file,
       }));
+      const sceneAspectRatioValues = await Promise.all(slices.map(async (slice) => {
+        try {
+          return await readImageAspectRatio(slice.file);
+        } catch {
+          return null;
+        }
+      }));
+      if (storyboardSplitRequestRef.current !== requestId) {
+        slices.forEach((slice) => URL.revokeObjectURL(slice.image));
+        return false;
+      }
+      const validSceneRatios = sceneAspectRatioValues.filter((value): value is number => value !== null);
+      const firstSceneRatio = validSceneRatios[0];
+      const storyboardHasMixedRatios = validSceneRatios.length !== sceneAspectRatioValues.length
+        || (firstSceneRatio !== undefined && validSceneRatios.some((value) => Math.abs(Math.log(value / firstSceneRatio)) > 0.03));
+      const sceneAspectRatioOptions = modelAspectRatioOptions(selectedModelOptionRef.current);
+      const sceneAspectRatios = sceneAspectRatioValues.map((value) => value === null
+        ? undefined
+        : closestAspectRatio(value, sceneAspectRatioOptions));
+      setStoryboardHasMixedAspectRatios(storyboardHasMixedRatios);
+      if (!storyboardHasMixedRatios && firstSceneRatio !== undefined) {
+        detectedImageAspectRatioRef.current = firstSceneRatio;
+        setDetectedImageAspectRatio(firstSceneRatio);
+        const sharedAspectRatio = closestAspectRatio(firstSceneRatio, sceneAspectRatioOptions);
+        if (sharedAspectRatio) setAspectRatio(sharedAspectRatio);
+      }
       setStoryboardSlices(slices);
       setStoryboardSlicesSourceFile(file);
       setStoryboardGridLabel(`${result.rows} × ${result.columns} · ${result.slices.length} scenes`);
@@ -1182,7 +1328,7 @@ export function VideoGenerationPage() {
         const sharedPrompt = prompt.trim() || firstScene?.prompt || "";
         const sharedDuration = firstScene?.duration || duration;
         const sharedModelParams = firstScene?.modelParams ?? modelParams;
-        return slices.map((slice) => ({
+        return slices.map((slice, index) => ({
           id: slice.id,
           image: slice.image,
           imageFile: slice.file,
@@ -1190,6 +1336,7 @@ export function VideoGenerationPage() {
           endImageFile: null,
           prompt: sharedPrompt,
           duration: sharedDuration,
+          ...(sceneAspectRatios[index] ? { aspectRatio: sceneAspectRatios[index] } : {}),
           startFrameSource: "manual" as const,
           modelParams: sharedModelParams,
         }));
@@ -1216,6 +1363,22 @@ export function VideoGenerationPage() {
     const file = storyboardSheetFile ?? storyboardScenes[0]?.imageFile;
     if (file && storyboardPreparedFileRef.current !== file && !storyboardSplitting) void prepareStoryboardSlices(file);
   }, [generationMode, prepareStoryboardSlices, storyboardScenes, storyboardSheetFile, storyboardSplitting]);
+  const clearDetectedAspectRatio = () => {
+    detectedImageAspectRatioRef.current = null;
+    setDetectedImageAspectRatio(null);
+    setStoryboardHasMixedAspectRatios(false);
+  };
+  const updateAspectRatioFromImage = async (file: File) => {
+    try {
+      const detectedRatio = await readImageAspectRatio(file);
+      detectedImageAspectRatioRef.current = detectedRatio;
+      setDetectedImageAspectRatio(detectedRatio);
+      const nextAspectRatio = closestAspectRatio(detectedRatio, aspectRatioOptions);
+      if (nextAspectRatio) setAspectRatio(nextAspectRatio);
+    } catch {
+      // Keep the model default when the browser cannot read the image dimensions.
+    }
+  };
   const uploadSource = async (file: File) => {
     const validationError = await validateMediaFile(file, "image", capabilities?.uploadConstraints);
     if (validationError) {
@@ -1250,7 +1413,9 @@ export function VideoGenerationPage() {
       )));
     setStoryboardSheetFile(generationMode === "single-image" ? file : null);
     setGenerationError(null);
+    clearDetectedAspectRatio();
     if (generationMode === "single-image") void prepareStoryboardSlices(file);
+    else void updateAspectRatioFromImage(file);
   };
   const clearSource = () => {
     storyboardSplitRequestRef.current += 1;
@@ -1263,6 +1428,7 @@ export function VideoGenerationPage() {
     setStoryboardGridLabel(null);
     setStoryboardQualityNote(null);
     setStoryboardSplitting(false);
+    clearDetectedAspectRatio();
     setStoryboardScenes((current) => generationMode === "single-image"
       ? [{ ...(current[0] ?? {
         id: "scene-1",
@@ -1297,8 +1463,23 @@ export function VideoGenerationPage() {
     }
     const nextUrl = URL.createObjectURL(file);
     setFrameReferences((current) => [...current, nextUrl]);
-    setFrameReferenceFiles((current) => [...current, file]);
     setGenerationError(null);
+  };
+
+  const addReferenceImage = async (role: ReferenceImageRole, file: File) => {
+    const validationError = await validateMediaFile(file, "image", capabilities?.uploadConstraints);
+    if (validationError) {
+      setGenerationError(validationError);
+      return;
+    }
+    const existingSlot = referenceImageSlots[role];
+    if (existingSlot?.url.startsWith("blob:")) URL.revokeObjectURL(existingSlot.url);
+    setReferenceImageSlots((current) => ({
+      ...current,
+      [role]: { url: URL.createObjectURL(file), file },
+    }));
+    setGenerationError(null);
+    if (role === "avatar" || !referenceImageSlots.avatar) void updateAspectRatioFromImage(file);
   };
 
   const handleAudioFile = async (file: File) => {
@@ -1321,13 +1502,35 @@ export function VideoGenerationPage() {
     setSceneImage(URL.createObjectURL(file));
     setSceneImageFile(file);
     setSceneError(null);
+    if (generationMode !== "reference-to-video" && (editingSceneIndex === null || editingSceneIndex === 0)) {
+      void updateAspectRatioFromImage(file);
+    }
   };
   const clearFrameReferences = () => {
     frameReferences.forEach((source) => {
       if (source.startsWith("blob:")) URL.revokeObjectURL(source);
     });
     setFrameReferences([]);
-    setFrameReferenceFiles([]);
+  };
+
+  const clearReferenceImageSlots = () => {
+    Object.values(referenceImageSlots).forEach((slot) => {
+      if (slot?.url.startsWith("blob:")) URL.revokeObjectURL(slot.url);
+    });
+    setReferenceImageSlots({});
+    clearDetectedAspectRatio();
+  };
+
+  const removeReferenceImage = (role: ReferenceImageRole) => {
+    const source = referenceImageSlots[role]?.url;
+    if (source?.startsWith("blob:")) URL.revokeObjectURL(source);
+    setReferenceImageSlots((current) => {
+      const next = { ...current };
+      delete next[role];
+      return next;
+    });
+    if (role === "avatar" && referenceImageSlots.product) void updateAspectRatioFromImage(referenceImageSlots.product.file);
+    else if (role === "product" && !referenceImageSlots.avatar) clearDetectedAspectRatio();
   };
   const scrollScenes = (direction: "left" | "right") => {
     const row = sceneRowRef.current;
@@ -1379,53 +1582,10 @@ export function VideoGenerationPage() {
       window.removeEventListener("resize", updateVideoRecentScrollState);
     };
   }, [videoHistory.length]);
-  useEffect(() => {
-    if (openSceneSourceMenu === null) return;
-    const updateMenuPosition = () => {
-      const button = sceneSourceButtonRefs.current[openSceneSourceMenu];
-      if (!button) return;
-      const rect = button.getBoundingClientRect();
-      setSceneSourceMenuPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
-    };
-    const row = sceneRowRef.current;
-    updateMenuPosition();
-    row?.addEventListener("scroll", updateMenuPosition, { passive: true });
-    window.addEventListener("resize", updateMenuPosition);
-    window.addEventListener("scroll", updateMenuPosition, true);
-    return () => {
-      row?.removeEventListener("scroll", updateMenuPosition);
-      window.removeEventListener("resize", updateMenuPosition);
-      window.removeEventListener("scroll", updateMenuPosition, true);
-    };
-  }, [openSceneSourceMenu]);
-  const toggleSceneSourceMenu = (index: number) => {
-    if (openSceneSourceMenu === index) {
-      setOpenSceneSourceMenu(null);
-      setSceneSourceMenuPosition(null);
-      return;
-    }
-    const button = sceneSourceButtonRefs.current[index];
-    if (button) {
-      const rect = button.getBoundingClientRect();
-      setSceneSourceMenuPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
-    }
-    setOpenSceneSourceMenu(index);
-  };
   const selectGenerationMode = (
-    nextMode: (typeof generationModeOptions)[number]["value"],
+    nextMode: GenerationMode,
   ) => {
     setGenerationMode(nextMode);
-    setIsGenerationModeMenuOpen(false);
-    setOpenSceneSourceMenu(null);
-    setSceneSourceMenuPosition(null);
     setActiveSceneIndex(0);
     if (nextMode !== "single-image" && storyboardSheetFile) {
       const originalSheet = storyboardSheetFile;
@@ -1452,7 +1612,7 @@ export function VideoGenerationPage() {
       setStoryboardSlicesSourceFile(null);
       setStoryboardGridLabel(null);
     }
-    if (nextMode === "image-to-video") {
+    if (isSingleSceneGenerationMode(nextMode)) {
       setStoryboardScenes((current) => current.slice(0, 1));
     }
     const nextVideoMode = nextMode === "continuous" ? "continuous" : "storyboard";
@@ -1496,7 +1656,7 @@ export function VideoGenerationPage() {
     && storyboardSlicesSourceFile === storyboardSheetFile
   const generationScenes = generationMode === "single-image"
     ? hasCurrentStoryboardSlices && storyboardScenes.length > 0 ? storyboardScenes : storyboardScenes.slice(0, 1)
-    : generationMode === "image-to-video"
+    : isSingleSceneGenerationMode(generationMode)
       ? storyboardScenes.slice(0, 1)
       : storyboardScenes;
   const shouldAutoUpscaleStoryboard = generationMode === "single-image" && Boolean(storyboardQualityNote) && generationScenes.length > 0;
@@ -1511,24 +1671,28 @@ export function VideoGenerationPage() {
           : scene.startFrameSource;
       const sceneInput: VideoGenerationInput["scenes"][number] = {
         startFrameSource,
-        prompt: scene.prompt.trim() || prompt.trim() || "Video generation",
+        prompt: promptWithReferenceRoles(scene.prompt.trim() || prompt.trim() || "Video generation"),
       };
       if (startFrameSource === "manual" && scene.image && !scene.image.startsWith("blob:")) sceneInput.storyboardImage = scene.image;
+      if (generationMode === "reference-to-video" && referenceImageUrls.length > 0) sceneInput.referenceImages = referenceImageUrls;
       if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
       if (durationProperty) sceneInput.duration = scene.duration;
+      if (scene.aspectRatio) sceneInput.aspectRatio = scene.aspectRatio;
       const sceneModelParams = modelParamsForGeneration(scene.modelParams, generationMode);
       if (Object.keys(sceneModelParams).length) sceneInput.modelParams = sceneModelParams;
       return sceneInput;
     });
     const request: Omit<VideoGenerationInput, "idempotencyKey"> = {
       model: selectedModel,
-      mode: generationMode === "single-image" || generationMode === "image-to-video" ? "storyboard" : videoMode,
+      mode: generationMode === "single-image" || isSingleSceneGenerationMode(generationMode) ? "storyboard" : videoMode,
+      generationMode,
       scenes,
       autoUpscale: shouldAutoUpscaleStoryboard,
+      promptOptimizerEnabled,
     };
     if (durationProperty) request.duration = duration;
     if (resolutionProperty && resolution) request.resolution = resolution;
-    if (supportsAspectRatio && aspectRatio) request.aspectRatio = aspectRatio;
+    if (supportsAspectRatio && aspectRatio && !storyboardHasMixedAspectRatios) request.aspectRatio = aspectRatio;
     if (audioProperty) request.generateAudio = autoSound;
     if (postAudioMode !== "none") {
       request.audioMode = postAudioMode;
@@ -1597,15 +1761,12 @@ export function VideoGenerationPage() {
   const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
   const sceneLimitReached = storyboardScenes.length >= maxStoryboardScenes;
   const canAddScene = generationMode !== "single-image"
-    && generationMode !== "image-to-video"
+    && !isSingleSceneGenerationMode(generationMode)
     && !sceneLimitReached
     && Boolean(firstScene?.image && firstSceneHasPrompt);
   const addSceneDisabledReason = sceneLimitReached
     ? `Storyboard supports up to ${maxStoryboardScenes} scenes.`
     : "Complete Scene 1 with a start image and prompt first";
-  const selectedGenerationMode =
-    generationModeOptions.find((option) => option.value === generationMode) ??
-    generationModeOptions[0];
   const selectedVideoMode =
     videoModeOptions.find((option) => option.value === videoMode) ??
     videoModeOptions[0];
@@ -1642,7 +1803,7 @@ export function VideoGenerationPage() {
     setIsSceneModalOpen(true);
   };
   const deleteScene = (index: number) => {
-    if (generationMode === "single-image" || generationMode === "image-to-video" || index === 0) return;
+    if (generationMode === "single-image" || isSingleSceneGenerationMode(generationMode) || index === 0) return;
     const scene = storyboardScenes[index];
     if (!scene) return;
     setDeleteSceneIndex(index);
@@ -1735,17 +1896,49 @@ export function VideoGenerationPage() {
   const isGeneratingVideo = generationStatus === "uploading" || generationStatus === "processing";
   const allGenerationScenesHavePrompts = generationScenes.length > 0
     && generationScenes.every((scene) => scene.prompt.trim().length > 0);
-  const allManualScenesHaveImages = generationScenes.every((scene, index) => (
-    getSceneSource(scene, index) !== "manual" || Boolean(scene.image)
-  ));
+  const allManualScenesHaveImages = generationMode === "reference-to-video"
+    ? referenceImageUrls.length > 0
+    : generationScenes.every((scene, index) => (
+      getSceneSource(scene, index) !== "manual" || Boolean(scene.image)
+    ));
   const storyboardReady = generationMode !== "single-image"
     || (!storyboardSplitting && hasCurrentStoryboardSlices);
-  const canGenerate = Boolean(selectedModel)
-    && !modelsLoading
-    && !isGeneratingVideo
-    && storyboardReady
-    && allGenerationScenesHavePrompts
-    && allManualScenesHaveImages;
+  const missingRequiredModelParameter = settingsModelParameterEntries.find(([name]) => requiredProperties.has(name) && !hasSchemaValue(modelParams[name]));
+  const requiredStructuredField = durationProperty && requiredProperties.has(durationProperty[0]) && (!Number.isFinite(duration) || duration <= 0)
+    ? durationProperty[0]
+    : resolutionProperty && requiredProperties.has(resolutionProperty[0]) && !hasSchemaValue(resolution)
+      ? resolutionProperty[0]
+      : aspectRatioProperty && requiredProperties.has(aspectRatioProperty[0]) && !hasSchemaValue(aspectRatio)
+        ? aspectRatioProperty[0]
+        : null;
+  const videoValidationMessage = modelsLoading
+    ? "Loading model options..."
+    : !selectedModel
+      ? "Select a video model before generating."
+      : generationMode === "reference-to-video" && !supportsReferenceImages
+        ? "The selected model does not support reference images. Choose a compatible model."
+        : generationMode === "reference-to-video" && referenceImageUrls.length === 0
+          ? "Add at least one reference image before generating."
+          : generationMode === "single-image" && !sourcePreviewImage
+            ? "Upload a storyboard image before generating."
+            : generationMode === "single-image" && storyboardSplitting
+              ? "Preparing storyboard scenes..."
+              : generationMode === "single-image" && !hasCurrentStoryboardSlices
+                ? "Preparing storyboard scenes from the uploaded image."
+                : generationMode !== "single-image" && !prompt.trim()
+                  ? "Add a prompt before generating."
+                  : !storyboardReady
+                    ? "Finish preparing the storyboard before generating."
+                    : !allGenerationScenesHavePrompts
+                      ? "Every scene needs a prompt before generating."
+                      : !allManualScenesHaveImages
+                        ? "Every manual scene needs a storyboard image."
+                        : requiredStructuredField
+                          ? `${labelFromParameterName(requiredStructuredField)} is required for this model.`
+                          : missingRequiredModelParameter
+                            ? `${labelFromParameterName(missingRequiredModelParameter[0])} is required for this model.`
+                            : null;
+  const canGenerate = Boolean(!videoValidationMessage && !isGeneratingVideo && !creditEstimateLoading);
   const safeVideoLibraryIndex = Math.min(videoLibraryIndex, Math.max(videoHistory.length - 1, 0));
   const galleryVideoUrl = videoHistory[safeVideoLibraryIndex]?.finalVideoUrl ?? null;
   const latestVideoUrl = finalVideoUrl ?? videoHistory[0]?.finalVideoUrl ?? null;
@@ -1788,6 +1981,14 @@ export function VideoGenerationPage() {
       setGenerationError("Select a video model first.");
       return;
     }
+    if (generationMode === "reference-to-video" && !supportsReferenceImages) {
+      setGenerationError("The selected model does not support reference images. Choose a compatible model.");
+      return;
+    }
+    if (generationMode === "reference-to-video" && referenceImageUrls.length === 0) {
+      setGenerationError("Add at least one reference image before generating.");
+      return;
+    }
     if (generationMode !== "single-image" && !prompt.trim()) {
       setGenerationError("Add a prompt before generating.");
       return;
@@ -1821,7 +2022,7 @@ export function VideoGenerationPage() {
       return;
     }
     const sceneSources = generationScenes.map((scene, index) => getSceneSource(scene, index));
-    if (sceneSources.some((source, index) => source === "manual" && !generationScenes[index].image)) {
+    if (generationMode !== "reference-to-video" && sceneSources.some((source, index) => source === "manual" && !generationScenes[index].image)) {
       setGenerationError("Every manual scene needs a storyboard image.");
       return;
     }
@@ -1844,7 +2045,7 @@ export function VideoGenerationPage() {
       const uploadedReferenceImages: string[] = [];
       for (let index = 0; index < generationScenes.length; index += 1) {
         const scene = generationScenes[index];
-        if (sceneSources[index] === "manual") {
+        if (generationMode !== "reference-to-video" && sceneSources[index] === "manual") {
           setNotice(`Uploading Scene ${index + 1} of ${generationScenes.length}…`);
           const file = await fileFromSceneImage(scene.image as string, index, scene.imageFile);
           uploadedImages[index] = await uploadImageAsset(file, {
@@ -1856,10 +2057,11 @@ export function VideoGenerationPage() {
         }
       }
 
-      if (supportsReferenceImages) {
-        for (let index = 0; index < frameReferences.length; index += 1) {
-          setNotice(`Uploading reference image ${index + 1} of ${frameReferences.length}…`);
-          const file = await fileFromSceneImage(frameReferences[index], index, frameReferenceFiles[index] ?? null, "reference");
+      if (generationMode === "reference-to-video" && supportsReferenceImages) {
+        for (let index = 0; index < referenceImageEntries.length; index += 1) {
+          setNotice(`Uploading ${referenceImageEntries[index].label.toLowerCase()} ${index + 1} of ${referenceImageEntries.length}…`);
+          const entry = referenceImageEntries[index];
+          const file = await fileFromSceneImage(entry.url, index, entry.file, "reference");
           uploadedReferenceImages.push(await uploadImageAsset(file, {
             purpose: "content",
             feature: "image-to-video",
@@ -1872,26 +2074,34 @@ export function VideoGenerationPage() {
       const scenes = generationScenes.map((scene, index) => {
         const sceneInput: VideoGenerationInput["scenes"][number] = {
           startFrameSource: sceneSources[index],
-          prompt: scene.prompt.trim(),
+          prompt: promptWithReferenceRoles(scene.prompt.trim()),
         };
         if (sceneSources[index] === "manual" && uploadedImages[index]) sceneInput.storyboardImage = uploadedImages[index];
-        if (uploadedReferenceImages.length > 0) sceneInput.referenceImages = uploadedReferenceImages;
+        if (generationMode === "reference-to-video") {
+          if (uploadedReferenceImages[0]) sceneInput.storyboardImage = uploadedReferenceImages[0];
+          if (uploadedReferenceImages.length > 0) sceneInput.referenceImages = uploadedReferenceImages;
+        } else if (uploadedReferenceImages.length > 0) {
+          sceneInput.referenceImages = uploadedReferenceImages;
+        }
         if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
         if (durationProperty) sceneInput.duration = scene.duration;
+        if (scene.aspectRatio) sceneInput.aspectRatio = scene.aspectRatio;
         const sceneModelParams = modelParamsForGeneration(scene.modelParams, generationMode);
         if (Object.keys(sceneModelParams).length) sceneInput.modelParams = sceneModelParams;
         return sceneInput;
       });
       const request: VideoGenerationInput = {
         model: selectedModel,
-        mode: generationMode === "single-image" || generationMode === "image-to-video" ? "storyboard" : videoMode,
+        mode: generationMode === "single-image" || isSingleSceneGenerationMode(generationMode) ? "storyboard" : videoMode,
+        generationMode,
         scenes,
         autoUpscale: shouldAutoUpscaleStoryboard,
         idempotencyKey: `video-${crypto.randomUUID()}`,
+        promptOptimizerEnabled,
       };
       if (durationProperty) request.duration = duration;
       if (resolutionProperty && resolution) request.resolution = resolution;
-      if (supportsAspectRatio && aspectRatio) request.aspectRatio = aspectRatio;
+      if (supportsAspectRatio && aspectRatio && !storyboardHasMixedAspectRatios) request.aspectRatio = aspectRatio;
       if (audioProperty && !audioInputMode) request.generateAudio = autoSound;
       if (audioInputMode && audioFile) {
         setNotice("Uploading audio reference…");
@@ -2079,46 +2289,24 @@ export function VideoGenerationPage() {
                   <h2 id="video-mode-title">GENERATION MODE</h2>
                   <Info size={11} />
                 </div>
-                <div className={`${styles.modelDropdown} ${styles.generationModeDropdown}`}>
-                  <button
-                    type="button"
-                    className={styles.modelDropdownTrigger}
-                    aria-haspopup="listbox"
-                    aria-expanded={isGenerationModeMenuOpen}
-                    onClick={() => setIsGenerationModeMenuOpen((open) => !open)}
-                  >
-                    <span>
-                      <strong>{selectedGenerationMode.label}</strong>
-                      <small>{selectedGenerationMode.description}</small>
-                    </span>
-                    <ChevronDown size={17} />
-                  </button>
-                  {isGenerationModeMenuOpen ? (
-                    <div
-                      className={styles.modelDropdownMenu}
-                      role="listbox"
-                      aria-label="Video generation mode options"
-                    >
-                      {generationModeOptions.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          role="option"
-                          aria-selected={option.value === generationMode}
-                          onClick={() => selectGenerationMode(option.value)}
-                        >
-                          <span>
-                            <strong>{option.label}</strong>
-                            <small>{option.description}</small>
-                          </span>
-                          {option.value === generationMode ? (
-                            <span className={styles.modelCheck}>✓</span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
+                <Dropdown
+                  value={generationMode}
+                  options={generationModeOptions.map((option) => ({
+                    value: option.value,
+                    label: (
+                      <>
+                        <strong>{generationModeLabels[option.value]?.trim() || option.label}</strong>
+                        <small>{option.description}</small>
+                      </>
+                    ),
+                  }))}
+                  ariaLabel="Video generation mode options"
+                  onChange={(nextMode) => selectGenerationMode(nextMode as GenerationMode)}
+                  className={`${styles.modelDropdown} ${styles.generationModeDropdown}`}
+                  triggerClassName={styles.modelDropdownTrigger}
+                  menuClassName={styles.modelDropdownMenu}
+                  optionClassName={styles.generationModeDropdownOption}
+                />
                 {generationMode === "single-image" ? (
                   <div className={`${styles.sequenceNotice} ${styles.sequenceNoticeNative}`}>
                     <ImageIcon size={13} />
@@ -2159,6 +2347,7 @@ export function VideoGenerationPage() {
                 />
               </label>
               <span className={styles.counter}>{prompt.length} / 2000</span>
+              <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
               <label className="block text-[10px] font-bold">
                 Negative Prompt <small>(Optional)</small>
                 <input
@@ -2167,8 +2356,83 @@ export function VideoGenerationPage() {
                   placeholder="e.g. blurry, low quality, watermark"
                 />
               </label>
+              {generationMode === "reference-to-video" ? (
+                <div className={styles.referenceInputs} aria-label="Reference image uploads">
+                  <div className={styles.referenceInputsHeading}>
+                    <span>REFERENCE IMAGES <b>*</b></span>
+                  </div>
+                  <div className={styles.referenceMediaField}>
+                    {supportsReferenceImages ? (
+                      <div className={styles.referenceRoleGrid}>
+                        {referenceImageRoles.map((role) => {
+                          const slot = referenceImageSlots[role.key];
+                          return (
+                            <div
+                              className={styles.referenceRoleField}
+                              key={role.key}
+                              title={role.description}
+                              aria-label={`${role.label}: ${role.description}`}
+                            >
+                              <div className={styles.referenceMediaLabel}>
+                                <span>{role.label}</span>
+                                <small>{role.description}</small>
+                              </div>
+                              {slot ? (
+                                <div className={styles.referenceRolePreview}>
+                                  <Image
+                                    src={slot.url}
+                                    alt={role.label}
+                                    width={112}
+                                    height={78}
+                                    unoptimized
+                                    className="h-full w-full object-cover"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeReferenceImage(role.key)}
+                                    aria-label={`Remove ${role.label}`}
+                                    title={`Remove ${role.label}`}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className={styles.referenceRoleUpload}
+                                  onClick={() => referenceImageInputRefs.current[role.key]?.click()}
+                                  aria-label={`Upload ${role.label}`}
+                                >
+                                  <CloudUpload size={17} />
+                                  <strong>Upload image</strong>
+                                  <small>PNG / JPG / WEBP</small>
+                                </button>
+                              )}
+                              <input
+                                ref={(element) => {
+                                  referenceImageInputRefs.current[role.key] = element;
+                                }}
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                className="hidden"
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  if (file) void addReferenceImage(role.key, file);
+                                  event.currentTarget.value = "";
+                                }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className={styles.sceneRequirement}>The selected model does not support reference images.</p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </section> : null}
-            <section className={`${styles.panel} ${generationMode === "single-image" ? styles.storyboardImagePanel : ""}`}>
+            {generationMode !== "reference-to-video" ? <section className={`${styles.panel} ${generationMode === "single-image" ? styles.storyboardImagePanel : ""}`}>
               <SectionTitle number={generationMode === "single-image" ? "1" : "2"}>{generationMode === "single-image" ? "STORYBOARD IMAGE" : "SOURCE"}</SectionTitle>
               <label className="mb-2 block text-[10px] font-bold">
                 {generationMode === "single-image" ? "Storyboard Sheet" : "Start Frame"} <small>(Required)</small>
@@ -2244,7 +2508,7 @@ export function VideoGenerationPage() {
                   ) : null}
                 </>
               ) : null}
-            </section>
+            </section> : null}
           </div>
           <div className={styles.centerColumn}>
             <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
@@ -2442,46 +2706,53 @@ export function VideoGenerationPage() {
                   </div>
               </div>
             </section>
-            {supportsReferenceImages ? (
+            {generationMode !== "reference-to-video" && supportsReferenceImages ? (
               <section className={styles.stripSection}>
                 <div className={styles.subheading}>
-                  SHOT / FRAME REFERENCES <small>(Optional · shared across scenes)</small>
+                  SHOT / FRAME REFERENCES
+                  <small>(Optional · shared across scenes)</small>
                 </div>
-                <div className={styles.thumbRow}>
-                  <button
-                    type="button"
-                    className={styles.addFrame}
-                    onClick={() => frameInputRef.current?.click()}
-                  >
-                    <Plus size={16} /> Add Frame
-                  </button>
-                  <input
-                    ref={frameInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) void addFrame(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                  {frameReferences.map((src, index) => (
-                    <div className={styles.thumb} key={src}>
-                      <Image
-                        src={src}
-                        alt={`Reference ${index + 1}`}
-                        width={92}
-                        height={62}
-                        unoptimized
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  ))}
-                </div>
+                {supportsReferenceImages ? (
+                  <div className={styles.thumbRow}>
+                    <button
+                      type="button"
+                      className={styles.addFrame}
+                      onClick={() => frameInputRef.current?.click()}
+                    >
+                      <Plus size={16} /> Add Frame
+                    </button>
+                    <input
+                      ref={frameInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void addFrame(file);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                    {frameReferences.map((src, index) => (
+                      <div className={styles.thumb} key={src}>
+                        <Image
+                          src={src}
+                          alt={`Reference ${index + 1}`}
+                          width={92}
+                          height={62}
+                          unoptimized
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={styles.sceneRequirement}>{referenceModeHasNoModel
+                    ? "No Reference to Video model is configured. Ask an Admin to assign one in Admin > Model routes > Image to Video > Reference to Video."
+                    : "The selected model does not support reference images. Choose a compatible model."}</p>
+                )}
               </section>
             ) : null}
-            {generationMode !== "image-to-video" ? (
+            {!isSingleSceneGenerationMode(generationMode) ? (
             <section className={styles.stripSection}>
               <div className={styles.subheading}>
                 STORYBOARD {generationMode === "single-image" ? <small>(Auto-created from uploaded sheet)</small> : <small>(Optional)</small>}
@@ -2547,27 +2818,17 @@ export function VideoGenerationPage() {
                           )}
                           <div className={styles.sceneCardFooter}>
                             {index > 0 && videoMode === "flexible" ? (
-                              <div className={styles.sceneSourceDropdown}>
-                                <button
-                                  ref={(element) => {
-                                    sceneSourceButtonRefs.current[index] =
-                                      element;
-                                  }}
-                                  type="button"
-                                  className={styles.sceneSourceTrigger}
-                                  aria-haspopup="listbox"
-                                  aria-expanded={openSceneSourceMenu === index}
-                                  onClick={() => toggleSceneSourceMenu(index)}
-                                >
-                                  <span>
-                                    {sceneSourceOptions.find(
-                                      (option) =>
-                                        option.value === scene.startFrameSource,
-                                    )?.label ?? "New image"}
-                                  </span>
-                                  <ChevronDown size={13} />
-                                </button>
-                              </div>
+                              <Dropdown
+                                value={scene.startFrameSource}
+                                options={sceneSourceOptions}
+                                ariaLabel={`Start frame source for Scene ${index + 1}`}
+                                onChange={(nextSource) => updateSceneSource(index, nextSource as StartFrameSource)}
+                                className={styles.sceneSourceDropdown}
+                                triggerClassName={styles.sceneSourceTrigger}
+                                menuClassName={styles.sceneSourceMenu}
+                                optionClassName={styles.sceneSourceOption}
+                                menuPosition="fixed"
+                              />
                             ) : (
                               <em className={styles.sceneAutoNote}>
                                 {index > 0 && videoMode === "continuous"
@@ -2627,37 +2888,6 @@ export function VideoGenerationPage() {
                   </>
                 ) : null}
               </div>
-              {openSceneSourceMenu !== null && sceneSourceMenuPosition ? (
-                <div
-                  className={styles.sceneSourceMenu}
-                  role="listbox"
-                  aria-label={`Start frame source for Scene ${openSceneSourceMenu + 1}`}
-                  style={{
-                    top: sceneSourceMenuPosition.top,
-                    left: sceneSourceMenuPosition.left,
-                    width: sceneSourceMenuPosition.width,
-                  }}
-                >
-                  {sceneSourceOptions.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="option"
-                      aria-selected={
-                        storyboardScenes[openSceneSourceMenu]
-                          ?.startFrameSource === option.value
-                      }
-                      onClick={() => {
-                        updateSceneSource(openSceneSourceMenu, option.value);
-                        setOpenSceneSourceMenu(null);
-                        setSceneSourceMenuPosition(null);
-                      }}
-                    >
-                      <span>{option.label}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </section>
             ) : null}
           </div>
@@ -2666,73 +2896,27 @@ export function VideoGenerationPage() {
             <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">
               Model <Info size={11} />
             </label>
-            <div className={styles.modelDropdown}>
-              <button
-                type="button"
-                className={styles.modelDropdownTrigger}
-                aria-haspopup="listbox"
-                aria-expanded={isModelMenuOpen}
-                disabled={modelsLoading || models.length === 0}
-                onClick={() => setIsModelMenuOpen((open) => !open)}
-              >
-                <span>
-                  <strong>
-                    {modelsLoading
-                      ? "Loading video models…"
-                      : selectedModelOption?.displayName ?? "No compatible model"}
-                  </strong>
-                  <span className={styles.modelProviderRow}>
-                    {selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}
-                    {!modelsLoading && selectedModelOption ? (
-                      <b className={`${styles.modelCapabilityBadge} ${nativeExtendModel ? styles.modelCapabilityBadgeNative : styles.modelCapabilityBadgeContinuation}`}>
-                        {nativeExtendModel ? "Native Extend" : "Frame Continuation"}
-                      </b>
-                    ) : null}
-                  </span>
-                </span>
-                <ChevronDown size={17} />
-              </button>
-              {isModelMenuOpen ? (
-                <div
-                  className={styles.modelDropdownMenu}
-                  role="listbox"
-                  aria-label="Video model options"
-                >
-                  {models.map((option) => {
-                    const optionHasNativeExtend = extendModels.some((model) => modelFamily(model.model) === modelFamily(option.model));
-                    return (
-                      <button
-                        key={option.model}
-                        type="button"
-                        role="option"
-                        aria-selected={option.model === selectedModel}
-                        onClick={() => {
-                          const optionReferenceParameter = findModelInputParameter(
-                            option,
-                            option.capabilities.referenceImagesParameter,
-                            referenceImageParameterAliases,
-                          );
-                          if (!optionReferenceParameter) clearFrameReferences();
-                          setSelectedModel(option.model);
-                          setIsModelMenuOpen(false);
-                          setIsResolutionMenuOpen(false);
-                        }}
-                      >
-                        <span>
-                          <strong>{option.displayName}</strong>
-                          <span className={styles.modelProviderRow}>
-                            <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, models.indexOf(option)))]}`}>{modelTier(option, models.indexOf(option))}</b>
-                            <b className={`${styles.modelCapabilityBadge} ${optionHasNativeExtend ? styles.modelCapabilityBadgeNative : styles.modelCapabilityBadgeContinuation}`}>
-                              {optionHasNativeExtend ? "Native Extend" : "Frame Continuation"}
-                            </b>
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
+            <VideoModelDropdown
+              models={models}
+              value={selectedModel}
+              loading={modelsLoading}
+              ariaLabel="Video model options"
+              onChange={(nextModel) => {
+                const option = models.find((item) => item.model === nextModel);
+                if (option) {
+                  const optionReferenceParameter = findModelInputParameter(
+                    option,
+                    option.capabilities.referenceImagesParameter,
+                    referenceImageParameterAliases,
+                  );
+                  if (!optionReferenceParameter) {
+                    clearFrameReferences();
+                    clearReferenceImageSlots();
+                  }
+                }
+                setSelectedModel(nextModel);
+              }}
+            />
             {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
             {generationMode !== "single-image" && durationProperty ? (
               <DurationControl
@@ -2745,44 +2929,32 @@ export function VideoGenerationPage() {
             {resolutionProperty ? (
               <div className={styles.settingBlock}>
                 <div className={styles.settingLabel}>{resolutionProperty[1].title ?? "Resolution"} <Info size={11} /></div>
-                <div className={styles.modelDropdown}>
-                  <button
-                    type="button"
-                    className={`${styles.modelDropdownTrigger} ${styles.resolutionDropdownTrigger} ${isResolutionMenuOpen ? styles.resolutionDropdownTriggerOpen : ""}`}
-                    aria-haspopup="listbox"
-                    aria-expanded={isResolutionMenuOpen}
-                    onClick={() => setIsResolutionMenuOpen((open) => !open)}
-                  >
-                    <span><strong>{resolution || "Select resolution"}</strong></span>
-                    <ChevronDown size={17} />
-                  </button>
-                  {isResolutionMenuOpen ? (
-                    <div className={`${styles.modelDropdownMenu} ${styles.resolutionDropdownMenu}`} role="listbox" aria-label="Resolution options">
-                      {(resolutionProperty[1].enum ?? []).map((value) => {
-                        const optionValue = String(value);
-                        return (
-                          <button
-                            key={optionValue}
-                            type="button"
-                            role="option"
-                            aria-selected={resolution === optionValue}
-                            onClick={() => {
-                              setResolution(optionValue);
-                              setIsResolutionMenuOpen(false);
-                            }}
-                          >
-                            <span><strong>{optionValue}</strong></span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
+                <Dropdown
+                  value={resolution}
+                  options={(resolutionProperty[1].enum ?? []).map((value) => ({
+                    value: String(value),
+                    label: String(value),
+                  }))}
+                  ariaLabel="Resolution options"
+                  placeholder="Select resolution"
+                  onChange={setResolution}
+                  className={styles.modelDropdown}
+                  triggerClassName={`${styles.modelDropdownTrigger} ${styles.resolutionDropdownTrigger}`}
+                  menuClassName={`${styles.modelDropdownMenu} ${styles.resolutionDropdownMenu}`}
+                  optionClassName={styles.resolutionDropdownOption}
+                />
               </div>
             ) : null}
             {supportsAspectRatio && aspectRatioOptions.length > 0 ? (
               <div className={styles.settingBlock}>
-                <div className={styles.settingLabel}>{aspectRatioProperty?.[1].title ?? "Aspect Ratio"} <Info size={11} /></div>
+                <div className={styles.settingLabel}>
+                  {aspectRatioProperty?.[1].title ?? "Aspect Ratio"} <Info size={11} />
+                  {storyboardHasMixedAspectRatios
+                    ? <small className={styles.autoAspectRatioHint}>Per scene</small>
+                    : detectedImageAspectRatio !== null
+                      ? <small className={styles.autoAspectRatioHint}>Auto from image</small>
+                      : null}
+                </div>
                 <div className={styles.ratios}>
                   {aspectRatioOptions.map((ratio) => {
                     return (
@@ -2790,6 +2962,12 @@ export function VideoGenerationPage() {
                         type="button"
                         className={aspectRatio === ratio ? styles.ratioSelected : ""}
                         onClick={() => setAspectRatio(ratio)}
+                        disabled={detectedImageAspectRatio !== null || storyboardHasMixedAspectRatios}
+                        title={storyboardHasMixedAspectRatios
+                          ? "Each storyboard scene uses its own aspect ratio"
+                          : detectedImageAspectRatio !== null
+                            ? "Aspect ratio detected from the uploaded image"
+                            : `Use ${ratio}`}
                         key={ratio}
                       >
                         <i className={ratio === "1:1" ? styles.square : Number(ratio.split(":")[0]) < Number(ratio.split(":")[1]) ? styles.portrait : styles.landscape} />
@@ -2813,7 +2991,7 @@ export function VideoGenerationPage() {
                 </button>
               </div>
             ) : null}
-            {audioInputMode ? (
+            {audioInputMode && generationMode !== "reference-to-video" ? (
               <div className={styles.audioReferenceField}>
                 <div className={styles.settingLabel}><span>Audio Reference</span><small>Optional</small></div>
                 {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label="Remove audio"><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={18} /><strong>Upload audio reference</strong><small>MP3 / WAV / M4A</small></button>}
@@ -2862,15 +3040,20 @@ export function VideoGenerationPage() {
                 return (
                   <label className={styles.dynamicField} key={name}>
                     <span>{label}{isRequired ? <b>*</b> : null}</span>
-                    <select
-                      className={styles.dynamicSelect}
+                    <Dropdown
                       value={value === undefined ? "" : String(value)}
-                      onChange={(event) => updateModelParam(name, event.target.value)}
-                      aria-required={isRequired}
-                    >
-                      {!isRequired ? <option value="">Select {label.toLowerCase()}</option> : null}
-                      {property.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
-                    </select>
+                      options={[
+                        ...(!isRequired ? [{ value: "", label: `Select ${label.toLowerCase()}` }] : []),
+                        ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+                      ]}
+                      onChange={(nextValue) => updateModelParam(name, parseSchemaEnumValue(nextValue, property))}
+                      ariaLabel={label}
+                      placeholder={`Select ${label.toLowerCase()}`}
+                      className={styles.dynamicDropdown}
+                      triggerClassName={styles.dynamicSelect}
+                      menuClassName={styles.dynamicDropdownMenu}
+                      optionClassName={styles.dynamicDropdownOption}
+                    />
                     {property.description ? <small>{property.description}</small> : null}
                   </label>
                 );
@@ -2947,6 +3130,8 @@ export function VideoGenerationPage() {
                   </small>
                 ) : null}
               </div>
+              {!isGeneratingVideo && videoValidationMessage ? <p className={styles.settingsError} role="status">{videoValidationMessage}</p> : null}
+              {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
               {isGeneratingVideo ? (
                 <button
                   type="button"
@@ -2973,7 +3158,6 @@ export function VideoGenerationPage() {
             {generationProgress.total > 0 && (generationStatus === "uploading" || generationStatus === "processing" || generationStatus === "completed") ? (
               <p className={styles.generationProgress}>{generationProgress.completed}/{generationProgress.total} scenes complete</p>
             ) : null}
-            {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
           </aside>
           <section className={styles.tutorials}>
             <div className={styles.tutorialTitle}>
@@ -3162,9 +3346,7 @@ export function VideoGenerationPage() {
             ) : null}
             <label className={styles.sceneModalField}>
               <span className={styles.sceneModalFieldHeader}>
-                <span>
-                  Prompt <b>*</b>
-                </span>
+                <span>Prompt <b>*</b></span>
                 <small>{scenePrompt.length} / 2000</small>
               </span>
               <textarea
@@ -3174,6 +3356,7 @@ export function VideoGenerationPage() {
                 maxLength={2000}
               />
             </label>
+            {generationMode === "single-image" ? <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /> : null}
             {durationProperty ? (
               <DurationControl
                 property={durationProperty[1]}
@@ -3194,15 +3377,20 @@ export function VideoGenerationPage() {
                     return (
                       <label className={styles.dynamicField} key={name}>
                         <span>{label}{isRequired ? <b>*</b> : null}</span>
-                        <select
-                          className={styles.dynamicSelect}
+                        <Dropdown
                           value={value === undefined ? "" : String(value)}
-                          onChange={(event) => setSceneModelParams((current) => ({ ...current, [name]: event.target.value }))}
-                          aria-required={isRequired}
-                        >
-                          {!isRequired ? <option value="">Select {label.toLowerCase()}</option> : null}
-                          {property.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
-                        </select>
+                          options={[
+                            ...(!isRequired ? [{ value: "", label: `Select ${label.toLowerCase()}` }] : []),
+                            ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+                          ]}
+                          onChange={(nextValue) => setSceneModelParams((current) => ({ ...current, [name]: parseSchemaEnumValue(nextValue, property) }))}
+                          ariaLabel={label}
+                          placeholder={`Select ${label.toLowerCase()}`}
+                          className={styles.dynamicDropdown}
+                          triggerClassName={styles.dynamicSelect}
+                          menuClassName={styles.dynamicDropdownMenu}
+                          optionClassName={styles.dynamicDropdownOption}
+                        />
                       </label>
                     );
                   }

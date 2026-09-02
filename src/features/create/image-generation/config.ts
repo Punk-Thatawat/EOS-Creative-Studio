@@ -1,5 +1,6 @@
 export const imageGenerationTabs = ["Text to Image", "Image to Image", "AI Style Transfer", "AI Background", "Upscale", "Extend Image"] as const;
 export type ImageGenerationTab = typeof imageGenerationTabs[number];
+export const textToImagePromptMaxLength = 2000;
 
 export const backgroundModes = [
   { id: "remove", label: "Remove Background", shortLabel: "Remove", description: "Cut out the subject cleanly" },
@@ -35,10 +36,11 @@ export const stylePresetImages = [
   "/generated-assets/style-anime.png",
 ] as const;
 
-export const imageRatios = ["1:1", "16:9", "4:3", "3:4", "9:16"] as const;
+export const imageRatios = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] as const;
 export type ImageRatio = typeof imageRatios[number];
 
 export const imageRatioSizes: Record<ImageRatio, string> = {
+  "21:9": "2560 x 1080",
   "1:1": "1024 x 1024",
   "16:9": "1280 x 720",
   "4:3": "1152 x 864",
@@ -47,6 +49,7 @@ export const imageRatioSizes: Record<ImageRatio, string> = {
 };
 
 export const imageResolutionOptions: Record<ImageRatio, readonly string[]> = {
+  "21:9": ["HD", "2K", "4K"],
   "1:1": ["HD", "2K", "4K"],
   "16:9": ["720p", "2K", "4K"],
   "4:3": ["HD", "2K", "4K"],
@@ -55,6 +58,7 @@ export const imageResolutionOptions: Record<ImageRatio, readonly string[]> = {
 };
 
 export const imageResolutionSizes: Record<ImageRatio, Record<string, string>> = {
+  "21:9": { HD: "1280 x 540", "2K": "2560 x 1080", "4K": "5120 x 2160" },
   "1:1": { HD: "1024 x 1024", "2K": "2048 x 2048", "4K": "4096 x 4096" },
   "16:9": { "720p": "1280 x 720", "2K": "2560 x 1440", "4K": "3840 x 2160" },
   "4:3": { HD: "1152 x 864", "2K": "2048 x 1536", "4K": "4096 x 3072" },
@@ -85,12 +89,17 @@ function ratioFromSize(value: string): ImageRatio | null {
   return best.distance < 0.03 ? best.ratio : null;
 }
 
+export function imageRatioFromSize(value: string): ImageRatio | null {
+  return ratioFromSize(value);
+}
+
 function normalizeCapabilitySize(value: string): string {
   return normalizeSize(value).replace(/x/gi, "*").replace(/\u00d7/g, "*");
 }
 
 export function supportedRatiosForModel(supportedSizes?: string[], supportedRatios?: string[]): ImageRatio[] {
-  const explicitRatios = (supportedRatios ?? []).filter((value): value is ImageRatio => imageRatios.includes(value as ImageRatio));
+  const explicitRatioSet = new Set((supportedRatios ?? []).filter((value): value is ImageRatio => imageRatios.includes(value as ImageRatio)));
+  const explicitRatios = imageRatios.filter((value) => explicitRatioSet.has(value));
   if (explicitRatios.length > 0) return explicitRatios;
   if (!supportedSizes || supportedSizes.length === 0) return [...imageRatios];
 

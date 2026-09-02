@@ -23,6 +23,7 @@ import {
   stylePresetImages,
   stylePresets,
   styleTransferPresets,
+  textToImagePromptMaxLength,
   type ImageCount,
   type ImageGenerationTab,
   type ImageQuality,
@@ -217,8 +218,8 @@ type ImageGenerationDraft = {
   styleTransferPrompt: string;
   backgroundPrompt: string;
   extendPrompt: string;
+  promptOptimizerEnabled: boolean;
   negativePrompt: string;
-  smartEnhance: boolean;
   imageToImageSourceImage: string | null;
   imageToImageSourceImages: string[];
   styleTransferSourceImage: string | null;
@@ -317,8 +318,8 @@ export function useImageGenerationState() {
   const [styleTransferPrompt, setStyleTransferPrompt] = useState("");
   const [backgroundPrompt, setBackgroundPrompt] = useState("");
   const [extendPrompt, setExtendPrompt] = useState("");
-  const [negativePrompt, setNegativePrompt] = useState("low quality, blurry, text, watermark, logo, deformed...");
-  const [smartEnhance, setSmartEnhance] = useState(true);
+  const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
+  const [negativePrompt, setNegativePrompt] = useState("");
   const [imageToImageSourceImage, setImageToImageSourceImage] = useState<string | null>(null);
   const [imageToImageSourceImages, setImageToImageSourceImages] = useState<string[]>([]);
   const [styleTransferSourceImage, setStyleTransferSourceImage] = useState<string | null>(null);
@@ -466,8 +467,8 @@ export function useImageGenerationState() {
         if (typeof storedDraft.styleTransferPrompt === "string") setStyleTransferPrompt(storedDraft.styleTransferPrompt);
         if (typeof storedDraft.backgroundPrompt === "string") setBackgroundPrompt(storedDraft.backgroundPrompt);
         if (typeof storedDraft.extendPrompt === "string") setExtendPrompt(storedDraft.extendPrompt);
-        if (typeof storedDraft.negativePrompt === "string") setNegativePrompt(storedDraft.negativePrompt);
-        if (typeof storedDraft.smartEnhance === "boolean") setSmartEnhance(storedDraft.smartEnhance);
+        if (typeof storedDraft.promptOptimizerEnabled === "boolean") setPromptOptimizerEnabled(storedDraft.promptOptimizerEnabled);
+        if (typeof storedDraft.negativePrompt === "string") setNegativePrompt(storedDraft.negativePrompt === "low quality, blurry, text, watermark, logo, deformed..." ? "" : storedDraft.negativePrompt);
         if (typeof storedDraft.extendDirection === "string" && ["left", "right", "top", "bottom", "all"].includes(storedDraft.extendDirection)) setExtendDirection(storedDraft.extendDirection as ExtendDirection);
         if (typeof storedDraft.extendAmount === "string" && ["25%", "50%", "100%"].includes(storedDraft.extendAmount)) setExtendAmount(storedDraft.extendAmount as ExtendAmount);
         if (storedDraft.styleSourceMode === "preset" || storedDraft.styleSourceMode === "reference") setStyleSourceMode(storedDraft.styleSourceMode);
@@ -618,8 +619,8 @@ export function useImageGenerationState() {
       styleTransferPrompt,
       backgroundPrompt,
       extendPrompt,
+      promptOptimizerEnabled,
       negativePrompt,
-      smartEnhance,
       imageToImageSourceImages,
       imageToImageSourceImage,
       styleTransferSourceImage,
@@ -678,8 +679,8 @@ export function useImageGenerationState() {
     styleTransferPrompt,
     backgroundPrompt,
     extendPrompt,
+    promptOptimizerEnabled,
     negativePrompt,
-    smartEnhance,
     imageToImageSourceImage,
     imageToImageSourceImages,
     styleTransferSourceImage,
@@ -883,6 +884,9 @@ export function useImageGenerationState() {
   const requestModelParams = Object.fromEntries(Object.entries(modelParams).filter(([name]) => !providerControlledModelParameters.has(name)));
   const nativeQuoteRatio = modelParameterValue(modelParams, selectedModelCapabilities?.aspectRatioParameter, ["aspect_ratio", "aspectRatio", "ratio"]);
   const nativeQuoteResolution = modelParameterValue(modelParams, selectedModelCapabilities?.resolutionParameter, ["resolution", "output_resolution", "outputResolution"]);
+  const smartEnhanceQuoteEnabled = promptOptimizerEnabled
+    && activeTab !== "Upscale"
+    && (activeTab !== "AI Background" || (backgroundSupportsPrompt && (backgroundMode === "replace" || backgroundMode === "generate")));
   const imageCreditQuoteInput: ImageCreditQuoteInput | null = (() => {
     // Credit estimates should be visible before the user fills the form. The
     // backend can quote the selected/default route from the current settings;
@@ -902,18 +906,19 @@ export function useImageGenerationState() {
       ...(qualityEnabled ? { quality: effectiveQuality } : {}),
       ...(providerOutputFormat ? { outputFormat: providerOutputFormat } : {}),
       ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}),
+      ...(smartEnhanceQuoteEnabled ? { promptOptimizerEnabled: true } : {}),
     };
     switch (activeTab) {
       case "Text to Image":
-        return { feature: "text-to-image", ...shared, prompt: prompt.trim() || "Image generation", ...(style ? { style } : {}), count: effectiveCount, smartEnhance, negativePrompt };
+        return { feature: "text-to-image", ...shared, prompt: prompt.trim() || "Image generation", ...(style ? { style } : {}), count: effectiveCount, negativePrompt };
       case "Image to Image":
-        return { feature: "image-to-image", ...shared, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt.trim() || "Transform the source image", ...(style ? { style } : {}), ...(imageToImageSupportsStrength ? { strength: imageStrength / 100 } : {}), count: effectiveCount, smartEnhance, negativePrompt };
+        return { feature: "image-to-image", ...shared, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt.trim() || "Transform the source image", ...(style ? { style } : {}), ...(imageToImageSupportsStrength ? { strength: imageStrength / 100 } : {}), count: effectiveCount, negativePrompt };
       case "AI Style Transfer":
-        return { feature: "style-transfer", ...shared, sourceImage: styleTransferSourceImage, ...(styleSourceMode === "preset" && styleTransferPreset ? { stylePreset: styleTransferPreset } : {}), ...(styleSourceMode === "reference" && styleReferenceImage ? { styleReferenceImage } : {}), ...(styleTransferPrompt.trim() ? { prompt: styleTransferPrompt.trim() } : {}), ...(styleTransferSupportsStrength ? { styleStrength: imageStrength / 100 } : {}), ...(styleTransferSupportsContentPreservation ? { contentPreservation: contentPreservation / 100 } : {}), count: effectiveCount, smartEnhance, negativePrompt };
+        return { feature: "style-transfer", ...shared, sourceImage: styleTransferSourceImage, ...(styleSourceMode === "preset" && styleTransferPreset ? { stylePreset: styleTransferPreset } : {}), ...(styleSourceMode === "reference" && styleReferenceImage ? { styleReferenceImage } : {}), ...(styleTransferPrompt.trim() ? { prompt: styleTransferPrompt.trim() } : {}), ...(styleTransferSupportsStrength ? { styleStrength: imageStrength / 100 } : {}), ...(styleTransferSupportsContentPreservation ? { contentPreservation: contentPreservation / 100 } : {}), count: effectiveCount, negativePrompt };
       case "AI Background":
         return { feature: "background-removal", ...shared, mode: isLocalSolidBackground ? "remove" : backgroundMode, sourceImage: backgroundSourceImage, ...(backgroundReferenceImage ? { backgroundReferenceImage } : {}), ...(backgroundSupportsPrompt && (backgroundMode === "replace" || backgroundMode === "generate") && backgroundPrompt.trim() ? { prompt: backgroundPrompt.trim() } : {}), ...(style ? { style } : {}), ...(backgroundMask ? { mask: backgroundMask } : {}), ...((backgroundMode === "remove" || isLocalSolidBackground) ? { autoDetectSubject: !backgroundMask } : {}), transparent: backgroundMode === "remove" || isLocalSolidBackground, ...(supportsNativeSolidBackground ? { backgroundColor } : {}), preserveSubject, edgeCleanup, addShadow, matchLighting, count: effectiveCount };
       case "Extend Image":
-        return { feature: "extend-image", ...shared, sourceImage: extendSourceImage, ...(extendPrompt.trim() ? { prompt: extendPrompt.trim() } : {}), direction: extendDirection, amount: extendAmount, count: effectiveCount, smartEnhance, negativePrompt };
+        return { feature: "extend-image", ...shared, sourceImage: extendSourceImage, ...(extendPrompt.trim() ? { prompt: extendPrompt.trim() } : {}), direction: extendDirection, amount: extendAmount, count: effectiveCount, negativePrompt };
       case "Upscale":
         return { feature: "upscale", model: activeSelectedModel || undefined, sourceImage: upscaleSourceImage, targetResolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}) };
     }
@@ -1659,6 +1664,7 @@ export function useImageGenerationState() {
     styleTransferPrompt,
     backgroundPrompt,
     extendPrompt,
+    promptOptimizerEnabled,
     extendDirection,
     extendAmount,
     quality: effectiveQuality,
@@ -1725,7 +1731,6 @@ export function useImageGenerationState() {
     edgeCleanup,
     addShadow,
     matchLighting,
-    smartEnhance,
     contentPreservation,
     facePreservation,
     seed,
@@ -1764,11 +1769,11 @@ export function useImageGenerationState() {
     setStyleTransferPrompt,
     setBackgroundPrompt,
     setExtendPrompt,
+    setPromptOptimizerEnabled,
     setExtendDirection,
     setExtendAmount,
     setQuality,
     setOutputFormat,
-    setSmartEnhance,
     setStyle,
     selectRecentGeneration,
     clearRecentSelection,
@@ -1801,7 +1806,7 @@ export function useImageGenerationState() {
     setSeed,
     refreshRecentGenerations,
     generateImage: async () => {
-      if (activeTab !== "Text to Image" || isGenerating) return;
+      if (activeTab !== "Text to Image" || isGenerating || !prompt.trim() || prompt.length > textToImagePromptMaxLength) return;
       generationRunRef.current = true;
       setPendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKey);
@@ -1825,7 +1830,7 @@ export function useImageGenerationState() {
           applyGenerationProgress(progress);
           if (progress.status === "failed" || progress.status === "cancelled") terminalStatus = progress.status;
         };
-        const result = await createTextToImage({ prompt, ...(style ? { style } : {}), ...(selectedModelCapabilities?.aspectRatioParameter ? {} : { ratio: effectiveRatio }), resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count: effectiveCount, smartEnhance, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedModel ? { model: selectedModel } : {}), idempotencyKey: crypto.randomUUID() }, handleProgress, abortController.signal);
+        const result = await createTextToImage({ prompt, promptOptimizerEnabled, ...(style ? { style } : {}), ...(selectedModelCapabilities?.aspectRatioParameter ? {} : { ratio: effectiveRatio }), resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count: effectiveCount, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedModel ? { model: selectedModel } : {}), idempotencyKey: crypto.randomUUID() }, handleProgress, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
@@ -1868,13 +1873,13 @@ export function useImageGenerationState() {
           workspaceId,
           sourceImage: extendSourceImage,
           prompt: extendPrompt,
+          promptOptimizerEnabled,
           direction: extendDirection,
           amount: extendAmount,
           ratio: effectiveRatio,
           resolution: effectiveResolution,
           ...(qualityEnabled ? { quality: effectiveQuality } : {}),
           count: effectiveCount,
-          smartEnhance,
           negativePrompt,
           ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}),
           ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}),
@@ -1973,7 +1978,7 @@ export function useImageGenerationState() {
       setImageToImageTotalCount(Number(count));
       setImageToImageCompletedCount(0);
       try {
-        const result = await createImageToImage({ workspaceId, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt, ...(style ? { style } : {}), ...(imageToImageSupportsStrength ? { strength: imageStrength } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, smartEnhance, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, applyImageToImageProgress, abortController.signal);
+        const result = await createImageToImage({ workspaceId, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt, promptOptimizerEnabled, ...(style ? { style } : {}), ...(imageToImageSupportsStrength ? { strength: imageStrength } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, applyImageToImageProgress, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
@@ -2021,6 +2026,7 @@ export function useImageGenerationState() {
           styleReferenceImage: styleSourceMode === "reference" ? styleReferenceImage : null,
           stylePreset: styleSourceMode === "preset" ? styleTransferPreset : undefined,
           prompt: styleTransferPrompt,
+          promptOptimizerEnabled,
           styleStrength: imageStrength / 100,
           contentPreservation: contentPreservation / 100,
           ratio: effectiveRatio,
@@ -2028,7 +2034,6 @@ export function useImageGenerationState() {
           quality,
           ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}),
           count,
-          smartEnhance,
           negativePrompt,
           ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}),
           ...(selectedStyleTransferModel ? { model: selectedStyleTransferModel } : {}),
@@ -2083,6 +2088,7 @@ export function useImageGenerationState() {
           sourceImage: backgroundSourceImage,
           backgroundReferenceImage: requestMode === "replace" ? backgroundReferenceImage : null,
           prompt: backgroundSupportsPrompt && (requestMode === "replace" || requestMode === "generate") ? backgroundPrompt : undefined,
+          ...(backgroundSupportsPrompt && (requestMode === "replace" || requestMode === "generate") ? { promptOptimizerEnabled } : {}),
           style: requestMode === "generate" ? style : undefined,
           mask: uploadedMask,
           autoDetectSubject: requestMode === "remove",

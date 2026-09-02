@@ -10,6 +10,7 @@ export type CreditPricingDefaults = {
   exchangeRateThbPerUsd: number;
   targetMargin: number;
   fixedCostThb: number;
+  smartEnhancePriceThb: number;
   roundingDecimals: number;
   minimumCreditCost: number;
   pricingVersion: string;
@@ -59,6 +60,8 @@ export type CreditPricingPreview = {
   profitThb?: number;
   promptAddonThb?: number;
   promptAddonCredits?: number;
+  smartEnhancePriceThb?: number;
+  smartEnhancePriceCredits?: number;
   pricingSource?: string;
   pricingVersion?: string;
   message?: string;
@@ -78,6 +81,7 @@ export type UpsertCreditPricingRuleInput = {
 export type UpsertCreditPricingDefaultsInput = {
   targetMargin: number;
   fixedCostThb?: number;
+  smartEnhancePriceThb?: number;
   minimumCreditCost?: number;
 };
 

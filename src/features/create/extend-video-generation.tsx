@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, CloudUpload, Info, Plus, X } from "lucide-react";
+import { Dropdown } from "@/components/ui/dropdown";
+import { CloudUpload, Info, Plus, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
@@ -19,7 +20,8 @@ import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
-import { modelTier, modelTierClass } from "./model-tier";
+import { VideoModelDropdown } from "./video-model-dropdown";
+import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 
 type SchemaProperty = {
   type?: string;
@@ -88,7 +90,7 @@ function progressOf(payload: ExtendVideoGenerationStatus, fallback: number): num
 
 function SchemaField({ name, property, value, required, onChange }: { name: string; property: SchemaProperty; value: unknown; required: boolean; onChange: (value: unknown) => void }) {
   const label = property.title ?? labelFor(name);
-  if (property.enum?.length) return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><select className={styles.dynamicSelect} value={value === undefined ? "" : String(value)} onChange={(event) => onChange(parseValue(event.target.value, property))} aria-required={required}>{!required ? <option value="">Auto</option> : null}{property.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}</select>{property.description ? <small>{property.description}</small> : null}</label>;
+  if (property.enum?.length) return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><Dropdown value={value === undefined ? "" : String(value)} options={[...(!required ? [{ value: "", label: "Auto" }] : []), ...property.enum.map((option) => ({ value: String(option), label: String(option) }))]} onChange={(nextValue) => onChange(parseValue(nextValue, property))} ariaLabel={label} placeholder="Auto" className={styles.dynamicDropdown} triggerClassName={styles.dynamicSelect} menuClassName={styles.dynamicDropdownMenu} optionClassName={styles.dynamicDropdownOption} />{property.description ? <small>{property.description}</small> : null}</label>;
   if (property.type === "boolean") return <div className={styles.toggleRow}>{label}{required ? <b>*</b> : null}<button type="button" className={styles.toggle} aria-pressed={Boolean(value)} onClick={() => onChange(!Boolean(value))}><i /></button></div>;
   const numeric = property.type === "integer" || property.type === "number";
   return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (property.type === "integer" ? 1 : "any")} onChange={(event) => onChange(parseValue(event.target.value, property))} aria-required={required} />{property.description ? <small>{property.description}</small> : null}</label>;
@@ -103,10 +105,10 @@ export function ExtendVideoWorkspace() {
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [sourceVideo, setSourceVideo] = useState<VideoAsset | null>(null);
   const [audio, setAudio] = useState<VideoAsset | null>(null);
   const [prompt, setPrompt] = useState("");
+  const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [duration, setDuration] = useState<number | undefined>(undefined);
   const [resolution, setResolution] = useState<unknown>(undefined);
@@ -118,7 +120,6 @@ export function ExtendVideoWorkspace() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
-  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const sourceInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
@@ -180,7 +181,6 @@ export function ExtendVideoWorkspace() {
     }
     const asset = { file, name: file.name, url: URL.createObjectURL(file) };
     if (kind === "video") setSourceVideo(asset); else setAudio(asset);
-    setSubmitAttempted(false);
   };
 
   const missingParameter = modelParameterEntries.find(([name]) => required.has(name) && !hasValue(modelParams[name]));
@@ -188,7 +188,6 @@ export function ExtendVideoWorkspace() {
   const validationMessage = !selectedModel ? "Select an Extend Video model." : !sourceVideo ? "Upload a source video." : !prompt.trim() ? "Prompt is required." : missingParameter ? `${labelFor(missingParameter[0])} is required for this model.` : null;
 
   const handleGenerate = async () => {
-    setSubmitAttempted(true);
     if (!isComplete || !sourceVideo) return;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -199,6 +198,7 @@ export function ExtendVideoWorkspace() {
       let audioUrl: string | undefined;
       if (audio && audioParameter) { setNotice("Uploading audio…"); audioUrl = await uploadPeopleMedia(audio.file, controller.signal, selected?.capabilities.uploadConstraints); }
       const request: Parameters<typeof createExtendVideoGeneration>[0] = { model: selectedModel, sourceVideo: sourceVideoUrl, prompt: prompt.trim() };
+      if (promptOptimizerEnabled) request.promptOptimizerEnabled = true;
       if (negativePrompt.trim()) request.negativePrompt = negativePrompt.trim();
       if (audioUrl) request.audioUrl = audioUrl;
       if (duration !== undefined) request.duration = duration;
@@ -250,16 +250,17 @@ export function ExtendVideoWorkspace() {
     negativePrompt: negativePrompt.trim() || undefined,
     duration,
     resolution,
+    promptOptimizerEnabled,
     modelParams,
   } : null);
   return <div className={styles.columns}>
     <div className={styles.leftColumn}>
       <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="extend-video-title"><div className={styles.videoModeHeading}><h2 id="extend-video-title">EXTEND VIDEO</h2><Info size={11} /></div><p className={styles.textVideoDescription}>Continue an existing video with a new prompt-guided segment.</p></section></section>
       <section className={styles.panel}><div className={styles.sectionTitle}><h2>1. SOURCE VIDEO</h2></div><div className={`${styles.peopleSourcePreview} ${!sourceVideo ? styles.peopleSourceUploadEmpty : ""}`}>{sourceVideo ? <div className={styles.peopleSourceMedia}><video src={sourceVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setSourceVideo(null)} aria-label="Remove source video"><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => sourceInputRef.current?.click()}><CloudUpload size={23} /><strong>Upload Video</strong><small>MP4 / WEBM</small></button>}</div><input ref={sourceInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "video"); event.currentTarget.value = ""; }} /></section>
-      <section className={styles.panel}><div className={styles.sectionTitle}><h2>2. PROMPT</h2></div><label className={styles.peopleFieldLabel}>Describe the continuation <small>(Required)</small><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Continue the camera movement naturally, keep the same subject, lighting, and style…" /></label><span className={styles.counter}>{prompt.length} / 4000</span><label className={styles.peopleFieldLabel}>Negative Prompt <small>(Optional)</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="blurry, jump cut, flicker, distorted subject" /></label></section>
+      <section className={styles.panel}><div className={styles.sectionTitle}><h2>2. PROMPT</h2></div><label className={styles.peopleFieldLabel}>Describe the continuation <small>(Required)</small><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Continue the camera movement naturally, keep the same subject, lighting, and style…" /></label><span className={styles.counter}>{prompt.length} / 4000</span><PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /><label className={styles.peopleFieldLabel}>Negative Prompt <small>(Optional)</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="blurry, jump cut, flicker, distorted subject" /></label></section>
       {audioParameter ? <section className={styles.panel}><div className={styles.sectionTitle}><h2>3. OPTIONAL AUDIO</h2></div>{audio ? <div className={styles.peopleNotice}>{audio.name}<button type="button" onClick={() => setAudio(null)} aria-label="Remove audio"><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={20} /><strong>Upload audio reference</strong><small>MP3 / WAV / M4A</small></button>}<input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "audio"); event.currentTarget.value = ""; }} /></section> : null}
     </div>
     <div className={styles.centerColumn}><section className={styles.previewPanel}><div className={styles.sectionTitle}><h2>PREVIEW</h2></div><div className={styles.videoPreview}>{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><Plus size={26} /><strong>{state === "uploading" ? "PREPARING VIDEO" : "EXTENDING VIDEO"}</strong><span>{notice ?? "Working…"}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${progress || 12}%` }} /></div><small>{progress ? `${progress}% complete` : "Waiting for provider…"}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} ariaLabel="Extended video preview" /> : selected?.previewUrl ? <ModelPreviewMedia url={selected.previewUrl} type={selected.previewType} alt={`${selected.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div></section><VideoResultLibrary feature="extend-video" currentVideoUrl={finalVideoUrl} selectedVideoUrl={displayedVideoUrl} refreshKey={libraryRefreshKey} onVideoSelect={(url) => setPreviewVideoUrl(url)} /></div>
-    <aside className={styles.settings}><div className={styles.sectionTitle}><h2>4. SETTINGS</h2></div><label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label><div className={styles.modelDropdown}><button type="button" className={styles.modelDropdownTrigger} aria-haspopup="listbox" aria-expanded={modelMenuOpen} disabled={modelsLoading || models.length === 0} onClick={() => setModelMenuOpen((open) => !open)}><span><strong>{modelsLoading ? "Loading Extend Video models…" : selected?.displayName ?? "No Extend Video model"}</strong><span className={styles.modelProviderRow}>{selected ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selected, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selected, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span></span><ChevronDown size={17} /></button>{modelMenuOpen ? <div className={styles.modelDropdownMenu} role="listbox" aria-label="Extend Video model options">{models.map((option, index) => <button key={option.model} type="button" role="option" aria-selected={option.model === selectedModel} onClick={() => { setSelectedModel(option.model); setModelMenuOpen(false); }}><span><strong>{option.displayName}</strong><span className={styles.modelProviderRow}><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, index))]}`}>{modelTier(option, index)}</b></span></span></button>)}</div> : null}</div>{modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}{resolutionProperty ? <SchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolution} required={required.has(resolutionProperty[0])} onChange={setResolution} /> : null}{durationProperty ? <div className={styles.settingBlock}><div className={styles.settingLabel}><span>{durationProperty[1].title ?? "Duration"}</span><strong>{duration ?? "Auto"} sec</strong></div><input type="range" min={durationProperty[1].minimum ?? 2} max={durationProperty[1].maximum ?? 15} step={durationProperty[1].step ?? 1} value={duration ?? durationProperty[1].minimum ?? 2} onChange={(event) => setDuration(Number(event.target.value))} aria-label="Duration" /><div className={styles.rangeLabels}><span>{durationProperty[1].minimum ?? 2}s</span><span>{durationProperty[1].maximum ?? 15}s</span></div></div> : null}{modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>{modelParameterEntries.map(([name, property]) => <SchemaField key={name} name={name} property={property} value={modelParams[name]} required={required.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}<VideoCreditEstimate featureLabel="Extend Video" duration={duration} estimate={videoCreditEstimate}>{isGenerating ? <button type="button" className={styles.textVideoCancel} onClick={() => void handleCancel()}>Cancel generation</button> : null}<button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><Plus size={18} /> {isGenerating ? "GENERATING…" : "EXTEND VIDEO"}</button></VideoCreditEstimate>{submitAttempted && !isComplete ? <p className={styles.settingsError}>{modelsLoading ? "Loading Extend Video models…" : validationMessage}</p> : null}{error ? <p className={styles.settingsError}>{error}</p> : null}{notice && !isGenerating ? <p className={styles.peopleNotice}>{notice}</p> : null}</aside>
+    <aside className={styles.settings}><div className={styles.sectionTitle}><h2>4. SETTINGS</h2></div><label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label><VideoModelDropdown models={models} value={selectedModel} loading={modelsLoading} ariaLabel="Extend Video model options" placeholder="No Extend Video model" onChange={setSelectedModel} />{modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}{resolutionProperty ? <SchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolution} required={required.has(resolutionProperty[0])} onChange={setResolution} /> : null}{durationProperty ? <div className={styles.settingBlock}><div className={styles.settingLabel}><span>{durationProperty[1].title ?? "Duration"}</span><strong>{duration ?? "Auto"} sec</strong></div><input type="range" min={durationProperty[1].minimum ?? 2} max={durationProperty[1].maximum ?? 15} step={durationProperty[1].step ?? 1} value={duration ?? durationProperty[1].minimum ?? 2} onChange={(event) => setDuration(Number(event.target.value))} aria-label="Duration" /><div className={styles.rangeLabels}><span>{durationProperty[1].minimum ?? 2}s</span><span>{durationProperty[1].maximum ?? 15}s</span></div></div> : null}{modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>{modelParameterEntries.map(([name, property]) => <SchemaField key={name} name={name} property={property} value={modelParams[name]} required={required.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}<VideoCreditEstimate featureLabel="Extend Video" duration={duration} estimate={videoCreditEstimate}>{!isGenerating ? <p className={styles.settingsError} role="status">{modelsLoading ? "Loading Extend Video models…" : validationMessage}</p> : null}{error ? <p className={styles.settingsError} role="alert">{error}</p> : null}{isGenerating ? <button type="button" className={styles.textVideoCancel} onClick={() => void handleCancel()}>Cancel generation</button> : null}<button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><Plus size={18} /> {isGenerating ? "GENERATING…" : "EXTEND VIDEO"}</button></VideoCreditEstimate>{notice && !isGenerating ? <p className={styles.peopleNotice}>{notice}</p> : null}</aside>
   </div>;
 }

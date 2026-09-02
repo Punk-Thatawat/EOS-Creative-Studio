@@ -84,7 +84,7 @@ export default function ConfirmEmailPage() {
     <main className="auth-confirm-page">
       <section className="auth-confirm-card" aria-live="polite">
         {state === "loading" || state === "success" ? <div className={`auth-confirm-mark${state === "success" ? " is-success" : ""}`} aria-hidden="true">{state === "success" ? "✓" : <span />}</div> : <div className="auth-confirm-mark is-error" aria-hidden="true">!</div>}
-        <Image src="/generated-assets/eos-logo.webp" alt="EOS Creative Studio" width={128} height={50} className="auth-confirm-logo" />
+        <Image src="/generated-assets/eos-logo.png" alt="EOS Creative Studio" width={422} height={152} className="auth-confirm-logo" />
         <h1>{state === "error" ? "Confirmation failed" : state === "success" ? "Welcome to EOS" : "Confirming your email"}</h1>
         <p>{message}</p>
         {state === "error" && <Link href="/?login=1">Back to login</Link>}

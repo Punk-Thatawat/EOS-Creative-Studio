@@ -12,6 +12,7 @@ import { PreviewPanel } from "./preview-panel";
 import { PromptPanel } from "./prompt-panel";
 import { SettingsPanel } from "./settings-panel";
 import { getKnownImageUploadConstraints } from "@/lib/media/upload-validation";
+import { textToImagePromptMaxLength } from "../config";
 
 const imageTabByRoute = {
   "text-to-image": "Text to Image",
@@ -65,16 +66,37 @@ export function ImageGenerationPage() {
     : getKnownImageUploadConstraints(selectedModel);
   const hasDefaultModel = state.activeModelOptions.some((model) => model.isDefault);
   const hasSelectedModel = state.activeModelOptions.some((model) => model.model === selectedModel);
-    const modelSelectionReady = hasDefaultModel || hasSelectedModel;
-  const canGenerate = modelSelectionReady && (isUpscaleTab
-    ? Boolean(state.sourceImage) && !activeTabIsGenerating
-    : isExtendTab
-    ? Boolean(state.sourceImage) && state.extendSupportsInput && !activeTabIsGenerating
-    : isBackgroundTab
-    ? Boolean(state.sourceImage) && state.backgroundSupportsInput && hasBackgroundInstruction && !activeTabIsGenerating
-    : isStyleTransferTab
-    ? Boolean(state.sourceImage) && state.styleTransferSupportsInput && hasStyleInstruction && !activeTabIsGenerating
-    : (isImageToImageTab ? state.imageToImagePrompt.trim().length > 0 : state.prompt.trim().length > 0) && (!isImageToImageTab || (Boolean(state.sourceImage) && state.imageToImageSupportsInput)) && !activeTabIsGenerating);
+  const modelSelectionReady = hasDefaultModel || hasSelectedModel;
+  const activePrompt = isTextToImageTab ? state.prompt : isImageToImageTab ? state.imageToImagePrompt : isStyleTransferTab ? state.styleTransferPrompt : isBackgroundTab ? state.backgroundPrompt : isExtendTab ? state.extendPrompt : "";
+  const generationValidationMessage = (() => {
+    if (activeTabIsGenerating) return null;
+    if (state.isLoadingModels) return "Loading model options...";
+    if (!modelSelectionReady) return "Select a model before generating.";
+    if (activePrompt.length > textToImagePromptMaxLength) return `Prompt must be ${textToImagePromptMaxLength.toLocaleString()} characters or fewer.`;
+    if (isTextToImageTab && !state.prompt.trim()) return "Add a prompt before generating.";
+    if (isImageToImageTab) {
+      if (!state.imageToImageSupportsInput) return "The selected model does not support image input.";
+      if (!state.sourceImage) return "Upload a reference image before transforming.";
+      if (!state.imageToImagePrompt.trim()) return "Add a prompt before transforming.";
+    }
+    if (isStyleTransferTab) {
+      if (!state.styleTransferSupportsInput) return "The selected model does not support image input.";
+      if (!state.sourceImage) return "Upload a content image before applying a style.";
+      if (!hasStyleInstruction) return "Choose a style preset, upload a reference, or add a prompt.";
+    }
+    if (isBackgroundTab) {
+      if (!state.backgroundSupportsInput) return "The selected model does not support image input.";
+      if (!state.sourceImage) return "Upload a source image before changing the background.";
+      if (!hasBackgroundInstruction) return "Choose a background mode, add a prompt, or upload a reference.";
+    }
+    if (isUpscaleTab && !state.sourceImage) return "Upload an image before upscaling.";
+    if (isExtendTab) {
+      if (!state.extendSupportsInput) return "The selected model does not support image input.";
+      if (!state.sourceImage) return "Upload a source image before extending.";
+    }
+    return null;
+  })();
+  const canGenerate = !generationValidationMessage && !activeTabIsGenerating;
   const activeGenerationStatus = isTextToImageTab ? state.generationStatus : isImageToImageTab ? state.imageToImageStatus : isStyleTransferTab ? state.styleTransferStatus : isBackgroundTab ? state.backgroundStatus : isUpscaleTab ? state.upscaleStatus : isExtendTab ? state.extendStatus : "idle";
   const activeGenerationCompletedCount = isTextToImageTab ? state.generationCompletedCount : isImageToImageTab ? state.imageToImageCompletedCount : isStyleTransferTab ? state.styleTransferCompletedCount : isBackgroundTab ? state.backgroundCompletedCount : isUpscaleTab ? state.upscaleCompletedCount : isExtendTab ? state.extendCompletedCount : 0;
   const activeGenerationTotalCount = isTextToImageTab ? state.generationTotalCount : isImageToImageTab ? state.imageToImageTotalCount : isStyleTransferTab ? state.styleTransferTotalCount : isBackgroundTab ? state.backgroundTotalCount : isUpscaleTab ? state.upscaleTotalCount : isExtendTab ? state.extendTotalCount : 0;
@@ -117,7 +139,6 @@ export function ImageGenerationPage() {
         activeTab={state.activeTab}
         prompt={isStyleTransferTab ? state.styleTransferPrompt : isImageToImageTab ? state.imageToImagePrompt : state.prompt}
         negativePrompt={state.negativePrompt}
-        smartEnhance={state.smartEnhance}
         style={state.style}
         stylePresetOptions={activeStylePresetOptions}
         styleTransferPresetOptions={styleTransferPresetOptions}
@@ -151,8 +172,9 @@ export function ImageGenerationPage() {
         extendDirection={state.extendDirection}
         extendAmount={state.extendAmount}
         onPromptChange={isStyleTransferTab ? state.setStyleTransferPrompt : isImageToImageTab ? state.setImageToImagePrompt : state.setPrompt}
+        promptOptimizerEnabled={state.promptOptimizerEnabled}
+        onPromptOptimizerChange={state.setPromptOptimizerEnabled}
         onNegativePromptChange={state.setNegativePrompt}
-        onSmartEnhanceChange={state.setSmartEnhance}
         onStyleChange={state.setStyle}
         onSourceImageChange={(imageUrl) => {
           if (isImageToImageTab) {
@@ -263,6 +285,7 @@ export function ImageGenerationPage() {
         backgroundMode={state.backgroundMode}
         generationCompletedCount={activeGenerationCompletedCount}
         generationError={activeGenerationError}
+        generationValidationMessage={generationValidationMessage}
         generationStatus={activeGenerationStatus}
         generationTotalCount={activeGenerationTotalCount}
         imageSizeOpen={state.imageSizeOpen}

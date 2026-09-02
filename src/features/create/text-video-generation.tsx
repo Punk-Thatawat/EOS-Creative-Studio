@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { CloudUpload, ChevronDown, Info, Mic2, RotateCcw, WandSparkles, X } from "lucide-react";
+import { Dropdown } from "@/components/ui/dropdown";
+import { CloudUpload, Info, Mic2, RotateCcw, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
@@ -23,7 +24,8 @@ import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
-import { modelTier, modelTierClass } from "./model-tier";
+import { VideoModelDropdown } from "./video-model-dropdown";
+import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 
 type SchemaProperty = {
   type?: string;
@@ -184,15 +186,20 @@ function TextSchemaField({
     return (
       <label className={styles.dynamicField}>
         <span>{label}{required ? <b>*</b> : null}</span>
-        <select
-          className={styles.dynamicSelect}
+        <Dropdown
           value={value === undefined ? "" : String(value)}
-          onChange={(event) => onChange(parseSchemaValue(event.target.value, property, property.enum))}
-          aria-required={required}
-        >
-          {!required ? <option value="">Auto</option> : null}
-          {property.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
-        </select>
+          options={[
+            ...(!required ? [{ value: "", label: "Auto" }] : []),
+            ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+          ]}
+          onChange={(nextValue) => onChange(parseSchemaValue(nextValue, property, property.enum))}
+          ariaLabel={label}
+          placeholder="Auto"
+          className={styles.dynamicDropdown}
+          triggerClassName={styles.dynamicSelect}
+          menuClassName={styles.dynamicDropdownMenu}
+          optionClassName={styles.dynamicDropdownOption}
+        />
         {property.description ? <small>{property.description}</small> : null}
       </label>
     );
@@ -302,8 +309,8 @@ export function TextToVideoWorkspace() {
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [referenceImageFile, setReferenceImageFile] = useState<File | null>(null);
@@ -360,9 +367,35 @@ export function TextToVideoWorkspace() {
     duration: durationValue,
     resolution: resolutionValue,
     aspectRatio: aspectRatioValue,
+    promptOptimizerEnabled,
     modelParams: { ...modelParams, ...(audioProperty && !audioInputMode ? { [audioProperty[0]]: audioValue } : {}) },
   } : null);
   const isGenerating = generationStatus === "uploading" || generationStatus === "processing";
+  const missingRequiredModelParameter = modelParameterEntries.find(([name]) => requiredProperties.has(name) && !hasValue(modelParams[name]));
+  const missingRequiredCoreParameter = [
+    durationProperty && requiredProperties.has(durationProperty[0]) && !hasValue(durationValue) ? durationProperty[0] : null,
+    resolutionProperty && requiredProperties.has(resolutionProperty[0]) && !hasValue(resolutionValue) ? resolutionProperty[0] : null,
+    aspectRatioProperty && requiredProperties.has(aspectRatioProperty[0]) && !hasValue(aspectRatioValue) ? aspectRatioProperty[0] : null,
+    fpsProperty && requiredProperties.has(fpsProperty[0]) && !hasValue(fpsValue) ? fpsProperty[0] : null,
+    seedProperty && requiredProperties.has(seedProperty[0]) && !hasValue(seedValue) ? seedProperty[0] : null,
+    cameraMotionProperty && requiredProperties.has(cameraMotionProperty[0]) && !hasValue(cameraMotionValue) ? cameraMotionProperty[0] : null,
+    audioProperty && requiredProperties.has(audioProperty[0]) && !hasValue(audioInputMode ? audioFile : audioValue) ? audioProperty[0] : null,
+    referenceParameter && requiredProperties.has(referenceParameter) && !referenceImage ? referenceParameter : null,
+  ].find(Boolean);
+  const validationMessage = modelsLoading
+    ? "Loading text-to-video models..."
+    : !selectedModel
+      ? "Select a text-to-video model."
+      : prompt.length > 2000
+        ? "Prompt must be 2,000 characters or fewer."
+        : !prompt.trim()
+          ? "Add a prompt before generating."
+          : missingRequiredCoreParameter
+            ? `${labelFromParameterName(String(missingRequiredCoreParameter))} is required for this model.`
+            : missingRequiredModelParameter
+              ? `${labelFromParameterName(missingRequiredModelParameter[0])} is required for this model.`
+              : null;
+  const canGenerate = Boolean(!validationMessage && !isGenerating && !videoCreditEstimate.loading);
 
   useEffect(() => {
     let active = true;
@@ -481,6 +514,7 @@ export function TextToVideoWorkspace() {
       }
 
       const request: TextVideoGenerationInput = { prompt: prompt.trim() };
+      if (promptOptimizerEnabled) request.promptOptimizerEnabled = true;
       if (selectedModel) request.model = selectedModel;
       if (negativePrompt.trim() && (!selectedModelOption || negativePromptSupported)) request.negativePrompt = negativePrompt.trim();
       if (durationProperty && hasValue(durationValue)) request.duration = durationValue;
@@ -585,9 +619,10 @@ export function TextToVideoWorkspace() {
           <div className={styles.sectionTitle}><h2>1. PROMPT</h2></div>
           <label className="block text-[10px] font-bold">
             Prompt <small>(Required)</small>
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A cinematic drone shot flying through a futuristic city at night" />
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A cinematic drone shot flying through a futuristic city at night" maxLength={2000} required aria-required="true" />
           </label>
           <span className={styles.counter}>{prompt.length} / 2000</span>
+          <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
           <label className="block text-[10px] font-bold">
             Negative Prompt <small>(Optional)</small>
             <input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="e.g. blurry, watermark, distorted" />
@@ -647,24 +682,14 @@ export function TextToVideoWorkspace() {
       <aside className={styles.settings}>
         <div className={styles.sectionTitle}><h2>3. SETTINGS</h2></div>
         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label>
-        <div className={styles.modelDropdown}>
-          <button type="button" className={styles.modelDropdownTrigger} aria-haspopup="listbox" aria-expanded={isModelMenuOpen} disabled={modelsLoading || models.length === 0} onClick={() => setIsModelMenuOpen((open) => !open)}>
-            <span>
-              <strong>{modelsLoading ? "Loading text-to-video models…" : selectedModelOption?.displayName ?? "No compatible model"}</strong>
-              <span className={styles.modelProviderRow}>{selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span>
-            </span>
-            <ChevronDown size={17} />
-          </button>
-          {isModelMenuOpen ? (
-            <div className={styles.modelDropdownMenu} role="listbox" aria-label="Text-to-video model options">
-              {models.map((option) => (
-                <button key={option.model} type="button" role="option" aria-selected={option.model === selectedModel} onClick={() => { setSelectedModel(option.model); setIsModelMenuOpen(false); }}>
-                  <span><strong>{option.displayName}</strong><span className={styles.modelProviderRow}><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, models.indexOf(option)))]}`}>{modelTier(option, models.indexOf(option))}</b></span></span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <VideoModelDropdown
+          models={models}
+          value={selectedModel}
+          loading={modelsLoading}
+          ariaLabel="Text-to-video model options"
+          placeholder="No compatible model"
+          onChange={setSelectedModel}
+        />
         {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
         {durationProperty ? <TextSchemaField name={durationProperty[0]} property={durationProperty[1]} value={durationValue} required={requiredProperties.has(durationProperty[0])} labelOverride="Duration" onChange={setDurationValue} /> : null}
         {resolutionProperty ? <TextSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride="Resolution" onChange={setResolutionValue} /> : null}
@@ -686,14 +711,15 @@ export function TextToVideoWorkspace() {
           </div>
         ) : null}
         <VideoCreditEstimate featureLabel="Text to Video" duration={durationValue} estimate={videoCreditEstimate}>
+          {!isGenerating && validationMessage ? <p className={styles.settingsError} role="status">{validationMessage}</p> : null}
+          {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
           {isGenerating ? (
             <button type="button" className={styles.textVideoCancel} onClick={() => void cancelGeneration()}><X size={14} /> CANCEL GENERATION</button>
           ) : (
-            <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={modelsLoading}><WandSparkles size={18} /> GENERATE VIDEO</button>
+            <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!canGenerate}><WandSparkles size={18} /> GENERATE VIDEO</button>
           )}
         </VideoCreditEstimate>
         {generationStatus === "failed" || generationStatus === "cancelled" ? <button type="button" className={styles.textVideoRetry} onClick={() => void handleGenerate()}><RotateCcw size={13} /> RETRY</button> : null}
-        {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
       </aside>
       <TextVideoTutorials />
     </div>

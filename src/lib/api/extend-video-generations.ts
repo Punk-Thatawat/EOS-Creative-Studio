@@ -8,6 +8,7 @@ const backendApiUrl = `${backendOrigin}/api/v1`;
 
 export type ExtendVideoGenerationInput = {
   model?: string;
+  promptOptimizerEnabled?: boolean;
   sourceVideo: string;
   prompt: string;
   negativePrompt?: string;

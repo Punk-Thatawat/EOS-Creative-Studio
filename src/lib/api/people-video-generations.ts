@@ -9,6 +9,7 @@ const backendApiUrl = `${backendOrigin}/api/v1`;
 
 export type PeopleVideoGenerationInput = {
   model?: string;
+  promptOptimizerEnabled?: boolean;
   sourceImage?: string;
   sourceVideo?: string;
   script?: string;

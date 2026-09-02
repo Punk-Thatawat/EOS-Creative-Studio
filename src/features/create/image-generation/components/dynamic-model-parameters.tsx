@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import { Dropdown } from "@/components/ui/dropdown";
 import type { GenerationModelOption } from "@/lib/api/generation-models";
 import { cx } from "../styles";
 
@@ -67,7 +68,7 @@ function DynamicField({ name, property, value, onChange }: { name: string; prope
   const description = property.description?.trim();
 
   if (Array.isArray(property.enum) && property.enum.length > 0) {
-    return <div className={cx("gen-dynamic-field")}><label htmlFor={`model-param-${name}`}>{label}</label><select id={`model-param-${name}`} value={value === undefined ? "" : String(value)} onChange={(event) => onChange(parseValue(event.target.value, property))}><option value="">Auto</option>{property.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}</select>{description && <small>{description}</small>}</div>;
+    return <div className={cx("gen-dynamic-field")}><label>{label}</label><Dropdown value={value === undefined ? "" : String(value)} options={property.enum.map((option) => ({ value: String(option), label: String(option) }))} onChange={(nextValue) => onChange(parseValue(nextValue, property))} placeholder="Auto" ariaLabel={label} triggerClassName={cx("gen-select")} menuClassName={cx("gen-select-menu")} />{description && <small>{description}</small>}</div>;
   }
 
   if (type === "boolean") {

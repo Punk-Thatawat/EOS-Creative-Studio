@@ -8,6 +8,7 @@ const backendApiUrl = `${backendOrigin}/api/v1`;
 
 export type TextVideoGenerationInput = {
   prompt: string;
+  promptOptimizerEnabled?: boolean;
   negativePrompt?: string;
   duration?: unknown;
   resolution?: unknown;

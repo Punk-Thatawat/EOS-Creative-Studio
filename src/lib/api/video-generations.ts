@@ -21,10 +21,14 @@ export type VideoGenerationInput = {
   projectId?: string | null;
   model: string;
   mode: "storyboard" | "continuous" | "flexible";
+  /** Selects the Admin-configured Image to Video mode route. */
+  generationMode?: "image-to-video" | "reference-to-video" | "single-image" | "multi-scene" | "continuous";
   duration?: number;
   resolution?: string;
   aspectRatio?: string;
   generateAudio?: boolean;
+  /** Enables the backend Prompt Optimizer before video generation. */
+  promptOptimizerEnabled?: boolean;
   /** Ask the backend to upscale each manual storyboard frame before video generation. */
   autoUpscale?: boolean;
   audioUrl?: string;
@@ -99,6 +103,7 @@ export type DirectVideoQuoteInput = {
   sourceVideo?: string;
   sourceImage?: string;
   modelParams?: Record<string, unknown>;
+  promptOptimizerEnabled?: boolean;
 };
 
 export type DirectVideoQuoteResponse = {
@@ -151,6 +156,7 @@ export type VideoStoryboardHistoryItem = {
 export type VideoStoryboardSettings = {
   maxScenes: number;
   hardMaxScenes: number;
+  modeLabels?: Record<"image-to-video" | "reference-to-video" | "single-image" | "multi-scene" | "continuous", string>;
   updatedAt?: string;
 };
 
@@ -215,6 +221,7 @@ export async function quoteDirectVideoGeneration(input: DirectVideoQuoteInput): 
       ...(input.audioUrl ? { audioUrl: input.audioUrl } : {}),
       ...(input.sourceVideo ? { sourceVideo: input.sourceVideo } : {}),
       ...(input.sourceImage ? { sourceImage: input.sourceImage } : {}),
+      ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
       ...(input.modelParams ? { modelParams: input.modelParams } : {}),
     }),
   }) as DirectVideoQuoteResponse;

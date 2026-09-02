@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, CloudUpload, Info, LoaderCircle, Mic2, WandSparkles, X } from "lucide-react";
+import { Dropdown } from "@/components/ui/dropdown";
+import { CloudUpload, Info, LoaderCircle, Mic2, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
@@ -27,7 +28,8 @@ import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
-import { modelTier, modelTierClass } from "./model-tier";
+import { VideoModelDropdown } from "./video-model-dropdown";
+import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 
 type PeopleSchemaProperty = {
   type?: string;
@@ -194,15 +196,20 @@ function PeopleSchemaField({
     return (
       <label className={styles.dynamicField}>
         <span>{label}{required ? <b>*</b> : null}</span>
-        <select
-          className={styles.dynamicSelect}
+        <Dropdown
           value={value === undefined ? "" : String(value)}
-          onChange={(event) => onChange(parsePeopleValue(event.target.value, property))}
-          aria-required={required}
-        >
-          {!required ? <option value="">Auto</option> : null}
-          {property.enum.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}
-        </select>
+          options={[
+            ...(!required ? [{ value: "", label: "Auto" }] : []),
+            ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+          ]}
+          onChange={(nextValue) => onChange(parsePeopleValue(nextValue, property))}
+          ariaLabel={label}
+          placeholder="Auto"
+          className={styles.dynamicDropdown}
+          triggerClassName={styles.dynamicSelect}
+          menuClassName={styles.dynamicDropdownMenu}
+          optionClassName={styles.dynamicDropdownOption}
+        />
         {property.description ? <small>{property.description}</small> : null}
       </label>
     );
@@ -272,10 +279,10 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
-  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [sourcePerson, setSourcePerson] = useState<PeopleSource | null>(null);
   const [script, setScript] = useState("");
   const [actingDirection, setActingDirection] = useState("");
+  const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -287,7 +294,6 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const [voiceValue, setVoiceValue] = useState<unknown>(undefined);
   const [modelParams, setModelParams] = useState<Record<string, unknown>>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [generationStatus, setGenerationStatus] = useState<PeopleGenerationStatus>("idle");
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -442,7 +448,6 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     sourceUploadAbortRef.current = controller;
     setSourcePerson({ url, kind: isVideo ? "video" : "image", name: file.name, file, uploadStatus: "uploading" });
     setGenerationError(null);
-    setSubmitAttempted(false);
     setNotice("Uploading source media to calculate the exact price…");
     try {
       const remoteUrl = await uploadPeopleMedia(file, controller.signal, capabilities?.uploadConstraints);
@@ -558,6 +563,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     duration: effectiveDurationValue,
     resolution: resolutionValue,
     aspectRatio: aspectRatioValue,
+    promptOptimizerEnabled,
     ...(sourcePerson?.kind === "image" ? { sourceImage: sourcePerson.remoteUrl } : { sourceVideo: sourcePerson?.remoteUrl }),
     ...(audioUrl ? { audioUrl } : {}),
     modelParams,
@@ -565,7 +571,6 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const pricingBusy = mediaUploadInProgress || videoCreditEstimate.loading;
 
   const handleGenerate = async () => {
-    setSubmitAttempted(true);
     if (!isComplete || !sourcePerson) return;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -584,6 +589,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         model: selectedModel,
       ...(sourcePerson.kind === "image" ? { sourceImage: sourceUrl } : { sourceVideo: sourceUrl }),
       };
+      if (promptOptimizerEnabled) request.promptOptimizerEnabled = true;
       if (driverTextSupported && script.trim()) request.script = script.trim();
       if (uploadedAudioUrl) request.audioUrl = uploadedAudioUrl;
       if (actingDirectionSupported && actingDirection.trim()) request.actingDirection = actingDirection.trim();
@@ -707,6 +713,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
                 <textarea value={actingDirection} onChange={(event) => setActingDirection(event.target.value)} placeholder="Smile, look into the camera, and nod naturally." />
               </label>
             ) : null}
+            {promptSupported ? <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /> : null}
             {negativePromptSupported ? (
               <label className={styles.peopleFieldLabel}>
                 Negative Prompt <small>(Optional)</small>
@@ -766,17 +773,14 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       <aside className={styles.settings}>
         <PeopleSectionTitle number={settingsStep}>SETTINGS</PeopleSectionTitle>
         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label>
-        <div className={styles.modelDropdown}>
-          <button type="button" className={styles.modelDropdownTrigger} aria-haspopup="listbox" aria-expanded={isModelMenuOpen} disabled={modelsLoading || models.length === 0} onClick={() => setIsModelMenuOpen((open) => !open)}>
-            <span><strong>{modelsLoading ? `Loading ${workspaceLabel} models…` : selectedModelOption?.displayName ?? `No ${workspaceLabel} model`}</strong><span className={styles.modelProviderRow}>{selectedModelOption ? <b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel))))]}`}>{modelTier(selectedModelOption, Math.max(0, models.findIndex((item) => item.model === selectedModel)))}</b> : null}</span></span>
-            <ChevronDown size={17} />
-          </button>
-          {isModelMenuOpen ? (
-            <div className={styles.modelDropdownMenu} role="listbox" aria-label={`${workspaceLabel} model options`}>
-              {models.map((option, index) => <button key={option.model} type="button" role="option" aria-selected={option.model === selectedModel} onClick={() => { setSelectedModel(option.model); setIsModelMenuOpen(false); }}><span><strong>{option.displayName}</strong><span className={styles.modelProviderRow}><b className={`${styles.modelTierBadge} ${styles[modelTierClass(modelTier(option, index))]}`}>{modelTier(option, index)}</b></span></span></button>)}
-            </div>
-          ) : null}
-        </div>
+        <VideoModelDropdown
+          models={models}
+          value={selectedModel}
+          loading={modelsLoading}
+          ariaLabel={`${workspaceLabel} model options`}
+          placeholder={`No ${workspaceLabel} model`}
+          onChange={setSelectedModel}
+        />
         <p className={styles.selectedModelRole}>{peopleModelRole(selectedModelOption, isLipsync)}</p>
         {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
         {durationProperty ? <PeopleSchemaField name={durationProperty[0]} property={durationProperty[1]} value={durationValue} required={requiredProperties.has(durationProperty[0])} labelOverride="Duration" onChange={setDurationValue} /> : null}
@@ -784,10 +788,10 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         {aspectRatioProperty ? <PeopleSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride="Aspect Ratio" onChange={setAspectRatioValue} /> : null}
         {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>{modelParameterEntries.map(([name, property]) => <PeopleSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => { const next = { ...current }; if (value === undefined || value === "") delete next[name]; else next[name] = value; return next; })} />)}</div> : null}
         <VideoCreditEstimate featureLabel={workspaceLabel} duration={displayDuration} estimate={videoCreditEstimate} emptyLoading={mediaUploadInProgress} emptyMessage={mediaUploadInProgress ? "Uploading media to calculate price…" : "Upload media to see price"}>
+          {!isComplete ? <p className={styles.settingsError} role="status">{modelsLoading ? `Loading ${workspaceLabel} models…` : validationMessage}</p> : null}
+          {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
           <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || pricingBusy || generationStatus === "uploading" || generationStatus === "processing"}>{pricingBusy ? <LoaderCircle size={18} className={styles.creditSpinner} /> : <WandSparkles size={18} />} {generationStatus === "uploading" || generationStatus === "processing" ? "GENERATING…" : mediaUploadInProgress ? "UPLOADING…" : videoCreditEstimate.loading ? "CALCULATING PRICE…" : "GENERATE VIDEO"}</button>
         </VideoCreditEstimate>
-        {submitAttempted && !isComplete ? <p className={styles.settingsError}>{modelsLoading ? `Loading ${workspaceLabel} models…` : validationMessage}</p> : null}
-        {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
         {notice ? <p className={styles.peopleNotice}>{notice}</p> : null}
       </aside>
     </div>

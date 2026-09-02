@@ -10,6 +10,7 @@ export type MotionTransferGenerationInput = {
   sourceImage: string;
   motionVideo: string;
   model: string;
+  promptOptimizerEnabled?: boolean;
   quality?: unknown;
   prompt?: string;
   negativePrompt?: string;

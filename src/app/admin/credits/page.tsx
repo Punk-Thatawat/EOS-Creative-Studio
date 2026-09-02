@@ -1099,6 +1099,7 @@ function AdminCreditsContent() {
   const [fxRate, setFxRate] = useState("33.50");
   const [roundingDecimals, setRoundingDecimals] = useState(0);
   const [fixedCost, setFixedCost] = useState("0");
+  const [smartEnhancePrice, setSmartEnhancePrice] = useState("0");
   const [minimumCredits, setMinimumCredits] = useState("1");
   const [rateSource, setRateSource] = useState("Environment fallback");
   const [rateUpdatedAt, setRateUpdatedAt] = useState("");
@@ -1153,6 +1154,7 @@ function AdminCreditsContent() {
       setRateUpdatedAt(settings.defaults.exchangeRateFetchedAt ?? "");
       setRateStale(settings.defaults.exchangeRateStale === true);
       setFixedCost(String(settings.defaults.fixedCostThb));
+      setSmartEnhancePrice(String(settings.defaults.smartEnhancePriceThb ?? 0));
       setMinimumCredits(String(settings.defaults.minimumCreditCost));
       setRoundingDecimals(settings.defaults.roundingDecimals);
       setSignupBonusEnabled(signupBonus.enabled);
@@ -1364,6 +1366,7 @@ function AdminCreditsContent() {
   const saveGlobalFallback = async () => {
     const targetMargin = Number(marginPercent) / 100;
     const fixed = Number(fixedCost);
+    const smartEnhance = Number(smartEnhancePrice);
     const minimum = Number(minimumCredits);
     if (!Number.isFinite(targetMargin) || targetMargin < 0 || targetMargin >= 1) {
       setError("Global margin must be between 0% and 99.99%");
@@ -1371,6 +1374,10 @@ function AdminCreditsContent() {
     }
     if (!Number.isFinite(fixed) || fixed < 0) {
       setError("Global fixed cost must be zero or greater");
+      return;
+    }
+    if (!Number.isFinite(smartEnhance) || smartEnhance < 0) {
+      setError("Smart Enhance price must be zero or greater");
       return;
     }
     if (!Number.isFinite(minimum) || minimum <= 0) {
@@ -1383,10 +1390,12 @@ function AdminCreditsContent() {
       const defaults = await upsertAdminCreditPricingDefaults({
         targetMargin,
         fixedCostThb: fixed,
+        smartEnhancePriceThb: smartEnhance,
         minimumCreditCost: minimum,
       });
       setMarginPercent(String(defaults.targetMargin * 100));
       setFixedCost(String(defaults.fixedCostThb));
+      setSmartEnhancePrice(String(defaults.smartEnhancePriceThb));
       setMinimumCredits(String(defaults.minimumCreditCost));
       setGlobalDirty(false);
       setSaved(true);
@@ -1802,6 +1811,16 @@ function AdminCreditsContent() {
                         help="ค่าใช้จ่ายคงที่ต่อ generation"
                       />
                       <NumberField
+                        label="Smart Enhance price"
+                        value={smartEnhancePrice}
+                        suffix="THB / run"
+                        onChange={(value) => {
+                          setSmartEnhancePrice(value);
+                          setGlobalDirty(true);
+                        }}
+                        help="คิดเพิ่มเมื่อเปิด Smart Enhance โดยคิด 1 ครั้งต่อ generation"
+                      />
+                      <NumberField
                         label="USD / THB rate"
                         value={fxRate}
                         suffix="THB"
@@ -1830,6 +1849,8 @@ function AdminCreditsContent() {
                           <p className="mt-1 font-mono text-[11px] leading-6 text-muted-foreground">
                             selling price = (provider cost × FX + fixed cost) ÷
                             (1 − margin)
+                            <br />
+                            Smart Enhance = เพิ่มตามราคาที่ตั้งไว้ เมื่อเปิดใช้งาน
                             <br />
                             credits = ceil(selling price ÷ credit value)
                           </p>

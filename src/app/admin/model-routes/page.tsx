@@ -36,7 +36,7 @@ import {
   type ModelPreviewType,
 } from "@/lib/api/generation-models";
 import { generateAdminAudioVoicePreview, getAdminAudioSettings, testAdminElevenLabsConnection, testAdminWaveSpeedConnection, updateAdminAudioSettings, type AdminAudioBackgroundMusicPreset, type AdminAudioFeature, type AdminAudioProvider, type AdminAudioSettings, type AdminAudioVoiceProfile, type AdminAudioVoiceSettings } from "@/lib/api/audio";
-import { getAdminVideoStoryboardSettings, updateAdminVideoStoryboardSettings, type AdminVideoStoryboardSettings } from "@/lib/api/video-settings";
+import { defaultVideoStoryboardModeLabels, getAdminVideoStoryboardSettings, updateAdminVideoStoryboardSettings, type VideoStoryboardModeKey, type AdminVideoStoryboardSettings } from "@/lib/api/video-settings";
 import { useSearchParams } from "next/navigation";
 
 const imageFunctions = [
@@ -70,6 +70,36 @@ const aiBackgroundModes: Array<{ id: AiBackgroundMode; label: string; descriptio
   { id: "generate", label: "Generate", description: "Create a background" },
   { id: "solid", label: "Solid", description: "Fill with a color" },
 ];
+
+const videoStoryboardModeOptions: Array<{ key: VideoStoryboardModeKey; label: string; description: string }> = [
+  { key: "image-to-video", label: "Image to Video", description: "Generate one video from one image" },
+  { key: "reference-to-video", label: "Reference to Video", description: "Use reference images to guide one video" },
+  { key: "single-image", label: "Single Storyboard Image", description: "Split one uploaded sheet into scenes" },
+  { key: "multi-scene", label: "Multi-Scene Storyboard", description: "Build the video scene by scene" },
+  { key: "continuous", label: "Continuous", description: "Continue each scene from the previous frame" },
+];
+
+function videoStoryboardModeRouteFeature(mode: VideoStoryboardModeKey): string {
+  return mode === "image-to-video" ? "image-to-video" : `image-to-video:${mode}`;
+}
+
+function isVideoStoryboardModeCompatible(item: GenerationModelOption, mode: VideoStoryboardModeKey): boolean {
+  if (item.kind !== "video") return false;
+  const capabilities = item.capabilities;
+  return capabilities.parameters.length > 0
+    && Boolean(capabilities.promptParameter)
+    && (mode === "reference-to-video" ? Boolean(capabilities.referenceImagesParameter) : Boolean(capabilities.imageParameter || capabilities.referenceImagesParameter));
+}
+
+type VideoStoryboardModeRouteDraft = {
+  enabledModels: string[];
+  defaultModel: string;
+};
+
+function sameVideoStoryboardModeRouteDraft(left?: VideoStoryboardModeRouteDraft, right?: VideoStoryboardModeRouteDraft): boolean {
+  if (!left || !right || left.defaultModel !== right.defaultModel || left.enabledModels.length !== right.enabledModels.length) return false;
+  return left.enabledModels.every((model) => right.enabledModels.includes(model));
+}
 
 type FeatureId = (typeof imageFunctions)[number]["id"] | (typeof videoFunctions)[number]["id"] | (typeof features)[number]["id"];
 
@@ -518,13 +548,21 @@ function AudioSettingsCard() {
   </section>;
 }
 
-function VideoStoryboardSettingsPanel() {
+function VideoStoryboardSettingsPanel({ catalog, routeOverview, onRoutesChanged, onDetails }: { catalog: GenerationModelOption[]; routeOverview: Record<string, GenerationModelOption[]>; onRoutesChanged: () => Promise<void>; onDetails: (item: GenerationModelOption) => void }) {
   const [settings, setSettings] = useState<AdminVideoStoryboardSettings | null>(null);
   const [draft, setDraft] = useState("");
+  const [selectedMode, setSelectedMode] = useState<VideoStoryboardModeKey>("image-to-video");
+  const [modeLabels, setModeLabels] = useState<Record<VideoStoryboardModeKey, string>>(defaultVideoStoryboardModeLabels);
+  const [modeRouteDrafts, setModeRouteDrafts] = useState<Partial<Record<VideoStoryboardModeKey, VideoStoryboardModeRouteDraft>>>({});
+  const [savedModeLabels, setSavedModeLabels] = useState<Record<VideoStoryboardModeKey, string>>(defaultVideoStoryboardModeLabels);
+  const [savedModeRouteDrafts, setSavedModeRouteDrafts] = useState<Partial<Record<VideoStoryboardModeKey, VideoStoryboardModeRouteDraft>>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const [assignmentQuery, setAssignmentQuery] = useState("");
+  const [draggedModeModel, setDraggedModeModel] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -532,6 +570,9 @@ function VideoStoryboardSettingsPanel() {
       if (cancelled) return;
       setSettings(next);
       setDraft(String(next.maxScenes));
+      const nextLabels = { ...defaultVideoStoryboardModeLabels, ...(next.modeLabels ?? {}) };
+      setModeLabels(nextLabels);
+      setSavedModeLabels(nextLabels);
     }).catch((reason) => {
       if (!cancelled) setError(reason instanceof Error ? reason.message : "Unable to load video settings");
     }).finally(() => {
@@ -540,6 +581,91 @@ function VideoStoryboardSettingsPanel() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!settings) return;
+    const syncTimer = window.setTimeout(() => {
+      const nextDrafts = Object.fromEntries(videoStoryboardModeOptions.map(({ key }) => {
+        const route = (routeOverview[videoStoryboardModeRouteFeature(key)] ?? []).filter((item) => isVideoStoryboardModeCompatible(item, key));
+        const baseRoute = routeOverview["image-to-video"] ?? [];
+        const explicitEnabled = route.filter((item) => item.enabled).map((item) => item.model);
+        const explicitDefault = route.find((item) => item.isDefault)?.model ?? explicitEnabled[0] ?? "";
+        const inheritedDefault = key !== "reference-to-video" && key !== "image-to-video"
+          ? baseRoute.find((item) => item.isDefault)?.model ?? baseRoute.find((item) => item.enabled)?.model ?? ""
+          : "";
+        const enabledModels = explicitEnabled.length > 0 ? explicitEnabled : inheritedDefault ? [inheritedDefault] : [];
+        return [key, { enabledModels, defaultModel: explicitDefault || inheritedDefault }];
+      })) as Partial<Record<VideoStoryboardModeKey, VideoStoryboardModeRouteDraft>>;
+      setModeRouteDrafts(nextDrafts);
+      setSavedModeRouteDrafts(nextDrafts);
+    }, 0);
+    return () => window.clearTimeout(syncTimer);
+  }, [routeOverview, settings]);
+
+  const selectedModeOption = videoStoryboardModeOptions.find((option) => option.key === selectedMode) ?? videoStoryboardModeOptions[0];
+  const selectedRouteKey = videoStoryboardModeRouteFeature(selectedMode);
+  const selectedRoute = routeOverview[selectedRouteKey] ?? [];
+  const selectedModelOptions = (selectedRoute.length > 0 ? selectedRoute : catalog)
+    .filter((item) => isVideoStoryboardModeCompatible(item, selectedMode))
+    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+  const selectedDraft = modeRouteDrafts[selectedMode] ?? { enabledModels: [], defaultModel: "" };
+  const savedSelectedDraft = savedModeRouteDrafts[selectedMode] ?? { enabledModels: [], defaultModel: "" };
+  const selectedModels = selectedModelOptions.filter((item) => selectedDraft.enabledModels.includes(item.model)).map((item) => ({
+    ...item,
+    enabled: true,
+    isDefault: selectedDraft.defaultModel === item.model,
+  }));
+  const filteredAssignmentModels = selectedModelOptions.filter((item) => `${item.displayName} ${item.provider} ${item.model}`.toLowerCase().includes(assignmentQuery.trim().toLowerCase()));
+  const unassignedModeModels = filteredAssignmentModels.filter((item) => !selectedDraft.enabledModels.includes(item.model));
+  const assignedModeModels = selectedModelOptions.filter((item) => selectedDraft.enabledModels.includes(item.model));
+
+  const selectModeModel = (model: string) => {
+    setModeRouteDrafts((current) => ({
+      ...current,
+      [selectedMode]: {
+        ...selectedDraft,
+        defaultModel: model,
+        enabledModels: selectedDraft.enabledModels.includes(model) ? selectedDraft.enabledModels : [...selectedDraft.enabledModels, model],
+      },
+    }));
+  };
+  const toggleModeModel = (model: string) => {
+    const enabledModels = selectedDraft.enabledModels.includes(model)
+      ? selectedDraft.enabledModels.filter((candidate) => candidate !== model)
+      : [...selectedDraft.enabledModels, model];
+    if (model === selectedDraft.defaultModel && !enabledModels.includes(model)) {
+      setError("Choose another default model before disabling this model.");
+      return;
+    }
+    setModeRouteDrafts((current) => ({ ...current, [selectedMode]: { ...selectedDraft, enabledModels } }));
+  };
+  const addModeModel = (model: string) => {
+    setModeRouteDrafts((current) => {
+      const currentDraft = current[selectedMode] ?? { enabledModels: [], defaultModel: "" };
+      return currentDraft.enabledModels.includes(model)
+        ? current
+        : { ...current, [selectedMode]: { ...currentDraft, enabledModels: [...currentDraft.enabledModels, model], defaultModel: currentDraft.defaultModel || model } };
+    });
+  };
+  const removeModeModel = (model: string) => {
+    setModeRouteDrafts((current) => {
+      const currentDraft = current[selectedMode] ?? { enabledModels: [], defaultModel: "" };
+      if (currentDraft.defaultModel === model) {
+        setError("Choose another default model before removing this model.");
+        return current;
+      }
+      return { ...current, [selectedMode]: { ...currentDraft, enabledModels: currentDraft.enabledModels.filter((candidate) => candidate !== model) } };
+    });
+  };
+  const closeAssignment = () => {
+    setAssignmentOpen(false);
+    setDraggedModeModel(null);
+    setAssignmentQuery("");
+  };
+  const cancelAssignment = () => {
+    setModeRouteDrafts((current) => ({ ...current, [selectedMode]: savedSelectedDraft }));
+    closeAssignment();
+  };
+
   const save = async () => {
     const maxScenes = Number(draft);
     const hardMax = settings?.hardMaxScenes ?? 100;
@@ -547,13 +673,35 @@ function VideoStoryboardSettingsPanel() {
       setError(`Maximum scenes must be an integer from 1 to ${hardMax}.`);
       return;
     }
+    if (videoStoryboardModeOptions.some(({ key }) => !modeLabels[key]?.trim() || modeLabels[key].trim().length > 80)) {
+      setError("Every mode name must be between 1 and 80 characters.");
+      return;
+    }
+    if (selectedDraft.enabledModels.length > 0 && !selectedDraft.defaultModel) {
+      setError("Choose a default model for the allowed models.");
+      return;
+    }
     setSaving(true);
     setMessage("");
     setError("");
     try {
-      const next = await updateAdminVideoStoryboardSettings(maxScenes);
+      const next = await updateAdminVideoStoryboardSettings(maxScenes, modeLabels);
+      for (const item of selectedModelOptions) {
+        const shouldBeEnabled = selectedDraft.enabledModels.includes(item.model);
+        const wasEnabled = savedSelectedDraft.enabledModels.includes(item.model);
+        const shouldBeDefault = selectedDraft.defaultModel === item.model;
+        const wasDefault = savedSelectedDraft.defaultModel === item.model;
+        if (shouldBeEnabled !== wasEnabled || shouldBeDefault !== wasDefault) {
+          await updateGenerationModelRoute(selectedRouteKey, item.model, item.provider, { enabled: shouldBeEnabled, isDefault: shouldBeDefault });
+        }
+      }
       setSettings(next);
       setDraft(String(next.maxScenes));
+      const nextLabels = { ...defaultVideoStoryboardModeLabels, ...(next.modeLabels ?? {}) };
+      setModeLabels(nextLabels);
+      setSavedModeLabels(nextLabels);
+      setSavedModeRouteDrafts((current) => ({ ...current, [selectedMode]: selectedDraft }));
+      await onRoutesChanged();
       setMessage("Video storyboard settings saved.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save video settings");
@@ -562,23 +710,33 @@ function VideoStoryboardSettingsPanel() {
     }
   };
 
-  const isDirty = Boolean(settings && Number(draft) !== settings.maxScenes);
+  const isDirty = Boolean(settings
+    && (Number(draft) !== settings.maxScenes
+      || videoStoryboardModeOptions.some(({ key }) => modeLabels[key] !== savedModeLabels[key])
+      || !sameVideoStoryboardModeRouteDraft(selectedDraft, savedSelectedDraft)));
 
   return <section aria-labelledby="video-storyboard-settings-heading" className="mb-7 rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Video generation settings</p>
-        <h2 id="video-storyboard-settings-heading" className="mt-1 text-xl font-bold tracking-tight">Storyboard scene limit</h2>
-        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">กำหนดจำนวน Scene สูงสุดที่ผู้ใช้เพิ่มได้ใน Image to Video ทุก mode ค่าใหม่นี้มีผลกับหน้า Create และ API สำหรับงานใหม่</p>
+        <h2 id="video-storyboard-settings-heading" className="mt-1 text-xl font-bold tracking-tight">Image to Video mode settings</h2>
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">ตั้งชื่อ, model และ default แยกตาม mode ของ Image to Video ทั้ง 5 แบบ</p>
       </div>
-      <span className="rounded-full bg-[#fff0e9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">Admin configurable</span>
+      <span className="rounded-full bg-[#fff0e9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">Mode-specific</span>
     </div>
     {error ? <div className="mt-4 rounded-xl border border-[#efc2c2] bg-[#fff6f6] p-3 text-xs text-[#9f3b3b]" role="alert">{error}</div> : null}
     {message ? <div className="mt-4 rounded-xl border border-[#bfe1cc] bg-[#f3fbf5] p-3 text-xs font-semibold text-[#347454]" role="status">{message}</div> : null}
-    {loading || !settings ? <div className="mt-5 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">Loading video settings...</div> : <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <label className="block w-full max-w-xs"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Maximum scenes</span><input type="number" min={1} max={settings.hardMaxScenes} step={1} value={draft} onChange={(event) => setDraft(event.target.value)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 font-mono text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="Maximum storyboard scenes" /><span className="mt-1 block text-[10px] text-muted-foreground">Allowed range: 1–{settings.hardMaxScenes}. Default: 12.</span></label>
-      <div className="flex flex-col items-start gap-2 sm:items-end"><Button size="sm" onClick={() => void save()} disabled={saving || !isDirty}>{saving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {saving ? "Saving..." : "Save scene limit"}</Button><span className="text-[10px] text-muted-foreground">Current limit: {settings.maxScenes} scenes</span></div>
-    </div>}
+    {loading || !settings ? <div className="mt-5 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">Loading video settings...</div> : <>
+      <section className="mt-5 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4" aria-labelledby="video-mode-settings-heading">
+        <div className="flex items-start justify-between gap-3"><div><h3 id="video-mode-settings-heading" className="text-sm font-bold">Image to Video mode</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">ตั้งชื่อที่แสดงและ model แยกตามงานที่เลือก</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">5 modes</span></div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-5" role="tablist" aria-label="Image to Video modes">{videoStoryboardModeOptions.map((option) => <button key={option.key} type="button" role="tab" aria-selected={selectedMode === option.key} onClick={() => { setSelectedMode(option.key); setError(""); }} className={`rounded-xl border px-3 py-3 text-left transition-colors ${selectedMode === option.key ? "border-primary bg-primary text-white" : "border-border bg-white hover:border-primary/50"}`}><span className="block text-xs font-bold">{modeLabels[option.key] || option.label}</span><span className={`mt-1 block text-[10px] leading-4 ${selectedMode === option.key ? "text-white/80" : "text-muted-foreground"}`}>{option.description}</span></button>)}</div>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="block w-full max-w-xl"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Mode name</span><input value={modeLabels[selectedMode] ?? ""} maxLength={80} onChange={(event) => setModeLabels((current) => ({ ...current, [selectedMode]: event.target.value }))} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${selectedModeOption.label} display name`} /><span className="mt-1 block text-[10px] text-muted-foreground">ชื่อที่ผู้ใช้จะเห็นในหน้า Create</span></label></div>
+      </section>
+      <div className="mt-5 mb-5 flex flex-col gap-2 rounded-xl border border-[#eaded6] bg-[#fffdfb] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-[#4c9b72]" /><p className="text-xs font-semibold">{selectedDraft.enabledModels.length} allowed · {selectedModels.length} available</p></div><Button variant="ghost" size="sm" onClick={() => setAssignmentOpen(true)} disabled={!selectedModelOptions.length}><Settings2 size={14} /> Open drag &amp; drop</Button></div>
+      <ModelGrid models={selectedModels} selectedModel={selectedDraft.defaultModel} onSelect={selectModeModel} onToggleEnabled={toggleModeModel} onDetails={onDetails} onOpenAssignment={() => setAssignmentOpen(true)} loading={loading} query="" />
+      <div className="mt-5 flex flex-col justify-between gap-3 border-t border-border pt-4 sm:flex-row sm:items-center"><div><p className="text-[11px] font-semibold text-foreground">Default model: {selectedModelOptions.find((item) => item.model === selectedDraft.defaultModel)?.displayName ?? "Not selected"}</p><p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">ชื่อ mode และ model จะมีผลกับงาน Image to Video ใหม่ทันที หลังจากกดบันทึก</p></div><div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-[10px] text-muted-foreground"><span>Max scenes</span><input type="number" min={1} max={settings.hardMaxScenes} step={1} value={draft} onChange={(event) => setDraft(event.target.value)} className="h-9 w-20 rounded-lg border border-border bg-white px-2 font-mono text-xs text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label="Maximum storyboard scenes" /></label><Button size="sm" onClick={() => void save()} disabled={saving || !isDirty}>{saving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {saving ? "Saving..." : "Save settings"}</Button></div></div>
+      {assignmentOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#201d1b]/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="video-mode-assignment-title"><div className="flex max-h-[min(820px,calc(100vh-32px))] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]"><header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4 sm:px-7 sm:py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Mode-specific assignment</p><h2 id="video-mode-assignment-title" className="mt-1 text-xl font-bold tracking-tight">Assign models to {modeLabels[selectedMode] || selectedModeOption.label}</h2><p className="mt-1 text-xs text-muted-foreground">ลาก model เข้าไปในพื้นที่ allowed หรือกด Add เพื่อเพิ่ม</p></div><button type="button" onClick={closeAssignment} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground" aria-label="Close mode assignment"><X size={19} /></button></header><div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-white p-4" aria-label="Mode model catalog"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold">Model catalog</h3><p className="mt-1 text-[11px] text-muted-foreground">{selectedModelOptions.length} compatible model{selectedModelOptions.length === 1 ? "" : "s"}</p></div><GripVertical size={17} className="text-muted-foreground" /></div><div className="relative mb-3"><Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input value={assignmentQuery} onChange={(event) => setAssignmentQuery(event.target.value)} placeholder="Search model" aria-label="Search mode model catalog" className="h-9 w-full rounded-xl border border-border bg-[#fcfaf8] pl-9 pr-3 text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></div><div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{unassignedModeModels.length ? unassignedModeModels.map((item) => <div key={`${item.provider}:${item.model}`} draggable onDragStart={() => setDraggedModeModel(item.model)} onDragEnd={() => setDraggedModeModel(null)} className="flex cursor-grab items-center gap-3 rounded-xl border border-border bg-[#fcfaf8] p-3 transition hover:border-primary/50 active:cursor-grabbing"><GripVertical size={15} className="shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.displayName}</p><p className="truncate font-mono text-[10px] text-muted-foreground">{item.provider} · {item.model}</p></div><button type="button" onClick={() => addModeModel(item.model)} className="shrink-0 rounded-lg bg-[#fff0e9] px-2.5 py-1.5 text-[10px] font-bold text-primary hover:bg-primary hover:text-white">Add</button></div>) : <p className="rounded-xl border border-dashed border-[#d8d0ca] px-4 py-8 text-center text-xs text-muted-foreground">All compatible models are assigned.</p>}</div></section><section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-dashed border-[#d8d0ca] bg-white p-4" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); if (draggedModeModel) addModeModel(draggedModeModel); setDraggedModeModel(null); }} aria-label="Allowed mode models"><div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold">Allowed models</h3><p className="mt-1 text-[11px] text-muted-foreground">เฉพาะ model เหล่านี้จะแสดงใน mode นี้</p></div><span className="rounded-full bg-[#e3f3e9] px-2.5 py-1 text-[10px] font-bold text-[#347454]">{assignedModeModels.length} allowed</span></div><div className="min-h-0 flex-1 space-y-2 overflow-y-auto">{assignedModeModels.length ? assignedModeModels.map((item) => <div key={`${item.provider}:${item.model}`} className={`flex items-center gap-3 rounded-xl border p-3 ${selectedDraft.defaultModel === item.model ? "border-primary bg-[#fffaf7]" : "border-border bg-[#fcfaf8]"}`}><GripVertical size={15} className="shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.displayName}</p><p className="truncate font-mono text-[10px] text-muted-foreground">{item.provider} · {item.model}</p></div><button type="button" onClick={() => selectModeModel(item.model)} className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-bold ${selectedDraft.defaultModel === item.model ? "bg-primary text-white" : "bg-surface-muted text-muted-foreground hover:bg-[#fff0e9] hover:text-primary"}`}>{selectedDraft.defaultModel === item.model ? "Default" : "Set default"}</button><button type="button" onClick={() => removeModeModel(item.model)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-[#fff0e9] hover:text-primary" aria-label={`Remove ${item.displayName}`}><X size={14} /></button></div>) : <div className="flex min-h-44 flex-col items-center justify-center rounded-xl border border-dashed border-[#d8d0ca] px-5 text-center"><GripVertical size={20} className="text-muted-foreground" /><p className="mt-2 text-xs font-bold">Drop models here</p><p className="mt-1 text-[11px] text-muted-foreground">ลาก model จาก catalog มาวางที่นี่</p></div>}</div></section></div><footer className="flex flex-col justify-between gap-3 border-t border-border bg-white px-5 py-4 sm:flex-row sm:items-center sm:px-7"><p className="text-[11px] text-muted-foreground">การเปลี่ยนแปลงจะยังไม่ส่งผลจนกว่าจะกด Save settings</p><div className="flex items-center justify-end gap-2"><Button variant="ghost" size="sm" onClick={cancelAssignment}>Cancel</Button><Button size="sm" onClick={closeAssignment}>Done</Button></div></footer></div></div> : null}
+    </>}
   </section>;
 }
 
@@ -1091,7 +1249,7 @@ function AdminModelRoutesContent() {
       <div className="mx-auto max-w-[1180px] pt-6 lg:pt-8">
         <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
            <div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><ServerCog size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">{feature === "audio" ? "Audio provider settings" : "Generation model routes"}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{feature === "audio" ? "Configure ElevenLabs, WaveSpeed and internal audio processing for Create > Audio." : "Choose the model that powers each creative feature. Changes apply to new generations immediately."}</p></div>
-           {feature === "audio" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">ElevenLabs / WaveSpeed configuration</span> : <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void openAssignment()} disabled={busy || loading}><Settings2 size={17} /> Assign models</Button><Button variant="outline" size="lg" onClick={() => void sync()} disabled={busy || loading}><CloudDownload size={17} /> {busy ? "Syncing catalog..." : "Sync provider catalog"}</Button></div>}
+            {feature === "audio" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">ElevenLabs / WaveSpeed configuration</span> : feature === "image-to-video" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">5 Image to Video modes</span> : <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void openAssignment()} disabled={busy || loading}><Settings2 size={17} /> Assign models</Button><Button variant="outline" size="lg" onClick={() => void sync()} disabled={busy || loading}><CloudDownload size={17} /> {busy ? "Syncing catalog..." : "Sync provider catalog"}</Button></div>}
         </div>
 
         {error ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc2c2] bg-[#fff6f6] p-4 text-sm text-[#9f3b3b]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={18} /><div><p className="font-bold">Couldn&apos;t load model routes</p><p className="mt-1 text-xs leading-5">{error}</p><button type="button" className="mt-2 text-xs font-bold underline underline-offset-2" onClick={() => void load()}>Try again</button></div></div> : null}
@@ -1099,10 +1257,10 @@ function AdminModelRoutesContent() {
 
          {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
 
-        {feature === "audio" ? <AudioProviderSettingsPanel /> : null}
-        {feature === "image-to-video" ? <VideoStoryboardSettingsPanel /> : null}
+            {feature === "audio" ? <AudioProviderSettingsPanel /> : null}
+        {feature === "image-to-video" ? <VideoStoryboardSettingsPanel catalog={catalog} routeOverview={routeOverview} onRoutesChanged={load} onDetails={setDetailsModel} /> : null}
 
-        {feature === "audio" ? null : <div className="grid gap-6 lg:grid-cols-1 lg:items-start">
+        {feature === "audio" || feature === "image-to-video" ? null : <div className="grid gap-6 lg:grid-cols-1 lg:items-start">
           <section aria-labelledby="route-heading" className="min-w-0">
             <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Route configuration</p><h2 id="route-heading" className="mt-1 text-xl font-bold tracking-tight">{activeFeature.label}</h2></div><div className="relative w-full sm:w-60"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search models" aria-label="Search models" className="h-9 w-full rounded-xl border border-border bg-white pl-9 pr-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" /></div></div>
             {feature === "background-removal" ? <div className="mb-4 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-3"><div className="mb-2 flex items-center justify-between gap-3"><div><p className="text-xs font-bold">AI Background mode</p><p className="mt-1 text-[11px] text-muted-foreground">ตั้ง model และ default แยกตามงานที่เลือก</p></div><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">Mode-specific</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="AI Background modes">{aiBackgroundModes.map((mode) => <button key={mode.id} type="button" role="tab" aria-selected={backgroundMode === mode.id} onClick={() => { setBackgroundMode(mode.id); setQuery(""); }} className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${backgroundMode === mode.id ? "border-primary bg-primary text-white" : "border-border bg-white hover:border-primary/50"}`}><span className="block text-xs font-bold">{mode.label}</span><span className={`mt-0.5 block text-[10px] ${backgroundMode === mode.id ? "text-white/80" : "text-muted-foreground"}`}>{mode.description}</span></button>)}</div></div> : null}
@@ -1112,7 +1270,7 @@ function AdminModelRoutesContent() {
         </div>}
       </div>
 
-      {feature !== "audio" ? <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div> : null}
+      {feature !== "audio" && feature !== "image-to-video" ? <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div> : null}
       {assignmentOpen ? <MultiTargetModelAssignmentDialog feature={assignmentFeature} catalog={assignmentFeature === "background-removal" ? assignmentCatalog : [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()]} assignments={assignmentDrafts} backgroundMode={assignmentBackgroundMode} onFeatureChange={setAssignmentFeature} onBackgroundModeChange={changeAssignmentBackgroundMode} onAdd={addAssignment} onRemove={removeAssignment} onSetDefault={setAssignmentDefault} onClose={() => setAssignmentOpen(false)} onSave={saveAssignment} saving={assignmentSaving} /> : null}
       {detailsModel ? <ModelDetailsDialog key={`${feature}:${backgroundMode}:${detailsModel.model}:${detailsModel.provider}`} item={detailsModel} feature={feature} backgroundMode={feature === "background-removal" ? backgroundMode : undefined} onClose={() => setDetailsModel(null)} onSaveDisplayName={saveModelDisplayName} onSaveInputLimits={saveModelInputLimits} onSavePreview={saveModelPreview} /> : null}
             </div>

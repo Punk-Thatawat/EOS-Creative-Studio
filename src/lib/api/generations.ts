@@ -9,13 +9,13 @@ const backendApiUrl = `${backendOrigin}/api/v1`;
 
 export type TextToImageInput = {
   prompt: string;
+  promptOptimizerEnabled?: boolean;
   style?: StylePreset;
   ratio?: string;
   resolution: string;
   quality?: ImageQuality;
   outputFormat?: string;
   count: ImageCount;
-  smartEnhance: boolean;
   negativePrompt: string;
   modelParams?: Record<string, unknown>;
   model?: string;
@@ -27,6 +27,7 @@ export type ImageToImageInput = {
   sourceImage: string;
   sourceImages?: string[];
   prompt: string;
+  promptOptimizerEnabled?: boolean;
   style?: StylePreset | null;
   strength?: number;
   ratio: ImageRatio;
@@ -34,7 +35,6 @@ export type ImageToImageInput = {
   quality?: ImageQuality;
   outputFormat?: string;
   count: ImageCount;
-  smartEnhance: boolean;
   negativePrompt: string;
   modelParams?: Record<string, unknown>;
   model?: string;
@@ -47,6 +47,7 @@ export type StyleTransferInput = {
   styleReferenceImage?: string | null;
   stylePreset?: StyleTransferPreset;
   prompt?: string;
+  promptOptimizerEnabled?: boolean;
   styleStrength?: number;
   contentPreservation?: number;
   ratio: ImageRatio;
@@ -54,7 +55,6 @@ export type StyleTransferInput = {
   quality: ImageQuality;
   outputFormat?: string;
   count: ImageCount;
-  smartEnhance: boolean;
   negativePrompt: string;
   modelParams?: Record<string, unknown>;
   model?: string;
@@ -67,6 +67,7 @@ export type BackgroundGenerationInput = {
   sourceImage: string;
   backgroundReferenceImage?: string | null;
   prompt?: string;
+  promptOptimizerEnabled?: boolean;
   style?: StylePreset | null;
   mask?: string | null;
   maskTool?: MaskTool;
@@ -91,6 +92,7 @@ export type ExtendImageInput = {
   workspaceId?: string | null;
   sourceImage: string;
   prompt?: string;
+  promptOptimizerEnabled?: boolean;
   direction: ExtendDirection;
   amount: ExtendAmount;
   ratio: ImageRatio;
@@ -98,7 +100,6 @@ export type ExtendImageInput = {
   quality?: ImageQuality;
   outputFormat?: string;
   count: ImageCount;
-  smartEnhance: boolean;
   negativePrompt: string;
   modelParams?: Record<string, unknown>;
   model?: string;
@@ -118,6 +119,7 @@ export type UpscaleInput = {
 
 export type ImageCreditQuoteInput = {
   feature: "text-to-image" | "image-to-image" | "style-transfer" | "background-removal" | "extend-image" | "upscale";
+  promptOptimizerEnabled?: boolean;
   model?: string;
   sourceImage?: string | null;
   sourceImages?: string[];
@@ -140,7 +142,6 @@ export type ImageCreditQuoteInput = {
   quality?: string;
   outputFormat?: string;
   count?: ImageCount;
-  smartEnhance?: boolean;
   autoDetectSubject?: boolean;
   transparent?: boolean;
   backgroundColor?: string | null;
@@ -155,6 +156,8 @@ export type ImageCreditQuoteResponse = {
   creditCost?: number;
   providerCostUsd?: number;
   providerCostThb?: number;
+  smartEnhancePriceThb?: number;
+  smartEnhancePriceCredits?: number;
   sellingPriceThb?: number;
   pricingSource?: string;
   pricingVersion?: string;
@@ -296,13 +299,13 @@ async function pollGeneration(target: EnqueuedGenerationResponse["data"] | Pendi
 export async function createTextToImage(input: TextToImageInput, onProgress?: (progress: GenerationProgress) => void, signal?: AbortSignal): Promise<TextToImageResponse> {
   const requestBody = {
     prompt: input.prompt,
+    ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
     ...(input.style ? { style: input.style } : {}),
     ratio: input.ratio,
     resolution: input.resolution,
     quality: input.quality,
     ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
     count: input.count,
-    smartEnhance: input.smartEnhance,
     negativePrompt: input.negativePrompt,
     ...(input.modelParams ? { modelParams: input.modelParams } : {}),
     ...(input.model ? { model: input.model } : {}),
@@ -371,6 +374,7 @@ export async function createImageToImage(input: ImageToImageInput, onProgress?: 
     sourceImage: input.sourceImage,
     ...(input.sourceImages && input.sourceImages.length > 0 ? { sourceImages: input.sourceImages } : {}),
     prompt: input.prompt,
+    ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
     ...(input.style ? { style: input.style } : {}),
     ...(input.strength !== undefined ? { strength: Math.min(1, Math.max(0, input.strength / 100)) } : {}),
     ratio: input.ratio,
@@ -378,7 +382,6 @@ export async function createImageToImage(input: ImageToImageInput, onProgress?: 
     ...(input.quality ? { quality: input.quality } : {}),
     ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
     count: input.count,
-    smartEnhance: input.smartEnhance,
     negativePrompt: input.negativePrompt,
     ...(input.modelParams ? { modelParams: input.modelParams } : {}),
     ...(input.model ? { model: input.model } : {}),
@@ -410,6 +413,7 @@ export async function createStyleTransfer(input: StyleTransferInput, onProgress?
     ...(input.styleReferenceImage ? { styleReferenceImage: input.styleReferenceImage } : {}),
     ...(input.stylePreset ? { stylePreset: input.stylePreset } : {}),
     ...(input.prompt?.trim() ? { prompt: input.prompt.trim() } : {}),
+    ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
     ...(input.styleStrength !== undefined ? { styleStrength: Math.min(1, Math.max(0, input.styleStrength)) } : {}),
     ...(input.contentPreservation !== undefined ? { contentPreservation: Math.min(1, Math.max(0, input.contentPreservation)) } : {}),
     ratio: input.ratio,
@@ -417,7 +421,6 @@ export async function createStyleTransfer(input: StyleTransferInput, onProgress?
     quality: input.quality,
     ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
     count: input.count,
-    smartEnhance: input.smartEnhance,
     negativePrompt: input.negativePrompt,
     ...(input.modelParams ? { modelParams: input.modelParams } : {}),
     ...(input.model ? { model: input.model } : {}),
@@ -449,6 +452,7 @@ export async function createBackgroundGeneration(input: BackgroundGenerationInpu
     sourceImage: input.sourceImage,
     ...(input.backgroundReferenceImage ? { backgroundReferenceImage: input.backgroundReferenceImage } : {}),
     ...(input.prompt?.trim() ? { prompt: input.prompt.trim() } : {}),
+    ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
     ...(input.style ? { style: input.style } : {}),
     ...(input.mask ? { mask: input.mask } : {}),
     ...(input.maskTool ? { maskTool: input.maskTool } : {}),
@@ -492,6 +496,7 @@ export async function createExtendImage(input: ExtendImageInput, onProgress?: (p
     ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
     sourceImage: input.sourceImage,
     ...(input.prompt?.trim() ? { prompt: input.prompt.trim() } : {}),
+    ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
     direction: input.direction,
     amount: input.amount,
     ratio: input.ratio,
@@ -499,7 +504,6 @@ export async function createExtendImage(input: ExtendImageInput, onProgress?: (p
     ...(input.quality ? { quality: input.quality } : {}),
     ...(input.outputFormat ? { outputFormat: input.outputFormat } : {}),
     count: input.count,
-    smartEnhance: input.smartEnhance,
     negativePrompt: input.negativePrompt,
     ...(input.modelParams ? { modelParams: input.modelParams } : {}),
     ...(input.model ? { model: input.model } : {}),

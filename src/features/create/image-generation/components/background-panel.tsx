@@ -1,11 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import { Eraser, Info, Upload, WandSparkles } from "lucide-react";
 import { backgroundModes, type BackgroundMode, type StylePreset } from "../config";
 import type { GenerationStylePreset } from "@/lib/api/style-presets";
 import type { ImageUploadConstraints } from "@/lib/media/upload-validation";
 import { cx } from "../styles";
+import { PromptField } from "@/components/ui/prompt-field";
 import { SourceImageUpload } from "./source-image-upload";
+import { PromptOptimizerToggle } from "./prompt-optimizer-toggle";
 
 type BackgroundPanelProps = {
   backgroundMode: BackgroundMode;
@@ -29,6 +32,8 @@ type BackgroundPanelProps = {
   onBackgroundReferenceImageChange: (imageUrl: string) => void;
   onBackgroundReferenceImageClear: () => void;
   onBackgroundPromptChange: (prompt: string) => void;
+  promptOptimizerEnabled: boolean;
+  onPromptOptimizerChange: (enabled: boolean) => void;
   onBackgroundColorChange: (color: string) => void;
   onPreserveSubjectChange: (enabled: boolean) => void;
   onEdgeCleanupChange: (enabled: boolean) => void;
@@ -48,13 +53,13 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function BackgroundPanel({ backgroundMode, sourceImage, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, style, stylePresetOptions, workspaceId, imageUploadConstraints, backgroundSupportsInput, backgroundSupportsPrompt, onBackgroundModeChange, onSourceImageChange, onSourceImageClear, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onStyleChange }: BackgroundPanelProps) {
+export function BackgroundPanel({ backgroundMode, sourceImage, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, style, stylePresetOptions, workspaceId, imageUploadConstraints, backgroundSupportsInput, backgroundSupportsPrompt, onBackgroundModeChange, onSourceImageChange, onSourceImageClear, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onStyleChange }: BackgroundPanelProps) {
   return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-background-panel")}>
     <div className={cx("gen-section-heading")}><h3>MODE</h3><Info size={12} /></div>
     <BackgroundModeSelector value={backgroundMode} onChange={onBackgroundModeChange} />
 
-    {backgroundMode === "replace" && backgroundSupportsPrompt && <section className={cx("gen-background-section")}><div className={cx("gen-section-heading")}><h3>NEW BACKGROUND</h3><em>(Prompt or reference)</em></div><label className={cx("gen-textarea-wrap", "gen-background-prompt")}><textarea id="gen-background-prompt" value={backgroundPrompt} onChange={(event) => onBackgroundPromptChange(event.target.value)} placeholder="A warm modern studio with soft daylight" aria-label="Background replacement prompt" /></label></section>}
-    {backgroundMode === "generate" && backgroundSupportsPrompt && <section className={cx("gen-background-section")}><div className={cx("gen-section-heading")}><h3>PROMPT <em>(Required)</em></h3></div><label className={cx("gen-textarea-wrap", "gen-background-prompt")}><textarea id="gen-background-prompt" value={backgroundPrompt} onChange={(event) => onBackgroundPromptChange(event.target.value)} placeholder="Place the subject in a premium editorial studio with warm window light" aria-label="Generated background prompt" /></label></section>}
+    {backgroundMode === "replace" && backgroundSupportsPrompt && <section className={cx("gen-background-section")}><div className={cx("gen-panel-title")}><h2>NEW BACKGROUND <em>(Prompt or reference)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div><PromptField id="gen-background-prompt" value={backgroundPrompt} onChange={onBackgroundPromptChange} placeholder="A warm modern studio with soft daylight" ariaLabel="Background replacement prompt" wrapperClassName={cx("gen-textarea-wrap", "gen-background-prompt")} metaClassName={cx("gen-prompt-meta")} /><PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} /></section>}
+    {backgroundMode === "generate" && backgroundSupportsPrompt && <section className={cx("gen-background-section")}><div className={cx("gen-panel-title")}><h2>PROMPT <em>(Required)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div><PromptField id="gen-background-prompt" value={backgroundPrompt} onChange={onBackgroundPromptChange} placeholder="Place the subject in a premium editorial studio with warm window light" ariaLabel="Generated background prompt" required wrapperClassName={cx("gen-textarea-wrap", "gen-background-prompt")} metaClassName={cx("gen-prompt-meta")} /><PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} /></section>}
     {(backgroundMode === "replace" || backgroundMode === "generate") && !backgroundSupportsPrompt && <p className={cx("gen-inline-helper")}>The selected model does not accept a prompt. Use a background reference image if the model supports one.</p>}
 
     <div className={cx("gen-section-heading")}><h3>SOURCE IMAGE <em>(Required)</em></h3></div>

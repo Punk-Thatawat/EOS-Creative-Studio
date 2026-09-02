@@ -1,20 +1,21 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, CircleOff, Info } from "lucide-react";
-import { type ExtendAmount, type ExtendDirection, type ImageGenerationTab, type StylePreset, type StyleSourceMode, type StyleTransferPreset } from "../config";
+import { textToImagePromptMaxLength, type ExtendAmount, type ExtendDirection, type ImageGenerationTab, type StylePreset, type StyleSourceMode, type StyleTransferPreset } from "../config";
 import type { GenerationStylePreset } from "@/lib/api/style-presets";
 import type { ImageUploadConstraints } from "@/lib/media/upload-validation";
 import { cx } from "../styles";
+import { PromptField } from "@/components/ui/prompt-field";
 import { SourceImageUpload } from "./source-image-upload";
 import { BackgroundPanel } from "./background-panel";
 import { ExtendPanel } from "./extend-panel";
 import { UpscalePanel } from "./upscale-panel";
+import { PromptOptimizerToggle } from "./prompt-optimizer-toggle";
 
 type PromptPanelProps = {
   activeTab: ImageGenerationTab;
   prompt: string;
   negativePrompt: string;
-  smartEnhance: boolean;
   style: StylePreset | null;
   stylePresetOptions: GenerationStylePreset[];
   styleTransferPresetOptions: GenerationStylePreset[];
@@ -30,8 +31,9 @@ type PromptPanelProps = {
   contentPreservation: number;
   facePreservation: boolean;
   onPromptChange: (prompt: string) => void;
+  promptOptimizerEnabled: boolean;
+  onPromptOptimizerChange: (enabled: boolean) => void;
   onNegativePromptChange: (prompt: string) => void;
-  onSmartEnhanceChange: (enabled: boolean) => void;
   onStyleChange: (style: StylePreset | null) => void;
   onSourceImageChange: (imageUrl: string) => void;
   onSourceImagesChange?: (imageUrls: string[]) => void;
@@ -80,7 +82,7 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, onNegativePromptChange, onSmartEnhanceChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, imageToImageSupportsStrength = true, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
+export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, imageToImageSupportsStrength = true, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
   const imageToImage = activeTab === "Image to Image";
   const styleTransfer = activeTab === "AI Style Transfer";
   const background = activeTab === "AI Background";
@@ -130,11 +132,11 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
   };
 
   if (background) {
-    return <BackgroundPanel backgroundMode={backgroundMode} sourceImage={sourceImage} backgroundReferenceImage={backgroundReferenceImage} backgroundPrompt={backgroundPrompt} backgroundColor={backgroundColor} preserveSubject={preserveSubject} edgeCleanup={edgeCleanup} addShadow={addShadow} matchLighting={matchLighting} style={style} stylePresetOptions={stylePresetOptions} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} backgroundSupportsInput={backgroundSupportsInput} backgroundSupportsPrompt={backgroundSupportsPrompt} onBackgroundModeChange={onBackgroundModeChange} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onBackgroundReferenceImageChange={onBackgroundReferenceImageChange} onBackgroundReferenceImageClear={onBackgroundReferenceImageClear} onBackgroundPromptChange={onBackgroundPromptChange} onBackgroundColorChange={onBackgroundColorChange} onPreserveSubjectChange={onPreserveSubjectChange} onEdgeCleanupChange={onEdgeCleanupChange} onAddShadowChange={onAddShadowChange} onMatchLightingChange={onMatchLightingChange} onStyleChange={onStyleChange} />;
+    return <BackgroundPanel backgroundMode={backgroundMode} sourceImage={sourceImage} backgroundReferenceImage={backgroundReferenceImage} backgroundPrompt={backgroundPrompt} backgroundColor={backgroundColor} preserveSubject={preserveSubject} edgeCleanup={edgeCleanup} addShadow={addShadow} matchLighting={matchLighting} style={style} stylePresetOptions={stylePresetOptions} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} backgroundSupportsInput={backgroundSupportsInput} backgroundSupportsPrompt={backgroundSupportsPrompt} onBackgroundModeChange={onBackgroundModeChange} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onBackgroundReferenceImageChange={onBackgroundReferenceImageChange} onBackgroundReferenceImageClear={onBackgroundReferenceImageClear} onBackgroundPromptChange={onBackgroundPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onBackgroundColorChange={onBackgroundColorChange} onPreserveSubjectChange={onPreserveSubjectChange} onEdgeCleanupChange={onEdgeCleanupChange} onAddShadowChange={onAddShadowChange} onMatchLightingChange={onMatchLightingChange} onStyleChange={onStyleChange} />;
   }
 
   if (extend) {
-    return <ExtendPanel sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} prompt={extendPrompt} negativePrompt={negativePrompt} smartEnhance={smartEnhance} direction={extendDirection} amount={extendAmount} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onPromptChange={onExtendPromptChange} onNegativePromptChange={onNegativePromptChange} onSmartEnhanceChange={onSmartEnhanceChange} onDirectionChange={onExtendDirectionChange} onAmountChange={onExtendAmountChange} />;
+    return <ExtendPanel sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} prompt={extendPrompt} negativePrompt={negativePrompt} direction={extendDirection} amount={extendAmount} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onPromptChange={onExtendPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onNegativePromptChange={onNegativePromptChange} onDirectionChange={onExtendDirectionChange} onAmountChange={onExtendAmountChange} />;
   }
 
   if (upscale) {
@@ -143,8 +145,9 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
 
   if (styleTransfer) {
     return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-style-transfer-panel")}>
-      <div className={cx("gen-section-heading", "gen-annotated-prompt-heading")}><h3>PROMPT <em>(Optional)</em></h3><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
-      <label className={cx("gen-textarea-wrap", "gen-style-transfer-prompt")}><textarea id="gen-style-transfer-prompt" value={prompt} onChange={(event) => onPromptChange(event.target.value)} placeholder="Apply soft cinematic lighting and detailed brush texture" aria-label="Optional style transfer prompt" /></label>
+      <div className={cx("gen-panel-title")}><h2>PROMPT <em>(Optional)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
+      <PromptField id="gen-style-transfer-prompt" value={prompt} onChange={onPromptChange} placeholder="Apply soft cinematic lighting and detailed brush texture" ariaLabel="Optional style transfer prompt" wrapperClassName={cx("gen-textarea-wrap", "gen-style-transfer-prompt")} metaClassName={cx("gen-prompt-meta")} />
+      <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
 
       <div className={cx("gen-section-heading")}><h3>CONTENT IMAGE <em>(Required)</em></h3></div>
       <SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} purpose="content" feature="ai-style-transfer" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} disabled={!styleTransferSupportsInput} />
@@ -172,12 +175,10 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
       <div className={cx("gen-range-control", !styleTransferSupportsStrength && "is-disabled")}><div><span>STYLE STRENGTH <Info size={12} /></span><strong>{imageStrength}%</strong></div><input type="range" min="0" max="100" step="1" value={imageStrength} onChange={(event) => onImageStrengthChange(Number(event.target.value))} aria-label="Style strength" disabled={!styleTransferSupportsStrength} /><p><span>Low keeps the original image</span><span>High makes the new style stronger</span></p>{!styleTransferSupportsStrength && <small>This model does not support style strength.</small>}</div>
       <div className={cx("gen-range-control", !styleTransferSupportsContentPreservation && "is-disabled")}><div><span>CONTENT PRESERVATION <Info size={12} /></span><strong>{contentPreservation}%</strong></div><input type="range" min="0" max="100" step="1" value={contentPreservation} onChange={(event) => onContentPreservationChange(Number(event.target.value))} aria-label="Content preservation" disabled={!styleTransferSupportsContentPreservation} /><p><span>Loose transformation</span><span>Keep face, objects & composition</span></p>{!styleTransferSupportsContentPreservation && <small>This model does not support content preservation.</small>}</div>
 
-      <div className={cx("gen-toggle-row")}><span>Smart Enhance <Info size={12} /></span><button type="button" className={cx("gen-toggle", smartEnhance && "is-on")} aria-label={`Smart Enhance ${smartEnhance ? "on" : "off"}`} aria-pressed={smartEnhance} onClick={() => onSmartEnhanceChange(!smartEnhance)}><i /></button></div>
-
       <details className={cx("gen-advanced")}>
         <summary><span>ADVANCED</span><ChevronDown size={15} /></summary>
         <div className={cx("gen-advanced-body")}>
-          <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-style">Negative prompt</label><input id="gen-negative-prompt-style" value={negativePrompt} onChange={(event) => onNegativePromptChange(event.target.value)} placeholder="blurry, distorted, low quality" /></div>
+          <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-style">Negative prompt</label><PromptField id="gen-negative-prompt-style" value={negativePrompt} onChange={onNegativePromptChange} placeholder="blurry, distorted, low quality" ariaLabel="Style transfer negative prompt" multiline={false} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} /></div>
           <div className={cx("gen-face-preservation")}><span><b>Face preservation</b><small>Protect facial identity where possible</small></span><button type="button" className={cx("gen-toggle", facePreservation && "is-on")} aria-label={`Face preservation ${facePreservation ? "on" : "off"}`} aria-pressed={facePreservation} onClick={() => onFacePreservationChange(!facePreservation)}><i /></button></div>
         </div>
       </details>
@@ -185,12 +186,11 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
   }
 
   return <aside className={cx("gen-panel", "gen-prompt-panel", imageToImage && "is-image-to-image")}>
-    {!imageToImage && <div className={cx("gen-panel-title")}><h2>PROMPT</h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>}
-    {imageToImage && <div className={cx("gen-section-heading", "gen-annotated-prompt-heading")}><h3>PROMPT</h3><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>}
-    <label className={cx("gen-textarea-wrap")}><textarea id="gen-prompt-input" value={prompt} onChange={(event) => onPromptChange(event.target.value)} placeholder={imageToImage ? "Describe how you want to transform the image" : undefined} aria-label={imageToImage ? "Describe how you want to transform the image" : "Prompt"} /></label>
+    <div className={cx("gen-panel-title")}><h2>PROMPT <em>(Required)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
+    <PromptField id="gen-prompt-input" value={prompt} onChange={onPromptChange} placeholder={imageToImage ? "Describe how you want to transform the image" : undefined} ariaLabel={imageToImage ? "Describe how you want to transform the image" : "Prompt"} maxLength={textToImagePromptMaxLength} required={!imageToImage} wrapperClassName={cx("gen-textarea-wrap")} metaClassName={cx("gen-prompt-meta")} />
+    <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
     {imageToImage && <><div className={cx("gen-section-heading")}><h3>REFERENCE IMAGES <em>(Required{maxSourceImages > 1 ? ` · up to ${maxSourceImages}` : ""})</em></h3></div><SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} imageUrls={sourceImages} onImagesChange={onSourceImagesChange} maxImages={maxSourceImages} purpose="content" feature="image-to-image" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} /></>}
     {imageToImage && <div className={cx("gen-strength-control", !imageToImageSupportsStrength && "is-disabled")}><div><span>IMAGE STRENGTH <Info size={12} /></span><strong>{imageStrength}%</strong></div><input type="range" min="0" max="100" step="1" value={imageStrength} onChange={(event) => onImageStrengthChange(Number(event.target.value))} aria-label="Image strength" disabled={!imageToImageSupportsStrength} /><p><span>0% keeps the original image</span><span>100% follows the prompt more</span></p>{!imageToImageSupportsStrength && <small>This model does not support strength control.</small>}</div>}
-    <div className={cx("gen-toggle-row")}><span>Smart Enhance <Info size={12} /></span><button type="button" className={cx("gen-toggle", smartEnhance && "is-on")} aria-label={`Smart Enhance ${smartEnhance ? "on" : "off"}`} aria-pressed={smartEnhance} onClick={() => onSmartEnhanceChange(!smartEnhance)}><i /></button></div>
     <div className={cx("gen-section-heading")}><h3>STYLE PRESETS</h3><button type="button">View all</button></div>
     <div className={cx("gen-style-preset-gallery")}>
       <div className={cx("gen-style-grid")} ref={stylePresetRowRef}>
@@ -203,6 +203,6 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, smartEnhance, s
       {stylePresetScrollState.canGoBack && <button type="button" className={cx("gen-gallery-prev")} onClick={() => scrollStylePresets(-1)} aria-label="Previous style presets"><ChevronLeft size={18} /></button>}
       {stylePresetScrollState.canGoForward && <button type="button" className={cx("gen-gallery-next")} onClick={() => scrollStylePresets(1)} aria-label="Next style presets"><ChevronRight size={18} /></button>}
     </div>
-    <div className={cx("gen-section-heading")}><h3>NEGATIVE PROMPT</h3></div><label className={cx("gen-input-wrap")}><input value={negativePrompt} onChange={(event) => onNegativePromptChange(event.target.value)} aria-label="Negative prompt" /></label>
+    <div className={cx("gen-section-heading")}><h3>NEGATIVE PROMPT</h3></div><PromptField value={negativePrompt} onChange={onNegativePromptChange} placeholder="low quality, blurry, text, watermark, logo, deformed..." ariaLabel="Negative prompt" multiline={false} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} />
   </aside>;
 }

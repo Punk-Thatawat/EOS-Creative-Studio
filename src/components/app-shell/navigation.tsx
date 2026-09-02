@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, AudioLines, BarChart3, Boxes, ChevronDown, ChevronUp, Clock3, FileText, FolderKanban, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, UsersRound, Video, WandSparkles } from "lucide-react";
+import { ArrowLeft, AudioLines, BarChart3, Boxes, ChevronDown, ChevronUp, Clock3, FileText, FolderKanban, Home, ImageIcon, LayoutTemplate, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, UsersRound, Video, WandSparkles } from "lucide-react";
 import { EosLogo } from "@/components/brand/eos-logo";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import type { NavigationItem } from "@/types/navigation";
@@ -97,11 +97,11 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
     { label: "System settings", href: "/admin/settings", icon: Settings, disabled: true },
   ] satisfies Array<NavigationItem & { disabled?: boolean }>;
 
-  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 md:flex md:px-5"><SidebarHeader className="mb-8 px-2"><EosLogo /></SidebarHeader><SidebarContent className="gap-0"><AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} /><AdminFeatureNavigationTree pathname={pathname} hydrated={hydrated} /><AdminNavigationGroup label="Operations" items={operations} pathname={pathname} /><SidebarGroup className="mt-2 px-0"><SidebarGroupContent><SidebarMenu><SidebarMenuItem><SidebarMenuButton render={<Link href="/home" />} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"><ArrowLeft size={18} /><span>Back to workspace</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent></Sidebar>;
+  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 md:flex md:px-5"><SidebarHeader className="mb-8 items-center px-2"><EosLogo /></SidebarHeader><SidebarContent className="gap-0"><AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} /><AdminFeatureNavigationTree pathname={pathname} hydrated={hydrated} /><AdminNavigationGroup label="Operations" items={operations} pathname={pathname} /><SidebarGroup className="mt-2 px-0"><SidebarGroupContent><SidebarMenu><SidebarMenuItem><SidebarMenuButton render={<Link href="/home" />} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"><ArrowLeft size={18} /><span>Back to workspace</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent></Sidebar>;
 }
 
 function WorkspaceSidebarHeader() {
-  return <SidebarHeader className="mb-8 px-2"><div className="flex items-center gap-[18px]"><button type="button" className="grid size-7 shrink-0 place-items-center text-foreground" aria-label="Toggle sidebar"><Menu size={28} strokeWidth={2.3} /></button><EosLogo className="origin-left scale-[0.86]" /></div></SidebarHeader>;
+  return <SidebarHeader className="px-2"><EosLogo className="origin-center scale-[1.1]" /></SidebarHeader>;
 }
 
 const audioWorkspaceItems = [
@@ -115,7 +115,7 @@ const audioWorkspaceItems = [
 
 function AudioSidebarNavigation({ pathname }: { pathname: string }) {
   return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 md:flex md:px-5">
-    <SidebarHeader className="-mt-2 mb-0 px-2"><EosLogo className="scale-[1.04] origin-left" /></SidebarHeader>
+    <SidebarHeader className="-mt-2 mb-0 items-center px-2"><EosLogo className="scale-[1.04] origin-center" /></SidebarHeader>
     <SidebarContent className="gap-0">
       <SidebarGroup className="px-0"><SidebarMenu className="gap-1">
         {audioWorkspaceItems.slice(0, 2).map((item) => { const active = pathname === item.href; return <SidebarMenuItem key={item.href}><SidebarMenuButton render={<Link href={item.href} aria-current={active ? "page" : undefined} />} isActive={active} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground data-active:bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] data-active:text-primary hover:bg-surface-muted hover:text-foreground"><item.icon size={18} strokeWidth={active ? 2.5 : 2} /><span>{item.label}</span></SidebarMenuButton></SidebarMenuItem>; })}
