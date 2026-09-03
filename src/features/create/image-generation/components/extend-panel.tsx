@@ -61,7 +61,7 @@ export function ExtendPanel({ sourceImage, workspaceId, imageUploadConstraints, 
     <details className={cx("gen-advanced")}>
       <summary><span>ADVANCED</span><span aria-hidden="true">⌄</span></summary>
       <div className={cx("gen-advanced-body")}>
-        <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-extend">Negative prompt</label><PromptField id="gen-negative-prompt-extend" value={negativePrompt} onChange={onNegativePromptChange} placeholder="blurry, seams, duplicated objects" ariaLabel="Extend image negative prompt" multiline={false} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} /></div>
+        <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-extend">Negative prompt</label><PromptField id="gen-negative-prompt-extend" value={negativePrompt} onChange={onNegativePromptChange} placeholder="blurry, seams, duplicated objects" ariaLabel="Extend image negative prompt" multiline={false} maxLength={100} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} /></div>
       </div>
     </details>
   </aside>;

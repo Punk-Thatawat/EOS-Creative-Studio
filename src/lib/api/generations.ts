@@ -29,7 +29,6 @@ export type ImageToImageInput = {
   prompt: string;
   promptOptimizerEnabled?: boolean;
   style?: StylePreset | null;
-  strength?: number;
   ratio: ImageRatio;
   resolution: string;
   quality?: ImageQuality;
@@ -376,7 +375,6 @@ export async function createImageToImage(input: ImageToImageInput, onProgress?: 
     prompt: input.prompt,
     ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
     ...(input.style ? { style: input.style } : {}),
-    ...(input.strength !== undefined ? { strength: Math.min(1, Math.max(0, input.strength / 100)) } : {}),
     ratio: input.ratio,
     resolution: input.resolution,
     ...(input.quality ? { quality: input.quality } : {}),

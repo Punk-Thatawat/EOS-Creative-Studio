@@ -409,9 +409,20 @@ export function MotionTransferWorkspace() {
           <input ref={motionVideoInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setMotionAsset(file, "video"); event.currentTarget.value = ""; }} />
         </section>
         {guidanceVisible ? (
-          <section className={styles.panel}>
-            <MotionSectionTitle number="3">MOTION GUIDANCE</MotionSectionTitle>
-            {promptSupported ? <><label className={styles.peopleFieldLabel}>Prompt <small>({promptRequired ? "Required for selected model" : "Optional"})</small><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Natural movement, keep the character's identity" /></label><span className={styles.counter}>{prompt.length} / 2000</span></> : null}
+          <section className={`${styles.panel} ${promptSupported ? styles.videoPromptPanel : ""}`}>
+            {promptSupported ? <>
+              <div className={styles.videoPromptHeading}>
+                <h2>PROMPT <small>({promptRequired ? "Required" : "Optional"})</small></h2>
+                <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+              </div>
+              <label className={styles.videoPromptInputLabel}>
+                <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Natural movement, keep the character's identity" maxLength={2000} />
+              </label>
+              <div className={styles.videoPromptMeta}>
+                <span>Maximum 2,000 characters</span>
+                <span>{prompt.length.toLocaleString()} / 2,000</span>
+              </div>
+            </> : <MotionSectionTitle number="3">MOTION GUIDANCE</MotionSectionTitle>}
             {promptSupported ? <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /> : null}
             {negativePromptSupported ? <label className={styles.peopleFieldLabel}>Negative Prompt <small>(Optional)</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="blurry, distorted, unnatural movement" /></label> : null}
           </section>

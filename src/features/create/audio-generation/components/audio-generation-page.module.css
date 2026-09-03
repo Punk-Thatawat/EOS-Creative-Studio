@@ -213,14 +213,15 @@
 .toggleOff { justify-content: flex-start; background: #c4c9d0; }
 .toggleOn span, .toggleOff span { display: block; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px #0002; }
 .musicHeader + .selectField { margin-top: 10px; }
-.creditEstimate { margin-top: 17px; border: 1px solid #f2d8c7; border-radius: 8px; background: #fffaf6; padding: 11px 10px 9px; }
-.creditEstimate > div { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
-.creditEstimate strong { color: #282e37; font-size: 10px; font-weight: 850; }
+.creditEstimate { margin-top: 20px; padding-top: 14px; border-top: 1px dashed #d9d9d9; }
+.creditEstimateHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.creditEstimate strong { display: inline-flex; align-items: center; gap: 5px; color: #282e37; font-size: 10px; font-weight: 850; }
+.creditEstimate strong svg { color: #6f747d; }
 .creditEstimate b { color: #313944; font-size: 10px; }
-.creditEstimate small { display: block; margin-top: 7px; color: #727983; font-size: 8px; }
-.creditEstimate span { display: block; margin-top: 7px; color: #1da56b; font-size: 9px; text-align: right; }
-.generateButton { display: flex; width: 100%; height: 45px; align-items: center; justify-content: center; gap: 7px; margin-top: 12px; border: 0; border-radius: 8px; background: var(--audio-orange); color: #fff; font: inherit; font-size: 14px; font-weight: 850; cursor: pointer; box-shadow: 0 7px 16px #ff620b2b; }
-.generateButton:hover { background: #e95100; }
+.creditEstimateCount { margin: 6px 0 0; color: #626872; font-size: 9px; }
+.generationValidation { margin: 10px 0 -8px; color: #b42318; font-size: 9px; line-height: 1.4; }
+.generateButton { display: flex; width: 100%; min-height: 52px; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; padding: 13px 8px; border: 0; border-radius: 9px; background: #ff620b url('/generated-assets/generate-button-bg.png') center / 100% 100% no-repeat; color: #fff; font: inherit; font-size: 16px; font-weight: 850; cursor: pointer; box-shadow: 0 8px 17px #f26b3838; }
+.generateButton:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .generateButton:disabled { cursor: wait; opacity: .82; }
 .securityNote { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 10px 0 0; color: #7b818a; font-size: 9px; text-align: center; }
 .spinner { width: 14px; height: 14px; border: 2px solid #fff8; border-top-color: #fff; border-radius: 50%; animation: spin .75s linear infinite; }

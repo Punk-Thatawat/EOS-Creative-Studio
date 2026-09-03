@@ -153,7 +153,6 @@ export function ImageGenerationPage() {
         imageStrength={state.imageStrength}
         contentPreservation={state.contentPreservation}
         facePreservation={state.facePreservation}
-        imageToImageSupportsStrength={state.imageToImageSupportsStrength}
         styleTransferSupportsInput={state.styleTransferSupportsInput}
         styleTransferSupportsReference={state.styleTransferSupportsReference}
         styleTransferSupportsStrength={state.styleTransferSupportsStrength}

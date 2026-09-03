@@ -696,17 +696,24 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
           {sourcePerson ? <p className={styles.peopleFileName}>{sourcePerson.name}</p> : null}
         </section>
         {textSectionVisible ? (
-          <section className={styles.panel}>
-          <PeopleSectionTitle number="2">{scriptSupported ? "SCRIPT / DIALOGUE" : !isLipsync && promptSupported ? "PERFORMANCE DIRECTION" : "PROMPT"}</PeopleSectionTitle>
+          <section className={`${styles.panel} ${driverTextSupported ? styles.videoPromptPanel : ""}`}>
             {driverTextSupported ? (
               <>
-                <label className={styles.peopleFieldLabel}>
-                  {driverLabel} <small>({requiredScriptInput ? "Required for selected model" : "Optional"})</small>
-                  <textarea value={script} onChange={(event) => setScript(event.target.value)} placeholder={scriptSupported ? "Hello everyone, welcome to our show…" : "Describe the desired performance…"} />
+                <div className={styles.videoPromptHeading}>
+                  <h2>{scriptSupported ? "SCRIPT / DIALOGUE" : !isLipsync && promptSupported ? "PERFORMANCE DIRECTION" : "PROMPT"} <small>({requiredScriptInput ? "Required" : "Optional"})</small></h2>
+                  <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+                </div>
+                <label className={styles.videoPromptInputLabel}>
+                  <textarea className={styles.videoPromptTextarea} value={script} onChange={(event) => setScript(event.target.value)} placeholder={scriptSupported ? "Hello everyone, welcome to our show…" : "Describe the desired performance…"} maxLength={2000} />
                 </label>
-                <span className={styles.counter}>{script.length} / 2000</span>
+                <div className={styles.videoPromptMeta}>
+                  <span>Maximum 2,000 characters</span>
+                  <span>{script.length.toLocaleString()} / 2,000</span>
+                </div>
               </>
-            ) : null}
+            ) : (
+              <PeopleSectionTitle number="2">{scriptSupported ? "SCRIPT / DIALOGUE" : !isLipsync && promptSupported ? "PERFORMANCE DIRECTION" : "PROMPT"}</PeopleSectionTitle>
+            )}
             {actingDirectionSupported ? (
               <label className={styles.peopleFieldLabel}>
                 Acting Direction <small>(Optional)</small>

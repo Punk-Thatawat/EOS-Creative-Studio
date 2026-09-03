@@ -45,7 +45,6 @@ type PromptPanelProps = {
   onImageStrengthChange: (strength: number) => void;
   onContentPreservationChange: (preservation: number) => void;
   onFacePreservationChange: (enabled: boolean) => void;
-  imageToImageSupportsStrength?: boolean;
   styleTransferSupportsInput?: boolean;
   styleTransferSupportsReference?: boolean;
   styleTransferSupportsStrength?: boolean;
@@ -82,7 +81,7 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, imageToImageSupportsStrength = true, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
+export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
   const imageToImage = activeTab === "Image to Image";
   const styleTransfer = activeTab === "AI Style Transfer";
   const background = activeTab === "AI Background";
@@ -178,7 +177,7 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePre
       <details className={cx("gen-advanced")}>
         <summary><span>ADVANCED</span><ChevronDown size={15} /></summary>
         <div className={cx("gen-advanced-body")}>
-          <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-style">Negative prompt</label><PromptField id="gen-negative-prompt-style" value={negativePrompt} onChange={onNegativePromptChange} placeholder="blurry, distorted, low quality" ariaLabel="Style transfer negative prompt" multiline={false} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} /></div>
+          <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-style">Negative prompt</label><PromptField id="gen-negative-prompt-style" value={negativePrompt} onChange={onNegativePromptChange} placeholder="blurry, distorted, low quality" ariaLabel="Style transfer negative prompt" multiline={false} maxLength={100} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} /></div>
           <div className={cx("gen-face-preservation")}><span><b>Face preservation</b><small>Protect facial identity where possible</small></span><button type="button" className={cx("gen-toggle", facePreservation && "is-on")} aria-label={`Face preservation ${facePreservation ? "on" : "off"}`} aria-pressed={facePreservation} onClick={() => onFacePreservationChange(!facePreservation)}><i /></button></div>
         </div>
       </details>
@@ -190,7 +189,6 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePre
     <PromptField id="gen-prompt-input" value={prompt} onChange={onPromptChange} placeholder={imageToImage ? "Describe how you want to transform the image" : undefined} ariaLabel={imageToImage ? "Describe how you want to transform the image" : "Prompt"} maxLength={textToImagePromptMaxLength} required={!imageToImage} wrapperClassName={cx("gen-textarea-wrap")} metaClassName={cx("gen-prompt-meta")} />
     <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
     {imageToImage && <><div className={cx("gen-section-heading")}><h3>REFERENCE IMAGES <em>(Required{maxSourceImages > 1 ? ` · up to ${maxSourceImages}` : ""})</em></h3></div><SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} imageUrls={sourceImages} onImagesChange={onSourceImagesChange} maxImages={maxSourceImages} purpose="content" feature="image-to-image" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} /></>}
-    {imageToImage && <div className={cx("gen-strength-control", !imageToImageSupportsStrength && "is-disabled")}><div><span>IMAGE STRENGTH <Info size={12} /></span><strong>{imageStrength}%</strong></div><input type="range" min="0" max="100" step="1" value={imageStrength} onChange={(event) => onImageStrengthChange(Number(event.target.value))} aria-label="Image strength" disabled={!imageToImageSupportsStrength} /><p><span>0% keeps the original image</span><span>100% follows the prompt more</span></p>{!imageToImageSupportsStrength && <small>This model does not support strength control.</small>}</div>}
     <div className={cx("gen-section-heading")}><h3>STYLE PRESETS</h3><button type="button">View all</button></div>
     <div className={cx("gen-style-preset-gallery")}>
       <div className={cx("gen-style-grid")} ref={stylePresetRowRef}>
@@ -203,6 +201,6 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePre
       {stylePresetScrollState.canGoBack && <button type="button" className={cx("gen-gallery-prev")} onClick={() => scrollStylePresets(-1)} aria-label="Previous style presets"><ChevronLeft size={18} /></button>}
       {stylePresetScrollState.canGoForward && <button type="button" className={cx("gen-gallery-next")} onClick={() => scrollStylePresets(1)} aria-label="Next style presets"><ChevronRight size={18} /></button>}
     </div>
-    <div className={cx("gen-section-heading")}><h3>NEGATIVE PROMPT</h3></div><PromptField value={negativePrompt} onChange={onNegativePromptChange} placeholder="low quality, blurry, text, watermark, logo, deformed..." ariaLabel="Negative prompt" multiline={false} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} />
+    <div className={cx("gen-section-heading")}><h3>NEGATIVE PROMPT</h3></div><PromptField value={negativePrompt} onChange={onNegativePromptChange} placeholder="low quality, blurry, text, watermark, logo, deformed..." ariaLabel="Negative prompt" multiline={false} maxLength={100} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} />
   </aside>;
 }

@@ -15,6 +15,9 @@ export function EosVideoPlayer({
   autoPlay = false,
   muted: initialMuted = true,
   onEnded,
+  onAspectRatioChange,
+  mediaFrameClassName,
+  mediaFrameStyle,
   ariaLabel = "Video player",
 }: {
   src: string;
@@ -22,6 +25,9 @@ export function EosVideoPlayer({
   autoPlay?: boolean;
   muted?: boolean;
   onEnded?: () => void;
+  onAspectRatioChange?: (aspectRatio: string) => void;
+  mediaFrameClassName?: string;
+  mediaFrameStyle?: CSSProperties;
   ariaLabel?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -118,7 +124,7 @@ export function EosVideoPlayer({
     setMuted(video.muted);
   };
   const toggleFullscreen = () => {
-    const target = videoRef.current?.parentElement;
+    const target = videoRef.current?.closest<HTMLElement>(".intro-video-player-wrap") ?? videoRef.current?.parentElement;
     if (!target) return;
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
@@ -133,11 +139,11 @@ export function EosVideoPlayer({
     setIsSettingsOpen(false);
   };
 
-  return (
-    <div className={`intro-video-player-wrap ${!paused ? "intro-video-is-playing" : ""} ${isPointerOverVideo ? "intro-video-pointer-over" : ""} ${areControlsVisible ? "intro-video-controls-visible" : ""} ${className}`} onMouseMove={handlePlayerPointerMove} onMouseLeave={() => { updatePointerOverVideo(false); if (!videoRef.current?.paused) setAreControlsVisible(false); }}>
-      <video
+  const videoElement = (
+    <video
         ref={videoRef}
         className="video-modal-player"
+        style={mediaFrameClassName ? { objectFit: "cover" } : undefined}
         src={src}
         autoPlay={autoPlay}
         muted={muted}
@@ -153,6 +159,9 @@ export function EosVideoPlayer({
           setVideoResolution(event.currentTarget.videoWidth && event.currentTarget.videoHeight
             ? `${event.currentTarget.videoWidth} × ${event.currentTarget.videoHeight}`
             : null);
+          if (event.currentTarget.videoWidth && event.currentTarget.videoHeight) {
+            onAspectRatioChange?.(`${event.currentTarget.videoWidth} / ${event.currentTarget.videoHeight}`);
+          }
         }}
         onLoadedData={(event) => {
           event.currentTarget.muted = muted;
@@ -173,7 +182,12 @@ export function EosVideoPlayer({
           setAreControlsVisible(true);
           onEnded?.();
         }}
-      />
+    />
+  );
+
+  return (
+    <div className={`intro-video-player-wrap ${!paused ? "intro-video-is-playing" : ""} ${isPointerOverVideo ? "intro-video-pointer-over" : ""} ${areControlsVisible ? "intro-video-controls-visible" : ""} ${className}`} onMouseMove={handlePlayerPointerMove} onMouseLeave={() => { updatePointerOverVideo(false); if (!videoRef.current?.paused) setAreControlsVisible(false); }}>
+      {mediaFrameClassName ? <div className={`intro-video-media-frame ${mediaFrameClassName}`} style={mediaFrameStyle}>{videoElement}</div> : videoElement}
       {playbackFeedback ? (
         <span key={playbackFeedback.id} className="intro-video-play-feedback" aria-hidden="true">
           {playbackFeedback.type === "play" ? <Play size={42} fill="currentColor" /> : <Pause size={42} fill="currentColor" />}

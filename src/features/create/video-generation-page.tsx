@@ -889,13 +889,6 @@ export function VideoGenerationPage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [postAudioSfxEnabled, setPostAudioSfxEnabled] = useState(false);
   const [postAudioMusicEnabled, setPostAudioMusicEnabled] = useState(false);
-  const postAudioMode = postAudioSfxEnabled && postAudioMusicEnabled
-    ? "both"
-    : postAudioSfxEnabled
-      ? "sfx"
-      : postAudioMusicEnabled
-        ? "music"
-        : "none";
   const [generationMode, setGenerationMode] = useState<GenerationMode>("single-image");
   const [generationModeLabels, setGenerationModeLabels] = useState<Record<string, string>>({});
   const [videoMode, setVideoMode] =
@@ -913,6 +906,10 @@ export function VideoGenerationPage() {
   const [isCancellingVideo, setIsCancellingVideo] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ completed: 0, total: 0 });
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+  const [previewMediaAspectRatioState, setPreviewMediaAspectRatioState] = useState<{
+    mediaKey: string | null;
+    ratio: string | null;
+  }>({ mediaKey: null, ratio: null });
   const [latestCompletedStoryboardId, setLatestCompletedStoryboardId] = useState<string | null>(null);
   const [previewView, setPreviewView] = useState<"latest" | "library">("latest");
   const [videoLibraryIndex, setVideoLibraryIndex] = useState(0);
@@ -987,7 +984,7 @@ export function VideoGenerationPage() {
   const referenceRolePrompt = referenceImageEntries.length > 0
     ? `Reference image roles: ${referenceImageEntries.map((entry, index) => `Image ${index + 1} = ${entry.label}`).join("; ")}. Use each image according to its role, preserving the avatar identity and product details.`
     : "";
-  const promptWithReferenceRoles = (value: string) => generationMode === "reference-to-video" && referenceRolePrompt
+  const promptWithReferenceRoles = (value: string) => (generationMode === "reference-to-video" || generationMode === "single-image") && referenceRolePrompt
     ? `${value}\n\n${referenceRolePrompt}`
     : value;
   const selectedModelOption = models.find((model) => model.model === selectedModel);
@@ -1016,6 +1013,22 @@ export function VideoGenerationPage() {
   const supportsAspectRatio = Boolean(aspectRatioProperty || capabilities?.aspectRatioParameter || aspectRatioOptions.length > 0);
   const audioProperty = findSchemaProperty(properties, ["generateAudio", "generate_audio", "audio", "audio_enabled"]);
   const audioInputMode = Boolean(audioProperty && audioProperty[1].type !== "boolean");
+  // Models exposing an audio control or audio input generate/handle audio
+  // themselves. The post-processing audio tools are only relevant for silent
+  // video models.
+  const hasNativeAudio = Boolean(audioProperty || capabilities?.audioParameter);
+  const showPostAudioOptions = activeVideoTab === "image-to-video"
+    && Boolean(selectedModelOption)
+    && !hasNativeAudio;
+  const postAudioMode = showPostAudioOptions
+    ? postAudioSfxEnabled && postAudioMusicEnabled
+      ? "both"
+      : postAudioSfxEnabled
+        ? "sfx"
+        : postAudioMusicEnabled
+          ? "music"
+          : "none"
+    : "none";
   const referenceAudiosParameter = findModelInputParameter(
     selectedModelOption,
     undefined,
@@ -1254,6 +1267,8 @@ export function VideoGenerationPage() {
       setAspectRatio(detectedAspect ?? (typeof aspectDefault === "string" ? aspectDefault : nextAspectRatioOptions[0] ?? ""));
       setAutoSound(typeof audioDefault === "boolean" ? audioDefault : false);
       setAudioFile(null);
+      setPostAudioSfxEnabled(false);
+      setPostAudioMusicEnabled(false);
       setStoryboardScenes((current) => current.map((scene) => ({
         ...scene,
         duration: nextDurationValue || scene.duration,
@@ -1674,7 +1689,9 @@ export function VideoGenerationPage() {
         prompt: promptWithReferenceRoles(scene.prompt.trim() || prompt.trim() || "Video generation"),
       };
       if (startFrameSource === "manual" && scene.image && !scene.image.startsWith("blob:")) sceneInput.storyboardImage = scene.image;
-      if (generationMode === "reference-to-video" && referenceImageUrls.length > 0) sceneInput.referenceImages = referenceImageUrls;
+      if ((generationMode === "reference-to-video" || generationMode === "single-image") && referenceImageUrls.length > 0) {
+        sceneInput.referenceImages = referenceImageUrls;
+      }
       if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
       if (durationProperty) sceneInput.duration = scene.duration;
       if (scene.aspectRatio) sceneInput.aspectRatio = scene.aspectRatio;
@@ -1925,7 +1942,7 @@ export function VideoGenerationPage() {
               ? "Preparing storyboard scenes..."
               : generationMode === "single-image" && !hasCurrentStoryboardSlices
                 ? "Preparing storyboard scenes from the uploaded image."
-                : generationMode !== "single-image" && !prompt.trim()
+                : !prompt.trim()
                   ? "Add a prompt before generating."
                   : !storyboardReady
                     ? "Finish preparing the storyboard before generating."
@@ -1943,6 +1960,14 @@ export function VideoGenerationPage() {
   const galleryVideoUrl = videoHistory[safeVideoLibraryIndex]?.finalVideoUrl ?? null;
   const latestVideoUrl = finalVideoUrl ?? videoHistory[0]?.finalVideoUrl ?? null;
   const displayedVideoUrl = previewView === "library" ? galleryVideoUrl ?? latestVideoUrl : latestVideoUrl;
+  const previewMediaKey = displayedVideoUrl ?? selectedModelOption?.previewUrl ?? null;
+  const detectedPreviewMediaAspectRatio = previewMediaAspectRatioState.mediaKey === previewMediaKey
+    ? previewMediaAspectRatioState.ratio
+    : null;
+  const previewMediaAspectRatio = detectedPreviewMediaAspectRatio ?? "16 / 9";
+  const handlePreviewAspectRatioChange = useCallback((ratio: string) => {
+    setPreviewMediaAspectRatioState({ mediaKey: previewMediaKey, ratio });
+  }, [previewMediaKey]);
   const displayedStoryboardId = previewView === "library"
     ? videoHistory[safeVideoLibraryIndex]?.storyboardId ?? latestCompletedStoryboardId
     : latestCompletedStoryboardId ?? videoHistory[0]?.storyboardId ?? null;
@@ -1989,7 +2014,7 @@ export function VideoGenerationPage() {
       setGenerationError("Add at least one reference image before generating.");
       return;
     }
-    if (generationMode !== "single-image" && !prompt.trim()) {
+    if (!prompt.trim()) {
       setGenerationError("Add a prompt before generating.");
       return;
     }
@@ -2057,7 +2082,7 @@ export function VideoGenerationPage() {
         }
       }
 
-      if (generationMode === "reference-to-video" && supportsReferenceImages) {
+      if ((generationMode === "reference-to-video" || generationMode === "single-image") && supportsReferenceImages) {
         for (let index = 0; index < referenceImageEntries.length; index += 1) {
           setNotice(`Uploading ${referenceImageEntries[index].label.toLowerCase()} ${index + 1} of ${referenceImageEntries.length}…`);
           const entry = referenceImageEntries[index];
@@ -2330,23 +2355,32 @@ export function VideoGenerationPage() {
                 ) : null}
               </section>
             </section>
-            {generationMode !== "single-image" ? <section className={`${styles.panel} ${styles.promptPanel}`}>
-              <SectionTitle number="1">PROMPT</SectionTitle>
-              <label className="block text-[10px] font-bold">
-                Prompt <small>(Required)</small>
+            <section className={`${styles.panel} ${styles.promptPanel} ${styles.videoPromptPanel}`}>
+              <div className={styles.videoPromptHeading}>
+                <h2>PROMPT <small>(Required)</small></h2>
+                <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+              </div>
+              <label className={styles.videoPromptInputLabel}>
                 <textarea
+                  className={styles.videoPromptTextarea}
                   value={prompt}
                   onChange={(event) => {
                     const value = event.target.value;
                     setPrompt(value);
                     setStoryboardScenes((current) => current.map((scene, index) => (
-                      index === 0 ? { ...scene, prompt: value } : scene
+                      generationMode === "single-image" || index === 0 ? { ...scene, prompt: value } : scene
                     )));
                   }}
                   placeholder="Describe your video"
+                  maxLength={2000}
+                  required
+                  aria-required="true"
                 />
               </label>
-              <span className={styles.counter}>{prompt.length} / 2000</span>
+              <div className={styles.videoPromptMeta}>
+                <span>Maximum 2,000 characters</span>
+                <span>{prompt.length.toLocaleString()} / 2,000</span>
+              </div>
               <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
               <label className="block text-[10px] font-bold">
                 Negative Prompt <small>(Optional)</small>
@@ -2356,10 +2390,10 @@ export function VideoGenerationPage() {
                   placeholder="e.g. blurry, low quality, watermark"
                 />
               </label>
-              {generationMode === "reference-to-video" ? (
+              {generationMode === "reference-to-video" || generationMode === "single-image" ? (
                 <div className={styles.referenceInputs} aria-label="Reference image uploads">
                   <div className={styles.referenceInputsHeading}>
-                    <span>REFERENCE IMAGES <b>*</b></span>
+                    <span>REFERENCE IMAGES {generationMode === "reference-to-video" ? <b>*</b> : null}</span>
                   </div>
                   <div className={styles.referenceMediaField}>
                     {supportsReferenceImages ? (
@@ -2431,11 +2465,11 @@ export function VideoGenerationPage() {
                   </div>
                 </div>
               ) : null}
-            </section> : null}
+            </section>
             {generationMode !== "reference-to-video" ? <section className={`${styles.panel} ${generationMode === "single-image" ? styles.storyboardImagePanel : ""}`}>
-              <SectionTitle number={generationMode === "single-image" ? "1" : "2"}>{generationMode === "single-image" ? "STORYBOARD IMAGE" : "SOURCE"}</SectionTitle>
+              <SectionTitle number="2">SOURCE</SectionTitle>
               <label className="mb-2 block text-[10px] font-bold">
-                {generationMode === "single-image" ? "Storyboard Sheet" : "Start Frame"} <small>(Required)</small>
+                Start Frame <small>(Required)</small>
               </label>
               {sourcePreviewImage ? (
                 <div className={styles.sourcePreview}>
@@ -2522,33 +2556,43 @@ export function VideoGenerationPage() {
                   className={styles.videoPreviewLiveBadge}
                 />
                 {isGeneratingVideo ? (
-                  <div className={styles.videoGeneratingPreview} aria-busy="true">
-                    <WandSparkles size={26} />
-                    <strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong>
-                    <span>{generationStatus === "uploading"
-                      ? generationMode === "single-image" ? "Splitting and uploading storyboard scenes…" : "Uploading scene assets…"
-                      : generationMode === "single-image" ? "Generating scenes from the storyboard sheet…" : "Your scenes are being generated in order…"}</span>
-                    <div className={styles.videoGenerationProgress}>
-                      <i style={{ width: `${generationProgress.total ? Math.round((generationProgress.completed / generationProgress.total) * 100) : 12}%` }} />
+                  <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
+                    <div className={styles.videoGeneratingPreview} aria-busy="true">
+                      <WandSparkles size={26} />
+                      <strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong>
+                      <span>{generationStatus === "uploading"
+                        ? generationMode === "single-image" ? "Splitting and uploading storyboard scenes…" : "Uploading scene assets…"
+                        : generationMode === "single-image" ? "Generating scenes from the storyboard sheet…" : "Your scenes are being generated in order…"}</span>
+                      <div className={styles.videoGenerationProgress}>
+                        <i style={{ width: `${generationProgress.total ? Math.round((generationProgress.completed / generationProgress.total) * 100) : 12}%` }} />
+                      </div>
+                      <small>{generationProgress.completed}/{generationProgress.total || generationScenes.length} scenes complete</small>
                     </div>
-                    <small>{generationProgress.completed}/{generationProgress.total || generationScenes.length} scenes complete</small>
                   </div>
                 ) : displayedVideoUrl ? (
                   <EosVideoPlayer
                     key={displayedVideoUrl}
                     src={displayedVideoUrl}
                     className={styles.generatedVideoPlayer}
+                    mediaFrameClassName={styles.videoPreviewMediaFrame}
+                    mediaFrameStyle={{ aspectRatio: previewMediaAspectRatio }}
+                    onAspectRatioChange={handlePreviewAspectRatioChange}
                     ariaLabel="Generated video"
                   />
                 ) : selectedModelOption?.previewUrl ? (
-                  <ModelPreviewMedia
-                    url={selectedModelOption.previewUrl}
-                    type={selectedModelOption.previewType}
-                    alt={`${selectedModelOption.displayName} model preview`}
-                    className={styles.generatedVideoPlayer}
-                  />
+                  <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
+                    <ModelPreviewMedia
+                      url={selectedModelOption.previewUrl}
+                      type={selectedModelOption.previewType}
+                      alt={`${selectedModelOption.displayName} model preview`}
+                      className={styles.generatedVideoPlayer}
+                      onAspectRatioChange={handlePreviewAspectRatioChange}
+                    />
+                  </div>
                 ) : (
-                  <VideoPreviewPlaceholder showActions={false} />
+                  <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
+                    <VideoPreviewPlaceholder showActions={false} />
+                  </div>
                 )}
                 {displayedVideoUrl ? <div className={styles.videoPreviewOverlayActions}>
                   <button
@@ -2892,7 +2936,7 @@ export function VideoGenerationPage() {
             ) : null}
           </div>
           <aside className={styles.settings}>
-            <SectionTitle number={generationMode === "single-image" ? "2" : "3"}>SETTINGS</SectionTitle>
+            <SectionTitle number="3">SETTINGS</SectionTitle>
             <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">
               Model <Info size={11} />
             </label>
@@ -2998,7 +3042,7 @@ export function VideoGenerationPage() {
                 <input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAudioFile(file); event.currentTarget.value = ""; }} />
               </div>
             ) : null}
-            {activeVideoTab === "image-to-video" ? (
+            {showPostAudioOptions ? (
               <div className={styles.postAudioCard}>
                 <div className={styles.settingLabel}><span>ADD AUDIO AFTER VIDEO</span><small>Optional</small></div>
                 <div className={styles.postAudioOptions} role="group" aria-label="Add audio after video">

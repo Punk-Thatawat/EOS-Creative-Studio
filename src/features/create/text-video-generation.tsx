@@ -615,13 +615,18 @@ export function TextToVideoWorkspace() {
             <p className={styles.textVideoDescription}>Describe the scene and let the selected model create the motion.</p>
           </section>
         </section>
-        <section className={styles.panel}>
-          <div className={styles.sectionTitle}><h2>1. PROMPT</h2></div>
-          <label className="block text-[10px] font-bold">
-            Prompt <small>(Required)</small>
-            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A cinematic drone shot flying through a futuristic city at night" maxLength={2000} required aria-required="true" />
+        <section className={`${styles.panel} ${styles.videoPromptPanel}`}>
+          <div className={styles.videoPromptHeading}>
+            <h2>PROMPT <small>(Required)</small></h2>
+            <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+          </div>
+          <label className={styles.videoPromptInputLabel}>
+            <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A cinematic drone shot flying through a futuristic city at night" maxLength={2000} required aria-required="true" />
           </label>
-          <span className={styles.counter}>{prompt.length} / 2000</span>
+          <div className={styles.videoPromptMeta}>
+            <span>Maximum 2,000 characters</span>
+            <span>{prompt.length.toLocaleString()} / 2,000</span>
+          </div>
           <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
           <label className="block text-[10px] font-bold">
             Negative Prompt <small>(Optional)</small>

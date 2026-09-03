@@ -1,4 +1,5 @@
-import Image from "next/image";
+/* eslint-disable @next/next/no-img-element */
+
 import Link from "next/link";
 import { MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +11,7 @@ const statusTone = { in_progress: "orange" as const, in_review: "warning" as con
 export function ProjectCard({ project }: { project: RecentProject }) {
   return <Link href={`/projects/${project.id}`} className="group block min-w-[220px] snap-start rounded-2xl border border-border bg-surface p-2 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] sm:min-w-[250px]">
     <div className={`relative h-28 overflow-hidden rounded-xl ${artClasses[project.art]}`}>
-      {project.imageSrc ? <Image src={project.imageSrc} alt="" fill sizes="(max-width: 640px) 82vw, (max-width: 1024px) 48vw, 25vw" className="object-cover transition duration-300 group-hover:scale-105" /> : null}
+      {project.imageSrc ? <img src={project.imageSrc} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105" /> : null}
       <div className="absolute left-2 top-2"><Badge tone={statusTone[project.status]}>{project.statusLabel}</Badge></div>
       <button type="button" className="absolute right-2 top-2 rounded-lg bg-white/80 p-1.5 text-foreground opacity-0 transition group-hover:opacity-100" aria-label={`More options for ${project.title}`}><MoreHorizontal size={14} /></button>
     </div>

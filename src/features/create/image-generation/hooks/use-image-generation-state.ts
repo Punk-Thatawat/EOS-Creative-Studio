@@ -816,7 +816,6 @@ export function useImageGenerationState() {
   const selectedModelCapabilities = activeModelOptions.find((item) => item.model === activeSelectedModel)?.capabilities;
   const activeModelParameters = selectedModelCapabilities?.parameters ?? [];
   const imageToImageSupportsInput = activeTab !== "Image to Image" || !activeSelectedModel || !selectedModelCapabilities || activeModelParameters.length === 0 || activeModelParameters.some((parameter) => /image|source|input/i.test(parameter)) || Boolean(selectedModelCapabilities.imagesParameter || selectedModelCapabilities.imageParameter || selectedModelCapabilities.inputImageParameter || selectedModelCapabilities.inputParameter);
-  const imageToImageSupportsStrength = activeTab !== "Image to Image" || !activeSelectedModel || !selectedModelCapabilities || activeModelParameters.length === 0 || Boolean(selectedModelCapabilities.strengthParameter) || activeModelParameters.some((parameter) => /strength|denoise|image.?strength/i.test(parameter));
   const styleTransferSupportsInput = activeTab !== "AI Style Transfer" || !activeSelectedModel || activeModelParameters.length === 0 || activeModelParameters.some((parameter) => /image|source|input/i.test(parameter)) || Boolean(selectedModelCapabilities?.referenceImagesParameter || selectedModelCapabilities?.styleImageParameter);
   const styleTransferSupportsReference = activeTab !== "AI Style Transfer" || !activeSelectedModel || activeModelParameters.length === 0 || Boolean(selectedModelCapabilities?.referenceImagesParameter || selectedModelCapabilities?.styleImageParameter) || activeModelParameters.some((parameter) => /reference|style.?image/i.test(parameter));
   const styleTransferSupportsStrength = activeTab !== "AI Style Transfer" || !activeSelectedModel || activeModelParameters.length === 0 || Boolean(selectedModelCapabilities?.strengthParameter) || activeModelParameters.some((parameter) => /strength|denoise|style.?strength/i.test(parameter));
@@ -912,7 +911,7 @@ export function useImageGenerationState() {
       case "Text to Image":
         return { feature: "text-to-image", ...shared, prompt: prompt.trim() || "Image generation", ...(style ? { style } : {}), count: effectiveCount, negativePrompt };
       case "Image to Image":
-        return { feature: "image-to-image", ...shared, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt.trim() || "Transform the source image", ...(style ? { style } : {}), ...(imageToImageSupportsStrength ? { strength: imageStrength / 100 } : {}), count: effectiveCount, negativePrompt };
+        return { feature: "image-to-image", ...shared, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt.trim() || "Transform the source image", ...(style ? { style } : {}), count: effectiveCount, negativePrompt };
       case "AI Style Transfer":
         return { feature: "style-transfer", ...shared, sourceImage: styleTransferSourceImage, ...(styleSourceMode === "preset" && styleTransferPreset ? { stylePreset: styleTransferPreset } : {}), ...(styleSourceMode === "reference" && styleReferenceImage ? { styleReferenceImage } : {}), ...(styleTransferPrompt.trim() ? { prompt: styleTransferPrompt.trim() } : {}), ...(styleTransferSupportsStrength ? { styleStrength: imageStrength / 100 } : {}), ...(styleTransferSupportsContentPreservation ? { contentPreservation: contentPreservation / 100 } : {}), count: effectiveCount, negativePrompt };
       case "AI Background":
@@ -1691,7 +1690,6 @@ export function useImageGenerationState() {
     backgroundSupportsInput,
     backgroundSupportsPrompt,
     extendSupportsInput,
-    imageToImageSupportsStrength,
     styleTransferSupportsInput,
     styleTransferSupportsReference,
     styleTransferSupportsStrength,
@@ -1978,7 +1976,7 @@ export function useImageGenerationState() {
       setImageToImageTotalCount(Number(count));
       setImageToImageCompletedCount(0);
       try {
-        const result = await createImageToImage({ workspaceId, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt, promptOptimizerEnabled, ...(style ? { style } : {}), ...(imageToImageSupportsStrength ? { strength: imageStrength } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, applyImageToImageProgress, abortController.signal);
+        const result = await createImageToImage({ workspaceId, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt, promptOptimizerEnabled, ...(style ? { style } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, applyImageToImageProgress, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
