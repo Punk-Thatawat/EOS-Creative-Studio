@@ -22,7 +22,7 @@ import {
   type LipsyncGenerationStatus,
 } from "@/lib/api/lipsync-generations";
 import { VideoResultLibrary } from "./video-result-library";
-import { VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
+import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
@@ -752,9 +752,9 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         ) : null}
       </div>
       <div className={styles.centerColumn}>
-        <section className={styles.previewPanel}>
-          <div className={styles.sectionTitle}><h2>PREVIEW</h2></div>
+        <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
           <div className={styles.videoPreview}>
+            <VideoPreviewLiveBadge />
             {generationStatus === "uploading" || generationStatus === "processing" ? (
               <div className={styles.videoGeneratingPreview} aria-busy="true">
                 <WandSparkles size={26} />
@@ -764,9 +764,9 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
                 <small>{generationProgress ? `${generationProgress}% complete` : "Working…"}</small>
               </div>
             ) : displayedVideoUrl ? (
-              <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} ariaLabel={`Generated ${workspaceLabel}`} />
+              <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={`Generated ${workspaceLabel}`} />
             ) : selectedModelOption?.previewUrl ? (
-              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} />
+              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} />
             ) : (
               <VideoPreviewPlaceholder />
             )}

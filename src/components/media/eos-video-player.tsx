@@ -37,6 +37,7 @@ export function EosVideoPlayer({
   const [muted, setMuted] = useState(initialMuted);
   const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [mediaAspectRatio, setMediaAspectRatio] = useState("16 / 9");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [videoResolution, setVideoResolution] = useState<string | null>(null);
   const [playbackFeedback, setPlaybackFeedback] = useState<{ type: "play" | "pause"; id: number } | null>(null);
@@ -160,6 +161,7 @@ export function EosVideoPlayer({
             ? `${event.currentTarget.videoWidth} × ${event.currentTarget.videoHeight}`
             : null);
           if (event.currentTarget.videoWidth && event.currentTarget.videoHeight) {
+            setMediaAspectRatio(`${event.currentTarget.videoWidth} / ${event.currentTarget.videoHeight}`);
             onAspectRatioChange?.(`${event.currentTarget.videoWidth} / ${event.currentTarget.videoHeight}`);
           }
         }}
@@ -187,7 +189,7 @@ export function EosVideoPlayer({
 
   return (
     <div className={`intro-video-player-wrap ${!paused ? "intro-video-is-playing" : ""} ${isPointerOverVideo ? "intro-video-pointer-over" : ""} ${areControlsVisible ? "intro-video-controls-visible" : ""} ${className}`} onMouseMove={handlePlayerPointerMove} onMouseLeave={() => { updatePointerOverVideo(false); if (!videoRef.current?.paused) setAreControlsVisible(false); }}>
-      {mediaFrameClassName ? <div className={`intro-video-media-frame ${mediaFrameClassName}`} style={mediaFrameStyle}>{videoElement}</div> : videoElement}
+      {mediaFrameClassName ? <div className={`intro-video-media-frame ${mediaFrameClassName}`} style={{ aspectRatio: mediaAspectRatio, ...mediaFrameStyle }}>{videoElement}</div> : videoElement}
       {playbackFeedback ? (
         <span key={playbackFeedback.id} className="intro-video-play-feedback" aria-hidden="true">
           {playbackFeedback.type === "play" ? <Play size={42} fill="currentColor" /> : <Pause size={42} fill="currentColor" />}

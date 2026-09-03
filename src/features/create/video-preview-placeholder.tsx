@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { Download, Heart, ImageIcon } from "lucide-react";
 import styles from "./video-generation-page.module.css";
@@ -43,6 +44,10 @@ export function VideoPreviewOverlayActions({ videoUrl }: VideoPreviewOverlayActi
       </button>
     </div>
   );
+}
+
+export function VideoPreviewLiveBadge() {
+  return <Image src="/generated-assets/preview-live.png" alt="Preview live" width={1536} height={1024} className={styles.videoPreviewLiveBadge} />;
 }
 
 /** Shared empty state for every video-generation preview. */

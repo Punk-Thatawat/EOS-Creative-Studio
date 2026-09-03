@@ -45,7 +45,7 @@ import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { MotionTransferWorkspace } from "./motion-transfer-generation";
 import { ExtendVideoWorkspace } from "./extend-video-generation";
-import { VideoPreviewPlaceholder } from "./video-preview-placeholder";
+import { VideoPreviewLiveBadge, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import styles from "./video-generation-page.module.css";
@@ -1102,40 +1102,62 @@ export function VideoGenerationPage() {
     });
 
     const readPersistedStoryboard = (): { generationId: string; completed: number; total: number } | null => {
-      try {
-        const raw = window.localStorage.getItem(floatingGenerationProgressStorageKey);
-        const parsed = raw ? JSON.parse(raw) as unknown : null;
-        if (!Array.isArray(parsed)) return null;
-        const candidates = parsed.filter((item): item is {
-          feature?: unknown;
-          pending?: { generationId?: unknown; pollUrl?: unknown; status?: unknown; completedCount?: unknown; totalCount?: unknown };
-        } => Boolean(item) && typeof item === "object")
-          .filter((item) => item.feature === "image-to-video" && item.pending?.status !== "completed"
-            && typeof item.pending?.generationId === "string"
-            && typeof item.pending?.pollUrl === "string"
-            && item.pending.pollUrl.includes("/generations/video/image-to-video/"));
-        const item = candidates[candidates.length - 1];
-        const pending = item?.pending;
-        if (!pending || typeof pending.generationId !== "string") return null;
+      const values: unknown[] = [];
+      const readStorage = (storage: Storage, key: string, expectsArray: boolean) => {
+        try {
+          const raw = storage.getItem(key);
+          if (!raw) return;
+          const parsed = JSON.parse(raw) as unknown;
+          if (expectsArray && Array.isArray(parsed)) values.push(...parsed);
+          else if (!expectsArray) values.push(parsed);
+        } catch {
+          // Storage can be unavailable while auth/session hydration is in progress.
+        }
+      };
+
+      readStorage(window.localStorage, floatingGenerationProgressStorageKey, true);
+      readStorage(window.sessionStorage, "eos.generation.pending.image-to-video", false);
+
+      const candidates = values.map((value) => {
+        if (!value || typeof value !== "object") return null;
+        const item = value as { feature?: unknown; pending?: unknown };
+        const pending = item.pending && typeof item.pending === "object" ? item.pending as {
+          generationId?: unknown;
+          pollUrl?: unknown;
+          status?: unknown;
+          completedCount?: unknown;
+          totalCount?: unknown;
+        } : value as {
+          generationId?: unknown;
+          pollUrl?: unknown;
+          status?: unknown;
+          completedCount?: unknown;
+          totalCount?: unknown;
+        };
+        if ((item.feature !== undefined && item.feature !== "image-to-video")
+          || (pending.status !== "queued" && pending.status !== "processing")
+          || typeof pending.generationId !== "string"
+          || typeof pending.pollUrl !== "string"
+          || !pending.pollUrl.includes("/generations/video/image-to-video/")) return null;
         return {
           generationId: pending.generationId,
           completed: typeof pending.completedCount === "number" ? pending.completedCount : 0,
-          total: typeof pending.totalCount === "number" ? pending.totalCount : 0,
+          total: typeof pending.totalCount === "number" ? Math.max(1, pending.totalCount) : 1,
         };
-      } catch {
-        return null;
-      }
+      }).filter((item): item is { generationId: string; completed: number; total: number } => Boolean(item));
+
+      return candidates[candidates.length - 1] ?? null;
     };
 
-    const applyProcessingStatus = (status: Awaited<ReturnType<typeof getVideoStoryboardStatus>>, generationId: string) => {
+    const applyProcessingStatus = (status: Awaited<ReturnType<typeof getVideoStoryboardStatus>>, generationId: string, fallback: { completed: number; total: number }) => {
       if (disposed) return;
       setActiveStoryboardId(status.storyboardId ?? generationId);
       setGenerationStatus("processing");
       setGenerationError(null);
       setIsCancellingVideo(false);
       setGenerationProgress({
-        completed: status.completedScenes ?? 0,
-        total: status.totalScenes ?? 0,
+        completed: status.completedScenes ?? fallback.completed,
+        total: status.totalScenes ?? fallback.total,
       });
       setNotice("Generating video…");
     };
@@ -1144,16 +1166,34 @@ export function VideoGenerationPage() {
       const persisted = readPersistedStoryboard();
       if (!persisted) return;
 
-      let status = await getVideoStoryboardStatus(persisted.generationId);
-      if (disposed) return;
-      if (status.status !== "processing" && status.status !== "queued") return;
+      setActiveStoryboardId(persisted.generationId);
+      setGenerationStatus("processing");
+      setGenerationError(null);
+      setGenerationProgress({ completed: persisted.completed, total: persisted.total });
+      setNotice("Generating video…");
 
-      applyProcessingStatus(status, persisted.generationId);
+      const fetchStatusWithRetry = async (): Promise<Awaited<ReturnType<typeof getVideoStoryboardStatus>> | null> => {
+        while (!disposed) {
+          try {
+            return await getVideoStoryboardStatus(persisted.generationId);
+          } catch {
+            await waitForNextPoll();
+          }
+        }
+        return null;
+      };
+
+      let status = await fetchStatusWithRetry();
+      if (!status) return;
+      if (disposed) return;
+
+      if (status.status === "processing" || status.status === "queued") applyProcessingStatus(status, persisted.generationId, persisted);
       while (!disposed && status.status !== "completed" && status.status !== "failed" && status.status !== "cancelled") {
         await waitForNextPoll();
         if (disposed) return;
-        status = await getVideoStoryboardStatus(persisted.generationId);
-        if (status.status === "processing" || status.status === "queued") applyProcessingStatus(status, persisted.generationId);
+        status = await fetchStatusWithRetry();
+        if (!status) return;
+        if (status.status === "processing" || status.status === "queued") applyProcessingStatus(status, persisted.generationId, persisted);
       }
       if (disposed) return;
 
@@ -1176,7 +1216,7 @@ export function VideoGenerationPage() {
     };
 
     void restoreProcessingStoryboard().catch(() => {
-      if (!disposed) setActiveStoryboardId(null);
+      if (!disposed) setNotice("Generating video…");
     });
     return () => {
       disposed = true;
@@ -2596,13 +2636,7 @@ export function VideoGenerationPage() {
             <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
               <SectionTitle>PREVIEW</SectionTitle>
               <div className={styles.videoPreview}>
-                <Image
-                  src="/generated-assets/preview-live.png"
-                  alt="Preview live"
-                  width={1536}
-                  height={1024}
-                  className={styles.videoPreviewLiveBadge}
-                />
+                <VideoPreviewLiveBadge />
                 {isGeneratingVideo ? (
                   <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: "16 / 9" }}>
                     <div className={styles.videoGeneratingPreview} aria-busy="true">

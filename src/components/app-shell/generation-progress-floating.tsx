@@ -297,6 +297,9 @@ export function GenerationProgressFloating() {
   const pathname = hydrated ? pathnameFromRouter : "";
   const isImageCreatePage = pathname === "/create/image";
   const router = useRouter();
+  // Keep the server render and the first client render identical. Browser
+  // storage is hydrated by the effects below after React has completed the
+  // hydration comparison.
   const [active, setActive] = useState<ActivePendingGeneration[]>([]);
   const [isCenterOpen, setIsCenterOpen] = useState(false);
   const pollingRef = useRef(new Map<string, AbortController>());

@@ -18,7 +18,7 @@ import {
   type TextVideoGenerationStatus,
 } from "@/lib/api/text-video-generations";
 import { VideoResultLibrary } from "./video-result-library";
-import { VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
+import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
@@ -625,9 +625,9 @@ export function TextToVideoWorkspace() {
         ) : null}
       </div>
       <div className={styles.centerColumn}>
-        <section className={styles.previewPanel}>
-          <div className={styles.sectionTitle}><h2>PREVIEW</h2></div>
+        <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
           <div className={styles.videoPreview}>
+            <VideoPreviewLiveBadge />
             {isGenerating ? (
               <div className={styles.videoGeneratingPreview} aria-busy="true">
                 <WandSparkles size={26} />
@@ -637,9 +637,9 @@ export function TextToVideoWorkspace() {
                 <small>{generationProgress ? `${generationProgress}% complete` : "Working…"}</small>
               </div>
             ) : displayedVideoUrl ? (
-              <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={styles.generatedVideoPlayer} ariaLabel="Generated text-to-video" />
+              <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={styles.generatedVideoPlayer} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel="Generated text-to-video" />
             ) : selectedModelOption?.previewUrl ? (
-              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={styles.generatedVideoPlayer} />
+              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={styles.generatedVideoPlayer} frameClassName={styles.videoPreviewMediaFrame} />
             ) : (
               <VideoPreviewPlaceholder />
             )}
