@@ -16,7 +16,9 @@ function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature:
     try {
       const tutorials = await listPublicTutorials(feature);
       const overview = tutorials.find((item) => !item.mode && item.enabled) ?? null;
-      const selected = mode ? tutorials.find((item) => item.mode === mode && item.enabled) ?? overview : overview ?? tutorials.find((item) => item.enabled) ?? null;
+      const selected = mode
+        ? tutorials.find((item) => item.mode === mode && item.enabled) ?? null
+        : overview;
       setTutorial(selected);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load tutorial");
