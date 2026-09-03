@@ -872,7 +872,7 @@ export function VideoGenerationPage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [postAudioSfxEnabled, setPostAudioSfxEnabled] = useState(false);
   const [postAudioMusicEnabled, setPostAudioMusicEnabled] = useState(false);
-  const [generationMode, setGenerationMode] = useState<GenerationMode>("single-image");
+  const [generationMode, setGenerationMode] = useState<GenerationMode>("image-to-video");
   const [generationModeLabels, setGenerationModeLabels] = useState<Record<string, string>>({});
   const [videoMode, setVideoMode] =
     useState<(typeof videoModeOptions)[number]["value"]>("storyboard");

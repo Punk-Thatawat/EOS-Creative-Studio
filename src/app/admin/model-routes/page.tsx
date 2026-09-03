@@ -1254,7 +1254,7 @@ function AdminModelRoutesContent() {
 
          {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
 
-            <FeatureTutorialPanel feature={tutorialFeature} featureName={tutorialFeatureName} />
+            <FeatureTutorialPanel feature={tutorialFeature} featureName={tutorialFeatureName} includeFeatureOverview={feature !== "image-to-video"} />
             {feature === "audio" ? <AudioProviderSettingsPanel initialFeature={audioFeatureParam ?? undefined} /> : null}
         {feature === "image-to-video" ? <VideoStoryboardSettingsPanel catalog={catalog} routeOverview={routeOverview} onRoutesChanged={load} onDetails={setDetailsModel} /> : null}
 

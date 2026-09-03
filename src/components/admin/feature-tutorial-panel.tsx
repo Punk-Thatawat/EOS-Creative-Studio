@@ -155,7 +155,7 @@ function TutorialDialog({ slot, busy, onClose, onSaved, onRemoved, onBusyChange 
   </div>;
 }
 
-export function FeatureTutorialPanel({ feature, featureName }: { feature: string; featureName: string }) {
+export function FeatureTutorialPanel({ feature, featureName, includeFeatureOverview = true }: { feature: string; featureName: string; includeFeatureOverview?: boolean }) {
   const [slots, setSlots] = useState<AdminTutorialSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -180,8 +180,9 @@ export function FeatureTutorialPanel({ feature, featureName }: { feature: string
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const activeSlot = useMemo(() => slots.find((slot) => slotKey(slot) === activeKey) ?? null, [activeKey, slots]);
-  const configuredCount = slots.filter((slot) => Boolean(slot.videoStorageKey)).length;
+  const visibleSlots = includeFeatureOverview ? slots : slots.filter((slot) => Boolean(slot.mode));
+  const activeSlot = useMemo(() => visibleSlots.find((slot) => slotKey(slot) === activeKey) ?? null, [activeKey, visibleSlots]);
+  const configuredCount = visibleSlots.filter((slot) => Boolean(slot.videoStorageKey)).length;
   const updateSlot = (next: AdminTutorialSlot) => setSlots((current) => current.map((slot) => slotKey(slot) === slotKey(next) ? next : slot));
 
   return <section aria-labelledby="feature-tutorial-heading" className="mb-7 rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
@@ -192,7 +193,7 @@ export function FeatureTutorialPanel({ feature, featureName }: { feature: string
 
     {error ? <div className="mt-4 flex items-start gap-2 rounded-xl border border-[#efc2c2] bg-[#fff6f6] p-3 text-xs text-[#9f3b3b]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={16} /><p>{error}</p></div> : null}
     {message ? <div className="mt-4 flex items-center gap-2 rounded-xl border border-[#bfe1cc] bg-[#f3fbf5] p-3 text-xs font-semibold text-[#347454]" role="status"><CheckCircle2 size={16} /><p>{message}</p></div> : null}
-    {loading ? <div className="mt-4 flex items-center justify-center rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-xs text-muted-foreground"><LoaderCircle size={16} className="mr-2 animate-spin" /> Loading tutorial slots...</div> : slots.length ? <div className="mt-4 divide-y divide-border rounded-2xl border border-border bg-[#fcfaf8] px-3">{slots.map((slot) => <TutorialSlotRow key={slotKey(slot)} slot={slot} busy={busyKey === slotKey(slot)} onOpen={(current) => { setActiveKey(slotKey(current)); setMessage(""); setError(""); }} />)}</div> : <div className="mt-4 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">No tutorial slots available for this feature.</div>}
+    {loading ? <div className="mt-4 flex items-center justify-center rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-xs text-muted-foreground"><LoaderCircle size={16} className="mr-2 animate-spin" /> Loading tutorial slots...</div> : visibleSlots.length ? <div className="mt-4 divide-y divide-border rounded-2xl border border-border bg-[#fcfaf8] px-3">{visibleSlots.map((slot) => <TutorialSlotRow key={slotKey(slot)} slot={slot} busy={busyKey === slotKey(slot)} onOpen={(current) => { setActiveKey(slotKey(current)); setMessage(""); setError(""); }} />)}</div> : <div className="mt-4 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">No tutorial slots available for this feature.</div>}
     <p className="mt-3 text-[10px] text-muted-foreground">กดปุ่มด้านขวาเพื่อเปิด popup สำหรับดูวิดีโอ อัปโหลด และ Save</p>
     {activeSlot ? <TutorialDialog key={slotKey(activeSlot)} slot={activeSlot} busy={busyKey === slotKey(activeSlot)} onClose={() => setActiveKey(null)} onSaved={(saved) => { updateSlot(saved); setMessage(`${saved.featureName}${saved.modeName ? ` · ${saved.modeName}` : ""} tutorial saved.`); }} onRemoved={(removed) => { updateSlot(removed); setMessage(`${removed.featureName}${removed.modeName ? ` · ${removed.modeName}` : ""} tutorial removed.`); }} onBusyChange={(isBusy) => setBusyKey(isBusy ? slotKey(activeSlot) : null)} /> : null}
   </section>;
