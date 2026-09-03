@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useImageGenerationState } from "../hooks/use-image-generation-state";
 import { cx } from "../styles";
 import { ImageGenerationTabs } from "./image-generation-tabs";
+import { ImageTutorialButton } from "./image-tutorial-button";
 import { PowerUpTools } from "./power-up-tools";
 import { PreviewPanel } from "./preview-panel";
 import { PromptPanel } from "./prompt-panel";
@@ -52,6 +53,8 @@ export function ImageGenerationPage() {
   const isBackgroundTab = state.activeTab === "AI Background";
   const isUpscaleTab = state.activeTab === "Upscale";
   const isExtendTab = state.activeTab === "Extend Image";
+  const activeTutorialFeature = isTextToImageTab ? "text-to-image" : isImageToImageTab ? "image-to-image" : isStyleTransferTab ? "style-transfer" : isBackgroundTab ? "background-removal" : isUpscaleTab ? "upscale" : "extend-image";
+  const activeTutorialMode = isBackgroundTab ? state.backgroundMode : undefined;
   const stylePresetFeature = isBackgroundTab ? "background-removal" : isImageToImageTab ? "image-to-image" : "text-to-image";
   const activeStylePresetOptions = state.stylePresetOptions.filter((preset) => preset.features.includes(stylePresetFeature));
   const styleTransferPresetOptions = state.styleTransferPresetOptions;
@@ -137,6 +140,7 @@ export function ImageGenerationPage() {
     <div className={cx("gen-workspace")}>
       <PromptPanel
         activeTab={state.activeTab}
+        tutorialButton={<ImageTutorialButton feature={activeTutorialFeature} featureName={state.activeTab} mode={activeTutorialMode} />}
         prompt={isStyleTransferTab ? state.styleTransferPrompt : isImageToImageTab ? state.imageToImagePrompt : state.prompt}
         negativePrompt={state.negativePrompt}
         style={state.style}

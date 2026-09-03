@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, CircleOff, Info } from "lucide-react";
 import { textToImagePromptMaxLength, type ExtendAmount, type ExtendDirection, type ImageGenerationTab, type StylePreset, type StyleSourceMode, type StyleTransferPreset } from "../config";
 import type { GenerationStylePreset } from "@/lib/api/style-presets";
@@ -14,6 +15,7 @@ import { PromptOptimizerToggle } from "./prompt-optimizer-toggle";
 
 type PromptPanelProps = {
   activeTab: ImageGenerationTab;
+  tutorialButton?: ReactNode;
   prompt: string;
   negativePrompt: string;
   style: StylePreset | null;
@@ -81,7 +83,7 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
+export function PromptPanel({ activeTab, tutorialButton, prompt, negativePrompt, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
   const imageToImage = activeTab === "Image to Image";
   const styleTransfer = activeTab === "AI Style Transfer";
   const background = activeTab === "AI Background";
@@ -131,20 +133,20 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePre
   };
 
   if (background) {
-    return <BackgroundPanel backgroundMode={backgroundMode} sourceImage={sourceImage} backgroundReferenceImage={backgroundReferenceImage} backgroundPrompt={backgroundPrompt} backgroundColor={backgroundColor} preserveSubject={preserveSubject} edgeCleanup={edgeCleanup} addShadow={addShadow} matchLighting={matchLighting} style={style} stylePresetOptions={stylePresetOptions} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} backgroundSupportsInput={backgroundSupportsInput} backgroundSupportsPrompt={backgroundSupportsPrompt} onBackgroundModeChange={onBackgroundModeChange} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onBackgroundReferenceImageChange={onBackgroundReferenceImageChange} onBackgroundReferenceImageClear={onBackgroundReferenceImageClear} onBackgroundPromptChange={onBackgroundPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onBackgroundColorChange={onBackgroundColorChange} onPreserveSubjectChange={onPreserveSubjectChange} onEdgeCleanupChange={onEdgeCleanupChange} onAddShadowChange={onAddShadowChange} onMatchLightingChange={onMatchLightingChange} onStyleChange={onStyleChange} />;
+    return <BackgroundPanel tutorialButton={tutorialButton} backgroundMode={backgroundMode} sourceImage={sourceImage} backgroundReferenceImage={backgroundReferenceImage} backgroundPrompt={backgroundPrompt} backgroundColor={backgroundColor} preserveSubject={preserveSubject} edgeCleanup={edgeCleanup} addShadow={addShadow} matchLighting={matchLighting} style={style} stylePresetOptions={stylePresetOptions} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} backgroundSupportsInput={backgroundSupportsInput} backgroundSupportsPrompt={backgroundSupportsPrompt} onBackgroundModeChange={onBackgroundModeChange} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onBackgroundReferenceImageChange={onBackgroundReferenceImageChange} onBackgroundReferenceImageClear={onBackgroundReferenceImageClear} onBackgroundPromptChange={onBackgroundPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onBackgroundColorChange={onBackgroundColorChange} onPreserveSubjectChange={onPreserveSubjectChange} onEdgeCleanupChange={onEdgeCleanupChange} onAddShadowChange={onAddShadowChange} onMatchLightingChange={onMatchLightingChange} onStyleChange={onStyleChange} />;
   }
 
   if (extend) {
-    return <ExtendPanel sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} prompt={extendPrompt} negativePrompt={negativePrompt} direction={extendDirection} amount={extendAmount} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onPromptChange={onExtendPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onNegativePromptChange={onNegativePromptChange} onDirectionChange={onExtendDirectionChange} onAmountChange={onExtendAmountChange} />;
+    return <ExtendPanel tutorialButton={tutorialButton} sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} prompt={extendPrompt} negativePrompt={negativePrompt} direction={extendDirection} amount={extendAmount} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onPromptChange={onExtendPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onNegativePromptChange={onNegativePromptChange} onDirectionChange={onExtendDirectionChange} onAmountChange={onExtendAmountChange} />;
   }
 
   if (upscale) {
-    return <UpscalePanel sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} />;
+    return <UpscalePanel tutorialButton={tutorialButton} sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} />;
   }
 
   if (styleTransfer) {
     return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-style-transfer-panel")}>
-      <div className={cx("gen-panel-title")}><h2>PROMPT <em>(Optional)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
+      <div className={cx("gen-prompt-top-action")}>{tutorialButton}</div><div className={cx("gen-panel-title")}><h2>PROMPT <em>(Optional)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
       <PromptField id="gen-style-transfer-prompt" value={prompt} onChange={onPromptChange} placeholder="Apply soft cinematic lighting and detailed brush texture" ariaLabel="Optional style transfer prompt" wrapperClassName={cx("gen-textarea-wrap", "gen-style-transfer-prompt")} metaClassName={cx("gen-prompt-meta")} />
       <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
 
@@ -185,7 +187,7 @@ export function PromptPanel({ activeTab, prompt, negativePrompt, style, stylePre
   }
 
   return <aside className={cx("gen-panel", "gen-prompt-panel", imageToImage && "is-image-to-image")}>
-    <div className={cx("gen-panel-title")}><h2>PROMPT <em>(Required)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
+    <div className={cx("gen-prompt-top-action")}>{tutorialButton}</div><div className={cx("gen-panel-title")}><h2>PROMPT <em>(Required)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
     <PromptField id="gen-prompt-input" value={prompt} onChange={onPromptChange} placeholder={imageToImage ? "Describe how you want to transform the image" : undefined} ariaLabel={imageToImage ? "Describe how you want to transform the image" : "Prompt"} maxLength={textToImagePromptMaxLength} required={!imageToImage} wrapperClassName={cx("gen-textarea-wrap")} metaClassName={cx("gen-prompt-meta")} />
     <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
     {imageToImage && <><div className={cx("gen-section-heading")}><h3>REFERENCE IMAGES <em>(Required{maxSourceImages > 1 ? ` · up to ${maxSourceImages}` : ""})</em></h3></div><SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} imageUrls={sourceImages} onImagesChange={onSourceImagesChange} maxImages={maxSourceImages} purpose="content" feature="image-to-image" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} /></>}

@@ -30,6 +30,7 @@ import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
+import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 
 type PeopleSchemaProperty = {
   type?: string;
@@ -667,6 +668,9 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       <div className={styles.leftColumn}>
         <section className={styles.panel}>
           <section className={styles.videoModePanel} aria-labelledby={`${workspaceFeature}-title`}>
+            <div className={styles.videoModeTutorial}>
+              <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? "Lipsync" : "People Video"} />
+            </div>
             <div className={styles.videoModeHeading}><h2 id={`${workspaceFeature}-title`}>{isLipsync ? "LIPSYNC" : "PEOPLE VIDEO"}</h2><Info size={11} /></div>
             <div className={styles.featureIdentity}>
               <span className={styles.featureIdentityEyebrow}>{featureGuide.eyebrow}</span>

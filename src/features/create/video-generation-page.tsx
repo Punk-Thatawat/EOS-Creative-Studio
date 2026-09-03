@@ -51,6 +51,7 @@ import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
+import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 
 const videoModes = [
   "Image to Video",
@@ -60,24 +61,6 @@ const videoModes = [
   "Lipsync",
   "Extend Video",
 ] as const;
-const tutorials = [
-  { title: "Quick Start Guide", subtitle: "", duration: "2:15" },
-  {
-    title: "Prompt Like a Pro",
-    subtitle: "Writing Better Prompts",
-    duration: "4:08",
-  },
-  { title: "Shot Magic", subtitle: "Camera & Movement Tips", duration: "3:42" },
-  { title: "Lipsync 101", subtitle: "Make It Talk", duration: "3:05" },
-  { title: "Sound On", subtitle: "Add Audio & Ambience", duration: "2:58" },
-];
-const tutorialImages = [
-  "/generated-assets/style-cinematic.png",
-  "/generated-assets/recent-6.png",
-  "/generated-assets/recent-2.png",
-  "/generated-assets/recent-5.png",
-  "/generated-assets/preview-live.png",
-];
 const floatingGenerationProgressStorageKey = "eos.generation.progress.cards";
 const videoModeOptions = [
   {
@@ -1601,6 +1584,14 @@ export function VideoGenerationPage() {
     nextMode: GenerationMode,
   ) => {
     setGenerationMode(nextMode);
+    // Clear the previous route's selection before the new model list loads.
+    // This prevents a Reference to Video model from being quoted against the
+    // Image to Video route during the mode transition.
+    setModels([]);
+    setSelectedModel("");
+    setModelParams({});
+    setModelsError(null);
+    setModelsLoading(true);
     setActiveSceneIndex(0);
     if (nextMode !== "single-image" && storyboardSheetFile) {
       const originalSheet = storyboardSheetFile;
@@ -1677,7 +1668,7 @@ export function VideoGenerationPage() {
   const shouldAutoUpscaleStoryboard = generationMode === "single-image" && Boolean(storyboardQualityNote) && generationScenes.length > 0;
   const requestModelParams = modelParamsForGeneration(modelParams, generationMode, { omitSeed: true });
   const creditQuoteInput: Omit<VideoGenerationInput, "idempotencyKey"> | null = (() => {
-    if (activeVideoTab !== "image-to-video" || !selectedModel || generationScenes.length === 0) return null;
+    if (activeVideoTab !== "image-to-video" || !selectedModelOption || generationScenes.length === 0) return null;
     const scenes = generationScenes.map((scene, index) => {
       const startFrameSource: StartFrameSource = index === 0 || videoMode === "storyboard"
         ? "manual"
@@ -1930,7 +1921,7 @@ export function VideoGenerationPage() {
         : null;
   const videoValidationMessage = modelsLoading
     ? "Loading model options..."
-    : !selectedModel
+    : !selectedModel || !selectedModelOption
       ? "Select a video model before generating."
       : generationMode === "reference-to-video" && !supportsReferenceImages
         ? "The selected model does not support reference images. Choose a compatible model."
@@ -2002,7 +1993,7 @@ export function VideoGenerationPage() {
     if (cancelRequestedRef.current) throw new Error("Video generation was cancelled");
   };
   const handleGenerate = async () => {
-    if (!selectedModel) {
+    if (!selectedModel || !selectedModelOption) {
       setGenerationError("Select a video model first.");
       return;
     }
@@ -2310,6 +2301,13 @@ export function VideoGenerationPage() {
                 className={styles.videoModePanel}
                 aria-labelledby="video-mode-title"
               >
+                <div className={styles.videoModeTutorial}>
+                  <ImageTutorialButton
+                    feature="image-to-video"
+                    featureName="Image to Video"
+                    mode={generationMode}
+                  />
+                </div>
                 <div className={styles.videoModeHeading}>
                   <h2 id="video-mode-title">GENERATION MODE</h2>
                   <Info size={11} />
@@ -2556,7 +2554,7 @@ export function VideoGenerationPage() {
                   className={styles.videoPreviewLiveBadge}
                 />
                 {isGeneratingVideo ? (
-                  <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
+                  <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: "16 / 9" }}>
                     <div className={styles.videoGeneratingPreview} aria-busy="true">
                       <WandSparkles size={26} />
                       <strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong>
@@ -3203,36 +3201,6 @@ export function VideoGenerationPage() {
               <p className={styles.generationProgress}>{generationProgress.completed}/{generationProgress.total} scenes complete</p>
             ) : null}
           </aside>
-          <section className={styles.tutorials}>
-            <div className={styles.tutorialTitle}>
-              <h2>
-                TUTORIAL &amp; IDEAS
-                <span className={styles.annotation} aria-hidden="true" />
-              </h2>
-              <a href="#tutorials">View all tutorials →</a>
-            </div>
-            <div className={styles.tutorialRow}>
-              {tutorials.map((item, index) => (
-                <button type="button" key={item.title}>
-                  <Image
-                    src={tutorialImages[index] ?? tutorialImages[0]}
-                    alt=""
-                    width={130}
-                    height={55}
-                    className="h-[55px] w-full object-cover"
-                  />
-                  <b>{item.title}</b>
-                  {item.subtitle ? <small>{item.subtitle}</small> : null}
-                  <time>{item.duration}</time>
-                </button>
-              ))}
-              <button type="button" className={styles.inspirationCard}>
-                <b>NEED INSPIRATION?</b>
-                <span>Explore Templates</span>
-                <i>→</i>
-              </button>
-            </div>
-          </section>
         </div>}
       </div>
       {isSceneModalOpen ? (

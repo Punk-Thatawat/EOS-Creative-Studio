@@ -23,6 +23,7 @@ import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
+import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 
 type MotionSchemaProperty = {
   type?: string;
@@ -397,7 +398,7 @@ export function MotionTransferWorkspace() {
   return (
     <div className={styles.columns}>
       <div className={styles.leftColumn}>
-        <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">MOTION TRANSFER</h2><Info size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{motionGuide.eyebrow}</span><p className={styles.textVideoDescription}>{motionGuide.description}</p><div className={styles.featurePills}>{motionGuide.chips.map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{motionGuide.note}</small></div></section></section>
+        <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="motion-transfer" featureName="Motion Transfer" /></div><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">MOTION TRANSFER</h2><Info size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{motionGuide.eyebrow}</span><p className={styles.textVideoDescription}>{motionGuide.description}</p><div className={styles.featurePills}>{motionGuide.chips.map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{motionGuide.note}</small></div></section></section>
         <section className={styles.panel}>
           <MotionSectionTitle number="1">CHARACTER IMAGE</MotionSectionTitle>
           <div className={`${styles.peopleSourcePreview} ${!sourceImage ? styles.peopleSourceUploadEmpty : ""}`}>{sourceImage ? <div className={styles.peopleSourceMedia}><Image src={sourceImage.url} alt="Source character" fill unoptimized className="object-cover" /><button type="button" onClick={() => setSourceImage(null)} aria-label="Remove source image"><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => document.getElementById("motion-source-image")?.click()}><CloudUpload size={23} /><strong>Upload Image</strong><small>PNG / JPG / WEBP</small></button>}</div>

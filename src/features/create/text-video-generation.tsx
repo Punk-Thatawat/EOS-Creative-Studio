@@ -26,6 +26,7 @@ import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
+import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 
 type SchemaProperty = {
   type?: string;
@@ -80,14 +81,6 @@ const textCoreParameterNames = new Set([
   "referenceImages",
   "reference_images",
 ]);
-
-const textTutorials = [
-  { title: "Quick Start Guide", subtitle: "", duration: "2:15", image: "/generated-assets/style-cinematic.png" },
-  { title: "Prompt Like a Pro", subtitle: "Writing Better Prompts", duration: "4:08", image: "/generated-assets/recent-6.png" },
-  { title: "Shot Magic", subtitle: "Camera & Movement Tips", duration: "3:42", image: "/generated-assets/recent-2.png" },
-  { title: "Lipsync 101", subtitle: "Make It Talk", duration: "3:05", image: "/generated-assets/recent-5.png" },
-  { title: "Sound On", subtitle: "Add Audio & Ambience", duration: "2:58", image: "/generated-assets/preview-live.png" },
-];
 
 function schemaProperties(model: GenerationModelOption | undefined): Record<string, SchemaProperty> {
   const properties = (model?.capabilities.apiSchema?.request_schema?.properties ?? {}) as Record<string, SchemaProperty>;
@@ -276,32 +269,6 @@ function outputVideoUrl(payload: TextVideoGenerationResponse | TextVideoGenerati
   if (typeof payload.finalVideoUrl === "string" && payload.finalVideoUrl) return payload.finalVideoUrl;
   if (typeof payload.videoUrl === "string" && payload.videoUrl) return payload.videoUrl;
   return null;
-}
-
-function TextVideoTutorials() {
-  return (
-    <section className={styles.tutorials}>
-      <div className={styles.tutorialTitle}>
-        <h2>TUTORIAL &amp; IDEAS</h2>
-        <a href="#tutorials">View all tutorials →</a>
-      </div>
-      <div className={styles.tutorialRow}>
-        {textTutorials.map((item) => (
-          <button type="button" key={item.title}>
-            <Image src={item.image} alt="" width={130} height={55} className="h-[55px] w-full object-cover" />
-            <b>{item.title}</b>
-            {item.subtitle ? <small>{item.subtitle}</small> : null}
-            <time>{item.duration}</time>
-          </button>
-        ))}
-        <button type="button" className={styles.inspirationCard}>
-          <b>NEED INSPIRATION?</b>
-          <span>Explore Templates</span>
-          <i>→</i>
-        </button>
-      </div>
-    </section>
-  );
 }
 
 export function TextToVideoWorkspace() {
@@ -608,6 +575,9 @@ export function TextToVideoWorkspace() {
       <div className={styles.leftColumn}>
         <section className={styles.panel}>
           <section className={styles.videoModePanel} aria-labelledby="text-video-title">
+            <div className={styles.videoModeTutorial}>
+              <ImageTutorialButton feature="text-to-video" featureName="Text to Video" />
+            </div>
             <div className={styles.videoModeHeading}>
               <h2 id="text-video-title">TEXT TO VIDEO</h2>
               <Info size={11} />
@@ -726,7 +696,6 @@ export function TextToVideoWorkspace() {
         </VideoCreditEstimate>
         {generationStatus === "failed" || generationStatus === "cancelled" ? <button type="button" className={styles.textVideoRetry} onClick={() => void handleGenerate()}><RotateCcw size={13} /> RETRY</button> : null}
       </aside>
-      <TextVideoTutorials />
     </div>
   );
 }

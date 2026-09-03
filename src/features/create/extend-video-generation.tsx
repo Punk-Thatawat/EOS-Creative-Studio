@@ -22,6 +22,7 @@ import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
+import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 
 type SchemaProperty = {
   type?: string;
@@ -255,7 +256,7 @@ export function ExtendVideoWorkspace() {
   } : null);
   return <div className={styles.columns}>
     <div className={styles.leftColumn}>
-      <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="extend-video-title"><div className={styles.videoModeHeading}><h2 id="extend-video-title">EXTEND VIDEO</h2><Info size={11} /></div><p className={styles.textVideoDescription}>Continue an existing video with a new prompt-guided segment.</p></section></section>
+      <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="extend-video-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="extend-video" featureName="Extend Video" /></div><div className={styles.videoModeHeading}><h2 id="extend-video-title">EXTEND VIDEO</h2><Info size={11} /></div><p className={styles.textVideoDescription}>Continue an existing video with a new prompt-guided segment.</p></section></section>
       <section className={styles.panel}><div className={styles.sectionTitle}><h2>1. SOURCE VIDEO</h2></div><div className={`${styles.peopleSourcePreview} ${!sourceVideo ? styles.peopleSourceUploadEmpty : ""}`}>{sourceVideo ? <div className={styles.peopleSourceMedia}><video src={sourceVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setSourceVideo(null)} aria-label="Remove source video"><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => sourceInputRef.current?.click()}><CloudUpload size={23} /><strong>Upload Video</strong><small>MP4 / WEBM</small></button>}</div><input ref={sourceInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "video"); event.currentTarget.value = ""; }} /></section>
       <section className={`${styles.panel} ${styles.videoPromptPanel}`}>
         <div className={styles.videoPromptHeading}>

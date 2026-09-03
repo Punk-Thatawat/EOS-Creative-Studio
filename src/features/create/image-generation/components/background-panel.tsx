@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Eraser, Info, Upload, WandSparkles } from "lucide-react";
+import type { ReactNode } from "react";
 import { backgroundModes, type BackgroundMode, type StylePreset } from "../config";
 import type { GenerationStylePreset } from "@/lib/api/style-presets";
 import type { ImageUploadConstraints } from "@/lib/media/upload-validation";
@@ -11,6 +12,7 @@ import { SourceImageUpload } from "./source-image-upload";
 import { PromptOptimizerToggle } from "./prompt-optimizer-toggle";
 
 type BackgroundPanelProps = {
+  tutorialButton?: ReactNode;
   backgroundMode: BackgroundMode;
   sourceImage: string | null;
   backgroundReferenceImage: string | null;
@@ -53,9 +55,9 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function BackgroundPanel({ backgroundMode, sourceImage, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, style, stylePresetOptions, workspaceId, imageUploadConstraints, backgroundSupportsInput, backgroundSupportsPrompt, onBackgroundModeChange, onSourceImageChange, onSourceImageClear, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onStyleChange }: BackgroundPanelProps) {
+export function BackgroundPanel({ tutorialButton, backgroundMode, sourceImage, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, style, stylePresetOptions, workspaceId, imageUploadConstraints, backgroundSupportsInput, backgroundSupportsPrompt, onBackgroundModeChange, onSourceImageChange, onSourceImageClear, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onStyleChange }: BackgroundPanelProps) {
   return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-background-panel")}>
-    <div className={cx("gen-section-heading")}><h3>MODE</h3><Info size={12} /></div>
+    <div className={cx("gen-prompt-top-action")}>{tutorialButton}</div><div className={cx("gen-section-heading")}><h3>MODE</h3><Info size={12} /></div>
     <BackgroundModeSelector value={backgroundMode} onChange={onBackgroundModeChange} />
 
     {(backgroundMode === "replace" || backgroundMode === "generate") && backgroundSupportsPrompt && <section className={cx("gen-background-section")}><div className={cx("gen-panel-title")}><h2>PROMPT <em>(Required)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div><PromptField id="gen-background-prompt" value={backgroundPrompt} onChange={onBackgroundPromptChange} ariaLabel={`${backgroundMode === "replace" ? "Background replacement" : "Generated background"} prompt`} required wrapperClassName={cx("gen-textarea-wrap", "gen-background-prompt")} metaClassName={cx("gen-prompt-meta")} /><PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} /></section>}

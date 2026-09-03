@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Info, Maximize2 } from "lucide-react";
+import type { ReactNode } from "react";
 import type { ExtendAmount, ExtendDirection } from "../config";
 import { extendAmounts, extendDirections } from "../config";
 import { cx } from "../styles";
@@ -9,6 +10,7 @@ import type { ImageUploadConstraints } from "@/lib/media/upload-validation";
 import { PromptOptimizerToggle } from "./prompt-optimizer-toggle";
 
 type ExtendPanelProps = {
+  tutorialButton?: ReactNode;
   sourceImage: string | null;
   workspaceId: string | null;
   imageUploadConstraints?: ImageUploadConstraints;
@@ -34,9 +36,9 @@ const directionMeta: Record<ExtendDirection, { label: string; helper: string; ic
   all: { label: "All sides", helper: "Expand around the image", icon: Maximize2 },
 };
 
-export function ExtendPanel({ sourceImage, workspaceId, imageUploadConstraints, prompt, negativePrompt, direction, amount, onSourceImageChange, onSourceImageClear, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onDirectionChange, onAmountChange }: ExtendPanelProps) {
+export function ExtendPanel({ tutorialButton, sourceImage, workspaceId, imageUploadConstraints, prompt, negativePrompt, direction, amount, onSourceImageChange, onSourceImageClear, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onDirectionChange, onAmountChange }: ExtendPanelProps) {
   return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-extend-panel")}>
-    <div className={cx("gen-panel-title")}><h2>PROMPT <em>(Optional)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
+    <div className={cx("gen-prompt-top-action")}>{tutorialButton}</div><div className={cx("gen-panel-title")}><h2>PROMPT <em>(Optional)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
     <PromptField id="gen-extend-prompt" value={prompt} onChange={onPromptChange} placeholder="Continue the sunset sky, trees and warm window light naturally" ariaLabel="Extend image prompt" wrapperClassName={cx("gen-textarea-wrap", "gen-extend-prompt")} metaClassName={cx("gen-prompt-meta")} />
     <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
     <div className={cx("gen-section-heading")}><h3>SOURCE IMAGE <em>(Required)</em></h3></div>
