@@ -33,6 +33,7 @@ export type GenerationModelOption = {
     description?: string;
     basePrice?: number | string;
     providerType?: string;
+    nativeAudio?: boolean;
     fixedUpscale?: boolean;
     supportsUpscale?: boolean;
     syncedAt?: string;

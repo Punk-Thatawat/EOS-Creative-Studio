@@ -639,6 +639,16 @@ const coreModelParameterNames = new Set([
   "generate_audio",
   "audio",
   "audio_enabled",
+  "audioOutput",
+  "audio_output",
+  "includeAudio",
+  "include_audio",
+  "withAudio",
+  "with_audio",
+  "nativeAudio",
+  "native_audio",
+  "sound",
+  "soundtrack",
   "negativePrompt",
   "negative_prompt",
   "endFrameImage",
@@ -994,12 +1004,28 @@ export function VideoGenerationPage() {
   const aspectRatioProperty = findSchemaProperty(properties, ["aspectRatio", "aspect_ratio"]);
   const aspectRatioOptions = modelAspectRatioOptions(selectedModelOption);
   const supportsAspectRatio = Boolean(aspectRatioProperty || capabilities?.aspectRatioParameter || aspectRatioOptions.length > 0);
-  const audioProperty = findSchemaProperty(properties, ["generateAudio", "generate_audio", "audio", "audio_enabled"]);
+  const canSelectAspectRatio = supportsAspectRatio && aspectRatioOptions.length > 0;
+  const audioProperty = findSchemaProperty(properties, [
+    "generateAudio",
+    "generate_audio",
+    "audio",
+    "audio_enabled",
+    "audioOutput",
+    "audio_output",
+    "includeAudio",
+    "include_audio",
+    "withAudio",
+    "with_audio",
+    "nativeAudio",
+    "native_audio",
+    "sound",
+    "soundtrack",
+  ]);
   const audioInputMode = Boolean(audioProperty && audioProperty[1].type !== "boolean");
   // Models exposing an audio control or audio input generate/handle audio
   // themselves. The post-processing audio tools are only relevant for silent
   // video models.
-  const hasNativeAudio = Boolean(audioProperty || capabilities?.audioParameter);
+  const hasNativeAudio = Boolean(capabilities?.nativeAudio || audioProperty || capabilities?.audioParameter);
   const showPostAudioOptions = activeVideoTab === "image-to-video"
     && Boolean(selectedModelOption)
     && !hasNativeAudio;
@@ -1230,7 +1256,24 @@ export function VideoGenerationPage() {
     const nextResolution = findSchemaProperty(nextProperties, ["resolution"]);
     const nextAspectRatio = findSchemaProperty(nextProperties, ["aspectRatio", "aspect_ratio"]);
     const nextAspectRatioOptions = modelAspectRatioOptions(selected);
-    const nextAudio = findSchemaProperty(nextProperties, ["generateAudio", "generate_audio", "audio", "audio_enabled"]);
+    const nextCanSelectAspectRatio = Boolean(nextAspectRatio || selected?.capabilities.aspectRatioParameter || nextAspectRatioOptions.length > 0)
+      && nextAspectRatioOptions.length > 0;
+    const nextAudio = findSchemaProperty(nextProperties, [
+      "generateAudio",
+      "generate_audio",
+      "audio",
+      "audio_enabled",
+      "audioOutput",
+      "audio_output",
+      "includeAudio",
+      "include_audio",
+      "withAudio",
+      "with_audio",
+      "nativeAudio",
+      "native_audio",
+      "sound",
+      "soundtrack",
+    ]);
     const durationDefault = schemaDefault(nextDuration?.[1]);
     const nextDurationValue = typeof durationDefault === "number"
       ? durationDefault
@@ -1244,9 +1287,9 @@ export function VideoGenerationPage() {
       setModelParams(nextParams);
       setDuration(nextDurationValue);
       setResolution(typeof resolutionDefault === "string" ? resolutionDefault : "");
-      const detectedAspect = detectedImageAspectRatioRef.current === null
-        ? undefined
-        : closestAspectRatio(detectedImageAspectRatioRef.current, nextAspectRatioOptions);
+      const detectedAspect = !nextCanSelectAspectRatio && detectedImageAspectRatioRef.current !== null
+        ? closestAspectRatio(detectedImageAspectRatioRef.current, nextAspectRatioOptions)
+        : undefined;
       setAspectRatio(detectedAspect ?? (typeof aspectDefault === "string" ? aspectDefault : nextAspectRatioOptions[0] ?? ""));
       setAutoSound(typeof audioDefault === "boolean" ? audioDefault : false);
       setAudioFile(null);
@@ -1371,6 +1414,7 @@ export function VideoGenerationPage() {
       const detectedRatio = await readImageAspectRatio(file);
       detectedImageAspectRatioRef.current = detectedRatio;
       setDetectedImageAspectRatio(detectedRatio);
+      if (canSelectAspectRatio) return;
       const nextAspectRatio = closestAspectRatio(detectedRatio, aspectRatioOptions);
       if (nextAspectRatio) setAspectRatio(nextAspectRatio);
     } catch {
@@ -1701,11 +1745,14 @@ export function VideoGenerationPage() {
     if (durationProperty) request.duration = duration;
     if (resolutionProperty && resolution) request.resolution = resolution;
     if (supportsAspectRatio && aspectRatio && !storyboardHasMixedAspectRatios) request.aspectRatio = aspectRatio;
-    if (audioProperty) request.generateAudio = autoSound;
     if (postAudioMode !== "none") {
       request.audioMode = postAudioMode;
     }
     if (Object.keys(requestModelParams).length) request.modelParams = requestModelParams;
+    if (audioProperty && !audioInputMode) {
+      if (["generateAudio", "generate_audio"].includes(audioProperty[0])) request.generateAudio = autoSound;
+      else request.modelParams = { ...(request.modelParams ?? {}), [audioProperty[0]]: autoSound };
+    }
     return request;
   })();
 
@@ -2118,7 +2165,6 @@ export function VideoGenerationPage() {
       if (durationProperty) request.duration = duration;
       if (resolutionProperty && resolution) request.resolution = resolution;
       if (supportsAspectRatio && aspectRatio && !storyboardHasMixedAspectRatios) request.aspectRatio = aspectRatio;
-      if (audioProperty && !audioInputMode) request.generateAudio = autoSound;
       if (audioInputMode && audioFile) {
         setNotice("Uploading audio reference…");
         request.audioUrl = await uploadPeopleMedia(audioFile, undefined, capabilities?.uploadConstraints);
@@ -2128,6 +2174,10 @@ export function VideoGenerationPage() {
         request.audioMode = postAudioMode;
       }
       if (Object.keys(requestModelParams).length) request.modelParams = requestModelParams;
+      if (audioProperty && !audioInputMode) {
+        if (["generateAudio", "generate_audio"].includes(audioProperty[0])) request.generateAudio = autoSound;
+        else request.modelParams = { ...(request.modelParams ?? {}), [audioProperty[0]]: autoSound };
+      }
 
       setNotice("Submitting video generation…");
       const created = await createVideoStoryboard(request);
@@ -2993,7 +3043,7 @@ export function VideoGenerationPage() {
                   {aspectRatioProperty?.[1].title ?? "Aspect Ratio"} <Info size={11} />
                   {storyboardHasMixedAspectRatios
                     ? <small className={styles.autoAspectRatioHint}>Per scene</small>
-                    : detectedImageAspectRatio !== null
+                    : !canSelectAspectRatio && detectedImageAspectRatio !== null
                       ? <small className={styles.autoAspectRatioHint}>Auto from image</small>
                       : null}
                 </div>
@@ -3004,10 +3054,10 @@ export function VideoGenerationPage() {
                         type="button"
                         className={aspectRatio === ratio ? styles.ratioSelected : ""}
                         onClick={() => setAspectRatio(ratio)}
-                        disabled={detectedImageAspectRatio !== null || storyboardHasMixedAspectRatios}
+                        disabled={storyboardHasMixedAspectRatios}
                         title={storyboardHasMixedAspectRatios
                           ? "Each storyboard scene uses its own aspect ratio"
-                          : detectedImageAspectRatio !== null
+                          : !canSelectAspectRatio && detectedImageAspectRatio !== null
                             ? "Aspect ratio detected from the uploaded image"
                             : `Use ${ratio}`}
                         key={ratio}
