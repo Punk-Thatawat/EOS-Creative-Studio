@@ -1,0 +1,116 @@
+.settingsPage {
+  --settings-ink: #171412;
+  --settings-muted: #736b65;
+  --settings-line: #e9e3df;
+  --settings-soft: #faf8f6;
+  color: var(--settings-ink);
+  padding-bottom: 2.5rem;
+}
+
+.pageIntro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+}
+
+.eyebrow,
+.navLabel {
+  color: #f26b38;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.eyebrow { margin-bottom: 0.5rem; }
+
+.titleRow { display: flex; align-items: center; flex-wrap: wrap; gap: 0.7rem; }
+.titleRow h1 { font-family: var(--font-heading); font-size: clamp(1.8rem, 3vw, 2.15rem); font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; }
+.description { max-width: 42rem; margin-top: 0.55rem; color: var(--settings-muted); font-size: 0.9rem; line-height: 1.6; }
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid #d9eee4;
+  border-radius: 999px;
+  background: #f4fbf7;
+  color: #37815e;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.35rem 0.6rem;
+}
+
+.statusDot { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: #43a574; }
+.saveButton { min-width: 8.5rem; box-shadow: 0 7px 16px rgb(242 107 56 / 18%); }
+
+.layout { display: grid; grid-template-columns: 13rem minmax(0, 1fr); align-items: start; gap: 1.25rem; }
+.sectionNav { position: sticky; top: 1.25rem; padding: 0.35rem; }
+.navLabel { padding: 0 0.75rem; margin: 0 0 0.65rem; color: #9c918a; font-size: 0.62rem; }
+.navItem { display: flex; align-items: center; width: 100%; gap: 0.65rem; border-radius: 0.75rem; color: #756d67; font-size: 0.78rem; font-weight: 600; padding: 0.7rem 0.75rem; text-align: left; transition: 160ms ease; }
+.navItem:hover { background: #f7f3f0; color: var(--settings-ink); }
+.navItemActive { background: #fff1eb; color: #e75e2c; }
+.navArrow { margin-left: auto; opacity: 0.55; }
+.navTip { display: flex; gap: 0.5rem; margin: 2rem 0.55rem 0; border-top: 1px solid var(--settings-line); padding-top: 1rem; color: #9a8e86; }
+.navTip svg { flex: none; color: #f26b38; margin-top: 0.1rem; }
+.navTip p { font-size: 0.68rem; line-height: 1.55; }
+
+.sections { display: grid; gap: 0.9rem; min-width: 0; }
+.settingsCard { scroll-margin-top: 1.25rem; overflow: hidden; }
+.sectionHeading { display: flex; align-items: center; gap: 0.8rem; border-bottom: 1px solid var(--settings-line); padding: 1.15rem 1.25rem 1rem; }
+.sectionHeading h2 { font-size: 0.95rem; font-weight: 800; letter-spacing: -0.01em; }
+.sectionHeading p { margin-top: 0.18rem; color: var(--settings-muted); font-size: 0.72rem; line-height: 1.45; }
+.sectionIcon { display: inline-flex; flex: none; width: 2.25rem; height: 2.25rem; align-items: center; justify-content: center; border-radius: 0.8rem; }
+.toneorange { background: #fff0e9; color: #f26b38; }
+.tonepink { background: #fae8ee; color: #b35a79; }
+.toneyellow { background: #fff5d5; color: #b18319; }
+.cardBody { padding: 0 1.25rem 1.2rem; }
+.languageRow, .preferenceRow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; }
+.languageRow { border-bottom: 1px solid var(--settings-line); }
+.languageSwitch { display: inline-flex; flex: none; border: 1px solid var(--settings-line); border-radius: 0.7rem; background: var(--settings-soft); padding: 0.2rem; }
+.languageSwitch button { min-width: 4.4rem; border-radius: 0.5rem; color: #897e76; font-size: 0.75rem; font-weight: 700; padding: 0.5rem 0.65rem; transition: 160ms ease; }
+.languageSwitch button:hover { color: var(--settings-ink); }
+.languageSwitch .languageActive { background: white; color: #e75e2c; box-shadow: 0 2px 7px rgb(41 28 20 / 10%); }
+.infoRow { display: flex; align-items: center; gap: 0.45rem; color: #8b817a; font-size: 0.7rem; padding-top: 0.85rem; }
+.infoRow svg { color: #f26b38; }
+.infoRow strong { color: #554d47; font-weight: 700; }
+.fieldLabel { display: block; color: #554d47; font-size: 0.72rem; font-weight: 700; padding-top: 1rem; }
+.fieldInput { margin-top: 0.45rem; height: 2.25rem; background: #fcfaf9; font-size: 0.8rem; }
+.preferenceRow { border-top: 1px solid var(--settings-line); margin-top: 1rem; }
+.preferenceValue { max-width: 14rem; color: #4f4842; font-size: 0.75rem; font-weight: 700; text-align: right; }
+.settingRow { display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid var(--settings-line); padding: 0.9rem 0; }
+.settingRow:last-child { border-bottom: 0; padding-bottom: 0; }
+.rowIcon { display: inline-flex; flex: none; width: 2rem; height: 2rem; align-items: center; justify-content: center; border-radius: 0.65rem; background: #f7f3f0; color: #887b72; }
+.rowCopy { min-width: 0; flex: 1; }
+.rowTitle { color: #3e3732; font-size: 0.78rem; font-weight: 750; }
+.rowDescription { margin-top: 0.18rem; color: var(--settings-muted); font-size: 0.7rem; line-height: 1.45; }
+.rowValue { color: #3d996b; font-size: 0.8rem; font-weight: 800; }
+.rowButton { flex: none; }
+.toggle { position: relative; width: 2.45rem; height: 1.4rem; flex: none; border-radius: 999px; background: #d9d3cf; transition: 160ms ease; }
+.toggleActive { background: #f26b38; }
+.toggleKnob { position: absolute; top: 0.2rem; left: 0.2rem; width: 1rem; height: 1rem; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgb(28 19 14 / 20%); transition: 160ms ease; }
+.toggleActive .toggleKnob { transform: translateX(1.05rem); }
+.helpRow { display: flex; align-items: center; justify-content: flex-end; gap: 0.5rem; color: #8d8178; font-size: 0.72rem; padding: 0.4rem 0.2rem; }
+.helpRow button { display: inline-flex; align-items: center; gap: 0.15rem; color: #2c2723; font-weight: 800; }
+.helpRow button:hover { color: #f26b38; }
+
+@media (max-width: 760px) {
+  .pageIntro { align-items: stretch; flex-direction: column; gap: 1rem; }
+  .saveButton { align-self: flex-start; }
+  .layout { display: block; }
+  .sectionNav { position: static; display: flex; gap: 0.35rem; overflow-x: auto; margin-bottom: 0.8rem; padding: 0; scrollbar-width: none; }
+  .sectionNav::-webkit-scrollbar { display: none; }
+  .navLabel, .navTip { display: none; }
+  .navItem { flex: none; width: auto; white-space: nowrap; padding: 0.6rem 0.7rem; }
+  .navItem .navArrow { display: none; }
+  .sectionHeading { padding-inline: 1rem; }
+  .cardBody { padding-inline: 1rem; }
+  .languageRow, .preferenceRow { align-items: flex-start; flex-direction: column; }
+  .preferenceValue { max-width: none; text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navItem, .languageSwitch button, .toggle, .toggleKnob { transition: none; }
+}

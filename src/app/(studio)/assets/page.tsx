@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import "./assets-universe.css";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import {
   AlertCircle,
@@ -14,13 +14,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  ExternalLink,
   FileText,
   Folder,
   Grid2X2,
   Image as ImageIcon,
   List,
-  LoaderCircle,
   MoreVertical,
   Play,
   Plus,
@@ -35,7 +33,6 @@ import {
   deleteAssetFolder,
   deleteAssetTag,
   downloadAsset,
-  emptyTrash,
   fetchAssets,
   createAssetFolder,
   createAssetTag,
@@ -69,7 +66,6 @@ type Asset = {
   tags: string[];
 };
 
-const tabs: AssetTab[] = ["My Assets"];
 
 const apiTabByLabel: Record<AssetTab, AssetsApiTab> = {
   "My Assets": "mine",
@@ -95,7 +91,6 @@ const filterByApiType: Record<AssetsApiType, Exclude<FilterType, "All Types">> =
   other: "Other",
 };
 
-const filterOptions: FilterType[] = ["All Types", "Images", "Videos", "Documents", "Audio", "Other"];
 const defaultAssetFolderNames = new Set(["image", "videos", "voice", "document"]);
 const SIDEBAR_GROUP_LIMIT = 5;
 const ASSETS_CACHE_TTL_MS = 15_000;
@@ -108,26 +103,11 @@ const previewFallbacks: Record<AssetsApiType, string> = {
   other: "/generated-icons-v2/jobs/image-generate.png",
 };
 
-const summaryIconPaths = {
-  total: "/generated-assets/assets-summary-icons/asset-summary-total.png",
-  images: "/generated-assets/assets-summary-icons/asset-summary-images.png",
-  videos: "/generated-assets/assets-summary-icons/asset-summary-videos.png",
-  documents: "/generated-assets/assets-summary-icons/asset-summary-documents.png",
-  other: "/generated-assets/assets-summary-icons/asset-summary-other.png",
-} as const;
-
 const typeColors: Record<string, string> = {
   JPG: "#0bca84", JPEG: "#0bca84", PNG: "#0bca84", WEBP: "#0bca84",
   MP4: "#ef0093", WEBM: "#ef0093", MOV: "#ef0093",
   PDF: "#f20b26", AI: "#6f17d9", PPT: "#ff5e0b", PPTX: "#ff5e0b",
   MP3: "#7f0ec1", WAV: "#7f0ec1", DOC: "#44a8d8", DOCX: "#44a8d8",
-};
-
-const ctaByTab: Record<AssetTab, { lineOne: string; lineTwoPrefix: string; accent: string; lineTwoSuffix: string; body: string; action: string }> = {
-  "My Assets": { lineOne: "Keep your assets organized", lineTwoPrefix: "and your ", accent: "creativity", lineTwoSuffix: " unstoppable.", body: "Upgrade for more storage, faster results, and priority AI power.", action: "UPGRADE PLAN" },
-  "Shared with me": { lineOne: "Keep every review moving", lineTwoPrefix: "with your ", accent: "creative team", lineTwoSuffix: ".", body: "Upgrade for more shared storage, faster reviews, and priority AI power.", action: "UPGRADE PLAN" },
-  "Team Assets": { lineOne: "Make your team", lineTwoPrefix: "and your ", accent: "creativity", lineTwoSuffix: " unstoppable.", body: "Upgrade for more team storage, faster results, and shared AI power.", action: "UPGRADE PLAN" },
-  Trash: { lineOne: "Recover what still matters", lineTwoPrefix: "before your ", accent: "trash expires", lineTwoSuffix: ".", body: "Deleted assets are kept for a limited time before permanent removal.", action: "EMPTY TRASH" },
 };
 
 const emptyData: AssetsApiListData = {
@@ -162,7 +142,7 @@ function formatBytes(value: number | null | undefined): string {
 function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string): string | undefined {
@@ -175,11 +155,11 @@ function mapApiAsset(asset: AssetsApiAsset): Asset {
   const type = extension || formatLabel(asset.type).toUpperCase();
   return {
     id: asset.id,
-    title: asset.title,
+    title: /^(create a high-quality image|preserve the entire original image|upscale the provided image|continue the source image)/i.test(asset.title.trim()) ? (metadataString(asset.metadata, "userPrompt") || "ผลงานสร้างสรรค์") : asset.title,
     date: formatDate(asset.createdAt),
     size: asset.sizeLabel || formatBytes(asset.sizeBytes),
     type,
-    image: asset.previewUrl ?? (asset.type === "image" && asset.url ? asset.url : previewFallbacks[asset.type]),
+    image: asset.type === "video" && asset.url ? asset.url : asset.previewUrl ?? (asset.type === "image" && asset.url ? asset.url : previewFallbacks[asset.type]),
     filter: filterByApiType[asset.type],
     mediaKind: asset.type,
     url: asset.url ?? null,
@@ -255,11 +235,10 @@ function FilterSelect({
   </div>;
 }
 
-function SummaryMetric({ icon, value, label, color }: { icon: ReactNode; value: number; label: string; color: string }) {
-  return <div className="assets-summary-metric"><span className="assets-summary-icon" style={{ color }}>{icon}</span><strong>{formatCount(value)}</strong><span>{label}</span></div>;
-}
-
 function AssetPreview({ asset }: { asset: Asset }) {
+  if (asset.mediaKind === "video" && asset.url && asset.image === asset.url) {
+    return <video className="asset-preview-video" src={asset.url} preload="metadata" muted playsInline aria-hidden="true" />;
+  }
   return <Image src={asset.image} alt="" fill sizes="(max-width: 1100px) 50vw, 22vw" loading="lazy" unoptimized />;
 }
 
@@ -300,13 +279,13 @@ function FilterList({ items, activeId, onSelect, kind }: { items: AssetsApiFilte
 export default function AssetsPage() {
   const queryParams = useSearchParams();
   const searchRef = useRef(queryParams.get("q") ?? "");
-  const [activeTab, setActiveTab] = useState<AssetTab>("My Assets");
+  const [activeTab] = useState<AssetTab>("My Assets");
   const [activeType, setActiveType] = useState<FilterType>("All Types");
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeSort, setActiveSort] = useState<AssetSort>("Newest");
   const [openFilter, setOpenFilter] = useState<string | null>(null);
-  const [showAllFolders, setShowAllFolders] = useState(false);
+  const [showAllFolders, setShowAllFolders] = useState(true);
   const [showAllTags, setShowAllTags] = useState(false);
   const [search, setSearch] = useState(() => queryParams.get("q") ?? "");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -426,14 +405,16 @@ export default function AssetsPage() {
   );
   const folderItems = useMemo(() => {
     const tabFolderName = activeTab === "Trash" ? "All Trash" : activeTab === "Shared with me" ? "All Shared" : activeTab === "Team Assets" ? "All Team Assets" : "All Assets";
-    return [{ id: "all", name: tabFolderName, count: assetsData.summary.total }, ...assetsData.filters.folders.filter((item) => item.id !== "all")];
+    const fixedFolders = ["Image", "Videos", "Voice", "Document"].map((name) => {
+      const existing = assetsData.filters.folders.find((item) => item.name.toLowerCase() === name.toLowerCase());
+      return { ...(existing ?? { id: name, name, count: 0 }), name: name === "Videos" ? "Video" : name };
+    });
+    const customFolders = assetsData.filters.folders.filter((item) => item.id !== "all" && !defaultAssetFolderNames.has(item.name.toLowerCase()));
+    return [{ id: "all", name: tabFolderName, count: assetsData.summary.total }, ...fixedFolders, ...customFolders];
   }, [activeTab, assetsData.filters.folders, assetsData.summary.total]);
   const visibleFolderItems = showAllFolders ? folderItems : folderItems.slice(0, SIDEBAR_GROUP_LIMIT);
   const visibleTagItems = showAllTags ? assetsData.filters.tags : assetsData.filters.tags.slice(0, SIDEBAR_GROUP_LIMIT);
   const totalPages = Math.max(1, assetsData.pagination.totalPages || 1);
-  const cta = ctaByTab[activeTab];
-  const activeFolderLabel = activeFolder ? formatLabel(folderItems.find((item) => item.id === activeFolder)?.name ?? activeFolder) : "All Folders";
-  const activeTagLabel = activeTag ? formatLabel(assetsData.filters.tags.find((item) => item.id === activeTag)?.name ?? activeTag) : "All Tags";
   const groupAsset = groupDialog?.assetId ? assets.find((asset) => asset.id === groupDialog.assetId) : null;
   const groupAssetTags = new Set((groupAsset?.tags ?? []).map((tag) => tag.trim().toLocaleLowerCase()));
   const groupOptions = groupDialog?.assetId
@@ -450,27 +431,8 @@ export default function AssetsPage() {
   const startItem = assetsData.pagination.total === 0 ? 0 : ((assetsData.pagination.page - 1) * assetsData.pagination.limit) + 1;
   const endItem = Math.min(assetsData.pagination.total, startItem + assetsData.pagination.limit - 1);
   const rangeLabel = assetsData.pagination.total === 0
-    ? activeTab === "Trash" ? "No deleted assets" : activeTab === "Shared with me" ? "No shared assets" : activeTab === "Team Assets" ? "No team assets" : "No assets yet"
-    : `Showing ${startItem}–${endItem} of ${formatCount(assetsData.pagination.total)} ${activeTab === "Trash" ? "deleted assets" : activeTab === "Shared with me" ? "shared assets" : activeTab === "Team Assets" ? "team assets" : "assets"}`;
-
-  const handleTabChange = (tab: AssetTab) => {
-    setActiveTab(tab);
-    setActiveType("All Types");
-    setActiveFolder(null);
-    setActiveTag(null);
-    setActiveSort("Newest");
-    setOpenFilter(null);
-    setShowAllFolders(false);
-    setShowAllTags(false);
-    setSearch("");
-    window.dispatchEvent(new Event("assets-search-clear"));
-    setPage(1);
-    setPendingDeleteFolder(null);
-    setPendingDeleteTag(null);
-    setSelectedAsset(null);
-    setOpenMenuAsset(null);
-    window.history.replaceState(null, "", "/assets");
-  };
+    ? "ไม่มีรายการ"
+    : `แสดง ${startItem}–${endItem} จาก ${formatCount(assetsData.pagination.total)} รายการ`;
 
   const openGroupDialog = (kind: GroupDialog["kind"], assetId: string | null = null) => {
     setOpenFilter(null);
@@ -625,20 +587,6 @@ export default function AssetsPage() {
     }
   };
 
-  const handleEmptyTrash = async () => {
-    if (!window.confirm("Permanently delete all assets in Trash?")) return;
-    setBusyAssetId("trash");
-    setError(null);
-    try {
-      await emptyTrash();
-      setRefreshKey((current) => current + 1);
-    } catch (emptyError) {
-      setError(emptyError instanceof Error ? emptyError.message : "Unable to empty trash");
-    } finally {
-      setBusyAssetId(null);
-    }
-  };
-
   const openAssetPreview = (asset: Asset) => {
     setSelectedAsset(asset.id);
     setOpenMenuAsset(null);
@@ -648,72 +596,27 @@ export default function AssetsPage() {
   const paginationButtons = totalPages <= 4 ? Array.from({ length: totalPages }, (_, index) => index + 1) : [1, 2, 3, totalPages];
 
   return (
-    <div className="assets-page" data-active-tab={activeTab}>
-      <section className="assets-hero" aria-labelledby="assets-heading">
-        <div className="assets-hero-copy">
-          <Image
-            id="assets-heading"
-            src="/generated-assets/assets-hero-banner-transparent.png"
-            alt="Assets — Organize. Find. Use. Create without limits."
-            width={2079}
-            height={378}
-            priority
-            className="assets-hero-banner"
-          />
-          <p>All your creative assets in one place.<br />Easy to manage, search, and <strong>reuse</strong> across your projects.</p>
+    <div className="assets-page" data-active-tab={activeTab} data-no-translate>
+      <section className="assets-universe-hero" aria-labelledby="assets-heading">
+        <div className="assets-universe-copy">
+          <h1 id="assets-heading" translate="no">YOUR CREATIVE<br />UNIVERSE.</h1>
+          <p>ทุกผลงาน <strong>พร้อมต่อยอด</strong></p>
+          <Image src="/generated-assets/cta-brush-only-transparent-v2-cropped.webp" alt="" width={280} height={24} className="assets-universe-underline" />
         </div>
-
-        <div className="assets-summary-card">
-          <div className="assets-summary-heading"><strong>ASSET SUMMARY</strong><button type="button" onClick={() => { setActiveType("All Types"); setActiveFolder(null); setActiveTag(null); setPage(1); }}>View all <ChevronRight size={17} /></button></div>
-          <div className="assets-summary-grid">
-            <SummaryMetric icon={<Image src={summaryIconPaths.total} alt="" width={23} height={23} />} value={assetsData.summary.total} label="Total Assets" color="#d700e8" />
-            <SummaryMetric icon={<Image src={summaryIconPaths.images} alt="" width={23} height={23} />} value={assetsData.summary.images} label="Images" color="#ff3113" />
-            <SummaryMetric icon={<Image src={summaryIconPaths.videos} alt="" width={23} height={23} />} value={assetsData.summary.videos} label="Videos" color="#e80091" />
-            <SummaryMetric icon={<Image src={summaryIconPaths.documents} alt="" width={23} height={23} />} value={assetsData.summary.documents} label="Documents" color="#ffd000" />
-            <SummaryMetric icon={<Image src={summaryIconPaths.other} alt="" width={23} height={23} />} value={assetsData.summary.others} label="Others" color="#9994a8" />
-          </div>
-        </div>
-
+        <Image src="/generated-assets/assets-universe-hero-v1.webp" alt="" width={1774} height={887} priority className="assets-universe-art" />
       </section>
 
       <section className="assets-library" aria-label={`${activeTab} asset library`}>
         <div className="assets-toolbar">
-          <div className="assets-tabs" role="tablist" aria-label="Asset ownership">
-            {tabs.map((tab) => <button type="button" role="tab" aria-selected={activeTab === tab} key={tab} className={activeTab === tab ? "is-active" : ""} onClick={() => handleTabChange(tab)}>{tab}</button>)}
+          <div className="assets-media-tabs" role="group" aria-label="ประเภทไฟล์">
+            {([["All Types","ทั้งหมด",null],["Images","ภาพ",ImageIcon],["Videos","วิดีโอ",Video],["Audio","เสียง",AudioLines],["Documents","เอกสาร",FileText]] as const).map(([value,label,Icon]) => <button key={value} type="button" aria-pressed={activeType === value} className={activeType === value ? "is-active" : ""} onClick={() => {setActiveType(value);setPage(1);}}>{Icon ? <Icon size={16} /> : null}{label}</button>)}
           </div>
           <div className="assets-filters">
             <FilterSelect
-              key="type"
-              label={activeType}
-              value={activeType}
-              options={filterOptions.map((option) => ({ value: option, label: option }))}
-              onSelect={(value) => { setActiveType(value as FilterType); setPage(1); }}
-              open={openFilter === "type"}
-              onToggle={(nextOpen) => setOpenFilter(nextOpen ? "type" : null)}
-            />
-            <FilterSelect
-              key="folder"
-              label={activeFolderLabel}
-              value={activeFolder ?? ""}
-              options={[{ value: "", label: "All Folders" }, ...assetsData.filters.folders.filter((item) => item.id !== "all").map((item) => ({ value: item.id, label: formatLabel(item.name), count: item.count }))]}
-              onSelect={(value) => { setActiveFolder(value || null); setShowAllFolders(Boolean(value)); setPage(1); }}
-              open={openFilter === "folder"}
-              onToggle={(nextOpen) => setOpenFilter(nextOpen ? "folder" : null)}
-            />
-            <FilterSelect
-              key="tag"
-              label={activeTagLabel}
-              value={activeTag ?? ""}
-              options={[{ value: "", label: "All Tags" }, ...assetsData.filters.tags.map((item) => ({ value: item.id, label: formatLabel(item.name), count: item.count }))]}
-              onSelect={(value) => { setActiveTag(value || null); setShowAllTags(Boolean(value)); setPage(1); }}
-              open={openFilter === "tag"}
-              onToggle={(nextOpen) => setOpenFilter(nextOpen ? "tag" : null)}
-            />
-            <FilterSelect
               key="sort"
-              label={`Sort by: ${activeSort}`}
+              label={activeSort === "Newest" ? "ล่าสุด" : "เก่าสุด"}
               value={activeSort}
-              options={[{ value: "Newest", label: "Sort by: Newest" }, { value: "Oldest", label: "Sort by: Oldest" }]}
+              options={[{ value: "Newest", label: "ล่าสุด" }, { value: "Oldest", label: "เก่าสุด" }]}
               onSelect={(value) => { setActiveSort(value as AssetSort); setPage(1); }}
               open={openFilter === "sort"}
               onToggle={(nextOpen) => setOpenFilter(nextOpen ? "sort" : null)}
@@ -726,13 +629,13 @@ export default function AssetsPage() {
         </div>
 
         <div className="assets-search-row">
-          <div className="assets-inline-search"><Search size={16} /><input aria-label="Search assets" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search within assets" /></div>
+          <div className="assets-inline-search"><Search size={16} /><input aria-label="Search assets" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาแอสเซ็ต..." /></div>
           <span>{rangeLabel}</span>
         </div>
 
         <div className="assets-content-grid">
-          <aside className="assets-sidebar-panel">
-            <div className="assets-panel-heading"><strong>FOLDERS</strong><div className="assets-panel-actions"><button type="button" aria-label="Delete selected folder" title={selectedCustomFolder ? `Delete ${formatLabel(selectedCustomFolder.name)}` : "Select a custom folder to delete"} disabled={!selectedCustomFolder || busyFolderName !== null} onClick={() => { if (selectedCustomFolder) setPendingDeleteFolder(selectedCustomFolder); }}><Trash2 size={16} /></button><button type="button" aria-label="Add folder" onClick={() => openGroupDialog("folder")}><Plus size={17} /></button></div></div>
+          <section className="assets-sidebar-panel" aria-label="โฟลเดอร์และแท็ก">
+            <div className="assets-panel-heading"><strong>โฟลเดอร์</strong><div className="assets-panel-actions"><button type="button" aria-label="Delete selected folder" title={selectedCustomFolder ? `Delete ${formatLabel(selectedCustomFolder.name)}` : "Select a custom folder to delete"} disabled={!selectedCustomFolder || busyFolderName !== null} onClick={() => { if (selectedCustomFolder) setPendingDeleteFolder(selectedCustomFolder); }}><Trash2 size={16} /></button><button type="button" className="assets-add-group" aria-label="สร้างโฟลเดอร์" onClick={() => openGroupDialog("folder")}><Plus size={17} /> สร้างโฟลเดอร์</button></div></div>
             {pendingDeleteFolder ? <div className="assets-folder-delete-popover" role="dialog" aria-label={`Confirm delete ${formatLabel(pendingDeleteFolder.name)}`}>
               <div className="assets-folder-delete-copy"><span className="assets-folder-delete-icon"><Trash2 size={16} /></span><div><strong>Delete folder?</strong><p>“{formatLabel(pendingDeleteFolder.name)}” will be removed. Assets stay in All Assets.</p></div></div>
               <div className="assets-folder-delete-actions"><button type="button" onClick={() => setPendingDeleteFolder(null)} disabled={busyFolderName !== null}>Cancel</button><button type="button" onClick={() => void handleDeleteFolder(pendingDeleteFolder)} disabled={busyFolderName !== null}>Delete</button></div>
@@ -743,7 +646,7 @@ export default function AssetsPage() {
             {folderItems.length > SIDEBAR_GROUP_LIMIT ? <button type="button" className={`assets-show-more ${showAllFolders ? "is-expanded" : ""}`} aria-expanded={showAllFolders} onClick={() => setShowAllFolders((current) => !current)}>{showAllFolders ? "Show less" : "Show more"} <ChevronDown size={14} /></button> : null}
             <div className="assets-panel-divider" />
             <div className="assets-tags-section">
-              <div className="assets-panel-heading"><strong>TAGS</strong><div className="assets-panel-actions"><button type="button" aria-label="Delete selected tag" title={selectedTag ? `Delete ${formatLabel(selectedTag.name)}` : "Select a tag to delete"} disabled={!selectedTag || busyTagName !== null} onClick={() => { if (selectedTag) setPendingDeleteTag(selectedTag); }}><Trash2 size={16} /></button><button type="button" aria-label="Add tag" onClick={() => openGroupDialog("tag")}><Plus size={17} /></button></div></div>
+              <div className="assets-panel-heading"><strong>แท็ก</strong><div className="assets-panel-actions"><button type="button" aria-label="Delete selected tag" title={selectedTag ? `Delete ${formatLabel(selectedTag.name)}` : "Select a tag to delete"} disabled={!selectedTag || busyTagName !== null} onClick={() => { if (selectedTag) setPendingDeleteTag(selectedTag); }}><Trash2 size={16} /></button><button type="button" className="assets-add-group" aria-label="เพิ่มแท็ก" onClick={() => openGroupDialog("tag")}><Plus size={17} /> เพิ่มแท็ก</button></div></div>
               {pendingDeleteTag ? <div className="assets-folder-delete-popover assets-tag-delete-popover" role="dialog" aria-label={`Confirm delete ${formatLabel(pendingDeleteTag.name)}`}>
                 <div className="assets-folder-delete-copy"><span className="assets-folder-delete-icon"><Trash2 size={16} /></span><div><strong>Delete tag?</strong><p>“{formatLabel(pendingDeleteTag.name)}” will be removed from your assets.</p></div></div>
                 <div className="assets-folder-delete-actions"><button type="button" onClick={() => setPendingDeleteTag(null)} disabled={busyTagName !== null}>Cancel</button><button type="button" onClick={() => void handleDeleteTag(pendingDeleteTag)} disabled={busyTagName !== null}>Delete</button></div>
@@ -753,35 +656,29 @@ export default function AssetsPage() {
               </div>
               {assetsData.filters.tags.length > SIDEBAR_GROUP_LIMIT ? <button type="button" className={`assets-show-more ${showAllTags ? "is-expanded" : ""}`} aria-expanded={showAllTags} onClick={() => setShowAllTags((current) => !current)}>{showAllTags ? "Show less" : "Show more"} <ChevronDown size={14} /></button> : null}
             </div>
-          </aside>
+          </section>
 
           <div className={`${view === "grid" ? "assets-grid" : "assets-list"} ${isRefreshing ? "is-refreshing" : ""}`} aria-busy={loading || isRefreshing}>
             {loading ? Array.from({ length: 8 }, (_, index) => <div className="asset-card assets-loading-card" key={`loading-${index}`} aria-hidden="true" />) : null}
-            {!loading && error ? <div className="assets-error" role="alert"><AlertCircle size={24} /><strong>Unable to load assets</strong><span>{error}</span><button type="button" onClick={() => setRefreshKey((current) => current + 1)}>TRY AGAIN</button></div> : null}
-            {!loading && !error ? assets.map((asset) => <article key={asset.id} className={`asset-card ${selectedAsset === asset.id ? "is-selected" : ""} ${openMenuAsset === asset.id ? "is-menu-open" : ""}`} onClick={() => openAssetPreview(asset)}>
+            {!loading && error ? <div className="assets-error" role="alert"><AlertCircle size={24} /><strong>โหลดผลงานไม่สำเร็จ</strong><span>{error}</span><button type="button" onClick={() => setRefreshKey((current) => current + 1)}>ลองอีกครั้ง</button></div> : null}
+            {!loading && !error ? assets.map((asset) => <article key={asset.id} className={`asset-card ${selectedAsset === asset.id ? "is-selected" : ""} ${openMenuAsset === asset.id ? "is-menu-open" : ""}`} tabIndex={0} aria-label={`ดูผลงาน ${asset.title}`} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openAssetPreview(asset); } }} onClick={() => openAssetPreview(asset)}>
               <div className="asset-card-media">
                 <AssetPreview asset={asset} />
                 <span className="asset-type-badge" style={{ backgroundColor: typeColors[asset.type] ?? "#73768a" }}><TypeIcon kind={asset.mediaKind} />{asset.type}</span>
                 {asset.playable ? <button type="button" className="asset-play" aria-label={`Play ${asset.title}`} onClick={(event) => { event.stopPropagation(); openAssetPreview(asset); }}><Play size={20} fill="white" /></button> : null}
                 {asset.duration ? <span className="asset-duration">{asset.duration}</span> : null}
               </div>
-              <div className="asset-card-footer"><div><strong>{asset.title}</strong><span>{asset.date} <i>•</i> {asset.size}</span></div><div className="asset-card-actions"><button type="button" aria-label={`More options for ${asset.title}`} onClick={(event) => { event.stopPropagation(); setOpenMenuAsset(openMenuAsset === asset.id ? null : asset.id); }} disabled={busyAssetId === asset.id}><MoreVertical size={18} /></button>{openMenuAsset === asset.id ? <div className="asset-card-menu" role="menu" onClick={(event) => event.stopPropagation()}>
+              <div className="asset-card-footer"><div><strong>{asset.title}</strong><span>{asset.date} <i>•</i> {asset.size}</span></div><div className="asset-card-actions"><button type="button" aria-label={`Download ${asset.title}`} onClick={(event) => { event.stopPropagation(); void handleDownload(asset); }} disabled={busyAssetId === asset.id}><Download size={17} /></button><button type="button" aria-label={`More options for ${asset.title}`} onClick={(event) => { event.stopPropagation(); setOpenMenuAsset(openMenuAsset === asset.id ? null : asset.id); }} disabled={busyAssetId === asset.id}><MoreVertical size={18} /></button>{openMenuAsset === asset.id ? <div className="asset-card-menu" role="menu" onClick={(event) => event.stopPropagation()}>
                 <button type="button" role="menuitem" onClick={() => void handleDownload(asset)} disabled={busyAssetId === asset.id}><Download size={14} />{busyAssetId === asset.id ? "Downloading..." : "Download"}</button>
                 {activeTab !== "Trash" ? <><button type="button" role="menuitem" onClick={() => openGroupDialog("folder", asset.id)}><Folder size={14} />Move to folder</button><button type="button" role="menuitem" onClick={() => openGroupDialog("tag", asset.id)}><Plus size={14} />Add tag</button></> : null}
                 {activeTab === "Trash" ? <button type="button" role="menuitem" onClick={() => void handleAssetAction(asset.id, "restore")}><RotateCcw size={14} />Restore</button> : <button type="button" role="menuitem" onClick={() => void handleAssetAction(asset.id, "trash")}><Trash2 size={14} />Move to trash</button>}
               </div> : null}</div></div>
             </article>) : null}
-            {!loading && !error && assets.length === 0 ? <div className="assets-empty"><Archive size={24} /><strong>No matching assets</strong><span>Try another search or filter.</span></div> : null}
+            {!loading && !error && assets.length === 0 ? <div className="assets-empty"><Archive size={24} /><strong>ไม่พบผลงานที่ตรงกัน</strong><span>ลองเปลี่ยนคำค้นหาหรือตัวกรอง</span></div> : null}
           </div>
         </div>
 
-        <div className="assets-pagination"><span>{rangeLabel}</span><div><button type="button" aria-label="Previous page" disabled={!assetsData.pagination.hasPrevious} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft size={18} /></button>{paginationButtons.map((value, index) => <span key={value}>{totalPages > 4 && index === paginationButtons.length - 1 ? <><span className="assets-pagination-ellipsis">…</span><button type="button" className={page === value ? "is-active" : ""} onClick={() => setPage(value)}>{value}</button></> : <button type="button" className={page === value ? "is-active" : ""} onClick={() => setPage(value)}>{value}</button>}</span>)}<button type="button" aria-label="Next page" disabled={!assetsData.pagination.hasNext} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}><ChevronRight size={18} /></button></div></div>
-      </section>
-
-      <section className="assets-bottom-cta" aria-label={activeTab === "Trash" ? "Trash actions" : "Upgrade plan"}>
-        <Image src="/generated-assets/landing-cta-artwork-transparent.png" alt="" fill sizes="100vw" className="assets-bottom-cta-image" />
-        <div className="assets-bottom-cta-copy"><strong>{cta.lineOne}<br />{cta.lineTwoPrefix}<em>{cta.accent}</em>{cta.lineTwoSuffix}</strong><span>{cta.body}</span></div>
-        <button type="button" onClick={activeTab === "Trash" ? () => void handleEmptyTrash() : undefined} disabled={busyAssetId === "trash"}>{busyAssetId === "trash" ? <LoaderCircle size={18} className="animate-spin" /> : activeTab === "Trash" ? <Trash2 size={18} /> : <ExternalLink size={18} />}{busyAssetId === "trash" ? "EMPTYING..." : cta.action}</button>
+        <div className="assets-pagination"><span>{rangeLabel}</span><div><button type="button" aria-label="Previous page" disabled={!assetsData.pagination.hasPrevious} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft size={18} /></button>{paginationButtons.map((value, index) => <span key={value} className="assets-pagination-page">{totalPages > 4 && index === paginationButtons.length - 1 ? <span className="assets-pagination-ellipsis" aria-hidden="true">…</span> : null}<button type="button" className={page === value ? "is-active" : ""} onClick={() => setPage(value)}>{value}</button></span>)}<button type="button" aria-label="Next page" disabled={!assetsData.pagination.hasNext} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}><ChevronRight size={18} /></button></div></div>
       </section>
 
       {groupDialog ? <div className="assets-group-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeGroupDialog(); }}>

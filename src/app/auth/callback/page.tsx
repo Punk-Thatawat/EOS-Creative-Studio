@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { exchangeGoogleCode, persistBackendSession } from "@/lib/auth/backend-auth";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type AuthStage = "authenticating" | "workspace" | "ready";
 
@@ -17,44 +17,40 @@ const stageIndex: Record<AuthStage, number> = {
 // Only redirect back to eoslabs.tech after login. This prevents the redirect
 // query parameter from being used as an open redirect to an attacker page.
 function resolveSafeRedirect(rawRedirect: string | null): string {
-  if (!rawRedirect) return "/dashboard";
+  if (!rawRedirect) return "/home";
+  if (rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")) return rawRedirect;
   try {
     const target = new URL(rawRedirect);
     const isAllowedHost =
       target.hostname === "eoslabs.tech" || target.hostname.endsWith(".eoslabs.tech");
-    return target.protocol === "https:" && isAllowedHost ? target.toString() : "/dashboard";
+    return target.protocol === "https:" && isAllowedHost ? target.toString() : "/home";
   } catch {
-    return "/dashboard";
+    return "/home";
   }
 }
 
 export default function AuthCallbackPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stage, setStage] = useState<AuthStage>("authenticating");
+  const completionStarted = useRef(false);
 
   useEffect(() => {
+    if (completionStarted.current) return undefined;
+    completionStarted.current = true;
     let active = true;
     const redirectParam = new URLSearchParams(window.location.search).get("redirect");
     const loginRetryUrl = "/?auth_error=1";
 
     async function completeAuth() {
-      const supabase = getSupabaseBrowserClient();
       const code = new URLSearchParams(window.location.search).get("code");
-      const initialSessionResult = await supabase.auth.getSession();
-      let session = initialSessionResult.data.session;
-
-      if (initialSessionResult.error) throw initialSessionResult.error;
-
-      if (!session && code) {
-        const exchangeResult = await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeResult.error) throw exchangeResult.error;
-        session = exchangeResult.data.session;
-      }
-
-      if (!session) throw new Error("Supabase session was not created");
+      if (!code) throw new Error("Google login code is missing or expired");
+      const exchangeResult = await exchangeGoogleCode(code);
+      const session = exchangeResult.data.session;
+      if (!session) throw new Error("EOS session was not created");
 
       setStage("workspace");
-      const backendProfile = await fetchBackendSession(session.access_token);
+      const accessToken = await persistBackendSession(session);
+      const backendProfile = await fetchBackendSession(accessToken);
       setStage("ready");
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
 

@@ -302,6 +302,16 @@ export function GenerationProgressFloating() {
   // hydration comparison.
   const [active, setActive] = useState<ActivePendingGeneration[]>([]);
   const [isCenterOpen, setIsCenterOpen] = useState(false);
+  const launcherRef = useRef<HTMLButtonElement>(null);
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  const closeCenter = () => {
+    setIsCenterOpen(false);
+    requestAnimationFrame(() => launcherRef.current?.focus());
+  };
+
+  useEffect(() => {
+    if (isCenterOpen) collapseRef.current?.focus();
+  }, [isCenterOpen]);
   const pollingRef = useRef(new Map<string, AbortController>());
   const activeRef = useRef(active);
   const dismissedGenerationIdsRef = useRef(new Set<string>());
@@ -506,15 +516,15 @@ export function GenerationProgressFloating() {
     </div>;
   };
 
-  return <div className={styles.wrapper}>
-    {isCenterOpen && <section className={styles.center} aria-label="Generation center">
+  return <div className={styles.wrapper} data-expanded={isCenterOpen} onKeyDown={(event) => { if (event.key === "Escape" && isCenterOpen) { event.stopPropagation(); closeCenter(); } }}>
+    {isCenterOpen && <section id="generation-center-panel" className={styles.center} aria-label="Generation center">
       <div className={styles.centerHeader}>
         <div>
           <span className={styles.centerTitle}><i className={`${styles.dot} ${inProgress.length > 0 ? "" : styles.dotCompleted}`} />GENERATION CENTER</span>
           <small>{active.length} {active.length === 1 ? "generation" : "generations"}</small>
         </div>
         <div className={styles.centerActions}>
-          <button type="button" className={styles.panelToggle} onClick={() => setIsCenterOpen(false)} aria-label="Collapse generation center" title="Collapse generation center"><ChevronDown size={15} /></button>
+          <button ref={collapseRef} type="button" className={styles.panelToggle} onClick={closeCenter} aria-label="Collapse generation center" title="Collapse generation center"><ChevronDown size={18} /></button>
         </div>
       </div>
       {inProgress.length > 0 && <section className={styles.group} aria-labelledby="generation-center-progress">
@@ -532,9 +542,9 @@ export function GenerationProgressFloating() {
         {completedItems.map(renderGenerationItem)}
       </section>}
     </section>}
-    <button type="button" className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`} onClick={() => setIsCenterOpen((open) => !open)} aria-expanded={isCenterOpen} aria-label="Open generation center" title="Open generation center">
+    <button ref={launcherRef} type="button" className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`} onClick={() => setIsCenterOpen((open) => !open)} aria-expanded={isCenterOpen} aria-controls={isCenterOpen ? "generation-center-panel" : undefined} aria-label="Open generation center" title="Open generation center">
       <i className={`${styles.dot} ${inProgress.length === 0 ? styles.dotCompleted : ""}`} />
-      <span className={styles.launcherCopy}><strong>GENERATIONS</strong><small>{active.length} {active.length === 1 ? "generation" : "generations"} · {inProgress.length > 0 ? `${inProgress.length} in progress` : "All complete"}</small></span>
+      <span className={styles.launcherCopy}><strong aria-live="polite">{inProgress.length > 0 ? `กำลังสร้าง ${inProgress.length} งาน` : `สร้างเสร็จแล้ว ${completedItems.length} งาน`}</strong><small>แตะเพื่อดูรายละเอียด</small></span>
       {isCenterOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
     </button>
   </div>;

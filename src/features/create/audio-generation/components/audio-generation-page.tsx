@@ -1,4 +1,6 @@
 "use client";
+import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
@@ -40,15 +42,21 @@ import {
   Zap,
 } from "lucide-react";
 import styles from "./audio-generation-page.module.css";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { createDialogue, createSoundEffects, createTextToSpeech, createTextToSpeechScenes, createVoiceClone, deleteAudioHistory, fetchAudioHistoryAudio, getAudioCreditBalance, listAudioBackgroundMusic, listAudioHistory, listAudioModels, listAudioVoices, previewVoiceClone, quoteTextToSpeech, quoteTextToSpeechScenes, saveAudioHistory, type AudioBackgroundMusic, type AudioCreditQuote, type AudioHistoryEntry, type AudioModel, type AudioVoice, type SaveAudioHistoryInput, type SoundEffectVariant, type TextToSpeechResponse } from "@/lib/api/audio";
 
-const tabs = [
-  "Text to Speech",
-  "Podcast & Dialogue",
-  "Voice Clone",
-  "Sound Effects",
-  "Audio Cleanup",
-] as const;
+type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Audio Cleanup";
+
+// Keep the main audio workflow visible while the advanced audio tools are being finalized.
+const visibleTabs = ["Text to Speech"] as const;
+
+const audioTabKeys = {
+  "Text to Speech": "create.audio.tabs.textToSpeech",
+  "Podcast & Dialogue": "create.audio.tabs.podcastDialogue",
+  "Voice Clone": "create.audio.tabs.voiceClone",
+  "Sound Effects": "create.audio.tabs.soundEffects",
+  "Audio Cleanup": "create.audio.tabs.audioCleanup",
+} as const;
 
 const tones = [
   { label: "Energetic", icon: Zap },
@@ -56,6 +64,13 @@ const tones = [
   { label: "Premium", icon: Star },
   { label: "Dramatic", icon: Clapperboard },
 ] as const;
+
+const toneKeys = {
+  Energetic: "create.audio.tones.energetic",
+  Friendly: "create.audio.tones.friendly",
+  Premium: "create.audio.tones.premium",
+  Dramatic: "create.audio.tones.dramatic",
+} as const;
 
 const voiceImages = [
   "/generated-assets/audio-ui/audio-voice-female-warm.png",
@@ -478,8 +493,13 @@ function AudioCleanupLayout() {
 }
 
 export function AudioGenerationPage() {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Text to Speech");
+  const { t } = useLocale();
+  const [activeTab, setActiveTab] = useState<AudioTab>("Text to Speech");
   const [prompt, setPrompt] = useState(DEFAULT_AUDIO_PROMPT);
+  useTemplatePrompt("audio", value => {
+    setPrompt(value);
+    setAudioScenes(current => current.map((scene, index) => index === 0 ? { ...scene, text: value } : scene));
+  });
   const [tone, setTone] = useState("Energetic");
   const [language, setLanguage] = useState("English (US)");
   const [pronunciation, setPronunciation] = useState("");
@@ -1069,14 +1089,26 @@ export function AudioGenerationPage() {
     </button>)}<button type="button" className={styles.addScene} onClick={addAudioScene} disabled={audioScenes.length >= 20}><Plus size={17} />Add Scene</button></div>
   </section>;
 
+  useTemplateSettings('audio',{ready:modelLoadState==='ready'&&voiceLoadState==='ready',model:selectedModel,models:availableModels.map(m=>m.key),setModel:setSelectedModel,apply:(s,p)=>{
+    setPrompt(p);setAudioScenes(current=>current.map((scene,i)=>i===0?{...scene,text:p}:scene));
+    if(typeof s.voice==='string') {
+      if(availableVoices.some(v=>v.key===s.voice))setSelectedVoice(s.voice);
+      else {setSelectedVoice('');window.alert('เสียงในเทมเพลตไม่พร้อมใช้ กรุณาเลือกเสียงใหม่ก่อนสร้าง');}
+    }
+    if(typeof s.outputFormat==='string')setFormat(s.outputFormat.toUpperCase());
+    if(typeof s.speed==='number')setSpeed(s.speed);
+    if(typeof s.tone==='string')setTone(s.tone);
+    if(typeof s.languageCode==='string')setLanguage(s.languageCode==='th'?'Thai':s.languageCode==='ja'?'Japanese':'English (US)');
+    if(typeof s.pronunciationHint==='string')setPronunciation(s.pronunciationHint);
+  }});
   return <div className={`${styles.audioPage} audio-studio-page`}>
     <section className={styles.heroBanner} aria-label="Gen Audio hero">
-      <Image src="/generated-assets/audio-ui/gen-audio-hero-clean.png" alt="Gen Audio — AI audio generation studio" fill priority unoptimized sizes="(min-width: 1024px) 100vw, 100vw" />
+      <Image src="/generated-assets/audio-ui/gen-audio-hero-clean.png" alt="Gen Audio — AI audio generation studio" width={2200} height={400} priority unoptimized sizes="100vw" />
     </section>
 
-    <nav className={styles.featureTabs} aria-label="Audio tools">
-      {tabs.map((label) => <button key={label} type="button" className={activeTab === label ? styles.tabActive : styles.tab} onClick={() => setActiveTab(label)} aria-pressed={activeTab === label}>
-        {label}
+    <nav className={styles.featureTabs} aria-label={t("create.audio.tools")}>
+      {visibleTabs.map((label) => <button key={label} type="button" className={activeTab === label ? styles.tabActive : styles.tab} onClick={() => setActiveTab(label)} aria-pressed={activeTab === label}>
+        {t(audioTabKeys[label])}
       </button>)}
     </nav>
 
@@ -1090,7 +1122,7 @@ export function AudioGenerationPage() {
 
         <div className={styles.inputSection}>
           <FieldLabel hint="Choose or describe">TONE</FieldLabel>
-          <div className={styles.chipRow}>{tones.map(({ label, icon: ToneIcon }) => <button type="button" key={label} className={tone === label ? styles.toneActive : styles.toneButton} onClick={() => setTone(label)}><ToneIcon size={12} />{label}</button>)}</div>
+          <div className={styles.chipRow}>{tones.map(({ label, icon: ToneIcon }) => <button type="button" key={label} className={tone === label ? styles.toneActive : styles.toneButton} onClick={() => setTone(label)}><ToneIcon size={12} />{t(toneKeys[label])}</button>)}</div>
         </div>
 
         <div className={styles.twoColumnFields}>
@@ -1161,7 +1193,7 @@ export function AudioGenerationPage() {
 
       <aside className={styles.settingsPanel} aria-label="Audio settings">
         <div className={styles.settingsTitle}><h2>SETTINGS</h2><WandSparkles size={22} /></div>
-        <div className={styles.settingBlock}><SelectField label="VOICE MODEL" value={selectedModel} onChange={(modelId) => { setSelectedModel(modelId); setSelectedVoice(""); }} disabled={modelLoadState !== "ready" || availableModels.length === 0}>{modelLoadState === "loading" ? <option value="">Loading models...</option> : availableModels.length ? availableModels.map((model) => <option key={model.key} value={model.key}>{model.name}</option>) : <option value="">No models configured</option>}</SelectField></div>
+        <div className={styles.settingBlock}><SelectField label="VOICE MODEL" value={selectedModel} onChange={(modelId) => { setSelectedModel(modelId); setSelectedVoice(""); }} disabled={modelLoadState !== "ready" || availableModels.length === 0}>{modelLoadState === "loading" ? <option value="">Loading models...</option> : availableModels.length ? availableModels.map((model) => <option key={model.key} value={model.key} data-no-translate="true">{model.name}</option>) : <option value="">No models configured</option>}</SelectField></div>
         <div className={styles.settingBlock}><FieldLabel>OUTPUT FORMAT</FieldLabel><div className={styles.formatRow}>{["MP3", "WAV", "OGG"].map((item) => <button type="button" key={item} className={format === item ? styles.formatActive : styles.formatButton} onClick={() => setFormat(item)}>{item}</button>)}</div></div>
         <div className={styles.settingBlock}><div className={styles.speedHeader}><FieldLabel>SPEECH SPEED</FieldLabel><strong>{speed.toFixed(2)}x</strong></div><input className={styles.speedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.rangeLabels}><span>0.5x</span><span>1x</span><span>2x</span></div></div>
         <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>AUTO BACKGROUND MUSIC</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}><span /></button></div>{backgroundMusic ? <SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}>{backgroundMusicLoadState === "loading" ? <option value="">Loading music...</option> : backgroundMusicPresets.length ? backgroundMusicPresets.map((preset) => <option key={preset.key} value={preset.key}>{preset.name}</option>) : <option value="">No music configured</option>}</SelectField> : null}</div>

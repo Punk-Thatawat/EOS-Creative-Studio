@@ -14,12 +14,13 @@
   color: var(--audio-ink);
 }
 
-.heroBanner { position: relative; isolation: isolate; z-index: 40; height: auto; aspect-ratio: 5.5 / 1; margin-inline: -2px; overflow: hidden; background: #fff; pointer-events: none; }
-.heroBanner img { position: absolute !important; inset: 0; z-index: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; transform: scale(1); pointer-events: none; }
+.heroBanner { isolation: isolate; height: auto; aspect-ratio: 5.5 / 1; margin-inline: 0; overflow: hidden; background: #fff; pointer-events: none; }
+.heroBanner img { display: block; width: 100%; height: auto; aspect-ratio: 5.5 / 1; object-fit: cover; object-position: center; pointer-events: none; }
 .featureTabs { display: flex; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; border: 1px solid var(--audio-line); border-radius: 13px 13px 0 0; background: #fff; scrollbar-width: none; }
 .featureTabs::-webkit-scrollbar { display: none; }
 .tab, .tabActive { position: relative; display: inline-flex; min-width: 125px; flex: 1; align-items: center; justify-content: center; border: 0; border-right: 1px solid #ece9e6; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; padding: 12px 10px; color: #515866; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .tab:last-child, .tabActive:last-child { border-right: 0; }
+.featureTabs > button:only-child { flex: 0 0 auto; min-width: 0; min-height: 44px; padding-inline: 22px; }
 .tab:hover { color: var(--audio-orange); }
 .tabActive { margin-top: 0; border: 1px solid #e5e1de; border-bottom: 3px solid #f26b38; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 -1px 5px rgba(58, 42, 30, .04); color: #ef5c29; }
 

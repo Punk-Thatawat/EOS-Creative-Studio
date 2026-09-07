@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect } from "react";
 import { Info, LoaderCircle, LockKeyhole, Sparkles } from "lucide-react";
 import type { GenerationStatus } from "@/lib/api/generations";
@@ -8,6 +10,7 @@ import { imageRatioFromSize, imageRatios, imageResolutionSizes, type BackgroundM
 import { cx } from "../styles";
 import { DynamicModelParameters } from "./dynamic-model-parameters";
 import { Segmented } from "./image-generation-ui";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 type SettingsPanelProps = {
   activeTab: ImageGenerationTab;
@@ -53,8 +56,9 @@ type SettingsPanelProps = {
 };
 
 function ResolutionControl({ resolution, resolutionOptions, onChange, descriptions, secondaryLabel }: { resolution: string; resolutionOptions: string[]; onChange: (resolution: string) => void; descriptions?: Record<string, string>; secondaryLabel?: string }) {
+  const { t } = useLocale();
   const options = resolutionOptions.map((item) => ({ value: item, label: item, description: secondaryLabel ?? descriptions?.[item] }));
-  return <div className={cx("gen-setting-block", "gen-resolution-block")}><h3>{secondaryLabel ? "TARGET RESOLUTION" : "RESOLUTION"} <Info size={12} /></h3><Dropdown value={resolution} options={options} onChange={onChange} ariaLabel={secondaryLabel ? "Target resolution options" : "Resolution options"} className={cx("gen-select-wrap")} triggerClassName={cx("gen-select")} menuClassName={cx("gen-select-menu")} />{secondaryLabel && <p className={cx("gen-model-options-note")}>The original aspect ratio is preserved.</p>}</div>;
+  return <div className={cx("gen-setting-block", "gen-resolution-block")}><h3>{t(secondaryLabel ? "create.settings.targetResolution" : "create.settings.resolution")} <Info size={12} /></h3><Dropdown value={resolution} options={options} onChange={onChange} ariaLabel={t(secondaryLabel ? "create.settings.targetResolutionOptions" : "create.settings.resolutionOptions")} className={cx("gen-select-wrap")} triggerClassName={cx("gen-select")} menuClassName={cx("gen-select-menu")} />{secondaryLabel && <p className={cx("gen-model-options-note")}>{t("create.settings.originalAspectPreserved")}</p>}</div>;
 }
 
 function supportsImageInput(model: GenerationModelOption) {
@@ -78,17 +82,18 @@ function findSchemaField(properties: Record<string, SchemaProperty>, names: stri
 }
 
 function SchemaFieldControl({ field, value, options, onChange }: { field: SchemaField; value: unknown; options?: string[]; onChange: (value: unknown) => void }) {
+  const { t } = useLocale();
   const enumValues = options ?? (field.property.enum ?? []).map((item) => String(item));
   const isAspectRatioField = /^(aspect[_-]?ratio|aspectRatio|ratio)$/i.test(field.name);
   const selectedValue = value ?? field.property.default ?? (isAspectRatioField ? enumValues[0] ?? "" : "");
   const description = typeof field.property.description === "string" ? field.property.description : undefined;
   const type = field.property.type ?? "string";
   if (enumValues.length > 0) {
-    const placeholder = typeof field.property["x-placeholder"] === "string" ? String(field.property["x-placeholder"]) : "Auto";
+    const placeholder = typeof field.property["x-placeholder"] === "string" ? String(field.property["x-placeholder"]) : t("create.settings.auto");
     const ratioEnumSet = new Set(enumValues.filter((item): item is ImageRatio => imageRatios.includes(item as ImageRatio)));
     const ratioEnumValues = imageRatios.filter((item) => ratioEnumSet.has(item));
     if (isAspectRatioField && ratioEnumValues.length > 0) {
-      return <div className={cx("gen-setting-block")}><h3>ASPECT RATIO <Info size={12} /></h3><AspectRatioPicker options={ratioEnumValues} value={ratioEnumValues.includes(String(selectedValue) as ImageRatio) ? String(selectedValue) : ratioEnumValues[0]} onChange={onChange} />{description && <small className={cx("gen-model-options-note")}>{description}</small>}</div>;
+      return <div className={cx("gen-setting-block")}><h3>{t("create.settings.aspectRatio")} <Info size={12} /></h3><AspectRatioPicker options={ratioEnumValues} value={ratioEnumValues.includes(String(selectedValue) as ImageRatio) ? String(selectedValue) : ratioEnumValues[0]} onChange={onChange} />{description && <small className={cx("gen-model-options-note")}>{description}</small>}</div>;
     }
     return <div className={cx("gen-setting-block")}><h3>{field.name} <Info size={12} /></h3><div className={cx("gen-dynamic-field")}><Dropdown value={String(selectedValue)} options={enumValues.map((item) => ({ value: item, label: item }))} onChange={(nextValue) => onChange(nextValue || undefined)} placeholder={placeholder} ariaLabel={field.name} triggerClassName={cx("gen-select")} menuClassName={cx("gen-select-menu")} />{description && <small>{description}</small>}</div></div>;
   }
@@ -96,6 +101,7 @@ function SchemaFieldControl({ field, value, options, onChange }: { field: Schema
 }
 
 export function SettingsPanel({ activeTab, canGenerate, count, countOptions, backgroundMode = "remove", generationError, generationValidationMessage, generationStatus, isGenerating, modelOptions, isLoadingModels, modelCapabilities, modelParams, ratioOptions, qualityOptions, qualityEnabled, imageCreditEstimate, imageCreditEstimateLoading, imageCreditEstimateError, outputFormatOptions, outputFormat, optionsFollowModel, selectedModel, resolution, resolutionOptions, quality, ratio, onCountChange, onGenerate, onModelChange, onQualityChange, onOutputFormatChange, onRatioChange, onResolutionChange, onCancel, onModelParamChange }: SettingsPanelProps) {
+  const { t } = useLocale();
   const isImageToImage = activeTab === "Image to Image";
   const isTextToImage = activeTab === "Text to Image";
   const isUpscale = activeTab === "Upscale";
@@ -131,14 +137,14 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
   const textCountSupported = Boolean(isTextToImage && findSchemaField(schemaProperties, ["count", "num_images", "numImages", "batch_size", "batchSize"]));
   const qualityIsPromptBased = Boolean(qualityEnabled && !modelCapabilities?.qualityParameter && !findSchemaField(schemaProperties, ["quality", "quality_level", "qualityLevel"]));
   const showCountControl = !isUpscale && countOptions.length > 0 && (!isTextToImage || textCountSupported);
-  const modelDropdownOptions = modelOptions.map((item) => { const disabled = isImageInputTab && !supportsImageInput(item); return { value: item.model, label: item.displayName, description: disabled ? "Image input not supported" : undefined, disabled }; });
-  const modelControl = <Dropdown value={selectedModel} options={modelDropdownOptions} onChange={onModelChange} ariaLabel="Model options" loading={isLoadingModels} placeholder="Select a model" className={cx("gen-select-wrap")} triggerClassName={cx("gen-select", "gen-model-select")} menuClassName={cx("gen-select-menu", "gen-model-menu")} />;
+  const modelDropdownOptions = modelOptions.map((item) => { const disabled = isImageInputTab && !supportsImageInput(item); return { value: item.model, label: item.displayName, preserveLabel: true, description: disabled ? t("create.settings.imageInputNotSupported") : undefined, disabled }; });
+  const modelControl = <Dropdown value={selectedModel} options={modelDropdownOptions} onChange={onModelChange} ariaLabel={t("create.settings.modelOptions")} loading={isLoadingModels} placeholder={t("create.settings.selectModel")} className={cx("gen-select-wrap")} triggerClassName={cx("gen-select", "gen-model-select")} menuClassName={cx("gen-select-menu", "gen-model-menu")} />;
   const canSubmit = canGenerate && !imageCreditEstimateLoading;
   const formattedCreditEstimate = imageCreditEstimate?.toLocaleString(undefined, { maximumFractionDigits: 2 });
   const estimatedCreditsValue = imageCreditEstimateLoading
-    ? <span className={cx("gen-estimate-recalculating")} aria-label="Updating price"><LoaderCircle size={12} aria-hidden="true" /></span>
-    : imageCreditEstimate !== null && !imageCreditEstimateError ? `= ${formattedCreditEstimate} Credits` : "Pricing unavailable";
-  const generationLabel = activeTab === "AI Background" ? backgroundMode === "remove" ? "REMOVE BACKGROUND" : backgroundMode === "replace" ? "REPLACE BACKGROUND" : backgroundMode === "generate" ? "GENERATE BACKGROUND" : "APPLY COLOR" : isImageToImage ? "TRANSFORM IMAGE" : activeTab === "AI Style Transfer" ? "APPLY STYLE" : isUpscale ? "UPSCALE IMAGE" : activeTab === "Extend Image" ? "EXTEND IMAGE" : "GENERATE IMAGE";
+    ? <span className={cx("gen-estimate-recalculating")} aria-label={t("create.settings.updatingPrice")}><LoaderCircle size={12} aria-hidden="true" /></span>
+    : imageCreditEstimate !== null && !imageCreditEstimateError ? `= ${formattedCreditEstimate} ${t("create.settings.credits")}` : t("create.settings.pricingUnavailable");
+  const generationLabel = activeTab === "AI Background" ? backgroundMode === "remove" ? t("create.settings.removeBackground") : backgroundMode === "replace" ? t("create.settings.replaceBackground") : backgroundMode === "generate" ? t("create.settings.generateBackground") : t("create.settings.applyColor") : isImageToImage ? t("create.settings.transformImage") : activeTab === "AI Style Transfer" ? t("create.settings.applyStyle") : isUpscale ? t("create.settings.upscaleImage") : activeTab === "Extend Image" ? t("create.settings.extendImage") : t("create.settings.generateImage");
 
   const handleRatioChange = (nextRatio: ImageRatio) => {
     onRatioChange(nextRatio);
@@ -158,23 +164,23 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
   };
 
   return <aside className={cx("gen-panel", "gen-settings-panel")} data-background-remove={isBackgroundRemove ? "true" : "false"}>
-    <div className={cx("gen-panel-title")}><h2>SETTINGS</h2><span className={cx("gen-dial")}>DIAL IT IN</span></div>
-    <div className={cx("gen-setting-block")}><h3>MODEL <Info size={12} /></h3>{modelControl}</div>
+    <div className={cx("gen-panel-title")}><h2>{t("create.settings.title")}</h2><span className={cx("gen-dial")}>{t("create.settings.dialItIn")}</span></div>
+    <div className={cx("gen-setting-block")}><h3>{t("create.model").toUpperCase()} <Info size={12} /></h3>{modelControl}</div>
     {!isBackgroundRemove && !isBackgroundSolid && <DynamicModelParameters capabilities={modelCapabilities} values={modelParams} onChange={onModelParamChange} />}
-    {!isUpscale && aspectRatioOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>ASPECT RATIO <Info size={12} /></h3><AspectRatioPicker options={aspectRatioOptions} value={aspectRatioOptions.includes(selectedAspectRatio) ? selectedAspectRatio : aspectRatioOptions[0]} onChange={handleRatioChange} />{optionsFollowModel && <p className={cx("gen-model-options-note")} role="status">Options update to match the selected model.</p>}</div>}
+    {!isUpscale && aspectRatioOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{t("create.settings.aspectRatio")} <Info size={12} /></h3><AspectRatioPicker options={aspectRatioOptions} value={aspectRatioOptions.includes(selectedAspectRatio) ? selectedAspectRatio : aspectRatioOptions[0]} onChange={handleRatioChange} />{optionsFollowModel && <p className={cx("gen-model-options-note")} role="status">{t("create.settings.optionsFollowModel")}</p>}</div>}
     {isUpscale ? <ResolutionControl resolution={resolution} resolutionOptions={resolutionOptions} onChange={onResolutionChange} secondaryLabel="AI output resolution" /> : <>{showGenericResolution && <ResolutionControl resolution={resolution} resolutionOptions={resolutionOptions} onChange={onResolutionChange} descriptions={imageResolutionSizes[ratio]} />}</>}
     {isTextToImage && textResolutionField && <SchemaFieldControl field={textResolutionField} value={modelParams[textResolutionField.name]} onChange={(value) => onModelParamChange(textResolutionField.name, value)} />}
     {isTextToImage && textSizeField && <SchemaFieldControl field={textSizeField} value={modelParams[textSizeField.name]} options={textSizeOptions.length > 0 ? textSizeOptions : undefined} onChange={handleSizeChange} />}
     {isTextToImage && textSeedField && <SchemaFieldControl field={textSeedField} value={modelParams[textSeedField.name]} onChange={(value) => onModelParamChange(textSeedField.name, value)} />}
-    {qualityEnabled && <div className={cx("gen-setting-block")}><h3>{isTextToImage && modelCapabilities?.qualityParameter ? modelCapabilities.qualityParameter : "QUALITY"} <Info size={12} /></h3><Segmented items={qualityOptions} value={quality} onChange={onQualityChange} />{qualityIsPromptBased && <p className={cx("gen-model-options-note")}>Applied as a prompt instruction because this model has no native quality parameter.</p>}</div>}
-    {outputFormatOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{isTextToImage && modelCapabilities?.outputFormatParameter ? modelCapabilities.outputFormatParameter : "OUTPUT FORMAT"} <Info size={12} /></h3><Segmented items={outputFormatOptions} value={outputFormat && outputFormatOptions.includes(outputFormat) ? outputFormat : outputFormatOptions[0] ?? ""} onChange={onOutputFormatChange} /><p className={cx("gen-model-options-note")}>Available formats for the selected model.</p></div>}
-    {showCountControl && <div className={cx("gen-setting-block")}><h3>NUMBER OF IMAGES <Info size={12} /></h3><Segmented items={countOptions} value={count} onChange={onCountChange} /></div>}
-    <div className={cx("gen-estimate")}><div><h3>ESTIMATED CREDITS <Info size={12} /></h3><p>{isUpscale ? `1 image x ${resolution}` : `${showCountControl ? `${count} images` : "1 image"}`} <strong>{estimatedCreditsValue}</strong></p></div></div>
-    {generationStatus === "cancelled" && <p className={cx("gen-generation-status")} role="status">Generation cancelled</p>}
+    {qualityEnabled && <div className={cx("gen-setting-block")}><h3>{isTextToImage && modelCapabilities?.qualityParameter ? modelCapabilities.qualityParameter : t("create.settings.quality")} <Info size={12} /></h3><Segmented items={qualityOptions} value={quality} onChange={onQualityChange} />{qualityIsPromptBased && <p className={cx("gen-model-options-note")}>{t("create.settings.qualityPromptNote")}</p>}</div>}
+    {outputFormatOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{isTextToImage && modelCapabilities?.outputFormatParameter ? modelCapabilities.outputFormatParameter : t("create.settings.outputFormat")} <Info size={12} /></h3><Segmented items={outputFormatOptions} value={outputFormat && outputFormatOptions.includes(outputFormat) ? outputFormat : outputFormatOptions[0] ?? ""} onChange={onOutputFormatChange} /><p className={cx("gen-model-options-note")}>{t("create.settings.outputFormatNote")}</p></div>}
+    {showCountControl && <div className={cx("gen-setting-block")}><h3>{t("create.settings.numberOfImages")} <Info size={12} /></h3><Segmented items={countOptions} value={count} onChange={onCountChange} /></div>}
+    <div className={cx("gen-estimate")}><div><h3>{t("create.settings.estimatedCredits")} <Info size={12} /></h3><p>{isUpscale ? `1 ${t("create.settings.image")} × ${resolution}` : `${showCountControl ? `${count} ${t("create.settings.images")}` : `1 ${t("create.settings.image")}`} `}<strong>{estimatedCreditsValue}</strong></p></div></div>
+    {generationStatus === "cancelled" && <p className={cx("gen-generation-status")} role="status">{t("create.settings.generationCancelled")}</p>}
     {generationError && <p className={cx("gen-generation-error")} role="alert">{generationError}</p>}
     {generationValidationMessage && <p className={cx("gen-generation-validation")} role="status">{generationValidationMessage}</p>}
-    {isGenerating && <button type="button" className={cx("gen-cancel-button")} onClick={onCancel}>Cancel generation</button>}
-    <button type="button" className={cx("gen-generate-button")} onClick={onGenerate} disabled={!canSubmit} aria-busy={isGenerating}>{isGenerating ? <LoaderCircle size={20} className={cx("gen-generating-icon")} aria-hidden="true" /> : <Sparkles size={20} aria-hidden="true" />} {isGenerating ? "GENERATING..." : generationLabel}</button>
-    <p className={cx("gen-private")}><LockKeyhole size={12} /> Your generation is private and secure</p>
+    {isGenerating && <button type="button" className={cx("gen-cancel-button")} onClick={onCancel}>{t("create.settings.cancelGeneration")}</button>}
+    <button type="button" className={cx("gen-generate-button")} onClick={onGenerate} disabled={!canSubmit} aria-busy={isGenerating}>{isGenerating ? <LoaderCircle size={20} className={cx("gen-generating-icon")} aria-hidden="true" /> : <Sparkles size={20} aria-hidden="true" />} {isGenerating ? t("create.settings.generating") : generationLabel}</button>
+    <p className={cx("gen-private")}><LockKeyhole size={12} /> {t("create.settings.privateSecure")}</p>
   </aside>;
 }

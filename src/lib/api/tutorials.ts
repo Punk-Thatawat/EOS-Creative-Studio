@@ -51,12 +51,22 @@ async function authenticatedJsonRequest(path: string, init: RequestInit = {}): P
   return response.json();
 }
 
+async function publicJsonRequest(path: string): Promise<unknown> {
+  const response = await fetch(`/api${path}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok) throw new Error(await getErrorMessage(response));
+  return response.json();
+}
+
 async function adminJsonRequest(path: string, init: RequestInit = {}): Promise<unknown> {
   return authenticatedJsonRequest(path, init);
 }
 
 export async function listPublicTutorials(feature: string): Promise<AdminTutorialSlot[]> {
-  const payload = await authenticatedJsonRequest(`/tutorials?feature=${encodeURIComponent(feature)}`) as { data?: { tutorials?: AdminTutorialSlot[] } };
+  const payload = await publicJsonRequest(`/tutorials?feature=${encodeURIComponent(feature)}`) as { data?: { tutorials?: AdminTutorialSlot[] } };
   return payload.data?.tutorials ?? [];
 }
 

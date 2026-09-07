@@ -1,6 +1,7 @@
 "use client";
 
 import { getApiAccessToken } from "@/lib/auth/access-token";
+import { generationErrorFromPayload } from "@/lib/api/generation-errors";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
@@ -48,6 +49,9 @@ export type VideoStoryboardResponse = {
   completedScenes?: number;
   failedScenes?: number;
   totalCreditCost?: number;
+  errorSource?: "system" | "provider";
+  errorCode?: string;
+  errorMessage?: string;
   audioMode?: "none" | "sfx" | "music" | "both" | string;
   audioModel?: string;
   audioProvider?: string;
@@ -126,6 +130,9 @@ export type VideoStoryboardStatus = {
   audioModel?: string;
   audioProvider?: string;
   finalVideoUrl?: string;
+  errorSource?: "system" | "provider";
+  errorCode?: string;
+  errorMessage?: string;
   continuation?: {
     strategy?: string;
     nativeExtend?: boolean;
@@ -177,14 +184,13 @@ async function authenticatedRequest(path: string, init: RequestInit = {}) {
   const payload = await response.json().catch(() => null) as {
     data?: unknown;
     message?: unknown;
+    errorSource?: unknown;
+    errorCode?: unknown;
+    code?: unknown;
+    errorMessage?: unknown;
   } | null;
   if (!response.ok) {
-    const message = Array.isArray(payload?.message)
-      ? payload.message.join(", ")
-      : typeof payload?.message === "string"
-        ? payload.message
-        : "Video generation request failed";
-    throw new Error(message);
+    throw generationErrorFromPayload(payload, "Video generation request failed");
   }
   return payload?.data ?? payload;
 }

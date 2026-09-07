@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Eraser, Expand, Heart, MousePointer2, Paintbrush, Trash2, X } from "lucide-react";
 import type { GenerationStatus } from "@/lib/api/generations";
 import { type BackgroundMode, type BackgroundPreviewMode, type ExtendAmount, type ExtendDirection, type ImageGenerationTab, type MaskTool } from "../config";
@@ -53,15 +53,62 @@ function PreviewSurface({ image, alt, placeholderLabel, isLoading = false, gener
 
     <div className={cx("gen-background-preview-tabs")} role="tablist" aria-label="Background preview"><button type="button" role="tab" aria-selected={mode === "before"} className={cx(mode === "before" && "is-selected")} onClick={() => onModeChange("before")}>Before</button><button type="button" role="tab" aria-selected={mode === "after"} className={cx(mode === "after" && "is-selected")} onClick={() => onModeChange("after")}>After</button><button type="button" role="tab" aria-selected={mode === "mask"} className={cx(mode === "mask" && "is-selected")} onClick={() => onModeChange("mask")}>{backgroundMode === "remove" ? "Edit Mask" : "View Mask"}</button><span>{isMaskEditing ? "White removes · black keeps" : backgroundMode === "solid" && transparent ? "Transparent canvas" : "Live preview"}</span></div>
 */
-function ExtendPreview({ sourceImage, resultImage, modelPreviewUrl, direction, amount, isFavorite, isLoading, placeholderLabel, onDownload, onToggleFavorite, onOpenImage }: { sourceImage: string | null; resultImage: string | null; modelPreviewUrl?: string | null; direction: ExtendDirection; amount: ExtendAmount; isFavorite: boolean; isLoading: boolean; placeholderLabel: string; onDownload: () => void; onToggleFavorite: () => void; onOpenImage: () => void }) {
+function extendSourceShare(amount: ExtendAmount): number {
+  if (amount === "25%") return 80;
+  if (amount === "100%") return 50;
+  return 200 / 3;
+}
+
+function imageRatioValue(ratio: string): number {
+  const [width, height] = ratio.split(":").map(Number);
+  return width > 0 && height > 0 ? width / height : 16 / 9;
+}
+
+function ExtendPreview({ sourceImage, resultImage, modelPreviewUrl, aspectRatio, direction, amount, isFavorite, isLoading, placeholderLabel, onDownload, onToggleFavorite, onOpenImage, onImageError }: { sourceImage: string | null; resultImage: string | null; modelPreviewUrl?: string | null; aspectRatio: string; direction: ExtendDirection; amount: ExtendAmount; isFavorite: boolean; isLoading: boolean; placeholderLabel: string; onDownload: () => void; onToggleFavorite: () => void; onOpenImage: () => void; onImageError: () => void }) {
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [sourceAspectRatio, setSourceAspectRatio] = useState<number | null>(null);
   const hasResult = Boolean(resultImage);
-  const hasModelPreview = !hasResult && Boolean(modelPreviewUrl);
-  return <PreviewSurface image={hasResult ? resultImage : hasModelPreview ? modelPreviewUrl ?? null : null} alt={hasResult ? "Extended image" : hasModelPreview ? "Model preview" : "Source image preview"} placeholderLabel={placeholderLabel} isLoading={isLoading} generated={hasResult} actionAvailable={hasResult} isFavorite={isFavorite} onDownload={onDownload} onToggleFavorite={onToggleFavorite} onOpenImage={onOpenImage} className={cx("gen-extend-preview")}>
-    {!hasResult && !hasModelPreview && sourceImage && !isLoading && <div className={cx("gen-extend-canvas", `is-${direction}`)}><div className={cx("gen-extend-zone")}><span>{direction === "all" ? "NEW AREA · ALL SIDES" : "NEW AREA"}</span><b>{direction === "all" ? `+${amount} EACH SIDE` : `+${amount}`}</b></div><img src={sourceImage} alt="Original image boundary" className={cx("gen-extend-source")} /><span className={cx("gen-extend-original-label")}>ORIGINAL</span><span className={cx("gen-extend-direction-label")}>{direction === "all" ? "AI will continue the scene in all four directions" : `AI will continue the scene ${direction}`}</span></div>}
+  // An uploaded image is the source of truth for the extend composition. A
+  // model preview is useful only before the user has supplied a source image.
+  const hasModelPreview = !hasResult && !sourceImage && Boolean(modelPreviewUrl);
+  const hasSourceComposition = !hasResult && !hasModelPreview && Boolean(sourceImage) && !isLoading;
+  useEffect(() => {
+    if (!hasSourceComposition) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const updateCanvasSize = () => {
+      const { width, height } = canvas.getBoundingClientRect();
+      if (!width || !height) return;
+      setCanvasSize((current) => current.width === width && current.height === height ? current : { width, height });
+    };
+    const frame = window.requestAnimationFrame(updateCanvasSize);
+    const observer = new ResizeObserver(updateCanvasSize);
+    observer.observe(canvas);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [hasSourceComposition]);
+
+  const sourceShare = extendSourceShare(amount);
+  const compositionRatio = imageRatioValue(aspectRatio);
+  const compositionWidth = canvasSize.width && canvasSize.height ? Math.min(canvasSize.width, canvasSize.height * compositionRatio) : 0;
+  const compositionHeight = compositionWidth > 0 ? compositionWidth / compositionRatio : 0;
+  const compositionStyle: CSSProperties = {
+    ...(compositionWidth > 0 ? { width: `${compositionWidth}px`, height: `${compositionHeight}px` } : {}),
+    aspectRatio: `${compositionRatio} / 1`,
+    "--gen-extend-source-share": `${sourceShare}%`,
+    "--gen-extend-new-share": `${100 - sourceShare}%`,
+    "--gen-extend-source-ratio": `${sourceAspectRatio ?? 1}`,
+  } as CSSProperties;
+  return <PreviewSurface image={hasResult ? resultImage : hasModelPreview ? modelPreviewUrl ?? null : null} alt={hasResult ? "Extended image" : hasModelPreview ? "Model preview" : "Source image preview"} placeholderLabel={placeholderLabel} isLoading={isLoading} generated={hasResult} actionAvailable={hasResult} isFavorite={isFavorite} onDownload={onDownload} onToggleFavorite={onToggleFavorite} onOpenImage={onOpenImage} onImageError={onImageError} className={cx("gen-extend-preview", hasSourceComposition && "has-source-composition")}>
+    {hasSourceComposition && <div ref={canvasRef} className={cx("gen-extend-canvas")}><div className={cx("gen-extend-composition", `is-${direction}`)} style={compositionStyle}><div className={cx("gen-extend-zone")} aria-hidden="true" /><div className={cx("gen-extend-source-frame")}><img src={sourceImage!} alt="Source image preview" className={cx("gen-extend-source")} onLoad={(event) => { const { naturalWidth, naturalHeight } = event.currentTarget; if (naturalWidth && naturalHeight) setSourceAspectRatio(naturalWidth / naturalHeight); }} /></div></div></div>}
   </PreviewSurface>;
 }
 
-export function PreviewPanel({ activeTab, generated, generatedImageUrls, generationCompletedCount, generationStatus, generationTotalCount, isGenerating, isLoadingRecent, recentError, recentGenerationUrls, imageMimeTypes, selectedRecentImageUrl, selectedVariation, previewDisplayMode, onPreviewDisplayModeChange, sourceImage, modelPreviewUrl = null, modelPreviewType = null, backgroundMask = null, backgroundMode = "remove", backgroundColor = "#ffffff", backgroundTransparent = true, maskTool, brushSize, extendDirection = "right", extendAmount = "50%", onBackgroundMaskChange, onMaskToolChange, onBrushSizeChange, onRecentSelect, onVariationSelect, onRefreshRecent }: { activeTab: ImageGenerationTab; generated: boolean; generatedImageUrls: string[]; generationCompletedCount: number; generationStatus: GenerationStatus; generationTotalCount: number; isGenerating: boolean; isLoadingRecent: boolean; recentError: string | null; recentGenerationUrls: string[]; imageMimeTypes: Record<string, string>; selectedRecentImageUrl: string | null; selectedVariation: number; previewDisplayMode: "current" | "gallery"; onPreviewDisplayModeChange: (mode: "current" | "gallery") => void; sourceImage: string | null; modelPreviewUrl?: string | null; modelPreviewType?: "image" | "video" | null; backgroundMask?: string | null; backgroundMode?: BackgroundMode; backgroundColor?: string; backgroundTransparent?: boolean; maskTool: MaskTool; brushSize: number; extendDirection?: ExtendDirection; extendAmount?: ExtendAmount; onBackgroundMaskChange: (mask: string | null) => void; onMaskToolChange: (tool: MaskTool) => void; onBrushSizeChange: (size: number) => void; onRecentSelect: (url: string) => void; onVariationSelect: (index: number) => void; onRefreshRecent: () => void }) {
+export function PreviewPanel({ activeTab, generated, generatedImageUrls, generationCompletedCount, generationStatus, generationTotalCount, isGenerating, isLoadingRecent, recentError, recentGenerationUrls, imageMimeTypes, selectedRecentImageUrl, selectedVariation, previewDisplayMode, onPreviewDisplayModeChange, sourceImage, previewRatio, modelPreviewUrl = null, modelPreviewType = null, backgroundMask = null, backgroundMode = "remove", backgroundColor = "#ffffff", backgroundTransparent = true, maskTool, brushSize, extendDirection = "right", extendAmount = "50%", onBackgroundMaskChange, onMaskToolChange, onBrushSizeChange, onRecentSelect, onVariationSelect, onRefreshRecent }: { activeTab: ImageGenerationTab; generated: boolean; generatedImageUrls: string[]; generationCompletedCount: number; generationStatus: GenerationStatus; generationTotalCount: number; isGenerating: boolean; isLoadingRecent: boolean; recentError: string | null; recentGenerationUrls: string[]; imageMimeTypes: Record<string, string>; selectedRecentImageUrl: string | null; selectedVariation: number; previewDisplayMode: "current" | "gallery"; onPreviewDisplayModeChange: (mode: "current" | "gallery") => void; sourceImage: string | null; previewRatio: string; modelPreviewUrl?: string | null; modelPreviewType?: "image" | "video" | null; backgroundMask?: string | null; backgroundMode?: BackgroundMode; backgroundColor?: string; backgroundTransparent?: boolean; maskTool: MaskTool; brushSize: number; extendDirection?: ExtendDirection; extendAmount?: ExtendAmount; onBackgroundMaskChange: (mask: string | null) => void; onMaskToolChange: (tool: MaskTool) => void; onBrushSizeChange: (size: number) => void; onRecentSelect: (url: string) => void; onVariationSelect: (index: number) => void; onRefreshRecent: () => void }) {
   const variationRowRef = useRef<HTMLDivElement>(null);
   const recentRowRef = useRef<HTMLDivElement>(null);
   const [variationScrollState, setVariationScrollState] = useState({ canGoBack: false, canGoForward: false });
@@ -77,6 +124,22 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
   const [galleryKind, setGalleryKind] = useState<"variation" | "recent">("variation");
   const [maskResetKey, setMaskResetKey] = useState(0);
   const [unavailableImageUrls, setUnavailableImageUrls] = useState<Set<string>>(() => new Set());
+  const [imageRetryKey, setImageRetryKey] = useState(0);
+  const outputKey = JSON.stringify([activeTab, generatedImageUrls]);
+  const [observedOutput, setObservedOutput] = useState({ key: outputKey, status: generationStatus });
+  if (observedOutput.key !== outputKey || observedOutput.status !== generationStatus) {
+    setObservedOutput({ key: outputKey, status: generationStatus });
+    if (generatedImageUrls.length > 0 && (observedOutput.key !== outputKey || generationStatus === "completed")) {
+      setIsImagePopupOpen(false);
+      setIsCompareOpen(false);
+    }
+  }
+
+  const retryFailedImages = () => {
+    setUnavailableImageUrls(new Set());
+    // Remount the image surfaces without changing provider-signed URLs.
+    setImageRetryKey((key) => key + 1);
+  };
 
   const markImageUnavailable = (url: string) => {
     setUnavailableImageUrls((current) => {
@@ -103,7 +166,9 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
   const selectedImageUrl = selectedRecentUrl ?? (selectedVariationUrl && !unavailableImageUrls.has(selectedVariationUrl) ? selectedVariationUrl : primaryImageUrl);
   const isBackgroundPreview = activeTab === "AI Background";
   const isExtendPreview = activeTab === "Extend Image";
-  const galleryImageUrl = galleryImages[galleryIndex] ?? null;
+  const selectedGalleryImageUrl = galleryImages[galleryIndex] ?? null;
+  const galleryImageUrl = selectedGalleryImageUrl && !unavailableImageUrls.has(selectedGalleryImageUrl)
+    ? selectedGalleryImageUrl : galleryImages.find((url) => !unavailableImageUrls.has(url)) ?? null;
   const isGalleryView = previewDisplayMode === "gallery" && Boolean(galleryImageUrl);
   // A restored draft can have generated URLs before the `generated` flag is
   // hydrated. The selected variation is the source of truth for Preview.
@@ -208,9 +273,10 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
   const previewIsGenerated = isGalleryView ? true : isBackgroundPreview ? Boolean(selectedImageUrl) && effectiveBackgroundPreviewMode === "after" : generated;
   const openDisplayedImage = () => {
     if (!displayedImageUrl) return;
-    const images = isGalleryView ? galleryImages : selectedRecentImageUrl ? recentPreviewUrls : variationSources.length ? variationSources : primaryImageUrl ? [primaryImageUrl] : [];
-    const selectedIndex = selectedRecentImageUrl ? recentPreviewUrls.indexOf(selectedRecentImageUrl) : selectedVariation;
-    const index = isGalleryView ? galleryIndex : selectedIndex >= 0 ? selectedIndex : 0;
+    const candidates = isGalleryView ? galleryImages : selectedRecentUrl ? recentPreviewUrls : variationSources;
+    const availableImages = candidates.filter((url) => !unavailableImageUrls.has(url));
+    const images = availableImages.includes(displayedImageUrl) ? availableImages : [displayedImageUrl];
+    const index = images.indexOf(displayedImageUrl);
     setPopupImages(images);
     setPopupIndex(index);
     setIsImagePopupOpen(true);
@@ -259,9 +325,10 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
     }
   };
   return <section className={cx("gen-panel", "gen-preview-panel")}>
+    {unavailableImageUrls.size > 0 && <div className={cx("gen-gallery-status")} role="status">Some images could not load. <button type="button" className={cx("gen-inline-action")} onClick={retryFailedImages}>Retry images</button></div>}
     <div className={cx("gen-panel-title")}><h2>PREVIEW</h2>{previewStatus ? <span className={cx("gen-generation-status", "gen-preview-status")} role="status" aria-live="polite"><span key={generationStatus}>{previewStatus}</span></span> : null}</div>
     {isBackgroundPreview && isBackgroundMaskEditing && <div className={cx("gen-mask-edit-heading")}><div><h3>REFINE MASK</h3><p>Paint or lasso the area to remove. White removes; black keeps.</p></div><button type="button" className={cx("gen-inline-action")} onClick={resetMask} disabled={!backgroundMask}><Trash2 size={12} /> Reset mask</button></div>}
-    {isExtendPreview ? <ExtendPreview sourceImage={sourceImage} resultImage={selectedImageUrl ?? null} modelPreviewUrl={configuredModelPreview} direction={extendDirection} amount={extendAmount} isFavorite={isFavorite} isLoading={isPreviewLoading} placeholderLabel={isPreviewLoading ? (previewStatus ?? "CREATING PREVIEW") : genericPreviewLabel} onDownload={() => void downloadImage()} onToggleFavorite={() => setIsFavorite((favorite) => !favorite)} onOpenImage={openDisplayedImage} /> : <PreviewSurface image={previewImage} alt={previewImageLabel} placeholderLabel={previewPlaceholderLabel} isLoading={isPreviewLoading} generated={previewIsGenerated} actionAvailable={Boolean(displayedImageUrl) && !isBackgroundMaskEditing && !showingModelPreview} isFavorite={isFavorite} onDownload={() => void downloadImage()} onToggleFavorite={() => setIsFavorite((favorite) => !favorite)} onOpenImage={openDisplayedImage} onImageError={() => previewImage && markImageUnavailable(previewImage)} showActions={!isBackgroundMaskEditing && !showingModelPreview} className={cx(isBackgroundPreview && "is-background-preview", isBackgroundMaskEditing && "is-background-mask-editing")} backgroundColor={isBackgroundPreview && backgroundMode === "solid" && effectiveBackgroundPreviewMode === "after" && !isGalleryView ? backgroundColor : undefined}>
+    {isExtendPreview ? <ExtendPreview key={imageRetryKey} sourceImage={sourceImage} resultImage={displayedImageUrl} modelPreviewUrl={configuredModelPreview} aspectRatio={previewRatio} direction={extendDirection} amount={extendAmount} isFavorite={isFavorite} isLoading={isPreviewLoading} placeholderLabel={isPreviewLoading ? (previewStatus ?? "CREATING PREVIEW") : genericPreviewLabel} onDownload={() => void downloadImage()} onToggleFavorite={() => setIsFavorite((favorite) => !favorite)} onOpenImage={openDisplayedImage} onImageError={() => displayedImageUrl && markImageUnavailable(displayedImageUrl)} /> : <PreviewSurface key={imageRetryKey} image={previewImage} alt={previewImageLabel} placeholderLabel={previewPlaceholderLabel} isLoading={isPreviewLoading} generated={previewIsGenerated} actionAvailable={Boolean(displayedImageUrl) && !isBackgroundMaskEditing && !showingModelPreview} isFavorite={isFavorite} onDownload={() => void downloadImage()} onToggleFavorite={() => setIsFavorite((favorite) => !favorite)} onOpenImage={openDisplayedImage} onImageError={() => previewImage && markImageUnavailable(previewImage)} showActions={!isBackgroundMaskEditing && !showingModelPreview} className={cx(isBackgroundPreview && "is-background-preview", isBackgroundMaskEditing && "is-background-mask-editing")} backgroundColor={isBackgroundPreview && backgroundMode === "solid" && effectiveBackgroundPreviewMode === "after" && !isGalleryView ? backgroundColor : undefined}>
       {isBackgroundPreview && <div className={cx("gen-mask-editor-preview", !isBackgroundMaskEditing && "is-hidden")}><MaskEditor imageUrl={sourceImage} tool={maskTool} brushSize={brushSize} resetKey={maskResetKey} onMaskChange={onBackgroundMaskChange} /></div>}
       {isBackgroundPreview && !isBackgroundMaskEditing && effectiveBackgroundPreviewMode === "mask" && sourceImage && !backgroundMask && <div className={cx("gen-mask-preview-overlay")} aria-hidden="true"><span>MASK VIEW</span></div>}
       {isBackgroundPreview && effectiveBackgroundPreviewMode === "after" && backgroundTransparent && selectedImageUrl && <span className={cx("gen-transparency-badge")}>PNG TRANSPARENT</span>}

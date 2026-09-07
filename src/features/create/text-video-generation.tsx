@@ -1,4 +1,6 @@
 "use client";
+import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -27,6 +29,7 @@ import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 
 type SchemaProperty = {
   type?: string;
@@ -277,6 +280,7 @@ export function TextToVideoWorkspace() {
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
+  useTemplatePrompt("video", setPrompt);
   const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
@@ -534,7 +538,7 @@ export function TextToVideoWorkspace() {
           });
         }
       }
-      if (status.status !== "completed") throw new Error(status.errorMessage ?? `Video generation ${status.status}`);
+      if (status.status !== "completed") throw generationErrorFromStatus(status, `Video generation ${status.status}`);
       const videoUrl = outputVideoUrl(status);
       if (!videoUrl) throw new Error("Text-to-video completed without a video URL");
       setFinalVideoUrl(videoUrl);
@@ -547,7 +551,7 @@ export function TextToVideoWorkspace() {
       if (controller.signal.aborted) return;
       setGenerationStatus("failed");
       setNotice(null);
-      setGenerationError(error instanceof Error ? error.message : "Unable to generate text-to-video");
+      setGenerationError(formatGenerationError(error, "Unable to generate text-to-video"));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -569,6 +573,20 @@ export function TextToVideoWorkspace() {
   };
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
+
+  useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
+    setPrompt(p); setNegativePrompt(typeof s.negativePrompt==='string'?s.negativePrompt:'');
+    if(s.duration!==undefined)setDurationValue(s.duration);
+    if(s.resolution!==undefined)setResolutionValue(s.resolution);
+    if(s.aspectRatio!==undefined||s.ratio!==undefined)setAspectRatioValue(s.aspectRatio??s.ratio);
+    if(s.seed!==undefined)setSeedValue(s.seed);
+    if(s.fps!==undefined)setFpsValue(s.fps);
+    if(s.cameraMotion!==undefined)setCameraMotionValue(s.cameraMotion);
+    if(s.audioEnabled!==undefined)setAudioValue(s.audioEnabled);
+    if(typeof s.sourceImage==='string')setReferenceImage(s.sourceImage);
+    setModelParams(s.modelParams&&typeof s.modelParams==='object'?s.modelParams as Record<string,unknown>:{});
+    setPromptOptimizerEnabled(s.promptOptimizerEnabled===true);
+  }});
 
   return (
     <div className={styles.columns}>

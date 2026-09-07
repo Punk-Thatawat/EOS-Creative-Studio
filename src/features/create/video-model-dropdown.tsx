@@ -38,6 +38,7 @@ export function VideoModelDropdown({
       options={models.map((model) => ({
         value: model.model,
         label: modelLabel(model),
+        preserveLabel: true,
       }))}
       onChange={onChange}
       ariaLabel={ariaLabel}

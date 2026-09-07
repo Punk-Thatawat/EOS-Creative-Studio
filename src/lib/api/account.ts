@@ -10,6 +10,7 @@ type BackendResponse = {
     user?: {
       displayName?: string | null;
       email?: string | null;
+      role?: string | null;
     };
     balance?: number | string | null;
   };
@@ -18,6 +19,7 @@ type BackendResponse = {
 export type HeaderAccountData = {
   displayName: string;
   email: string;
+  role: string;
   balance: number | string | null;
 };
 
@@ -43,7 +45,7 @@ async function getBackendData(path: string, accessToken: string): Promise<Backen
 
 export async function fetchHeaderAccountData(): Promise<HeaderAccountData> {
   const accessToken = await getAccessToken();
-  if (!accessToken) return { displayName: "User", email: "", balance: null };
+  if (!accessToken) return { displayName: "User", email: "", role: "User", balance: null };
 
   const [session, credits] = await Promise.all([
     getBackendData("/auth/session", accessToken),
@@ -52,10 +54,13 @@ export async function fetchHeaderAccountData(): Promise<HeaderAccountData> {
   const user = session.data?.user;
   const email = user?.email?.trim() ?? "";
   const displayName = user?.displayName?.trim() || email || "User";
+  const role = user?.role?.trim().toLowerCase();
+  const accountRole = role === "admin" ? "Admin" : role === "owner" ? "Owner" : role === "staff" ? "Staff" : "User";
 
   return {
     displayName,
     email,
+    role: accountRole,
     balance: credits.data?.balance ?? null,
   };
 }

@@ -1,4 +1,6 @@
 "use client";
+import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
@@ -41,6 +43,7 @@ import {
 } from "@/lib/api/video-generations";
 import { TextToVideoWorkspace } from "./text-video-generation";
 import { LipsyncWorkspace, PeopleVideoWorkspace } from "./people-video-generation";
+import { EosCutButton } from "./eos-cut-button";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { MotionTransferWorkspace } from "./motion-transfer-generation";
@@ -52,6 +55,8 @@ import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
+import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 
 const videoModes = [
   "Image to Video",
@@ -61,6 +66,14 @@ const videoModes = [
   "Lipsync",
   "Extend Video",
 ] as const;
+const videoTabKeys = {
+  "Image to Video": "create.video.tabs.imageToVideo",
+  "Text to Video": "create.video.tabs.textToVideo",
+  "People Video": "create.video.tabs.peopleVideo",
+  "Motion Transfer": "create.video.tabs.motionTransfer",
+  Lipsync: "create.video.tabs.lipsync",
+  "Extend Video": "create.video.tabs.extendVideo",
+} as const;
 const floatingGenerationProgressStorageKey = "eos.generation.progress.cards";
 const videoModeOptions = [
   {
@@ -106,6 +119,16 @@ const generationModeOptions = [
     description: "Continue each scene from the previous frame",
   },
 ] as const;
+type VideoModeCopyValue = (typeof videoModeOptions)[number]["value"] | (typeof generationModeOptions)[number]["value"];
+const generationModeCopyKeys: Record<VideoModeCopyValue, { labelKey: TranslationKey; descriptionKey: TranslationKey }> = {
+  storyboard: { labelKey: "create.video.generationModes.storyboard", descriptionKey: "create.video.generationModes.storyboardDescription" },
+  continuous: { labelKey: "create.video.generationModes.continuous", descriptionKey: "create.video.generationModes.continuousDescription" },
+  flexible: { labelKey: "create.video.generationModes.flexible", descriptionKey: "create.video.generationModes.flexibleDescription" },
+  "image-to-video": { labelKey: "create.video.generationModes.imageToVideo", descriptionKey: "create.video.generationModes.imageToVideoDescription" },
+  "reference-to-video": { labelKey: "create.video.generationModes.referenceToVideo", descriptionKey: "create.video.generationModes.referenceToVideoDescription" },
+  "single-image": { labelKey: "create.video.generationModes.singleImage", descriptionKey: "create.video.generationModes.singleImageDescription" },
+  "multi-scene": { labelKey: "create.video.generationModes.multiScene", descriptionKey: "create.video.generationModes.multiSceneDescription" },
+};
 type GenerationMode = (typeof generationModeOptions)[number]["value"];
 
 function videoModeRouteFeature(mode: GenerationMode): string {
@@ -863,6 +886,7 @@ function formatHistoryDate(value?: string): string {
 }
 
 export function VideoGenerationPage() {
+  const { t } = useLocale();
   const searchParams = useSearchParams();
   const [activeVideoTab, setActiveVideoTab] = useState<"image-to-video" | "text-to-video" | "people-video" | "motion-transfer" | "lipsync" | "extend-video">("image-to-video");
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -873,6 +897,7 @@ export function VideoGenerationPage() {
   const [storyboardQualityNote, setStoryboardQualityNote] = useState<string | null>(null);
   const [storyboardSplitting, setStoryboardSplitting] = useState(false);
   const [prompt, setPrompt] = useState("");
+  useTemplatePrompt("video", setPrompt);
   const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [duration, setDuration] = useState(5);
@@ -1069,7 +1094,10 @@ export function VideoGenerationPage() {
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
     if (requestedTab !== "image-to-video" && requestedTab !== "text-to-video" && requestedTab !== "people-video" && requestedTab !== "motion-transfer" && requestedTab !== "lipsync" && requestedTab !== "extend-video") return;
-    const timeoutId = window.setTimeout(() => setActiveVideoTab(requestedTab), 0);
+    const timeoutId = window.setTimeout(() => {
+      setPromptOptimizerEnabled(false);
+      setActiveVideoTab(requestedTab);
+    }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [searchParams]);
 
@@ -1428,7 +1456,7 @@ export function VideoGenerationPage() {
         setStoryboardSlices([]);
         setStoryboardSlicesSourceFile(null);
         setStoryboardQualityNote(null);
-        setGenerationError(error instanceof Error ? error.message : "Unable to split storyboard image");
+        setGenerationError(formatGenerationError(error, "Unable to split storyboard image"));
       }
       return false;
     } finally {
@@ -2049,9 +2077,6 @@ export function VideoGenerationPage() {
   const displayedStoryboardId = previewView === "library"
     ? videoHistory[safeVideoLibraryIndex]?.storyboardId ?? latestCompletedStoryboardId
     : latestCompletedStoryboardId ?? videoHistory[0]?.storyboardId ?? null;
-  const editInEosCutUrl = displayedStoryboardId
-    ? `https://cut.eoslabs.tech/projects?importSceneSet=${encodeURIComponent(displayedStoryboardId)}`
-    : null;
   const downloadDisplayedVideo = async () => {
     if (!displayedVideoUrl) return;
     try {
@@ -2261,7 +2286,7 @@ export function VideoGenerationPage() {
       setContinuationInfo(status.continuation ?? null);
       if (status.status !== "completed") {
         requestCreditBalanceSync(acceptedCreditCost);
-        throw new Error(status.status === "cancelled" ? "Video generation was cancelled" : "Video generation failed");
+        throw generationErrorFromStatus(status, status.status === "cancelled" ? "Video generation was cancelled" : "Video generation failed");
       }
       if (!status.finalVideoUrl) {
         requestCreditBalanceSync(acceptedCreditCost);
@@ -2299,8 +2324,8 @@ export function VideoGenerationPage() {
           : [completedHistoryItem, ...current]);
       });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Unable to generate video";
-      if (cancelRequestedRef.current || message === "Video generation was cancelled") {
+      const message = formatGenerationError(error, "Unable to generate video");
+      if (cancelRequestedRef.current || (error instanceof Error && error.message === "Video generation was cancelled")) {
         setGenerationStatus("cancelled");
         setGenerationError(null);
         setNotice("Video generation cancelled");
@@ -2332,11 +2357,25 @@ export function VideoGenerationPage() {
     } catch (error: unknown) {
       cancelRequestedRef.current = false;
       setIsCancellingVideo(false);
-      setGenerationError(error instanceof Error ? error.message : "Unable to cancel video generation");
+      setGenerationError(formatGenerationError(error, "Unable to cancel video generation"));
       setNotice(null);
     }
   };
 
+  useTemplateSettings('video',{ready:!modelsLoading&&activeVideoTab==='image-to-video',model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
+    setPrompt(p); setNegativePrompt(typeof s.negativePrompt==='string'?s.negativePrompt:'');
+    if(typeof s.duration==='number')setDuration(s.duration);
+    if(typeof s.resolution==='string')setResolution(s.resolution);
+    if(typeof s.aspectRatio==='string')setAspectRatio(s.aspectRatio);
+    const image=typeof s.sourceImage==='string'?s.sourceImage:null;
+    if(image)setSourceImage(image);
+    setStoryboardScenes(current=>current.map((scene,i)=>i===0?{...scene,image,prompt:p,duration:typeof s.duration==='number'?s.duration:scene.duration,modelParams:s.modelParams&&typeof s.modelParams==='object'?s.modelParams as Record<string,unknown>:{}}:scene));
+    if(Array.isArray(s.scenes)&&s.scenes.length) setStoryboardScenes(s.scenes.map((raw,i)=>{
+      const scene=raw as Record<string,unknown>;
+      return {id:`template-scene-${i+1}`,image:typeof scene.sourceImage==='string'?scene.sourceImage:null,imageFile:null,endImage:null,endImageFile:null,prompt:typeof scene.prompt==='string'?scene.prompt:'',duration:typeof scene.duration==='number'?scene.duration:5,startFrameSource:scene.startFrameSource==='previous_last_frame'?'previous_last_frame':'manual',modelParams:scene.modelParams&&typeof scene.modelParams==='object'?scene.modelParams as Record<string,unknown>:{}};
+    }));
+    setPromptOptimizerEnabled(s.promptOptimizerEnabled===true);
+  }});
   return (
     <div className={styles.page} data-page="gen-video">
       <div className={styles.hero}>
@@ -2353,7 +2392,7 @@ export function VideoGenerationPage() {
             {notice}
           </div>
         ) : null}
-        <nav className={styles.tabs} aria-label="Video generation modes">
+        <nav className={styles.tabs} aria-label={t("create.video.tools")}>
           {videoModes.map((label) => {
             const tab = label === "Image to Video" ? "image-to-video" : label === "Text to Video" ? "text-to-video" : label === "People Video" ? "people-video" : label === "Motion Transfer" ? "motion-transfer" : label === "Lipsync" ? "lipsync" : label === "Extend Video" ? "extend-video" : null;
             const isActive = tab === "image-to-video"
@@ -2376,10 +2415,13 @@ export function VideoGenerationPage() {
                 className={isActive ? styles.active : undefined}
                 aria-current={isActive ? "page" : undefined}
                 onClick={() => {
-                  if (tab) setActiveVideoTab(tab);
+                  if (tab && tab !== activeVideoTab) {
+                    setPromptOptimizerEnabled(false);
+                    setActiveVideoTab(tab);
+                  }
                 }}
               >
-                {label}
+                {t(videoTabKeys[label])}
               </button>
             );
           })}
@@ -2404,15 +2446,18 @@ export function VideoGenerationPage() {
                 </div>
                 <Dropdown
                   value={generationMode}
-                  options={generationModeOptions.map((option) => ({
-                    value: option.value,
-                    label: (
-                      <>
-                        <strong>{generationModeLabels[option.value]?.trim() || option.label}</strong>
-                        <small>{option.description}</small>
-                      </>
-                    ),
-                  }))}
+                  options={generationModeOptions.map((option) => {
+                    const copyKeys = generationModeCopyKeys[option.value];
+                    return {
+                      value: option.value,
+                      label: (
+                        <>
+                          <strong>{generationModeLabels[option.value]?.trim() || t(copyKeys.labelKey)}</strong>
+                          <small>{t(copyKeys.descriptionKey)}</small>
+                        </>
+                      ),
+                    };
+                  })}
                   ariaLabel="Video generation mode options"
                   onChange={(nextMode) => selectGenerationMode(nextMode as GenerationMode)}
                   className={`${styles.modelDropdown} ${styles.generationModeDropdown}`}
@@ -2698,19 +2743,7 @@ export function VideoGenerationPage() {
                   </button>
                 </div> : null}
               </div>
-              {displayedVideoUrl && editInEosCutUrl ? (
-                <div className={styles.videoPreviewActions}>
-                  <a
-                    href={editInEosCutUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={styles.editInEosCutButton}
-                  >
-                    <Pencil size={14} />
-                    <span>แก้ไขใน EOS CUT</span>
-                  </a>
-                </div>
-              ) : null}
+              <EosCutButton storyboardId={displayedVideoUrl ? displayedStoryboardId : null} />
               <div className={styles.previewViewTabs} role="tablist" aria-label="Video preview views">
                     <button
                       type="button"

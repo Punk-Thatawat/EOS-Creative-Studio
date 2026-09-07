@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Play } from "lucide-react";
 import { listGenerationHistory, type GenerationHistoryItem } from "@/lib/api/generations";
 import styles from "./video-generation-page.module.css";
+import { EosCutButton } from "./eos-cut-button";
 
 type VideoResultLibraryProps = {
   feature: string;
@@ -83,6 +84,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, selectedVideoUrl,
 
   return (
     <section className={styles.videoResultLibrary} aria-label="Video results">
+      <EosCutButton />
       <div className={styles.previewViewTabs} role="tablist" aria-label="Video result views">
         <button type="button" role="tab" aria-selected={view === "latest"} className={view === "latest" ? styles.previewViewTabActive : undefined} onClick={selectLatest}>Latest result</button>
         <button type="button" role="tab" aria-selected={view === "library"} className={view === "library" ? styles.previewViewTabActive : undefined} onClick={() => setView("library")}>Video library</button>

@@ -8,6 +8,7 @@ import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
 import { loginWithBackend, persistBackendSession, registerWithBackend, resendConfirmationWithBackend } from "@/lib/auth/backend-auth";
 import { signInWithGoogle } from "@/lib/auth/google-login";
+import { listPublicVideoShowcase } from "@/lib/api/video-showcase";
 
 const tools = [
   ["AI Image", "Generate stunning images", "/generated-icons-v2/icon-1-image.png"],
@@ -18,7 +19,7 @@ const tools = [
   ["More Tools", "Custom AI workflows", "/generated-icons-v2/icon-6-sparkles.png"],
 ] as const;
 
-const examples = [
+const fallbackExamples = [
   { label: "PRODUCT AD", video: "/uploaded-videos/product-ad.mp4", webm: "/uploaded-videos/product-ad.webm" },
   { label: "BRAND CAMPAIGN", video: "/uploaded-videos/brand-campaign.mp4", webm: "/uploaded-videos/brand-campaign.webm" },
   { label: "AI PRESENTER VIDEO", video: "/uploaded-videos/ai-presenter.mp4", webm: "/uploaded-videos/ai-presenter.webm" },
@@ -26,6 +27,8 @@ const examples = [
   { label: "BLOWAWAY", video: "/uploaded-videos/blowaway.mp4", webm: "/uploaded-videos/blowaway.webm" },
   { label: "TAPE LOOK", video: "/uploaded-videos/tape-look.mp4", webm: "/uploaded-videos/tape-look.webm" },
 ];
+
+type ShowcaseExample = { id?: string; label: string; video: string; webm?: string; mimeType?: string };
 
 const formatVideoDuration = (duration: number) => {
   if (!Number.isFinite(duration)) return "--:--";
@@ -87,6 +90,7 @@ function getPasswordStrength(password: string): { label: string; score: number }
 }
 
 export function PreLoginPage() {
+  const [examples, setExamples] = useState<ShowcaseExample[]>(fallbackExamples);
   const [exampleOffset, setExampleOffset] = useState(0);
   const [videoDurations, setVideoDurations] = useState<Record<number, string>>({});
   const [showIntroVideo, setShowIntroVideo] = useState(false);
@@ -104,8 +108,20 @@ export function PreLoginPage() {
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
+  const maxExampleOffset = Math.max(0, examples.length - 5);
+  const visibleExampleOffset = Math.min(exampleOffset, maxExampleOffset);
   const authEmailError = authEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(authEmail) ? "Enter a valid email address" : null;
   const authPasswordError = authMode === "register" && authPassword.length > 0 && authPassword.length < 8 ? "Use at least 8 characters" : null;
+
+  useEffect(() => {
+    let active = true;
+    listPublicVideoShowcase().then((items) => {
+      if (!active) return;
+      setVideoDurations({});
+      setExamples(items.map((item) => ({ id: item.id, label: item.label, video: item.videoUrl ?? "", mimeType: item.mimeType })));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   const handleGoogleLogin = async () => {
     setGoogleLoginLoading(true);
@@ -331,12 +347,12 @@ export function PreLoginPage() {
       </section>
 
       <section id="examples" className="examples-section">
-        <div className="section-heading"><h2>SEE WHAT YOU CAN CREATE</h2><span>EXPLORE EXAMPLES</span><div className="carousel-actions"><button aria-label="Previous examples" onClick={() => setExampleOffset(Math.max(0, exampleOffset - 1))}><ChevronLeft size={18} /></button><button aria-label="Next examples" onClick={() => setExampleOffset(Math.min(1, exampleOffset + 1))}><ChevronRight size={18} /></button></div></div>
-        <div className="example-window"><div className="example-track" style={{ transform: `translateX(-${exampleOffset * 20.5}%)` }}>{examples.map((example, index) => <article className={`example-card example-${index}${index === exampleOffset + 2 ? " example-featured" : ""}`} key={example.label}>
+        <div className="section-heading"><h2>SEE WHAT YOU CAN CREATE</h2><span>EXPLORE EXAMPLES</span><div className="carousel-actions"><button aria-label="Previous examples" onClick={() => setExampleOffset(Math.max(0, visibleExampleOffset - 1))} disabled={visibleExampleOffset === 0}><ChevronLeft size={18} /></button><button aria-label="Next examples" onClick={() => setExampleOffset(Math.min(maxExampleOffset, visibleExampleOffset + 1))} disabled={visibleExampleOffset >= maxExampleOffset}><ChevronRight size={18} /></button></div></div>
+        <div className="example-window"><div className="example-track" style={{ transform: `translateX(-${visibleExampleOffset * 20.5}%)` }}>{examples.map((example, index) => <article className={`example-card example-${index}${index === visibleExampleOffset + 2 ? " example-featured" : ""}`} key={example.id ?? `${example.label}-${index}`}>
           <div className="example-placeholder">
             <video ref={(video) => { videoRefs.current[index] = video; }} className="example-video" muted loop playsInline preload="none" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`} onLoadedMetadata={(event) => { const duration = event.currentTarget.duration; setVideoDurations((current) => ({ ...current, [index]: formatVideoDuration(duration) })); }}>
-              <source src={example.webm} type="video/webm" />
-              <source src={example.video} type="video/mp4" />
+              {example.webm ? <source src={example.webm} type="video/webm" /> : null}
+              {example.video ? <source src={example.video} type={example.mimeType ?? "video/mp4"} /> : null}
             </video>
           </div>
           <div className="example-label">{example.label}<time>{videoDurations[index] ?? "--:--"}</time></div>

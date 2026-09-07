@@ -114,9 +114,13 @@
 .peopleAudioFile{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:7px 9px;border:1px solid #eaded6;border-radius:7px;background:#fffaf7;color:#8f5c42;font-size:9px}.peopleAudioFile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.peopleAudioFile button{display:grid;width:22px;height:22px;flex:none;place-items:center;border:0;border-radius:5px;background:#fff;color:#8f5c42}.peopleAudioFile button:hover{background:#ffe9df;color:#d94b27}
 .peopleNotice{margin:10px 0 0;padding:8px 9px;border:1px solid #cdebd7;border-radius:8px;background:#f5fcf7;color:#267149;font-size:9px;line-height:1.35}
 .videoResultLibrary{box-sizing:border-box;margin-top:-10px;padding:0 16px 16px}
-.videoPreviewActions{display:flex;justify-content:flex-end;margin-top:8px}
-.editInEosCutButton{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border:1px solid #e4d9d2;border-radius:8px;background:#fff;color:#a24e2d;font-size:9px;font-weight:800;text-decoration:none;transition:border-color .15s ease,background .15s ease,color .15s ease}
-.editInEosCutButton:hover{border-color:#f26b38;background:#fff7f2;color:#ed5c2d}
+.videoPreviewActions{display:flex;justify-content:flex-end;padding:12px 0 6px}
+.editInEosCutButton{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:44px;max-width:100%;padding:7px 14px 7px 8px;border:1px solid transparent;border-radius:12px;background:linear-gradient(110deg,#c94208 0%,#d72c32 48%,#d50072 100%);color:#fff;font-size:13px;line-height:1.4;font-weight:700;text-decoration:none;box-shadow:0 4px 12px rgb(213 0 114 / 14%);transition:box-shadow .15s ease,filter .15s ease}
+.editInEosCutButton:hover{filter:brightness(1.08);box-shadow:0 6px 18px rgb(213 0 114 / 24%)}
+.editInEosCutButton:focus-visible{outline:3px solid #171717;outline-offset:3px}
+.editInEosCutButton:active{filter:brightness(.95)}
+.eosCutIcon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:30px;height:30px;border-radius:8px;background:rgb(255 255 255 / 17%)}
+@media(prefers-reduced-motion:reduce){.editInEosCutButton{transition:none}}
 .addScene:disabled{cursor:not-allowed;opacity:.45;background:#fafafa}
 .sceneRequirement{margin:7px 0 0;color:#9a6a50;font-size:9px;line-height:1.35}
 .estimate>span{display:flex;align-items:center;justify-content:space-between;gap:8px;white-space:nowrap}.estimate strong{margin:0;color:#202124;font-size:12px;white-space:nowrap}

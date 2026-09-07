@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, LogOut, UserRound } from "lucide-react";
 import { signOutFromEOS } from "@/lib/auth/logout";
 import { cn } from "@/lib/utils";
+import { shellCopy, useLocale } from "@/lib/i18n/locale-provider";
 
 type AccountMenuProps = {
   displayName: string;
@@ -25,6 +26,11 @@ export function AccountMenu({
   const [isOpen, setIsOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { locale } = useLocale();
+  const text = shellCopy[locale];
+  const localizedRole = locale === "th"
+    ? ({ Admin: "แอดมิน", Owner: "เจ้าของ", Staff: "ทีมงาน", User: "ผู้ใช้" }[role ?? "User"] ?? role)
+    : role;
   const menuRef = useRef<HTMLDivElement>(null);
   const resolvedAvatarText = avatarText ?? (displayName.trim().split(/\s+/).map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase() || "U");
 
@@ -60,7 +66,7 @@ export function AccountMenu({
       await signOutFromEOS();
     } catch (logoutError) {
       setIsLoggingOut(false);
-      setError(logoutError instanceof Error ? logoutError.message : "Logout failed");
+      setError(logoutError instanceof Error ? logoutError.message : text.account.logoutFailed);
     }
   };
 
@@ -69,7 +75,7 @@ export function AccountMenu({
       <button
         type="button"
         className="flex items-center gap-2 rounded-xl p-1.5 text-left hover:bg-surface-muted"
-        aria-label="Open account menu"
+        aria-label={text.account.openMenu}
         aria-expanded={isOpen}
         aria-haspopup="menu"
         onClick={() => {
@@ -89,7 +95,7 @@ export function AccountMenu({
         )}
         <span className="hidden sm:block">
           <span className="block text-xs font-bold leading-4">{displayName}</span>
-          {role ? <span className="block text-[11px] leading-4 text-muted-foreground">{role}</span> : null}
+          {localizedRole ? <span className="block text-[11px] leading-4 text-muted-foreground">{localizedRole}</span> : null}
         </span>
         <ChevronDown className="hidden text-muted-foreground sm:block" size={14} />
       </button>
@@ -98,7 +104,7 @@ export function AccountMenu({
         <div
           className="absolute right-0 top-[calc(100%+0.5rem)] z-[70] min-w-48 rounded-xl border border-border bg-white p-1.5 shadow-lg"
           role="menu"
-          aria-label="Account actions"
+          aria-label={text.account.actions}
         >
           {error ? <p className="px-3 py-2 text-xs text-destructive">{error}</p> : null}
           <button
@@ -109,7 +115,7 @@ export function AccountMenu({
             disabled={isLoggingOut}
           >
             <LogOut size={16} />
-            {isLoggingOut ? "Logging out..." : "Log out"}
+            {isLoggingOut ? text.account.loggingOut : text.account.logout}
           </button>
         </div>
       ) : null}

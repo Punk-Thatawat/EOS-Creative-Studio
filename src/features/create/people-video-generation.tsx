@@ -1,4 +1,6 @@
 "use client";
+import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -31,6 +33,7 @@ import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 
 type PeopleSchemaProperty = {
   type?: string;
@@ -49,7 +52,7 @@ type PeopleSource = {
   url: string;
   kind: "image" | "video";
   name: string;
-  file: File;
+  file?: File;
   remoteUrl?: string;
   uploadStatus?: "uploading" | "ready" | "error";
 };
@@ -283,6 +286,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const [sourcePerson, setSourcePerson] = useState<PeopleSource | null>(null);
   const [script, setScript] = useState("");
   const [actingDirection, setActingDirection] = useState("");
+  useTemplatePrompt("video", setActingDirection);
   const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -346,7 +350,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     ? sourcePerson.kind === "image" ? sourceImageSupported : sourceVideoSupported
     : false;
   const hasSupportedTextDriver = driverTextSupported && Boolean(script.trim());
-  const hasSupportedAudioDriver = audioSupported && Boolean(audioFile);
+  const hasSupportedAudioDriver = audioSupported && Boolean(audioFile || audioUrl);
   const sourceAccept = sourceImageSupported && sourceVideoSupported
     ? "image/png,image/jpeg,image/webp,video/mp4,video/webm"
     : sourceImageSupported
@@ -458,7 +462,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       if (controller.signal.aborted) return;
       setSourcePerson((current) => current?.file === file ? { ...current, uploadStatus: "error" } : current);
       setNotice(null);
-      setGenerationError(error instanceof Error ? error.message : "Unable to upload source media");
+      setGenerationError(formatGenerationError(error, "Unable to upload source media"));
     } finally {
       if (sourceUploadAbortRef.current === controller) sourceUploadAbortRef.current = null;
     }
@@ -492,7 +496,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       if (controller.signal.aborted) return;
       setAudioUploadStatus("error");
       setNotice(null);
-      setGenerationError(error instanceof Error ? error.message : "Unable to upload audio");
+      setGenerationError(formatGenerationError(error, "Unable to upload audio"));
     } finally {
       if (audioUploadAbortRef.current === controller) audioUploadAbortRef.current = null;
     }
@@ -528,7 +532,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     && sourcePerson.remoteUrl
     && sourceKindSupported
     && (hasSupportedTextDriver || hasSupportedAudioDriver)
-    && (!requiredAudioInput || Boolean(audioFile))
+    && (!requiredAudioInput || Boolean(audioFile || audioUrl))
     && (!audioFile || Boolean(audioUrl))
     && (!requiredScriptInput || Boolean(script.trim()))
     && (!durationProperty || !requiredProperties.has(durationProperty[0]) || peopleHasValue(durationValue))
@@ -548,7 +552,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
           ? sourcePerson.uploadStatus === "uploading" ? "Uploading source media…" : "Upload the source media again."
         : audioFile && !audioUrl
           ? audioUploadStatus === "uploading" ? "Uploading audio…" : "Upload the audio again."
-        : requiredAudioInput && !audioFile
+        : requiredAudioInput && !audioFile && !audioUrl
           ? "This model requires an audio file."
           : requiredScriptInput && !script.trim()
               ? `This model requires ${driverLabel.toLowerCase()}.`
@@ -642,7 +646,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
           });
         }
       }
-      if (status.status !== "completed") throw new Error(status.errorMessage ?? `${workspaceLabel} generation ${status.status}`);
+      if (status.status !== "completed") throw generationErrorFromStatus(status, `${workspaceLabel} generation ${status.status}`);
       const videoUrl = peopleOutputVideoUrl(status);
       if (!videoUrl) throw new Error("People video completed without an output URL");
       setFinalVideoUrl(videoUrl);
@@ -655,13 +659,23 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       if (controller.signal.aborted) return;
       setGenerationStatus("failed");
       setNotice(null);
-      setGenerationError(error instanceof Error ? error.message : `Unable to generate ${workspaceLabel}`);
+      setGenerationError(formatGenerationError(error, `Unable to generate ${workspaceLabel}`));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
+  useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
+    setActingDirection(p);
+    if(s.duration!==undefined)setDurationValue(s.duration);if(s.resolution!==undefined)setResolutionValue(s.resolution);if(s.aspectRatio!==undefined)setAspectRatioValue(s.aspectRatio);
+    const url=typeof s.sourceImage==='string'?s.sourceImage:typeof s.sourceVideo==='string'?s.sourceVideo:null;
+    if(url)setSourcePerson({url,remoteUrl:url,kind:typeof s.sourceImage==='string'?'image':'video',name:'Template source',uploadStatus:'ready'});
+    if(typeof s.script==='string')setScript(s.script);
+    if(typeof s.audioUrl==='string'){setAudioUrl(s.audioUrl);setAudioUploadStatus('ready');}
+    setNegativePrompt(typeof s.negativePrompt==='string'?s.negativePrompt:'');
+    setModelParams(s.modelParams&&typeof s.modelParams==='object'?s.modelParams as Record<string,unknown>:{});
+  }});
 
   return (
     <div className={styles.columns}>

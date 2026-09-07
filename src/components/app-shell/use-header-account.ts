@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fetchHeaderAccountData, type HeaderAccountData } from "@/lib/api/account";
+import { getApiAccessToken } from "@/lib/auth/access-token";
 import {
   CREDIT_BALANCE_CHANGED_EVENT,
   CREDIT_BALANCE_SYNC_EVENT,
@@ -9,7 +10,7 @@ import {
   type CreditBalanceSyncDetail,
 } from "@/lib/credits/credit-events";
 
-const initialAccount: HeaderAccountData = { displayName: "User", email: "", balance: null };
+const initialAccount: HeaderAccountData = { displayName: "User", email: "", role: "User", balance: null };
 
 function toNumericBalance(balance: HeaderAccountData["balance"]): number | null {
   const value = typeof balance === "string" ? Number(balance.replace(/,/g, "")) : balance;
@@ -63,6 +64,21 @@ export function useHeaderAccount() {
       isMounted = false;
       window.removeEventListener(CREDIT_BALANCE_CHANGED_EVENT, handleBalanceChanged);
       window.removeEventListener(CREDIT_BALANCE_SYNC_EVENT, handleBalanceSync);
+    };
+  }, []);
+
+  useEffect(() => {
+    const refreshSession = () => { void getApiAccessToken(); };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshSession();
+    };
+    const interval = window.setInterval(refreshSession, 60_000);
+    window.addEventListener("focus", refreshSession);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshSession);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 

@@ -2,6 +2,7 @@
 
 import { getApiAccessToken } from "@/lib/auth/access-token";
 import { detectMediaUploadKind, friendlyUploadError, validateMediaFile, type ImageUploadConstraints } from "@/lib/media/upload-validation";
+import { GenerationApiError, generationErrorFromPayload } from "@/lib/api/generation-errors";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendOrigin = configuredBackendUrl.replace(/\/api\/v1$/, "");
@@ -50,6 +51,8 @@ export type PeopleVideoGenerationStatus = {
   progress?: number;
   output?: PeopleVideoOutput[];
   errorMessage?: string;
+  errorCode?: string;
+  errorSource?: "system" | "provider";
   [key: string]: unknown;
 };
 
@@ -67,16 +70,6 @@ function apiPath(path: string): string {
 
 async function readPayload(response: Response): Promise<unknown> {
   return response.json().catch(() => null);
-}
-
-function errorMessage(payload: unknown): string {
-  if (payload && typeof payload === "object" && "message" in payload) {
-    const message = payload.message;
-    if (typeof message === "string") return message;
-    if (Array.isArray(message)) return message.join(", ");
-  }
-  if (payload && typeof payload === "object" && "errorMessage" in payload && typeof payload.errorMessage === "string") return payload.errorMessage;
-  return "People video request failed";
 }
 
 function unwrapData(payload: unknown): unknown {
@@ -97,7 +90,10 @@ async function authenticatedRequest(path: string, init: RequestInit = {}): Promi
     cache: "no-store",
   });
   const payload = await readPayload(response);
-  if (!response.ok) throw new Error(friendlyUploadError(errorMessage(payload), "Media upload failed"));
+  if (!response.ok) {
+    const apiError = generationErrorFromPayload(payload, "People video request failed");
+    throw new GenerationApiError(friendlyUploadError(apiError.message, "Media upload failed"), apiError.source, apiError.code);
+  }
   return unwrapData(payload);
 }
 
@@ -119,10 +115,10 @@ export async function uploadPeopleMedia(file: File, signal?: AbortSignal, constr
     cache: "no-store",
   });
   const payload = await readPayload(response);
-  if (!response.ok) throw new Error(errorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Media upload failed");
   const data = unwrapData(payload);
   const url = data && typeof data === "object" && "url" in data ? data.url : undefined;
-  if (typeof url !== "string" || !url) throw new Error("Media upload did not return a URL");
+  if (typeof url !== "string" || !url) throw new GenerationApiError("Media upload did not return a URL", "system");
   return url;
 }
 

@@ -1,4 +1,6 @@
 "use client";
+import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import { useEffect, useRef, useState } from "react";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -23,6 +25,7 @@ import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 
 type SchemaProperty = {
   type?: string;
@@ -35,7 +38,7 @@ type SchemaProperty = {
   step?: number;
 };
 
-type VideoAsset = { url: string; file: File; name: string };
+type VideoAsset = { url: string; file?: File; name: string };
 type GenerationState = "idle" | "uploading" | "processing" | "completed" | "failed" | "cancelled";
 
 const coreParameterNames = new Set([
@@ -109,6 +112,7 @@ export function ExtendVideoWorkspace() {
   const [sourceVideo, setSourceVideo] = useState<VideoAsset | null>(null);
   const [audio, setAudio] = useState<VideoAsset | null>(null);
   const [prompt, setPrompt] = useState("");
+  useTemplatePrompt("video", setPrompt);
   const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [duration, setDuration] = useState<number | undefined>(undefined);
@@ -195,9 +199,9 @@ export function ExtendVideoWorkspace() {
     setError(null); setNotice(null); setFinalVideoUrl(null); setPreviewVideoUrl(null); setProgress(0); setState("uploading");
     try {
       setNotice("Uploading source video…");
-      const sourceVideoUrl = await uploadPeopleMedia(sourceVideo.file, controller.signal, selected?.capabilities.uploadConstraints);
+      const sourceVideoUrl = sourceVideo.file ? await uploadPeopleMedia(sourceVideo.file, controller.signal, selected?.capabilities.uploadConstraints) : sourceVideo.url;
       let audioUrl: string | undefined;
-      if (audio && audioParameter) { setNotice("Uploading audio…"); audioUrl = await uploadPeopleMedia(audio.file, controller.signal, selected?.capabilities.uploadConstraints); }
+      if (audio && audioParameter) { setNotice("Uploading audio…"); audioUrl = audio.file ? await uploadPeopleMedia(audio.file, controller.signal, selected?.capabilities.uploadConstraints) : audio.url; }
       const request: Parameters<typeof createExtendVideoGeneration>[0] = { model: selectedModel, sourceVideo: sourceVideoUrl, prompt: prompt.trim() };
       if (promptOptimizerEnabled) request.promptOptimizerEnabled = true;
       if (negativePrompt.trim()) request.negativePrompt = negativePrompt.trim();
@@ -224,13 +228,13 @@ export function ExtendVideoWorkspace() {
           await new Promise<void>((resolve, reject) => { const timeout = window.setTimeout(resolve, 2200); controller.signal.addEventListener("abort", () => { window.clearTimeout(timeout); reject(new DOMException("Generation cancelled", "AbortError")); }, { once: true }); });
         }
       }
-      if (status.status !== "completed") throw new Error(status.errorMessage ?? `Extend Video generation ${status.status}`);
+      if (status.status !== "completed") throw generationErrorFromStatus(status, `Extend Video generation ${status.status}`);
       const url = outputUrl(status);
       if (!url) throw new Error("Extend Video completed without an output URL");
       setFinalVideoUrl(url); setPreviewVideoUrl(url); setProgress(100); setState("completed"); setLibraryRefreshKey((value) => value + 1); setNotice("Video ready");
     } catch (reason: unknown) {
       if (controller.signal.aborted) return;
-      setState("failed"); setNotice(null); setError(reason instanceof Error ? reason.message : "Unable to extend video");
+      setState("failed"); setNotice(null); setError(formatGenerationError(reason, "Unable to extend video"));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -254,6 +258,13 @@ export function ExtendVideoWorkspace() {
     promptOptimizerEnabled,
     modelParams,
   } : null);
+  useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
+    setPrompt(p); if(typeof s.duration==='number')setDuration(s.duration);if(s.resolution!==undefined)setResolution(s.resolution);
+    if(typeof s.sourceVideo==='string')setSourceVideo({url:s.sourceVideo,name:'Template video'});
+    if(typeof s.audioUrl==='string')setAudio({url:s.audioUrl,name:'Template audio'});
+    setNegativePrompt(typeof s.negativePrompt==='string'?s.negativePrompt:'');
+    setModelParams(s.modelParams&&typeof s.modelParams==='object'?s.modelParams as Record<string,unknown>:{});
+  }});
   return <div className={styles.columns}>
     <div className={styles.leftColumn}>
       <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="extend-video-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="extend-video" featureName="Extend Video" /></div><div className={styles.videoModeHeading}><h2 id="extend-video-title">EXTEND VIDEO</h2><Info size={11} /></div><p className={styles.textVideoDescription}>Continue an existing video with a new prompt-guided segment.</p></section></section>

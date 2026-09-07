@@ -1,6 +1,7 @@
 "use client";
 
 import { getApiAccessToken } from "@/lib/auth/access-token";
+import { generationErrorFromPayload } from "@/lib/api/generation-errors";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendOrigin = configuredBackendUrl.replace(/\/api\/v1$/, "");
@@ -46,6 +47,8 @@ export type ExtendVideoGenerationStatus = {
   progress?: number;
   output?: ExtendVideoOutput[];
   errorMessage?: string;
+  errorCode?: string;
+  errorSource?: "system" | "provider";
   [key: string]: unknown;
 };
 
@@ -73,10 +76,9 @@ async function authenticatedRequest(path: string, init: RequestInit = {}): Promi
     },
     cache: "no-store",
   });
-  const payload = await response.json().catch(() => null) as { data?: unknown; message?: unknown; errorMessage?: unknown } | null;
+  const payload = await response.json().catch(() => null) as { data?: unknown; message?: unknown; errorMessage?: unknown; errorCode?: unknown; errorSource?: unknown; code?: unknown } | null;
   if (!response.ok) {
-    const message = Array.isArray(payload?.message) ? payload.message.join(", ") : typeof payload?.message === "string" ? payload.message : typeof payload?.errorMessage === "string" ? payload.errorMessage : "Extend video request failed";
-    throw new Error(message);
+    throw generationErrorFromPayload(payload, "Extend video request failed");
   }
   return payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
 }

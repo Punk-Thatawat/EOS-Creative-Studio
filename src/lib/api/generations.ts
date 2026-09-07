@@ -1,6 +1,7 @@
 "use client";
 
 import { getApiAccessToken } from "@/lib/auth/access-token";
+import { generationErrorFromPayload, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import type { BackgroundMode, ExtendAmount, ExtendDirection, ImageCount, ImageQuality, ImageRatio, MaskTool, StylePreset, StyleTransferPreset } from "@/features/create/image-generation/config";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
@@ -234,6 +235,8 @@ type GenerationStatusResponse = {
   finalVideoUrl?: string;
   videoUrl?: string;
   errorMessage?: string;
+  errorCode?: string;
+  errorSource?: "system" | "provider";
 };
 
 function unwrapGenerationStatus(payload: unknown): GenerationStatusResponse {
@@ -241,21 +244,6 @@ function unwrapGenerationStatus(payload: unknown): GenerationStatusResponse {
     return payload.data as GenerationStatusResponse;
   }
   return payload as GenerationStatusResponse;
-}
-
-function getErrorMessage(payload: unknown): string {
-  if (payload && typeof payload === "object" && "errorMessage" in payload && typeof payload.errorMessage === "string") {
-    return payload.errorMessage;
-  }
-  if (payload && typeof payload === "object" && "errorCode" in payload && typeof payload.errorCode === "string") {
-    return payload.errorCode;
-  }
-  if (payload && typeof payload === "object" && "message" in payload) {
-    const message = payload.message;
-    if (typeof message === "string") return message;
-    if (Array.isArray(message)) return message.join(", ");
-  }
-  return "Image generation failed";
 }
 
 async function getAccessToken(): Promise<string> {
@@ -283,7 +271,7 @@ async function pollGeneration(target: EnqueuedGenerationResponse["data"] | Pendi
       signal,
     });
     const statusPayload = await statusResponse.json().catch(() => null) as GenerationStatusResponse | { data?: unknown; message?: unknown } | null;
-    if (!statusResponse.ok) throw new Error(getErrorMessage(statusPayload));
+    if (!statusResponse.ok) throw generationErrorFromPayload(statusPayload, "Image generation request failed");
     const status = unwrapGenerationStatus(statusPayload);
     const outputs = status.output ?? [];
     onProgress?.({ generationId: status.id || generationId, pollUrl: target.pollUrl, workspaceId: target.workspaceId, provider: target.provider, model: target.model, status: status.status, totalCount: status.totalCount ?? status.totalScenes ?? target.totalCount ?? fallbackCount, completedCount: status.completedCount ?? status.completedScenes ?? outputs.length, output: outputs });
@@ -291,7 +279,9 @@ async function pollGeneration(target: EnqueuedGenerationResponse["data"] | Pendi
       if (!outputs.length && !("kind" in target && target.kind === "video")) throw new Error("Generation completed without image output");
       return { data: { generationId, workspaceId: target.workspaceId, provider: target.provider ?? "", model: target.model ?? "", status: "completed", output: outputs, predictionIds: [], count: outputs.length, estimatedProviderCostUsd: Number((outputs.length * 0.005).toFixed(3)) } };
     }
-    if (status.status === "failed" || status.status === "cancelled") throw new Error(status.errorMessage ?? `Generation ${status.status}`);
+    if (status.status === "failed" || status.status === "cancelled") {
+      throw generationErrorFromStatus(status, `Generation ${status.status}`);
+    }
   }
 }
 
@@ -324,7 +314,7 @@ export async function createTextToImage(input: TextToImageInput, onProgress?: (p
   });
 
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
   const enqueued = payload as EnqueuedGenerationResponse;
   return pollGeneration(enqueued.data, Number(input.count), accessToken, onProgress, signal);
 }
@@ -342,7 +332,7 @@ export async function quoteImageGeneration(input: ImageCreditQuoteInput): Promis
     cache: "no-store",
   });
   const payload = await response.json().catch(() => null) as { data?: ImageCreditQuoteResponse } | ImageCreditQuoteResponse | null;
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
   if (payload && typeof payload === "object" && "data" in payload && payload.data && typeof payload.data === "object") return payload.data as ImageCreditQuoteResponse;
   return (payload ?? {}) as ImageCreditQuoteResponse;
 }
@@ -364,7 +354,7 @@ export async function cancelGeneration(generationId: string, workspaceId: string
     headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
 }
 
 export async function createImageToImage(input: ImageToImageInput, onProgress?: (progress: GenerationProgress) => void, signal?: AbortSignal): Promise<TextToImageResponse> {
@@ -399,7 +389,7 @@ export async function createImageToImage(input: ImageToImageInput, onProgress?: 
   });
 
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
   const enqueued = payload as EnqueuedGenerationResponse;
   return pollGeneration(enqueued.data, Number(input.count), accessToken, onProgress, signal);
 }
@@ -438,7 +428,7 @@ export async function createStyleTransfer(input: StyleTransferInput, onProgress?
   });
 
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
   const enqueued = payload as EnqueuedGenerationResponse;
   return pollGeneration(enqueued.data, Number(input.count), accessToken, onProgress, signal);
 }
@@ -484,7 +474,7 @@ export async function createBackgroundGeneration(input: BackgroundGenerationInpu
   });
 
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
   const enqueued = payload as EnqueuedGenerationResponse;
   return pollGeneration(enqueued.data, Number(input.count), accessToken, onProgress, signal);
 }
@@ -516,7 +506,7 @@ export async function createExtendImage(input: ExtendImageInput, onProgress?: (p
     signal,
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
   const enqueued = payload as EnqueuedGenerationResponse;
   return pollGeneration(enqueued.data, Number(input.count), accessToken, onProgress, signal);
 }
@@ -541,7 +531,7 @@ export async function createUpscale(input: UpscaleInput, onProgress?: (progress:
     signal,
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
   const enqueued = payload as EnqueuedGenerationResponse;
   return pollGeneration(enqueued.data, 1, accessToken, onProgress, signal);
 }
@@ -561,6 +551,8 @@ export type GenerationHistoryItem = {
   finalVideoUrl?: string;
   videoUrl?: string;
   errorMessage?: string;
+  errorCode?: string;
+  errorSource?: "system" | "provider";
   createdAt?: string;
   updatedAt?: string;
 };
@@ -578,7 +570,7 @@ export async function listGenerationHistory(workspaceId?: string | null, feature
   });
 
   const payload = await response.json().catch(() => null) as { data?: GenerationHistoryItem[] } | null;
-  if (!response.ok) throw new Error(getErrorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
 
   return payload?.data ?? [];
 }

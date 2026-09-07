@@ -374,17 +374,36 @@
 @media (max-width: 700px) {
   .wrapper {
     right: 10px;
-    bottom: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     width: calc(100vw - 20px);
   }
 
+  .wrapper[data-expanded="true"] .launcher { display: none; }
+
   .center {
-    max-height: 65vh;
+    max-height: 50vh;
+    max-height: 50dvh;
+    border-radius: 20px 20px 14px 14px;
+    padding: 0 12px 12px;
+    overscroll-behavior: contain;
+    animation: sheetIn .18s ease-out;
   }
+
+  .centerHeader { position: sticky; top: 0; z-index: 2; padding: 12px 0; background: #fff; }
+  .panelToggle { width: 44px; height: 44px; }
+  .clearCompleted { min-height: 44px; font-size: 12px; }
+  .centerTitle, .itemLabel, .launcherCopy strong { font-size: 13px; }
+  .centerHeader small, .launcherCopy small, .item .meta { font-size: 11px; }
+  .item { padding-right: 52px; }
+  .itemShell .dismiss { width: 36px; height: 36px; }
+  .launcher { min-height: 56px; }
 }
+
+@keyframes sheetIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (prefers-reduced-motion: reduce) {
   .barIndeterminate,
+  .center,
   .dot,
   .item,
   .launcher {

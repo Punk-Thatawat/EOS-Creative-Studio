@@ -1,10 +1,12 @@
 "use client";
+import { useTemplateSettings } from "@/features/templates/use-template-settings";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelGeneration, createBackgroundGeneration, createExtendImage, createImageToImage, createStyleTransfer, createTextToImage, createUpscale, listGenerationHistory, resumeGeneration, resumeTextToImage, type GenerationHistoryItem, type GenerationProgress, type GenerationStatus, type ImageCreditQuoteInput, type PendingGeneration, type TextToImageOutput } from "@/lib/api/generations";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { listStylePresets, type GenerationStylePreset, type StylePresetFeature } from "@/lib/api/style-presets";
 import { uploadImageAsset, uploadMaskAsset } from "@/lib/api/storage";
+import { formatGenerationError } from "@/lib/api/generation-errors";
 import { useImageCreditEstimate } from "./use-image-credit-estimate";
 import {
   imageCountOptions,
@@ -379,6 +381,7 @@ export function useImageGenerationState() {
   const [styleTransferCompletedCount, setStyleTransferCompletedCount] = useState(0);
   const [styleTransferError, setStyleTransferError] = useState<string | null>(null);
   const [backgroundGenerated, setBackgroundGenerated] = useState(false);
+  const [backgroundPendingGeneration, setBackgroundPendingGeneration] = useState<PendingGeneration | null>(null);
   const [backgroundUrls, setBackgroundUrls] = useState<string[]>([]);
   const [backgroundIsGenerating, setBackgroundIsGenerating] = useState(false);
   const [backgroundStatus, setBackgroundStatus] = useState<GenerationStatus>("idle");
@@ -416,6 +419,8 @@ export function useImageGenerationState() {
   const styleTransferAbortRef = useRef<AbortController | null>(null);
   const styleTransferCancelRequestedRef = useRef(false);
   const backgroundAbortRef = useRef<AbortController | null>(null);
+  const backgroundRunRef = useRef(false);
+  const backgroundResumeStartedRef = useRef(false);
   const backgroundCancelRequestedRef = useRef(false);
   const extendResumeStartedRef = useRef(false);
   const extendRunRef = useRef(false);
@@ -447,7 +452,7 @@ export function useImageGenerationState() {
 
       const storedDraft = readImageGenerationDraft();
       if (storedDraft) {
-        if (typeof storedDraft.activeTab === "string" && imageGenerationTabs.includes(storedDraft.activeTab as ImageGenerationTab)) setActiveTab(storedDraft.activeTab as ImageGenerationTab);
+        if (typeof storedDraft.activeTab === "string" && imageGenerationTabs.includes(storedDraft.activeTab as (typeof imageGenerationTabs)[number])) setActiveTab(storedDraft.activeTab as ImageGenerationTab);
         if (storedDraft.style === null || typeof storedDraft.style === "string") setStyle(storedDraft.style ?? null);
         if (typeof storedDraft.ratio === "string" && imageRatios.includes(storedDraft.ratio as ImageRatio)) setRatio(storedDraft.ratio as ImageRatio);
         if (typeof storedDraft.quality === "string") setQuality(storedDraft.quality);
@@ -562,6 +567,7 @@ export function useImageGenerationState() {
       }
 
       if (storedBackgroundPendingGeneration) {
+        setBackgroundPendingGeneration(storedBackgroundPendingGeneration);
         setBackgroundStatus(storedBackgroundPendingGeneration.status);
         setBackgroundTotalCount(storedBackgroundPendingGeneration.totalCount);
         setBackgroundCompletedCount(storedBackgroundPendingGeneration.completedCount);
@@ -1011,6 +1017,12 @@ export function useImageGenerationState() {
         setExtendGenerated(nextPendingGeneration.output.length > 0);
         setExtendIsGenerating(true);
         window.sessionStorage.setItem(pendingGenerationStorageKeyForFeature(requestedFeature), JSON.stringify(nextPendingGeneration));
+      } else if (requestedFeature === "background-removal" && !backgroundRunRef.current && !backgroundResumeStartedRef.current) {
+        setBackgroundPendingGeneration(nextPendingGeneration);
+        window.sessionStorage.setItem(pendingGenerationStorageKeyForFeature(requestedFeature), JSON.stringify(nextPendingGeneration));
+      } else if (requestedFeature === "upscale" && !upscaleRunRef.current && !upscaleResumeStartedRef.current) {
+        setUpscalePendingGeneration(nextPendingGeneration);
+        window.sessionStorage.setItem(pendingGenerationStorageKeyForFeature(requestedFeature), JSON.stringify(nextPendingGeneration));
       }
     } catch (error) {
       if (requestId !== recentRequestRef.current || featureKeyForTab(activeTabRef.current) !== requestedFeature) return;
@@ -1132,6 +1144,7 @@ export function useImageGenerationState() {
       setGenerated(pending.output.length > 0);
       setIsGenerating(true);
     } else if (tab === "AI Background") {
+      setBackgroundPendingGeneration(pending);
       setBackgroundStatus(pending.status);
       setBackgroundTotalCount(pending.totalCount);
       setBackgroundCompletedCount(pending.completedCount);
@@ -1204,6 +1217,7 @@ export function useImageGenerationState() {
     const urls = progress.output.map((output) => output.url).filter(Boolean);
     rememberImageMimeTypes(progress.output);
     if (urls.length > 0) {
+      if (featureKeyForTab(activeTabRef.current) === "text-to-image") { setSelectedRecentImageUrl(null); setSelectedVariation(0); }
       setGeneratedImageUrls((currentUrls) => Array.from(new Set([...currentUrls, ...urls])));
       setGenerated(true);
     }
@@ -1219,6 +1233,7 @@ export function useImageGenerationState() {
     const urls = progress.output.map((output) => output.url).filter(Boolean);
     rememberImageMimeTypes(progress.output);
     if (urls.length > 0) {
+      if (featureKeyForTab(activeTabRef.current) === "image-to-image") { setSelectedRecentImageUrl(null); setSelectedVariation(0); }
       setImageToImageUrls((currentUrls) => Array.from(new Set([...currentUrls, ...urls])));
       setImageToImageGenerated(true);
     }
@@ -1233,25 +1248,28 @@ export function useImageGenerationState() {
     const urls = progress.output.map((output) => output.url).filter(Boolean);
     rememberImageMimeTypes(progress.output);
     if (urls.length > 0) {
+      if (featureKeyForTab(activeTabRef.current) === "style-transfer") { setSelectedRecentImageUrl(null); setSelectedVariation(0); }
       setStyleTransferUrls((currentUrls) => Array.from(new Set([...currentUrls, ...urls])));
       setStyleTransferGenerated(true);
     }
   }, [rememberImageMimeTypes]);
 
   const applyBackgroundProgress = useCallback((progress: GenerationProgress) => {
-    setBackgroundIsGenerating(progress.status === "queued" || progress.status === "processing");
+    setBackgroundIsGenerating(progress.status === "queued" || progress.status === "processing" || (progress.status === "completed" && isLocalSolidBackground));
     setBackgroundStatus(progress.status);
     setBackgroundTotalCount(progress.totalCount);
     setBackgroundCompletedCount(progress.completedCount);
     const pending = savePendingGeneration(progress, "background-removal");
+    setBackgroundPendingGeneration(pending);
     const urls = progress.output.map((output) => output.url).filter(Boolean);
     rememberImageMimeTypes(progress.output);
-    if (urls.length > 0) {
+    if (urls.length > 0 && !isLocalSolidBackground) {
+      if (featureKeyForTab(activeTabRef.current) === "background-removal") { setSelectedRecentImageUrl(null); setSelectedVariation(0); }
       setBackgroundUrls((currentUrls) => Array.from(new Set([...currentUrls, ...urls])));
       setBackgroundGenerated(true);
     }
     if (!pending) window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
-  }, [rememberImageMimeTypes]);
+  }, [rememberImageMimeTypes, isLocalSolidBackground]);
 
   const applyExtendProgress = useCallback((progress: GenerationProgress) => {
     setExtendIsGenerating(progress.status === "queued" || progress.status === "processing");
@@ -1262,6 +1280,7 @@ export function useImageGenerationState() {
     const urls = progress.output.map((output) => output.url).filter(Boolean);
     rememberImageMimeTypes(progress.output);
     if (urls.length > 0) {
+      if (featureKeyForTab(activeTabRef.current) === "extend-image") { setSelectedRecentImageUrl(null); setSelectedVariation(0); }
       setExtendUrls((currentUrls) => Array.from(new Set([...currentUrls, ...urls])));
       setExtendGenerated(true);
     }
@@ -1276,6 +1295,7 @@ export function useImageGenerationState() {
     const urls = progress.output.map((output) => output.url).filter(Boolean);
     rememberImageMimeTypes(progress.output);
     if (urls.length > 0) {
+      if (featureKeyForTab(activeTabRef.current) === "upscale") { setSelectedRecentImageUrl(null); setSelectedVariation(0); }
       setUpscaleUrls((currentUrls) => Array.from(new Set([...currentUrls, ...urls])));
       setUpscaleGenerated(true);
     }
@@ -1318,7 +1338,7 @@ export function useImageGenerationState() {
         setGenerationStatus("cancelled");
       } else {
         setGenerationStatus("failed");
-        setGenerationError(error instanceof Error ? error.message : "Unable to resume image generation");
+      setGenerationError(formatGenerationError(error, "Unable to resume image generation"));
       }
       window.sessionStorage.removeItem(pendingGenerationStorageKey);
       setPendingGeneration(null);
@@ -1363,7 +1383,7 @@ export function useImageGenerationState() {
         setImageToImageStatus("cancelled");
       } else {
         setImageToImageStatus("failed");
-        setImageToImageError(error instanceof Error ? error.message : "Unable to resume image transformation");
+        setImageToImageError(formatGenerationError(error, "Unable to resume image transformation"));
       }
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("image-to-image"));
       setImageToImagePendingGeneration(null);
@@ -1408,7 +1428,7 @@ export function useImageGenerationState() {
         setStyleTransferStatus("cancelled");
       } else {
         setStyleTransferStatus("failed");
-        setStyleTransferError(error instanceof Error ? error.message : "Unable to resume style transfer");
+        setStyleTransferError(formatGenerationError(error, "Unable to resume style transfer"));
       }
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("style-transfer"));
       setStyleTransferPendingGeneration(null);
@@ -1453,7 +1473,7 @@ export function useImageGenerationState() {
         setExtendStatus("cancelled");
       } else {
         setExtendStatus("failed");
-        setExtendError(error instanceof Error ? error.message : "Unable to resume image extension");
+        setExtendError(formatGenerationError(error, "Unable to resume image extension"));
       }
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("extend-image"));
       setExtendPendingGeneration(null);
@@ -1498,7 +1518,7 @@ export function useImageGenerationState() {
         setUpscaleStatus("cancelled");
       } else {
         setUpscaleStatus("failed");
-        setUpscaleError(error instanceof Error ? error.message : "Unable to resume image upscaling");
+        setUpscaleError(formatGenerationError(error, "Unable to resume image upscaling"));
       }
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("upscale"));
       setUpscalePendingGeneration(null);
@@ -1507,6 +1527,54 @@ export function useImageGenerationState() {
       setUpscaleIsGenerating(false);
     });
   }, [applyUpscaleProgress, loadRecentGenerations, upscalePendingGeneration]);
+
+  useEffect(() => {
+    if (!backgroundPendingGeneration || backgroundResumeStartedRef.current || backgroundRunRef.current) return;
+    const pending = backgroundPendingGeneration;
+    backgroundResumeStartedRef.current = true;
+    setBackgroundError(null);
+    setSelectedRecentImageUrl(null);
+    setSelectedVariation(0);
+    setBackgroundStatus(pending.status);
+    setBackgroundTotalCount(pending.totalCount);
+    setBackgroundCompletedCount(pending.completedCount);
+    if (!isLocalSolidBackground) {
+      setBackgroundUrls(pending.output.map(output=>output.url).filter(Boolean));
+      setBackgroundGenerated(pending.output.some(output=>Boolean(output.url)));
+    }
+    if (pending.status === "completed" && !isLocalSolidBackground) { setBackgroundIsGenerating(false); return; }
+    backgroundRunRef.current = true;
+    setBackgroundIsGenerating(true);
+    const abortController = new AbortController();
+    backgroundAbortRef.current = abortController;
+    backgroundCancelRequestedRef.current = false;
+    void resumeGeneration(pending, applyBackgroundProgress, abortController.signal).then(async result => {
+      const rawUrls = result.data.output.map(output=>output.url).filter(Boolean);
+      const urls = isLocalSolidBackground
+        ? await Promise.all(rawUrls.map(async url=>uploadImageAsset(await createSolidBackgroundFile(url, backgroundColor, effectiveOutputFormat), {purpose:"content",feature:"background-removal",workspaceId:result.data.workspaceId})))
+        : rawUrls;
+      if (abortController.signal.aborted) return;
+      if (featureKeyForTab(activeTabRef.current) === "background-removal") {
+        setSelectedRecentImageUrl(null);
+        setSelectedVariation(0);
+      }
+      setWorkspaceId(result.data.workspaceId);
+      window.sessionStorage.setItem("eos.generation.workspace-id",result.data.workspaceId);
+      setBackgroundUrls(urls); setBackgroundGenerated(urls.length>0);
+      setBackgroundStatus("completed"); setBackgroundCompletedCount(urls.length);
+      window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
+      setBackgroundPendingGeneration(null);
+      await loadRecentGenerations(result.data.workspaceId,"background-removal");
+    }).catch(error=>{
+      setBackgroundStatus(abortController.signal.aborted||backgroundCancelRequestedRef.current?"cancelled":"failed");
+      if (!abortController.signal.aborted && !backgroundCancelRequestedRef.current) setBackgroundError(formatGenerationError(error,"Unable to resume background generation"));
+      window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
+      setBackgroundPendingGeneration(null);
+    }).finally(()=>{
+      if(backgroundAbortRef.current===abortController)backgroundAbortRef.current=null;
+      setBackgroundIsGenerating(false);
+    });
+  },[backgroundPendingGeneration,applyBackgroundProgress,loadRecentGenerations,isLocalSolidBackground,backgroundColor,effectiveOutputFormat]);
 
   const requestGenerationCancellation = useCallback(async (
     target: GenerationCancelTarget | null,
@@ -1575,6 +1643,7 @@ export function useImageGenerationState() {
       backgroundAbortRef.current?.abort();
       setBackgroundIsGenerating(false);
       setBackgroundStatus("cancelled");
+      setBackgroundPendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
     }, setBackgroundError);
   }, [backgroundIsGenerating, requestGenerationCancellation]);
@@ -1604,6 +1673,53 @@ export function useImageGenerationState() {
       setUpscalePendingGeneration(null);
     }, setUpscaleError);
   }, [requestGenerationCancellation, upscaleIsGenerating, upscalePendingGeneration]);
+
+  useTemplateSettings("image", {
+    ready: !isLoadingModels, model:activeSelectedModel, models:activeModelOptions.map(m=>m.model),
+    setModel: value => {
+      if(activeTab === "Image to Image") setSelectedImageToImageModel(value);
+      else if(activeTab === "AI Style Transfer") setSelectedStyleTransferModel(value);
+      else if(activeTab === "AI Background") setSelectedBackgroundModel(value);
+      else if(activeTab === "Upscale") setSelectedUpscaleModel(value);
+      else if(activeTab === "Extend Image") setSelectedExtendModel(value);
+      else setSelectedModel(value);
+    },
+    apply: (s,p) => {
+      setPrompt(p); setImageToImagePrompt(p); setStyleTransferPrompt(p); setBackgroundPrompt(p); setExtendPrompt(p);
+      if(typeof s.ratio==='string')setRatio(s.ratio as ImageRatio);
+      if(typeof s.resolution==='string')setResolution(s.resolution);
+      if(typeof s.quality==='string')setQuality(s.quality as ImageQuality);
+      if(s.count!==undefined)setCount(String(s.count) as ImageCount);
+      if(typeof s.outputFormat==='string')setOutputFormat(s.outputFormat);
+      if(typeof s.style==='string')setStyle(s.style as StylePreset);
+      if(typeof s.mask==='string')setBackgroundMask(s.mask);
+      if(s.seed!==undefined)setSeed(String(s.seed));
+      setNegativePrompt(typeof s.negativePrompt==='string'?s.negativePrompt:'');
+      setModelParams(s.modelParams && typeof s.modelParams==='object'?s.modelParams as Record<string,unknown>:{});
+      setPromptOptimizerEnabled(s.promptOptimizerEnabled===true);
+      if(typeof s.sourceImage==='string') {
+        if(activeTab==='Image to Image')setImageToImageSourceImageAndPersist(s.sourceImage);
+        if(activeTab==='AI Style Transfer')setStyleTransferSourceImageAndPersist(s.sourceImage);
+        if(activeTab==='AI Background')setBackgroundSourceImageAndPersist(s.sourceImage);
+        if(activeTab==='Upscale')setUpscaleSourceImageAndPersist(s.sourceImage);
+        if(activeTab==='Extend Image')setExtendSourceImageAndPersist(s.sourceImage);
+      }
+      if(Array.isArray(s.sourceImages))setImageToImageSourceImagesAndPersist(s.sourceImages.filter((x):x is string=>typeof x==='string'));
+      if(typeof s.direction==='string')setExtendDirection(s.direction as ExtendDirection);
+      if(typeof s.amount==='string')setExtendAmount(s.amount as ExtendAmount);
+      if(typeof s.styleReferenceImage==='string'){setStyleReferenceImageAndPersist(s.styleReferenceImage);setStyleSourceMode('reference');}
+      if(typeof s.stylePreset==='string'){setStyleTransferPreset(s.stylePreset as StyleTransferPreset);setStyleSourceMode('preset');}
+      if(typeof s.styleStrength==='number')setImageStrength(s.styleStrength*100);
+      if(typeof s.contentPreservation==='number')setContentPreservation(s.contentPreservation*100);
+      if(typeof s.backgroundReferenceImage==='string')setBackgroundReferenceImage(s.backgroundReferenceImage);
+      if(typeof s.mode==='string')setBackgroundMode(s.mode as BackgroundMode);
+      if(typeof s.backgroundColor==='string')setBackgroundColor(s.backgroundColor);
+      if(typeof s.preserveSubject==='boolean')setPreserveSubject(s.preserveSubject);
+      if(typeof s.edgeCleanup==='boolean')setEdgeCleanup(s.edgeCleanup);
+      if(typeof s.addShadow==='boolean')setAddShadow(s.addShadow);
+      if(typeof s.matchLighting==='boolean')setMatchLighting(s.matchLighting);
+    },
+  });
 
   return {
     activeTab,
@@ -1736,6 +1852,9 @@ export function useImageGenerationState() {
     setActiveTab: (nextTab: ImageGenerationTab) => {
       const previousTab = activeTabRef.current;
       if (previousTab !== nextTab) {
+        // Smart Enhance belongs to the current tab. Do not carry its active
+        // state into the next workflow.
+        setPromptOptimizerEnabled(false);
         if (!hasActiveGenerationForTab(previousTab)) {
           clearSourceImageForTab(previousTab);
         }
@@ -1841,7 +1960,7 @@ export function useImageGenerationState() {
           setGenerationStatus("cancelled");
         } else {
           setGenerationStatus(terminalStatus ?? "failed");
-          setGenerationError(error instanceof Error ? error.message : "Image generation failed");
+          setGenerationError(formatGenerationError(error, "Image generation failed"));
         }
       } finally {
         if (generationAbortRef.current === abortController) generationAbortRef.current = null;
@@ -1898,7 +2017,7 @@ export function useImageGenerationState() {
           setExtendStatus("cancelled");
         } else {
           setExtendStatus("failed");
-          setExtendError(error instanceof Error ? error.message : "Image extension failed");
+          setExtendError(formatGenerationError(error, "Image extension failed"));
         }
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("extend-image"));
         setExtendPendingGeneration(null);
@@ -1950,7 +2069,7 @@ export function useImageGenerationState() {
           setUpscaleStatus("cancelled");
         } else {
           setUpscaleStatus("failed");
-          setUpscaleError(error instanceof Error ? error.message : "Image upscaling failed");
+          setUpscaleError(formatGenerationError(error, "Image upscaling failed"));
         }
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("upscale"));
         setUpscalePendingGeneration(null);
@@ -1991,7 +2110,7 @@ export function useImageGenerationState() {
           setImageToImageStatus("cancelled");
         } else {
           setImageToImageStatus("failed");
-          setImageToImageError(error instanceof Error ? error.message : "Image transformation failed");
+          setImageToImageError(formatGenerationError(error, "Image transformation failed"));
         }
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("image-to-image"));
         setImageToImagePendingGeneration(null);
@@ -2051,7 +2170,7 @@ export function useImageGenerationState() {
           setStyleTransferStatus("cancelled");
         } else {
           setStyleTransferStatus("failed");
-          setStyleTransferError(error instanceof Error ? error.message : "Style transfer failed");
+          setStyleTransferError(formatGenerationError(error, "Style transfer failed"));
         }
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("style-transfer"));
         setStyleTransferPendingGeneration(null);
@@ -2063,6 +2182,8 @@ export function useImageGenerationState() {
     generateBackground: async () => {
       const hasModeInstruction = backgroundMode === "remove" || backgroundMode === "solid" || (backgroundSupportsPrompt && Boolean(backgroundPrompt.trim())) || Boolean(backgroundReferenceImage);
       if (activeTab !== "AI Background" || backgroundIsGenerating || !backgroundSourceImage || !backgroundSupportsInput || !hasModeInstruction) return;
+      backgroundRunRef.current = true;
+      setBackgroundPendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
       backgroundAbortRef.current?.abort();
       const abortController = new AbortController();
@@ -2109,6 +2230,11 @@ export function useImageGenerationState() {
         const urls = isLocalSolidBackground
           ? await Promise.all(rawUrls.map(async (url) => uploadImageAsset(await createSolidBackgroundFile(url, backgroundColor, effectiveOutputFormat), { purpose: "content", feature: "background-removal", workspaceId: result.data.workspaceId })))
           : rawUrls;
+        if (abortController.signal.aborted) return;
+        if (featureKeyForTab(activeTabRef.current) === "background-removal") {
+          setSelectedRecentImageUrl(null);
+          setSelectedVariation(0);
+        }
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
         setBackgroundUrls(urls);
@@ -2118,6 +2244,7 @@ export function useImageGenerationState() {
         // Solid Color may replace the provider output with a locally composited
         // asset. Do not restore the provider's raw pending output after reload.
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
+        setBackgroundPendingGeneration(null);
         await loadRecentGenerations(result.data.workspaceId, "background-removal");
         setRecentGenerationUrls((currentUrls) => Array.from(new Set([...urls, ...currentUrls])));
       } catch (error) {
@@ -2125,7 +2252,7 @@ export function useImageGenerationState() {
           setBackgroundStatus("cancelled");
         } else {
           setBackgroundStatus("failed");
-          setBackgroundError(error instanceof Error ? error.message : "Background generation failed");
+          setBackgroundError(formatGenerationError(error, "Background generation failed"));
         }
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
       } finally {

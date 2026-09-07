@@ -50,6 +50,7 @@ export type UsageDashboard = {
       transactionType: string;
       title: string;
       subtitle: string;
+      artwork?: { generationId: string; name: string; outputUrl: string | null; thumbnailUrl: string | null } | null;
       amount: number;
       balanceAfter: number;
       referenceType: string | null;
@@ -114,8 +115,8 @@ async function backendRequest<T>(path: string, init: RequestInit = {}): Promise<
   return payload?.data as T;
 }
 
-export function fetchUsageDashboard(period: UsagePeriodKey, trend: UsageTrend): Promise<UsageDashboard> {
-  const params = new URLSearchParams({ period, trend, activityLimit: "5" });
+export function fetchUsageDashboard(period: UsagePeriodKey, trend: UsageTrend, activityLimit = 5, activityOffset = 0): Promise<UsageDashboard> {
+  const params = new URLSearchParams({ period, trend, activityLimit: String(activityLimit), activityOffset: String(activityOffset) });
   return backendRequest<UsageDashboard>(`/users/me/usage?${params.toString()}`);
 }
 

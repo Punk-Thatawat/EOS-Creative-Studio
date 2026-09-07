@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { confirmEmailWithBackend, persistBackendSession, type BackendAuthSession } from "@/lib/auth/backend-auth";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type ConfirmationState = "loading" | "success" | "error";
 
@@ -22,7 +21,6 @@ export default function ConfirmEmailPage() {
       const token = params.get("token");
       const email = params.get("email");
       const type = params.get("type") === "email" ? "email" : "signup";
-      const supabase = getSupabaseBrowserClient();
 
       let accessToken: string | null = null;
       let backendSession: BackendAuthSession | null = null;
@@ -34,29 +32,6 @@ export default function ConfirmEmailPage() {
         });
         backendSession = result.data.session;
         if (backendSession) accessToken = await persistBackendSession(backendSession);
-      } else {
-        const code = params.get("code");
-        const initialSessionResult = await supabase.auth.getSession();
-        if (initialSessionResult.error) throw initialSessionResult.error;
-        let session = initialSessionResult.data.session;
-
-        if (!session && code) {
-          const exchangeResult = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeResult.error) throw exchangeResult.error;
-          session = exchangeResult.data.session;
-        }
-
-        if (!session && window.location.hash) {
-          const hashParams = new URLSearchParams(window.location.hash.slice(1));
-          const hashAccessToken = hashParams.get("access_token");
-          const hashRefreshToken = hashParams.get("refresh_token");
-          if (hashAccessToken && hashRefreshToken) {
-            const setSessionResult = await supabase.auth.setSession({ access_token: hashAccessToken, refresh_token: hashRefreshToken });
-            if (setSessionResult.error) throw setSessionResult.error;
-            session = setSessionResult.data.session;
-          }
-        }
-        if (session) accessToken = session.access_token;
       }
 
       if (!accessToken) throw new Error("The confirmation link is invalid or has expired.");

@@ -55,7 +55,7 @@ export default function LoginPageClient() {
           </button>
         </div>
         {errorMessage && <p className="mt-4 rounded-xl bg-red-50 p-3 text-center text-xs text-red-700" role="alert">{errorMessage}</p>}
-        <p className="mt-5 rounded-xl bg-surface-muted p-3 text-center text-[11px] leading-5 text-muted-foreground">Google securely signs you in with Supabase Auth. Your EOS profile is loaded from the backend after callback.</p>
+        <p className="mt-5 rounded-xl bg-surface-muted p-3 text-center text-[11px] leading-5 text-muted-foreground">Google securely signs you in, then EOS creates and manages your session in its own backend.</p>
       </Card>
     </div>
   );

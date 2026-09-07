@@ -107,7 +107,7 @@ export async function listGenerationModels(feature = "text-to-image", background
   const accessToken = await getApiAccessToken();
   if (!accessToken) return [];
   const modeQuery = backgroundMode ? `&backgroundMode=${encodeURIComponent(backgroundMode)}` : "";
-  const response = await fetch(`${backendApiUrl}/generation-models?feature=${encodeURIComponent(feature)}${modeQuery}`, {
+  const response = await fetch(`/api/generation-models?feature=${encodeURIComponent(feature)}${modeQuery}`, {
     headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
   });

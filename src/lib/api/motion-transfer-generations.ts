@@ -1,6 +1,7 @@
 "use client";
 
 import { getApiAccessToken } from "@/lib/auth/access-token";
+import { generationErrorFromPayload } from "@/lib/api/generation-errors";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendOrigin = configuredBackendUrl.replace(/\/api\/v1$/, "");
@@ -44,6 +45,8 @@ export type MotionTransferGenerationStatus = {
   progress?: number;
   output?: MotionTransferOutput[];
   errorMessage?: string;
+  errorCode?: string;
+  errorSource?: "system" | "provider";
   [key: string]: unknown;
 };
 
@@ -61,16 +64,6 @@ function apiPath(path: string): string {
 
 async function readPayload(response: Response): Promise<unknown> {
   return response.json().catch(() => null);
-}
-
-function errorMessage(payload: unknown): string {
-  if (payload && typeof payload === "object" && "message" in payload) {
-    const message = payload.message;
-    if (typeof message === "string") return message;
-    if (Array.isArray(message)) return message.join(", ");
-  }
-  if (payload && typeof payload === "object" && "errorMessage" in payload && typeof payload.errorMessage === "string") return payload.errorMessage;
-  return "Motion transfer request failed";
 }
 
 function unwrapData(payload: unknown): unknown {
@@ -91,7 +84,7 @@ async function authenticatedRequest(path: string, init: RequestInit = {}): Promi
     cache: "no-store",
   });
   const payload = await readPayload(response);
-  if (!response.ok) throw new Error(errorMessage(payload));
+  if (!response.ok) throw generationErrorFromPayload(payload, "Motion transfer request failed");
   return unwrapData(payload);
 }
 

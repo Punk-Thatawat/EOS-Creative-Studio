@@ -1,8 +1,7 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
-
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000";
+const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
+const sessionStorageKey = "eos.backend.session";
 
 export type BackendAuthSession = {
   accessToken: string;
@@ -68,11 +67,40 @@ export function confirmEmailWithBackend(input: { token_hash?: string; token?: st
   return postAuth("confirm-email", body);
 }
 
-export async function persistBackendSession(session: BackendAuthSession): Promise<string> {
-  const { data, error } = await getSupabaseBrowserClient().auth.setSession({
-    access_token: session.accessToken,
-    refresh_token: session.refreshToken,
-  });
-  if (error || !data.session) throw error ?? new Error("Could not create browser session");
-  return data.session.access_token;
+export function exchangeGoogleCode(code: string) {
+  return postAuth("google/exchange", { code });
+}
+
+function parseStoredSession(value: string | null): BackendAuthSession | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<BackendAuthSession>;
+    if (typeof parsed.accessToken !== "string" || typeof parsed.refreshToken !== "string" || typeof parsed.expiresAt !== "number") return null;
+    return parsed as BackendAuthSession;
+  } catch {
+    return null;
+  }
+}
+
+export function getStoredBackendSession(): BackendAuthSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return parseStoredSession(window.localStorage.getItem(sessionStorageKey)) ?? parseStoredSession(window.sessionStorage.getItem(sessionStorageKey));
+  } catch {
+    return null;
+  }
+}
+
+export async function persistBackendSession(session: BackendAuthSession, remember = true): Promise<string> {
+  if (typeof window === "undefined") throw new Error("Browser session is unavailable");
+  const storage = remember ? window.localStorage : window.sessionStorage;
+  storage.setItem(sessionStorageKey, JSON.stringify(session));
+  if (!remember) window.localStorage.removeItem(sessionStorageKey);
+  return session.accessToken;
+}
+
+export function clearBackendSession(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(sessionStorageKey);
+  window.sessionStorage.removeItem(sessionStorageKey);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 import { useRef, useState } from "react";
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -8,7 +9,6 @@ import { useImageGenerationState } from "../hooks/use-image-generation-state";
 import { cx } from "../styles";
 import { ImageGenerationTabs } from "./image-generation-tabs";
 import { ImageTutorialButton } from "./image-tutorial-button";
-import { PowerUpTools } from "./power-up-tools";
 import { PreviewPanel } from "./preview-panel";
 import { PromptPanel } from "./prompt-panel";
 import { SettingsPanel } from "./settings-panel";
@@ -18,7 +18,6 @@ import { textToImagePromptMaxLength } from "../config";
 const imageTabByRoute = {
   "text-to-image": "Text to Image",
   "image-to-image": "Image to Image",
-  "style-transfer": "AI Style Transfer",
   "background-removal": "AI Background",
   upscale: "Upscale",
   "extend-image": "Extend Image",
@@ -26,6 +25,13 @@ const imageTabByRoute = {
 
 export function ImageGenerationPage() {
   const state = useImageGenerationState();
+  useTemplatePrompt("image", prompt => {
+    state.setPrompt(prompt);
+    state.setImageToImagePrompt(prompt);
+    state.setStyleTransferPrompt(prompt);
+    state.setBackgroundPrompt(prompt);
+    state.setExtendPrompt(prompt);
+  });
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
@@ -108,6 +114,16 @@ export function ImageGenerationPage() {
   const activeGeneratedUrls = isTextToImageTab ? state.generatedImageUrls : isImageToImageTab ? state.imageToImageUrls : isStyleTransferTab ? state.styleTransferUrls : isBackgroundTab ? state.backgroundUrls : isUpscaleTab ? state.upscaleUrls : isExtendTab ? state.extendUrls : [];
     const optionsFollowModel = Boolean(selectedModel);
   const [previewDisplayMode, setPreviewDisplayMode] = useState<"current" | "gallery">("current");
+  const activeOutputKey = JSON.stringify([state.activeTab, activeGeneratedUrls]);
+  const [observedOutput, setObservedOutput] = useState({ key: activeOutputKey, status: activeGenerationStatus });
+  if (observedOutput.key !== activeOutputKey || observedOutput.status !== activeGenerationStatus) {
+    setObservedOutput({ key: activeOutputKey, status: activeGenerationStatus });
+    // Reveal new outputs before rendering children, including resumed jobs and
+    // completion after the user browsed history while a job was running.
+    if (activeGeneratedUrls.length > 0 && (
+      observedOutput.key !== activeOutputKey || activeGenerationStatus === "completed"
+    )) setPreviewDisplayMode("current");
+  }
   const generateTextToImage = () => {
     setPreviewDisplayMode("current");
     void state.generateImage();
@@ -263,6 +279,7 @@ export function ImageGenerationPage() {
         previewDisplayMode={previewDisplayMode}
         onPreviewDisplayModeChange={(mode) => { if (mode === "current") state.clearRecentSelection(); setPreviewDisplayMode(mode); }}
         sourceImage={state.sourceImage}
+        previewRatio={state.ratio}
         modelPreviewUrl={selectedModelOption?.previewUrl ?? null}
         modelPreviewType={selectedModelOption?.previewType ?? null}
         backgroundMask={state.backgroundMask}
@@ -323,6 +340,5 @@ export function ImageGenerationPage() {
         onModelParamChange={state.setModelParam}
       />
     </div>
-    <PowerUpTools />
   </div>;
 }

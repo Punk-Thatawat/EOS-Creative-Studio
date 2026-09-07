@@ -1,4 +1,6 @@
 "use client";
+import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -24,6 +26,7 @@ import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 
 type MotionSchemaProperty = {
   type?: string;
@@ -37,7 +40,7 @@ type MotionSchemaProperty = {
   [key: string]: unknown;
 };
 
-type MotionAsset = { url: string; file: File; kind: "image" | "video"; name: string };
+type MotionAsset = { url: string; file?: File; kind: "image" | "video"; name: string };
 type MotionStatus = "idle" | "uploading" | "processing" | "completed" | "failed";
 
 const motionCoreParameterNames = new Set([
@@ -187,6 +190,7 @@ export function MotionTransferWorkspace() {
   const [sourceImage, setSourceImage] = useState<MotionAsset | null>(null);
   const [motionVideo, setMotionVideo] = useState<MotionAsset | null>(null);
   const [prompt, setPrompt] = useState("");
+  useTemplatePrompt("video", setPrompt);
   const [promptOptimizerEnabled, setPromptOptimizerEnabled] = useState(false);
   const [negativePrompt, setNegativePrompt] = useState("");
   const [qualityValue, setQualityValue] = useState<unknown>(undefined);
@@ -323,9 +327,9 @@ export function MotionTransferWorkspace() {
     setGenerationStatus("uploading");
     try {
       setNotice("Uploading source image…");
-      const sourceImageUrl = await uploadImageAsset(sourceImage.file, { purpose: "content", feature: "motion-transfer", uploadConstraints: capabilities?.uploadConstraints });
+      const sourceImageUrl = sourceImage.file ? await uploadImageAsset(sourceImage.file, { purpose: "content", feature: "motion-transfer", uploadConstraints: capabilities?.uploadConstraints }) : sourceImage.url;
       setNotice("Uploading motion video…");
-      const motionVideoUrl = await uploadImageAsset(motionVideo.file, { purpose: "content", feature: "motion-transfer", uploadConstraints: capabilities?.uploadConstraints });
+      const motionVideoUrl = motionVideo.file ? await uploadImageAsset(motionVideo.file, { purpose: "content", feature: "motion-transfer", uploadConstraints: capabilities?.uploadConstraints }) : motionVideo.url;
       const request: MotionTransferGenerationInput = { sourceImage: sourceImageUrl, motionVideo: motionVideoUrl, model: selectedModel };
       if (promptOptimizerEnabled) request.promptOptimizerEnabled = true;
       if (qualityProperty && motionHasValue(qualityValue)) request.quality = qualityValue;
@@ -357,7 +361,7 @@ export function MotionTransferWorkspace() {
           });
         }
       }
-      if (status.status !== "completed") throw new Error(status.errorMessage ?? `Motion transfer generation ${status.status}`);
+      if (status.status !== "completed") throw generationErrorFromStatus(status, `Motion transfer generation ${status.status}`);
       const videoUrl = motionOutputUrl(status);
       if (!videoUrl) throw new Error("Motion transfer completed without an output URL");
       setFinalVideoUrl(videoUrl);
@@ -370,13 +374,22 @@ export function MotionTransferWorkspace() {
       if (controller.signal.aborted) return;
       setGenerationStatus("failed");
       setNotice(null);
-      setGenerationError(error instanceof Error ? error.message : "Unable to generate motion transfer video");
+      setGenerationError(formatGenerationError(error, "Unable to generate motion transfer video"));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
+  useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
+    setPrompt(p);if(s.quality!==undefined)setQualityValue(s.quality);
+    if(s.characterOrientation!==undefined)setOrientationValue(s.characterOrientation);
+    if(s.keepOriginalSound!==undefined)setKeepOriginalSound(s.keepOriginalSound);
+    if(typeof s.sourceImage==='string')setSourceImage({url:s.sourceImage,kind:'image',name:'Template image'});
+    if(typeof s.sourceVideo==='string')setMotionVideo({url:s.sourceVideo,kind:'video',name:'Template video'});
+    setNegativePrompt(typeof s.negativePrompt==='string'?s.negativePrompt:'');
+    setModelParams(s.modelParams&&typeof s.modelParams==='object'?s.modelParams as Record<string,unknown>:{});
+  }});
   const videoCreditEstimate = useVideoCreditEstimate(selectedModel ? {
     feature: "motion-transfer",
     model: selectedModel,

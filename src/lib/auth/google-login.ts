@@ -1,22 +1,10 @@
 "use client";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
-
 export async function signInWithGoogle({
   redirectTarget,
 }: { redirectTarget?: string } = {}) {
-  const supabase = getSupabaseBrowserClient();
-  const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
-  if (redirectTarget) {
-    callbackUrl.searchParams.set("redirect", redirectTarget);
-  }
-
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: callbackUrl.toString(),
-    },
-  });
-
-  if (error) throw error;
+  const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
+  const authorizationUrl = new URL(`${backendUrl}/api/v1/auth/google`);
+  if (redirectTarget) authorizationUrl.searchParams.set("redirect", redirectTarget);
+  window.location.assign(authorizationUrl.toString());
 }
