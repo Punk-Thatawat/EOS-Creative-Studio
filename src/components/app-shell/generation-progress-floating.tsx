@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronUp, Clock3, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { listGenerationHistory, resumeGeneration, type GenerationHistoryItem, type GenerationProgress, type PendingGeneration } from "@/lib/api/generations";
 import { emitGenerationCompleted } from "@/lib/generation-progress-events";
+import { getDismissedProgressStorageKey, getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import { useHydrated } from "@/components/app-shell/use-hydrated";
 import styles from "./generation-progress-floating.module.css";
 
@@ -32,8 +33,6 @@ type ActivePendingGeneration = {
   pending: PendingGeneration;
 };
 
-const floatingProgressStorageKey = "eos.generation.progress.cards";
-const dismissedProgressStorageKey = "eos.generation.progress.dismissed";
 function featureConfig(feature?: string) {
   return generationFeatureOptions.find((item) => item.feature === feature) ?? {
     feature: feature ?? "image-generation",
@@ -155,7 +154,7 @@ function readPersistedProgress(): ActivePendingGeneration[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const raw = window.localStorage.getItem(floatingProgressStorageKey);
+    const raw = window.localStorage.getItem(getGenerationProgressStorageKey());
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed)
@@ -170,8 +169,9 @@ function writePersistedProgress(items: ActivePendingGeneration[]): void {
   if (typeof window === "undefined") return;
 
   try {
-    if (items.length === 0) window.localStorage.removeItem(floatingProgressStorageKey);
-    else window.localStorage.setItem(floatingProgressStorageKey, JSON.stringify(items));
+    const storageKey = getGenerationProgressStorageKey();
+    if (items.length === 0) window.localStorage.removeItem(storageKey);
+    else window.localStorage.setItem(storageKey, JSON.stringify(items));
   } catch {
     // Storage may be unavailable in private browsing; the in-memory card still works.
   }
@@ -181,7 +181,7 @@ function readDismissedGenerationIds(): Set<string> {
   if (typeof window === "undefined") return new Set();
 
   try {
-    const raw = window.localStorage.getItem(dismissedProgressStorageKey);
+    const raw = window.localStorage.getItem(getDismissedProgressStorageKey());
     if (!raw) return new Set();
     const parsed = JSON.parse(raw) as unknown;
     return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : []);
@@ -194,8 +194,9 @@ function writeDismissedGenerationIds(ids: Set<string>): void {
   if (typeof window === "undefined") return;
 
   try {
-    if (ids.size === 0) window.localStorage.removeItem(dismissedProgressStorageKey);
-    else window.localStorage.setItem(dismissedProgressStorageKey, JSON.stringify(Array.from(ids)));
+    const storageKey = getDismissedProgressStorageKey();
+    if (ids.size === 0) window.localStorage.removeItem(storageKey);
+    else window.localStorage.setItem(storageKey, JSON.stringify(Array.from(ids)));
   } catch {
     // Storage may be unavailable; the in-memory dismissal still works.
   }

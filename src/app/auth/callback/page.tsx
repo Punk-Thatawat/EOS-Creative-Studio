@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { exchangeGoogleCode, persistBackendSession } from "@/lib/auth/backend-auth";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
+import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 
 type AuthStage = "authenticating" | "workspace" | "ready";
 
@@ -49,6 +50,7 @@ export default function AuthCallbackPage() {
       if (!session) throw new Error("EOS session was not created");
 
       setStage("workspace");
+      clearGenerationProgressStorage();
       const accessToken = await persistBackendSession(session);
       const backendProfile = await fetchBackendSession(accessToken);
       setStage("ready");

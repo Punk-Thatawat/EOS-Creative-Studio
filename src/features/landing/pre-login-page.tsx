@@ -7,8 +7,10 @@ import { EosLogo } from "@/components/brand/eos-logo";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
 import { loginWithBackend, persistBackendSession, registerWithBackend, resendConfirmationWithBackend } from "@/lib/auth/backend-auth";
+import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 import { listPublicVideoShowcase } from "@/lib/api/video-showcase";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 const tools = [
   ["AI Image", "Generate stunning images", "/generated-icons-v2/icon-1-image.png"],
@@ -58,38 +60,43 @@ type AuthFieldProps = {
   minLength?: number;
   hint?: string;
   optional?: boolean;
+  optionalLabel?: string;
   error?: string | null;
   showPassword?: boolean;
+  passwordToggleLabel?: string;
   onTogglePassword?: () => void;
   onChange: (value: string) => void;
 };
 
-function AuthField({ id, label, value, placeholder, type, autoComplete, icon: Icon, disabled, required, minLength, hint, optional, error, showPassword, onTogglePassword, onChange }: AuthFieldProps) {
+function AuthField({ id, label, value, placeholder, type, autoComplete, icon: Icon, disabled, required, minLength, hint, optional, optionalLabel, error, showPassword, passwordToggleLabel, onTogglePassword, onChange }: AuthFieldProps) {
   const inputType = type === "password" && showPassword ? "text" : type;
   const descriptionId = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
 
   return (
     <div className={`auth-field${error ? " auth-field--error" : ""}`}>
       <label htmlFor={id}>
-        <span>{label}{optional ? <small>optional</small> : null}</span>
+        <span>{label}{optional ? <small>{optionalLabel}</small> : null}</span>
         {hint ? <em id={`${id}-hint`}>{hint}</em> : null}
       </label>
       <div className="auth-input-wrap">
         <Icon className="auth-input-icon" size={17} aria-hidden="true" />
         <input id={id} value={value} onChange={(event) => onChange(event.target.value)} type={inputType} placeholder={placeholder} autoComplete={autoComplete} autoCapitalize={type === "email" ? "none" : undefined} spellCheck={type === "email" ? false : undefined} required={required} minLength={minLength} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={descriptionId} />
-        {type === "password" && onTogglePassword ? <button type="button" className="auth-password-toggle" aria-label={showPassword ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`} onClick={onTogglePassword} disabled={disabled}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button> : null}
+        {type === "password" && onTogglePassword ? <button type="button" className="auth-password-toggle" aria-label={passwordToggleLabel} onClick={onTogglePassword} disabled={disabled}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button> : null}
       </div>
       {error ? <p id={`${id}-error`} className="auth-field-error"><CircleAlert size={13} aria-hidden="true" />{error}</p> : null}
     </div>
   );
 }
 
-function getPasswordStrength(password: string): { label: string; score: number } {
+type PasswordStrengthLabelKey = "auth.passwordStrength.needsMore" | "auth.passwordStrength.goodStart" | "auth.passwordStrength.strong";
+
+function getPasswordStrength(password: string): { labelKey: PasswordStrengthLabelKey; score: number } {
   const score = [password.length >= 8, /[A-Z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)].filter(Boolean).length;
-  return { score, label: score <= 1 ? "Needs more strength" : score <= 2 ? "Good start" : "Strong password" };
+  return { score, labelKey: score <= 1 ? "auth.passwordStrength.needsMore" : score <= 2 ? "auth.passwordStrength.goodStart" : "auth.passwordStrength.strong" };
 }
 
 export function PreLoginPage() {
+  const { t } = useLocale();
   const [examples, setExamples] = useState<ShowcaseExample[]>(fallbackExamples);
   const [exampleOffset, setExampleOffset] = useState(0);
   const [videoDurations, setVideoDurations] = useState<Record<number, string>>({});
@@ -110,8 +117,8 @@ export function PreLoginPage() {
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
   const maxExampleOffset = Math.max(0, examples.length - 5);
   const visibleExampleOffset = Math.min(exampleOffset, maxExampleOffset);
-  const authEmailError = authEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(authEmail) ? "Enter a valid email address" : null;
-  const authPasswordError = authMode === "register" && authPassword.length > 0 && authPassword.length < 8 ? "Use at least 8 characters" : null;
+  const authEmailError = authEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(authEmail) ? t("auth.validation.emailInvalid") : null;
+  const authPasswordError = authMode === "register" && authPassword.length > 0 && authPassword.length < 8 ? t("auth.validation.passwordMin") : null;
 
   useEffect(() => {
     let active = true;
@@ -130,7 +137,7 @@ export function PreLoginPage() {
       await signInWithGoogle();
     } catch (error: unknown) {
       setGoogleLoginLoading(false);
-      setGoogleLoginError(error instanceof Error ? error.message : "Unable to start Google login");
+      setGoogleLoginError(error instanceof Error ? error.message : t("auth.error.googleStart"));
     }
   };
 
@@ -172,12 +179,13 @@ export function PreLoginPage() {
     setAuthMessage(null);
 
     try {
-      if (!authEmail.trim()) throw new Error("Enter your email address");
+      if (!authEmail.trim()) throw new Error(t("auth.validation.emailRequired"));
       if (authMode === "register") {
-        if (authPassword.length < 8) throw new Error("Use at least 8 characters for your password");
-        if (authPassword !== authPasswordConfirmation) throw new Error("Passwords do not match");
+        if (authPassword.length < 8) throw new Error(t("auth.validation.passwordMinFull"));
+        if (authPassword !== authPasswordConfirmation) throw new Error(t("auth.validation.passwordMismatch"));
         const result = await registerWithBackend({ email: authEmail, password: authPassword, display_name: authName.trim() || undefined });
         if (result.data.session) {
+          clearGenerationProgressStorage();
           const accessToken = await persistBackendSession(result.data.session);
           const backendProfile = await fetchBackendSession(accessToken);
           window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
@@ -185,18 +193,19 @@ export function PreLoginPage() {
           return;
         }
         setAuthMode("confirmation");
-        setAuthMessage(`We sent a confirmation link to ${authEmail}. Please check your inbox to activate your account.`);
+        setAuthMessage(t("auth.confirmation.sent", { email: authEmail }));
         return;
       }
 
       const result = await loginWithBackend(authEmail, authPassword);
-      if (!result.data.session) throw new Error("Login did not create a session");
+      if (!result.data.session) throw new Error(t("auth.validation.sessionMissing"));
+      clearGenerationProgressStorage();
       const accessToken = await persistBackendSession(result.data.session);
       const backendProfile = await fetchBackendSession(accessToken);
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
       window.location.replace("/home");
     } catch (error: unknown) {
-      setAuthError(error instanceof Error ? error.message : "Authentication failed. Please try again.");
+      setAuthError(error instanceof Error ? error.message : t("auth.error.authenticationFailed"));
     } finally {
       setAuthSubmitting(false);
     }
@@ -208,9 +217,9 @@ export function PreLoginPage() {
     setAuthMessage(null);
     try {
       await resendConfirmationWithBackend(authEmail);
-      setAuthMessage(`A new confirmation link was sent to ${authEmail}.`);
+      setAuthMessage(t("auth.confirmation.resent", { email: authEmail }));
     } catch (error: unknown) {
-      setAuthError(error instanceof Error ? error.message : "Could not resend the confirmation email.");
+      setAuthError(error instanceof Error ? error.message : t("auth.error.resendConfirmation"));
     } finally {
       setAuthSubmitting(false);
     }
@@ -292,14 +301,14 @@ export function PreLoginPage() {
     const timer = window.setTimeout(() => {
       if (params.get("auth_error") === "1") {
         const storedError = window.sessionStorage.getItem("eos.auth.login-error");
-        setGoogleLoginError(storedError || "Login failed. Please try again.");
+        setGoogleLoginError(storedError || t("auth.error.loginFailed"));
         window.sessionStorage.removeItem("eos.auth.login-error");
       }
       setLoginOpen(true);
       window.history.replaceState(null, "", window.location.pathname);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const cleanups = videoRefs.current.map((video, index) => {
@@ -378,41 +387,41 @@ export function PreLoginPage() {
         </div>
       </div>}
 
-      {loginOpen && <div className="auth-modal" role="dialog" aria-modal="true" aria-label={authMode === "login" ? "Login" : authMode === "register" ? "Create account" : "Confirm email"} onClick={closeLogin}>
+      {loginOpen && <div className="auth-modal" role="dialog" aria-modal="true" aria-label={authMode === "login" ? t("auth.modal.loginTitle") : authMode === "register" ? t("auth.modal.registerTitle") : t("auth.modal.confirmationTitle")} onClick={closeLogin}>
         <div className="auth-modal-shell" onClick={(event) => event.stopPropagation()}>
           <div className="auth-mobile-logo"><EosLogo href="/" /></div>
-          <button type="button" className="auth-modal-close" aria-label="Close login" onClick={closeLogin}><X size={22} /></button>
+          <button type="button" className="auth-modal-close" aria-label={t("auth.a11y.closeLogin")} onClick={closeLogin}><X size={22} /></button>
           <div className={`auth-modal-panel auth-modal-panel--${authMode}`}>
-          {authMode === "login" && <div className="auth-modal-heading-art"><Image src="/generated-assets/login-welcome-back.webp" alt="Welcome back" fill sizes="430px" className="auth-heading-desktop" /><Image src="/generated-assets/login-welcome-mobile.webp" alt="Welcome back" fill sizes="430px" className="auth-heading-mobile" /></div>}
-          <div className={`auth-modal-heading${authMode !== "login" ? " is-visible" : ""}`}><span>{authMode === "confirmation" ? <Check size={21} /> : "✦"}</span><h2>{authMode === "login" ? "Welcome back" : authMode === "register" ? "Create your account" : "Check your inbox"}</h2></div>
-          <p className="auth-modal-subtitle">{authMode === "login" ? <>Login to your <strong>EOS Creative Studio</strong> account</> : authMode === "register" ? <>Start creating with <strong>EOS Creative Studio</strong></> : <>Confirm your email to activate your <strong>EOS Creative Studio</strong> account</>}</p>
+          {authMode === "login" && <div className="auth-modal-heading-art"><Image src="/generated-assets/login-welcome-back.webp" alt={t("auth.modal.loginTitle")} fill sizes="430px" className="auth-heading-desktop" /><Image src="/generated-assets/login-welcome-mobile.webp" alt={t("auth.modal.loginTitle")} fill sizes="430px" className="auth-heading-mobile" /></div>}
+          <div className={`auth-modal-heading${authMode !== "login" ? " is-visible" : ""}`}><span>{authMode === "confirmation" ? <Check size={21} /> : "✦"}</span><h2>{authMode === "login" ? t("auth.modal.loginTitle") : authMode === "register" ? t("auth.modal.registerTitle") : t("auth.modal.confirmationTitle")}</h2></div>
+          <p className="auth-modal-subtitle">{authMode === "login" ? t("auth.modal.loginSubtitle", { brand: "EOS Creative Studio" }) : authMode === "register" ? t("auth.modal.registerSubtitle", { brand: "EOS Creative Studio" }) : t("auth.modal.confirmationSubtitle", { brand: "EOS Creative Studio" })}</p>
 
           {authMode === "confirmation" ? <div className="auth-confirmation-state">
             <div className="auth-confirmation-icon"><MailCheck size={29} /></div>
-            <p>{authMessage ?? `We sent a confirmation link to ${authEmail}.`}</p>
-            <button type="button" className="auth-secondary-button" onClick={() => { void handleResendConfirmation(); }} disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={15} className="auth-spin" /> Sending...</> : "Resend confirmation email"}</button>
+            <p>{authMessage ?? t("auth.confirmation.defaultSent", { email: authEmail })}</p>
+            <button type="button" className="auth-secondary-button" onClick={() => { void handleResendConfirmation(); }} disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={15} className="auth-spin" /> {t("auth.action.sending")}</> : t("auth.action.resendConfirmation")}</button>
             {authError && <p className="auth-error" role="alert">{authError}</p>}
-            <button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>Back to login</button>
+            <button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button>
           </div> : <>
             <form onSubmit={handleEmailAuth}>
-              {authMode === "register" && <AuthField id="modal-name" label="Name" optional value={authName} onChange={setAuthName} type="text" placeholder="Your name" autoComplete="name" icon={UserRound} disabled={authSubmitting} />}
-              <AuthField id="modal-email" label="Email address" value={authEmail} onChange={setAuthEmail} type="email" placeholder="you@example.com" autoComplete="email" icon={Mail} required disabled={authSubmitting} error={authEmailError} />
-              <AuthField id="modal-password" label="Password" value={authPassword} onChange={setAuthPassword} type="password" placeholder="Enter your password" autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? "8+ characters" : "Keep it private"} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />
+              {authMode === "register" && <AuthField id="modal-name" label={t("auth.form.name")} optional optionalLabel={t("auth.form.optional")} value={authName} onChange={setAuthName} type="text" placeholder={t("auth.form.namePlaceholder")} autoComplete="name" icon={UserRound} disabled={authSubmitting} />}
+              <AuthField id="modal-email" label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete="email" icon={Mail} required disabled={authSubmitting} error={authEmailError} />
+              <AuthField id="modal-password" label={t("auth.form.password")} value={authPassword} onChange={setAuthPassword} type="password" placeholder={t("auth.form.passwordPlaceholder")} autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? t("auth.form.passwordMinHint") : t("auth.form.privateHint")} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} passwordToggleLabel={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />
               {authMode === "register" && <>
-                {authPassword && <div className="auth-password-strength" aria-label={`Password strength: ${getPasswordStrength(authPassword).label}`}>
+                {authPassword && <div className="auth-password-strength" aria-label={t("auth.a11y.passwordStrength", { strength: t(getPasswordStrength(authPassword).labelKey) })}>
                   <div className="auth-strength-bars" aria-hidden="true">{[1, 2, 3, 4].map((bar) => <span key={bar} className={bar <= getPasswordStrength(authPassword).score ? "is-filled" : ""} />)}</div>
-                  <span>{getPasswordStrength(authPassword).label}</span>
+                  <span>{t(getPasswordStrength(authPassword).labelKey)}</span>
                 </div>}
-                <AuthField id="modal-password-confirm" label="Confirm password" value={authPasswordConfirmation} onChange={setAuthPasswordConfirmation} type="password" placeholder="Re-enter your password" autoComplete="new-password" icon={LockKeyhole} required minLength={8} disabled={authSubmitting} error={authPasswordConfirmation && authPassword !== authPasswordConfirmation ? "Passwords do not match" : null} showPassword={confirmationPasswordVisible} onTogglePassword={() => setConfirmationPasswordVisible((visible) => !visible)} />
+                <AuthField id="modal-password-confirm" label={t("auth.form.confirmPassword")} value={authPasswordConfirmation} onChange={setAuthPasswordConfirmation} type="password" placeholder={t("auth.form.confirmPasswordPlaceholder")} autoComplete="new-password" icon={LockKeyhole} required minLength={8} disabled={authSubmitting} error={authPasswordConfirmation && authPassword !== authPasswordConfirmation ? t("auth.validation.passwordMismatch") : null} showPassword={confirmationPasswordVisible} passwordToggleLabel={confirmationPasswordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setConfirmationPasswordVisible((visible) => !visible)} />
               </>}
-              {authMode === "login" && <label className="auth-remember"><input type="checkbox" defaultChecked /> Keep me signed in</label>}
+              {authMode === "login" && <label className="auth-remember"><input type="checkbox" defaultChecked /> {t("auth.form.keepSignedIn")}</label>}
               {authError && <p className="auth-error" role="alert">{authError}</p>}
-              <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="submit" className="auth-submit" disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={18} className="auth-spin" /> {authMode === "login" ? "Signing in..." : "Creating account..."}</> : <>{authMode === "login" ? "LOGIN" : "CREATE ACCOUNT"} <ArrowRight size={20} /></>}</button></div>
+              <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="submit" className="auth-submit" disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={18} className="auth-spin" /> {authMode === "login" ? t("auth.action.signingIn") : t("auth.action.creatingAccount")}</> : <>{authMode === "login" ? t("auth.action.login") : t("auth.action.register")} <ArrowRight size={20} /></>}</button></div>
             </form>
-            <div className="auth-divider"><span>OR CONTINUE WITH</span></div>
+            <div className="auth-divider"><span>{t("auth.action.continueWith")}</span></div>
             {googleLoginError && <p className="auth-error" role="alert">{googleLoginError}</p>}
-            <div className="auth-socials"><button type="button" onClick={() => { void handleGoogleLogin(); }} disabled={googleLoginLoading || authSubmitting} aria-busy={googleLoginLoading}><Image src="/generated-assets/google-g-icon.svg" alt="" width={18} height={18} /> <span>{googleLoginLoading ? "Connecting..." : "Google"}</span></button></div>
-            <p className="auth-signup">{authMode === "login" ? <>Don&apos;t have an account? <button type="button" onClick={() => switchAuthMode("register")}>Sign up</button></> : <>Already have an account? <button type="button" onClick={() => switchAuthMode("login")}>Login</button></>}</p>
+            <div className="auth-socials"><button type="button" onClick={() => { void handleGoogleLogin(); }} disabled={googleLoginLoading || authSubmitting} aria-busy={googleLoginLoading}><Image src="/generated-assets/google-g-icon.svg" alt="" width={18} height={18} /> <span>{googleLoginLoading ? t("auth.action.connecting") : "Google"}</span></button></div>
+            <p className="auth-signup">{authMode === "login" ? <>{t("auth.footer.noAccount")} <button type="button" onClick={() => switchAuthMode("register")}>{t("auth.action.signUp")}</button></> : <>{t("auth.footer.hasAccount")} <button type="button" onClick={() => switchAuthMode("login")}>{t("auth.action.login")}</button></>}</p>
           </>}
           </div>
         </div>

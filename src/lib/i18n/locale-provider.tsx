@@ -36,9 +36,36 @@ function createShellCopy(locale: Locale): ShellCopy {
 export const shellCopy: Record<Locale, ShellCopy> = { th: createShellCopy("th"), en: createShellCopy("en") };
 
 // Legacy feature screens still contain copy authored before the shared locale layer.
-// This dictionary keeps every rendered tab/feature localized while those screens
-// migrate to typed copy objects incrementally.
+// Keep this as an exact whole-phrase compatibility map while those screens migrate
+// to typed copy objects. Never translate individual words or substrings here.
 const featurePhraseTranslations: Record<string, string> = {
+  "OR CONTINUE WITH": "หรือเข้าสู่ระบบด้วย",
+  "Don't have an account?": "ยังไม่มีบัญชี?",
+  "Already have an account?": "มีบัญชีอยู่แล้ว?",
+  "Sign up": "สมัครสมาชิก",
+  "Keep me signed in": "ให้ฉันอยู่ในระบบต่อไป",
+  "Keep it private": "เก็บรหัสผ่านเป็นความลับ",
+  "Email address": "อีเมล",
+  "Work email": "อีเมลที่ทำงาน",
+  "Password": "รหัสผ่าน",
+  "Confirm password": "ยืนยันรหัสผ่าน",
+  "Enter your password": "กรอกรหัสผ่าน",
+  "Re-enter your password": "กรอกรหัสผ่านอีกครั้ง",
+  "Passwords do not match": "รหัสผ่านไม่ตรงกัน",
+  "8+ characters": "อย่างน้อย 8 ตัวอักษร",
+  "LOGIN": "เข้าสู่ระบบ",
+  "Login": "เข้าสู่ระบบ",
+  "CREATE ACCOUNT": "สมัครสมาชิก",
+  "Signing in...": "กำลังเข้าสู่ระบบ...",
+  "Creating account...": "กำลังสร้างบัญชี...",
+  "Connecting...": "กำลังเชื่อมต่อ...",
+  "Continue with Google": "เข้าสู่ระบบด้วย Google",
+  "Welcome back": "ยินดีต้อนรับกลับ",
+  "Create your account": "สร้างบัญชีของคุณ",
+  "Check your inbox": "ตรวจสอบอีเมลของคุณ",
+  "Back to login": "กลับไปเข้าสู่ระบบ",
+  "Resend confirmation email": "ส่งอีเมลยืนยันอีกครั้ง",
+  "Sending...": "กำลังส่ง...",
   "Image to Video": "รูปภาพเป็นวิดีโอ",
   "IMAGE TO VIDEO": "รูปภาพเป็นวิดีโอ",
   "Text to Video": "ข้อความเป็นวิดีโอ",
@@ -425,18 +452,9 @@ const featurePhraseTranslations: Record<string, string> = {
   "None": "ไม่มี",
 };
 
-const featureWordTranslations: Record<string, string> = {
-  Home: "หน้าแรก", Projects: "โปรเจกต์", Create: "สร้าง", Templates: "เทมเพลต", Assets: "แอสเซ็ต", History: "ประวัติ", Settings: "ตั้งค่า", Image: "รูปภาพ", Video: "วิดีโอ", Audio: "เสียง", Model: "โมเดล", Prompt: "พรอมต์", Negative: "เชิงลบ", Required: "จำเป็น", Optional: "ไม่บังคับ", Duration: "ระยะเวลา", Resolution: "ความละเอียด", Aspect: "สัดส่วน", Ratio: "อัตราส่วน", Quality: "คุณภาพ", Output: "ผลลัพธ์", Format: "รูปแบบ", Seed: "ซีด", Source: "ต้นฉบับ", Reference: "อ้างอิง", Upload: "อัปโหลด", Remove: "ลบ", Replace: "แทนที่", Generate: "สร้าง", Generating: "กำลังสร้าง", Preview: "ตัวอย่าง", Latest: "ล่าสุด", Recent: "ล่าสุด", View: "ดู", Download: "ดาวน์โหลด", Favorite: "รายการโปรด", Add: "เพิ่ม", Delete: "ลบ", Save: "บันทึก", Cancel: "ยกเลิก", Clear: "ล้าง", Choose: "เลือก", Select: "เลือก", Edit: "แก้ไข", Close: "ปิด", Open: "เปิด", Next: "ถัดไป", Previous: "ก่อนหน้า", Loading: "กำลังโหลด", Error: "ข้อผิดพลาด", Success: "สำเร็จ", Scene: "ฉาก", Scenes: "ฉาก", Voice: "เสียง", Script: "สคริปต์", Sound: "เสียง", Music: "เพลง", Camera: "กล้อง", Fixed: "คงที่", Performance: "การแสดง", Direction: "ทิศทาง", Style: "สไตล์", Strength: "ความเข้ม", Content: "เนื้อหา", Preservation: "การรักษาไว้", Original: "ต้นฉบับ", Result: "ผลลัพธ์", Gallery: "แกลเลอรี", Variation: "รูปแบบ", Variations: "รูปแบบ", Mask: "มาสก์", Brush: "แปรง", Lasso: "เชือกบ่วง", Eraser: "ยางลบ", Compare: "เปรียบเทียบ", Tutorial: "บทช่วยสอน", Guide: "คู่มือ", Auto: "อัตโนมัติ", Automatic: "อัตโนมัติ", Enabled: "เปิดใช้งาน", Disabled: "ปิดใช้งาน", Current: "ปัจจุบัน", All: "ทั้งหมด", Color: "สี", Transparent: "โปร่งใส", Background: "พื้นหลัง", Character: "ตัวละคร", Motion: "การเคลื่อนไหว", People: "บุคคล", Lipsync: "ซิงก์ปาก", Speaker: "ผู้พูด", Speakers: "ผู้พูด", Podcast: "พอดแคสต์", Dialogue: "บทสนทนา", Clean: "ล้าง", Noise: "เสียงรบกวน", Price: "ราคา", Credits: "เครดิต", Private: "ส่วนตัว", Secure: "ปลอดภัย", New: "ใหม่", Back: "ย้อนกลับ", Forward: "เดินหน้า", Enter: "กรอก", Size: "ขนาด", Low: "ต่ำ", High: "สูง", Loose: "หลวม", Keep: "รักษา", Face: "ใบหน้า", Objects: "วัตถุ", Composition: "องค์ประกอบ", White: "ขาว", Black: "ดำ", Before: "ก่อน", After: "หลัง", Apply: "ใช้", Expand: "ขยาย", Target: "เป้าหมาย", Native: "เนทีฟ", Seamless: "ไร้รอยต่อ", Flexible: "ยืดหยุ่น", Continuous: "ต่อเนื่อง", Storyboard: "สตอรี่บอร์ด", Frame: "เฟรม", Manual: "กำหนดเอง", Generation: "การสร้าง", Library: "คลัง", Screen: "หน้าจอ", SFX: "เอฟเฟกต์เสียง", FX: "เอฟเฟกต์", Restore: "คืนค่า", Clarity: "ความชัดเจน", Identity: "ตัวตน", Expression: "สีหน้า", Pose: "ท่าทาง", Orientation: "ทิศทาง", Product: "สินค้า", Avatar: "อวตาร", Male: "ชาย", Female: "หญิง", Bright: "สดใส", Warm: "อบอุ่น", Natural: "เป็นธรรมชาติ", Fast: "เร็ว", Highest: "สูงสุด", Fidelity: "ความเที่ยงตรง", Control: "การควบคุม",
-  Upscale: "เพิ่มความละเอียด", Presets: "พรีเซ็ต", Preset: "พรีเซ็ต", Render: "เรนเดอร์", Fullscreen: "เต็มหน้าจอ", Maximum: "สูงสุด", Characters: "ตัวอักษร", Smart: "อัจฉริยะ", Enhance: "ปรับปรุง", Waveform: "คลื่นเสียง", One: "หนึ่ง", From: "จาก", The: "", A: "หนึ่ง", An: "หนึ่ง", With: "พร้อม", And: "และ", Will: "จะ", Appear: "แสดง", Here: "ที่นี่", Please: "กรุณา", Sign: "เข้าสู่ระบบ", In: "ใน", Not: "ไม่", Yet: "แล้ว", Is: "คือ", Are: "คือ", This: "นี้", Support: "รองรับ", Supports: "รองรับ", Accepts: "รองรับ", Requires: "ต้องใช้", Sec: "วินาที", Mode: "โหมด", Live: "สด", Views: "มุมมอง", Dubbing: "พากย์", Mouth: "ปาก", Sync: "ซิงก์", Uploaded: "อัปโหลดแล้ว", Currently: "ขณะนี้", Exact: "อย่างแม่นยำ", Use: "ใช้",
-};
-
 const translatableAttributes = ["aria-label", "placeholder", "title", "alt"] as const;
 const originalTextNodes = new WeakMap<Text, { original: string; last: string }>();
 const originalAttributes = new WeakMap<Element, Map<string, { original: string; last: string }>>();
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 function translateFeatureText(value: string, locale: Locale) {
   if (locale === "en" || !value.trim()) return value;
@@ -445,14 +463,7 @@ function translateFeatureText(value: string, locale: Locale) {
   const core = value.slice(leading.length, value.length - trailing.length || undefined);
   const sceneEstimate = core.match(/^(\d+) scene x (\d+) sec$/i);
   if (sceneEstimate) return `${leading}${sceneEstimate[1]} ฉาก × ${sceneEstimate[2]} วินาที${trailing}`;
-  let translated = featurePhraseTranslations[core] ?? core;
-  if (translated === core) {
-    const entries = Object.entries(featureWordTranslations).sort(([left], [right]) => right.length - left.length);
-    for (const [english, thai] of entries) {
-      translated = translated.replace(new RegExp(`(?<![A-Za-z])${escapeRegExp(english)}(?![A-Za-z])`, "gi"), thai);
-    }
-  }
-  return `${leading}${translated}${trailing}`;
+  return `${leading}${featurePhraseTranslations[core] ?? core}${trailing}`;
 }
 
 function translateDocument(locale: Locale) {

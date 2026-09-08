@@ -1,6 +1,7 @@
 "use client";
 
 import { clearBackendSession, getStoredBackendSession } from "@/lib/auth/backend-auth";
+import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
 
@@ -15,6 +16,7 @@ export async function signOutFromEOS() {
     }).catch(() => undefined);
   }
   clearBackendSession();
+  clearGenerationProgressStorage();
 
   window.sessionStorage.removeItem("eos.backend.user-profile");
   window.location.replace("/?login=1");

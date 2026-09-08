@@ -51,6 +51,7 @@ import { ExtendVideoWorkspace } from "./extend-video-generation";
 import { VideoPreviewLiveBadge, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
+import { getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
@@ -74,7 +75,6 @@ const videoTabKeys = {
   Lipsync: "create.video.tabs.lipsync",
   "Extend Video": "create.video.tabs.extendVideo",
 } as const;
-const floatingGenerationProgressStorageKey = "eos.generation.progress.cards";
 const videoModeOptions = [
   {
     value: "storyboard",
@@ -1143,7 +1143,7 @@ export function VideoGenerationPage() {
         }
       };
 
-      readStorage(window.localStorage, floatingGenerationProgressStorageKey, true);
+      readStorage(window.localStorage, getGenerationProgressStorageKey(), true);
       readStorage(window.sessionStorage, "eos.generation.pending.image-to-video", false);
 
       const candidates = values.map((value) => {

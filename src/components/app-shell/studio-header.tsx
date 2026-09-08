@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, Layers3, Search } from "lucide-react";
+import { Layers3, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { GenerationProgressFloating } from "@/components/app-shell/generation-progress-floating";
 import { MobileNavigation } from "@/components/app-shell/mobile-navigation";
@@ -68,7 +68,6 @@ export function StudioHeader() {
           </div>
           <button className="rounded-xl p-2.5 text-muted-foreground hover:bg-surface-muted md:hidden" aria-label={text.header.openSearch}><Search size={18} /></button>
           {<Link href="/usage?tab=topup" title={locale === "th" ? "เติมเครดิต" : "Top up credits"} className="header-credits-badge shrink-0 hidden h-9 items-center gap-2 rounded-full border border-border bg-white px-3.5 text-[13px] font-semibold text-foreground transition-colors hover:border-primary hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 sm:flex"><Layers3 size={18} className="text-primary" strokeWidth={2.4} /><span>{locale === "th" ? account.creditsLabel.replace(/ Credits$/, " เครดิต") : account.creditsLabel}</span><span className="sr-only">{locale === "th" ? " — เติมเครดิต" : " — Top up credits"}</span></Link>}
-          {<><button className="relative rounded-xl p-2.5 text-muted-foreground hover:bg-surface-muted" aria-label={text.header.openNotifications}><Bell size={18} /><span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">2</span></button><div className="hidden h-7 w-px bg-border sm:block" /></>}
           <AccountMenu displayName={account.displayName} role={account.role} useUserIcon onOpenChange={setIsAccountMenuOpen} />
         </div>
       </header>

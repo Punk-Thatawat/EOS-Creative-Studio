@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { confirmEmailWithBackend, persistBackendSession, type BackendAuthSession } from "@/lib/auth/backend-auth";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
+import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 
 type ConfirmationState = "loading" | "success" | "error";
 
@@ -35,6 +36,7 @@ export default function ConfirmEmailPage() {
       }
 
       if (!accessToken) throw new Error("The confirmation link is invalid or has expired.");
+      clearGenerationProgressStorage();
       const backendProfile = await fetchBackendSession(accessToken);
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
       if (!active) return;
