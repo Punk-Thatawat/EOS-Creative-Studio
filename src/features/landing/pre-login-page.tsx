@@ -6,7 +6,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { EosLogo } from "@/components/brand/eos-logo";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
-import { loginWithBackend, persistBackendSession, registerWithBackend, resendConfirmationWithBackend } from "@/lib/auth/backend-auth";
+import { loginWithBackend, persistBackendSession, registerWithBackend, requestPasswordResetWithBackend, resendConfirmationWithBackend } from "@/lib/auth/backend-auth";
 import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 import { listPublicVideoShowcase } from "@/lib/api/video-showcase";
@@ -45,7 +45,7 @@ const getLocalDateKey = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
 
-type AuthMode = "login" | "register" | "confirmation";
+type AuthMode = "login" | "register" | "confirmation" | "forgot";
 
 type AuthFieldProps = {
   id: string;
@@ -194,6 +194,12 @@ export function PreLoginPage() {
         }
         setAuthMode("confirmation");
         setAuthMessage(t("auth.confirmation.sent", { email: authEmail }));
+        return;
+      }
+
+      if (authMode === "forgot") {
+        await requestPasswordResetWithBackend(authEmail);
+        setAuthMessage(t("auth.reset.sent"));
         return;
       }
 
@@ -389,14 +395,14 @@ export function PreLoginPage() {
         </div>
       </div>}
 
-      {loginOpen && <div className="auth-modal" role="dialog" aria-modal="true" aria-label={authMode === "login" ? t("auth.modal.loginTitle") : authMode === "register" ? t("auth.modal.registerTitle") : t("auth.modal.confirmationTitle")} onClick={closeLogin}>
+      {loginOpen && <div className="auth-modal" role="dialog" aria-modal="true" aria-label={authMode === "login" ? t("auth.modal.loginTitle") : authMode === "register" ? t("auth.modal.registerTitle") : authMode === "forgot" ? t("auth.modal.forgotTitle") : t("auth.modal.confirmationTitle")} onClick={closeLogin}>
         <div className="auth-modal-shell" onClick={(event) => event.stopPropagation()}>
           <div className="auth-mobile-logo"><EosLogo href="/" /></div>
           <button type="button" className="auth-modal-close" aria-label={t("auth.a11y.closeLogin")} onClick={closeLogin}><X size={22} /></button>
           <div className={`auth-modal-panel auth-modal-panel--${authMode}`}>
           {authMode === "login" && <div className="auth-modal-heading-art"><Image src="/generated-assets/login-welcome-back.webp" alt={t("auth.modal.loginTitle")} fill sizes="430px" className="auth-heading-desktop" /><Image src="/generated-assets/login-welcome-mobile.webp" alt={t("auth.modal.loginTitle")} fill sizes="430px" className="auth-heading-mobile" /></div>}
-          <div className={`auth-modal-heading${authMode !== "login" ? " is-visible" : ""}`}><span>{authMode === "confirmation" ? <Check size={21} /> : "✦"}</span><h2>{authMode === "login" ? t("auth.modal.loginTitle") : authMode === "register" ? t("auth.modal.registerTitle") : t("auth.modal.confirmationTitle")}</h2></div>
-          <p className="auth-modal-subtitle">{authMode === "login" ? t("auth.modal.loginSubtitle", { brand: "EOS Creative Studio" }) : authMode === "register" ? t("auth.modal.registerSubtitle", { brand: "EOS Creative Studio" }) : t("auth.modal.confirmationSubtitle", { brand: "EOS Creative Studio" })}</p>
+          <div className={`auth-modal-heading${authMode !== "login" ? " is-visible" : ""}`}><span>{authMode === "confirmation" ? <Check size={21} /> : "✦"}</span><h2>{authMode === "login" ? t("auth.modal.loginTitle") : authMode === "register" ? t("auth.modal.registerTitle") : authMode === "forgot" ? t("auth.modal.forgotTitle") : t("auth.modal.confirmationTitle")}</h2></div>
+          <p className="auth-modal-subtitle">{authMode === "login" ? t("auth.modal.loginSubtitle", { brand: "EOS Creative Studio" }) : authMode === "register" ? t("auth.modal.registerSubtitle", { brand: "EOS Creative Studio" }) : authMode === "forgot" ? t("auth.modal.forgotSubtitle") : t("auth.modal.confirmationSubtitle", { brand: "EOS Creative Studio" })}</p>
 
           {authMode === "confirmation" ? <div className="auth-confirmation-state">
             <div className="auth-confirmation-icon"><MailCheck size={29} /></div>
@@ -404,11 +410,11 @@ export function PreLoginPage() {
             <button type="button" className="auth-secondary-button" onClick={() => { void handleResendConfirmation(); }} disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={15} className="auth-spin" /> {t("auth.action.sending")}</> : t("auth.action.resendConfirmation")}</button>
             {authError && <p className="auth-error" role="alert">{authError}</p>}
             <button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button>
-          </div> : <>
+          </div> : authMode === "forgot" && authMessage ? <div className="auth-confirmation-state"><div className="auth-confirmation-icon"><MailCheck size={29} /></div><p>{authMessage}</p><button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button></div> : <>
             <form onSubmit={handleEmailAuth}>
               {authMode === "register" && <AuthField id="modal-name" label={t("auth.form.name")} optional optionalLabel={t("auth.form.optional")} value={authName} onChange={setAuthName} type="text" placeholder={t("auth.form.namePlaceholder")} autoComplete="name" icon={UserRound} disabled={authSubmitting} />}
               <AuthField id="modal-email" label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete="email" icon={Mail} required disabled={authSubmitting} error={authEmailError} />
-              <AuthField id="modal-password" label={t("auth.form.password")} value={authPassword} onChange={setAuthPassword} type="password" placeholder={t("auth.form.passwordPlaceholder")} autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? t("auth.form.passwordMinHint") : t("auth.form.privateHint")} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} passwordToggleLabel={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />
+              {authMode !== "forgot" && <AuthField id="modal-password" label={t("auth.form.password")} value={authPassword} onChange={setAuthPassword} type="password" placeholder={t("auth.form.passwordPlaceholder")} autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? t("auth.form.passwordMinHint") : t("auth.form.privateHint")} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} passwordToggleLabel={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />}
               {authMode === "register" && <>
                 {authPassword && <div className="auth-password-strength" aria-label={t("auth.a11y.passwordStrength", { strength: t(getPasswordStrength(authPassword).labelKey) })}>
                   <div className="auth-strength-bars" aria-hidden="true">{[1, 2, 3, 4].map((bar) => <span key={bar} className={bar <= getPasswordStrength(authPassword).score ? "is-filled" : ""} />)}</div>
@@ -416,14 +422,13 @@ export function PreLoginPage() {
                 </div>}
                 <AuthField id="modal-password-confirm" label={t("auth.form.confirmPassword")} value={authPasswordConfirmation} onChange={setAuthPasswordConfirmation} type="password" placeholder={t("auth.form.confirmPasswordPlaceholder")} autoComplete="new-password" icon={LockKeyhole} required minLength={8} disabled={authSubmitting} error={authPasswordConfirmation && authPassword !== authPasswordConfirmation ? t("auth.validation.passwordMismatch") : null} showPassword={confirmationPasswordVisible} passwordToggleLabel={confirmationPasswordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setConfirmationPasswordVisible((visible) => !visible)} />
               </>}
-              {authMode === "login" && <label className="auth-remember"><input type="checkbox" defaultChecked /> {t("auth.form.keepSignedIn")}</label>}
+              {authMode === "login" && <><label className="auth-remember"><input type="checkbox" defaultChecked /> {t("auth.form.keepSignedIn")}</label><button type="button" className="auth-forgot-link" onClick={() => switchAuthMode("forgot")}>{t("auth.action.forgotPassword")}</button></>}
               {authError && <p className="auth-error" role="alert">{authError}</p>}
-              <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="submit" className="auth-submit" disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={18} className="auth-spin" /> {authMode === "login" ? t("auth.action.signingIn") : t("auth.action.creatingAccount")}</> : <>{authMode === "login" ? t("auth.action.login") : t("auth.action.register")} <ArrowRight size={20} /></>}</button></div>
+              <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="submit" className="auth-submit" disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={18} className="auth-spin" /> {authMode === "login" ? t("auth.action.signingIn") : t("auth.action.sending")}</> : <>{authMode === "login" ? t("auth.action.login") : authMode === "forgot" ? t("auth.action.sending") : t("auth.action.register")} <ArrowRight size={20} /></>}</button></div>
             </form>
-            <div className="auth-divider"><span>{t("auth.action.continueWith")}</span></div>
+            {authMode !== "forgot" && <div className="auth-divider"><span>{t("auth.action.continueWith")}</span></div>}
             {googleLoginError && <p className="auth-error" role="alert">{googleLoginError}</p>}
-            <div className="auth-socials"><button type="button" onClick={() => { void handleGoogleLogin(); }} disabled={googleLoginLoading || authSubmitting} aria-busy={googleLoginLoading}><Image src="/generated-assets/google-g-icon.svg" alt="" width={18} height={18} /> <span>{googleLoginLoading ? t("auth.action.connecting") : "Google"}</span></button></div>
-            <p className="auth-signup">{authMode === "login" ? <>{t("auth.footer.noAccount")} <button type="button" onClick={() => switchAuthMode("register")}>{t("auth.action.signUp")}</button></> : <>{t("auth.footer.hasAccount")} <button type="button" onClick={() => switchAuthMode("login")}>{t("auth.action.login")}</button></>}</p>
+            {authMode !== "forgot" && <><div className="auth-socials"><button type="button" onClick={() => { void handleGoogleLogin(); }} disabled={googleLoginLoading || authSubmitting} aria-busy={googleLoginLoading}><Image src="/generated-assets/google-g-icon.svg" alt="" width={18} height={18} /> <span>{googleLoginLoading ? t("auth.action.connecting") : "Google"}</span></button></div><p className="auth-signup">{authMode === "login" ? <>{t("auth.footer.noAccount")} <button type="button" onClick={() => switchAuthMode("register")}>{t("auth.action.signUp")}</button></> : <>{t("auth.footer.hasAccount")} <button type="button" onClick={() => switchAuthMode("login")}>{t("auth.action.login")}</button></>}</p></>}
           </>}
           </div>
         </div>

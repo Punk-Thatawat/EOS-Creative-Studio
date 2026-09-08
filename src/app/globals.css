@@ -656,6 +656,11 @@ body:has(.audio-studio-page) .page-gutter > main { width: 100%; }
 .auth-secondary-button:hover { background:#fff5f9; }
 .auth-secondary-button:disabled { cursor:wait; opacity:.65; }
 .auth-back-link { margin-top:14px; padding:0; color:#777780; background:none; border:0; font-size:10px; cursor:pointer; }
+.auth-forgot-link { display:block; margin:-8px 0 16px auto; padding:0; color:#f51591; background:none; border:0; font-size:10px; cursor:pointer; }
+.auth-reset-page { display:grid; min-height:100svh; place-items:center; padding:24px; background:#f7f5f1; }
+.auth-reset-card { width:min(100%,460px); padding:42px 38px; border:1px solid #e4e1dc; border-radius:24px; background:#fff; box-shadow:0 20px 60px rgba(20,20,20,.1); }
+.auth-reset-icon { display:grid; width:52px; height:52px; place-items:center; margin-bottom:18px; border-radius:16px; color:#f51591; background:#fff0eb; }
+.auth-reset-card h1 { margin:0; font-size:30px; letter-spacing:-.8px; }.auth-reset-card > p { margin:9px 0 26px; color:#66636a; font-size:13px; line-height:1.6; }.auth-reset-card label { display:block; margin-bottom:16px; font-size:11px; font-weight:800; }.auth-reset-card input { display:block; width:100%; height:44px; margin-top:7px; padding:0 12px; border:1px solid #d9d9de; border-radius:9px; outline:none; }.auth-reset-card input:focus { border-color:#f51591; }.auth-reset-card button { display:flex; width:100%; height:44px; align-items:center; justify-content:center; gap:10px; color:#fff; background:linear-gradient(90deg,#ff6819,#f51591); border:0; border-radius:999px; font-size:12px; font-weight:900; cursor:pointer; }.auth-reset-card button:disabled { opacity:.65; }.auth-reset-card a { display:block; margin-top:20px; color:#f51591; text-align:center; font-size:12px; font-weight:800; }.auth-reset-error { margin:-4px 0 14px; color:#c5225f; font-size:11px; }
 .auth-back-link:hover { color:#f51591; }
 
 /* Confirmation callback page for Supabase email links. */

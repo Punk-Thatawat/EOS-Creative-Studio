@@ -21,6 +21,7 @@ type BackendAuthResponse = {
     session: BackendAuthSession | null;
     emailConfirmationRequired?: boolean;
     sent?: boolean;
+    resetToken?: string;
   };
 };
 
@@ -56,6 +57,14 @@ export function registerWithBackend(input: { email: string; password: string; di
 
 export function resendConfirmationWithBackend(email: string) {
   return postAuth("resend-confirmation", { email });
+}
+
+export function requestPasswordResetWithBackend(email: string) {
+  return postAuth("request-password-reset", { email });
+}
+
+export function resetPasswordWithBackend(input: { token: string; newPassword: string }) {
+  return postAuth("reset-password", { token: input.token, new_password: input.newPassword });
 }
 
 export function confirmEmailWithBackend(input: { token_hash?: string; token?: string; email?: string; type?: "signup" | "email" }) {
