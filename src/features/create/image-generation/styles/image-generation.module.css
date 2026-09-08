@@ -375,7 +375,7 @@
 .gen-extend-amount-helper { margin: 5px 0 0; color: #8a9098; font-size: 8px; line-height: 1.35; }
 .gen-extend-prompt textarea { height: 233px; min-height: 233px; resize: vertical; }
 .gen-extend-preview { background: #fff8f4; }
-.gen-extend-preview.is-generated > .gen-generated-image { object-fit: cover; background: transparent; }
+.gen-extend-preview.is-generated > .gen-generated-image { object-fit: contain; background: transparent; }
 .gen-extend-preview.has-source-composition > .gen-placeholder { display: none; }
 .gen-extend-canvas { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; background: #fff8f4; }
 .gen-extend-composition { position: relative; flex: 0 0 auto; overflow: hidden; background: #fff8f4; }

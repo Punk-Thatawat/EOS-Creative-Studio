@@ -1129,7 +1129,7 @@ export function VideoGenerationPage() {
       window.setTimeout(resolve, 2500);
     });
 
-    const readPersistedStoryboard = (): { generationId: string; completed: number; total: number } | null => {
+    const readPersistedStoryboard = (): { generationId: string; completed: number; total: number; videoUrl?: string } | null => {
       const values: unknown[] = [];
       const readStorage = (storage: Storage, key: string, expectsArray: boolean) => {
         try {
@@ -1155,24 +1155,30 @@ export function VideoGenerationPage() {
           status?: unknown;
           completedCount?: unknown;
           totalCount?: unknown;
+          output?: unknown;
         } : value as {
           generationId?: unknown;
           pollUrl?: unknown;
           status?: unknown;
           completedCount?: unknown;
           totalCount?: unknown;
+          output?: unknown;
         };
         if ((item.feature !== undefined && item.feature !== "image-to-video")
-          || (pending.status !== "queued" && pending.status !== "processing")
+          || (pending.status !== "queued" && pending.status !== "processing" && pending.status !== "completed")
           || typeof pending.generationId !== "string"
           || typeof pending.pollUrl !== "string"
           || !pending.pollUrl.includes("/generations/video/image-to-video/")) return null;
+        const videoOutput = Array.isArray(pending.output)
+          ? pending.output.find((output): output is { url: string } => Boolean(output) && typeof output === "object" && typeof (output as { type?: unknown }).type === "string" && (output as { type: string }).type === "video" && typeof (output as { url?: unknown }).url === "string")
+          : undefined;
         return {
           generationId: pending.generationId,
           completed: typeof pending.completedCount === "number" ? pending.completedCount : 0,
           total: typeof pending.totalCount === "number" ? Math.max(1, pending.totalCount) : 1,
+          ...(videoOutput?.url ? { videoUrl: videoOutput.url } : {}),
         };
-      }).filter((item): item is { generationId: string; completed: number; total: number } => Boolean(item));
+      }).filter((item): item is { generationId: string; completed: number; total: number; videoUrl?: string } => Boolean(item));
 
       return candidates[candidates.length - 1] ?? null;
     };
@@ -1193,6 +1199,16 @@ export function VideoGenerationPage() {
     const restoreProcessingStoryboard = async () => {
       const persisted = readPersistedStoryboard();
       if (!persisted) return;
+
+      if (persisted.videoUrl) {
+        setFinalVideoUrl(persisted.videoUrl);
+        setLatestCompletedStoryboardId(persisted.generationId);
+        setGenerationProgress({ completed: persisted.completed || persisted.total, total: persisted.total });
+        setGenerationStatus("completed");
+        setNotice("Video ready");
+        void loadVideoHistory();
+        return;
+      }
 
       setActiveStoryboardId(persisted.generationId);
       setGenerationStatus("processing");

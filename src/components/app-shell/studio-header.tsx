@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Layers3, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { GenerationProgressFloating } from "@/components/app-shell/generation-progress-floating";
+import { MobileBottomNavigation } from "@/components/app-shell/mobile-bottom-navigation";
 import { MobileNavigation } from "@/components/app-shell/mobile-navigation";
 import { useHydrated } from "@/components/app-shell/use-hydrated";
 import { useHeaderAccount } from "@/components/app-shell/use-header-account";
@@ -52,7 +53,7 @@ export function StudioHeader() {
 
   return (
     <>
-      <header className={`eos-studio-header px-4 sm:px-6 lg:px-8 sticky top-0 ${isAccountMenuOpen ? "z-[100] shadow-md" : isSticky ? "z-50 shadow-sm" : "z-30"} flex h-[80px] items-center justify-between border-b border-[#ece7e3] bg-white`}>
+      <header className={`eos-studio-header sticky top-0 ${isAccountMenuOpen ? "z-[100] shadow-md" : isSticky ? "z-50 shadow-sm" : "z-30"} flex h-16 items-center justify-between border-b border-[#ece7e3] bg-white px-3 sm:h-[80px] sm:px-6 lg:px-8`}>
         <div className="mr-3 md:hidden"><MobileNavigation /></div>
         <div className="ml-auto flex min-w-0 max-w-full items-center gap-1 sm:gap-3">
           <div className="relative z-[60] hidden min-w-0 w-[min(420px,42vw)] shrink md:block">
@@ -71,6 +72,7 @@ export function StudioHeader() {
           <AccountMenu displayName={account.displayName} role={account.role} useUserIcon onOpenChange={setIsAccountMenuOpen} />
         </div>
       </header>
+      <MobileBottomNavigation />
       <GenerationProgressFloating />
     </>
   );

@@ -273,7 +273,19 @@ async function pollGeneration(target: EnqueuedGenerationResponse["data"] | Pendi
     const statusPayload = await statusResponse.json().catch(() => null) as GenerationStatusResponse | { data?: unknown; message?: unknown } | null;
     if (!statusResponse.ok) throw generationErrorFromPayload(statusPayload, "Image generation request failed");
     const status = unwrapGenerationStatus(statusPayload);
-    const outputs = status.output ?? [];
+    const providerOutputs = status.output ?? [];
+    const completedVideoUrl = "kind" in target && target.kind === "video"
+      ? typeof status.finalVideoUrl === "string" && status.finalVideoUrl
+        ? status.finalVideoUrl
+        : typeof status.videoUrl === "string" && status.videoUrl
+          ? status.videoUrl
+          : null
+      : null;
+    const outputs = providerOutputs.length > 0
+      ? providerOutputs
+      : completedVideoUrl
+        ? [{ type: "video" as const, url: completedVideoUrl, mimeType: "video/mp4" }]
+        : [];
     onProgress?.({ generationId: status.id || generationId, pollUrl: target.pollUrl, workspaceId: target.workspaceId, provider: target.provider, model: target.model, status: status.status, totalCount: status.totalCount ?? status.totalScenes ?? target.totalCount ?? fallbackCount, completedCount: status.completedCount ?? status.completedScenes ?? outputs.length, output: outputs });
     if (status.status === "completed") {
       if (!outputs.length && !("kind" in target && target.kind === "video")) throw new Error("Generation completed without image output");

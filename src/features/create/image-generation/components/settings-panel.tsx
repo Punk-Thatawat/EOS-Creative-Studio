@@ -66,6 +66,10 @@ function supportsImageInput(model: GenerationModelOption) {
   return parameters.length === 0 || parameters.some((parameter) => /image|source|input/i.test(parameter)) || Boolean(model.capabilities?.imageParameter || model.capabilities?.imagesParameter || model.capabilities?.inputImageParameter || model.capabilities?.inputParameter);
 }
 
+function isZImageTurboModel(model?: string): boolean {
+  return /(?:^|\/)z-image(?:-turbo|\/turbo)(?:$|\/)/i.test(model ?? "");
+}
+
 type SchemaProperty = {
   type?: string;
   default?: unknown;
@@ -125,6 +129,7 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
   const modelAspectRatio = aspectRatioParameter ? modelParams[aspectRatioParameter] : undefined;
   const selectedAspectRatio = typeof modelAspectRatio === "string" && aspectRatioOptions.includes(modelAspectRatio as ImageRatio) ? modelAspectRatio as ImageRatio : ratio;
   const showGenericResolution = !isTextToImage || (!textResolutionField && !textSizeField);
+  const showTextSizeField = Boolean(isTextToImage && textSizeField && !isZImageTurboModel(modelCapabilities?.model ?? selectedModel));
 
   useEffect(() => {
     if (!textSizeFieldName || !aspectRatioParameter || (!modelSupportedSizesKey && !textSizeSchemaValuesKey)) return;
@@ -170,7 +175,7 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
     {!isUpscale && aspectRatioOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{t("create.settings.aspectRatio")} <Info size={12} /></h3><AspectRatioPicker options={aspectRatioOptions} value={aspectRatioOptions.includes(selectedAspectRatio) ? selectedAspectRatio : aspectRatioOptions[0]} onChange={handleRatioChange} />{optionsFollowModel && <p className={cx("gen-model-options-note")} role="status">{t("create.settings.optionsFollowModel")}</p>}</div>}
     {isUpscale ? <ResolutionControl resolution={resolution} resolutionOptions={resolutionOptions} onChange={onResolutionChange} secondaryLabel="AI output resolution" /> : <>{showGenericResolution && <ResolutionControl resolution={resolution} resolutionOptions={resolutionOptions} onChange={onResolutionChange} descriptions={imageResolutionSizes[ratio]} />}</>}
     {isTextToImage && textResolutionField && <SchemaFieldControl field={textResolutionField} value={modelParams[textResolutionField.name]} onChange={(value) => onModelParamChange(textResolutionField.name, value)} />}
-    {isTextToImage && textSizeField && <SchemaFieldControl field={textSizeField} value={modelParams[textSizeField.name]} options={textSizeOptions.length > 0 ? textSizeOptions : undefined} onChange={handleSizeChange} />}
+    {showTextSizeField && textSizeField && <SchemaFieldControl field={textSizeField} value={modelParams[textSizeField.name]} options={textSizeOptions.length > 0 ? textSizeOptions : undefined} onChange={handleSizeChange} />}
     {isTextToImage && textSeedField && <SchemaFieldControl field={textSeedField} value={modelParams[textSeedField.name]} onChange={(value) => onModelParamChange(textSeedField.name, value)} />}
     {qualityEnabled && <div className={cx("gen-setting-block")}><h3>{isTextToImage && modelCapabilities?.qualityParameter ? modelCapabilities.qualityParameter : t("create.settings.quality")} <Info size={12} /></h3><Segmented items={qualityOptions} value={quality} onChange={onQualityChange} />{qualityIsPromptBased && <p className={cx("gen-model-options-note")}>{t("create.settings.qualityPromptNote")}</p>}</div>}
     {outputFormatOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{isTextToImage && modelCapabilities?.outputFormatParameter ? modelCapabilities.outputFormatParameter : t("create.settings.outputFormat")} <Info size={12} /></h3><Segmented items={outputFormatOptions} value={outputFormat && outputFormatOptions.includes(outputFormat) ? outputFormat : outputFormatOptions[0] ?? ""} onChange={onOutputFormatChange} /><p className={cx("gen-model-options-note")}>{t("create.settings.outputFormatNote")}</p></div>}

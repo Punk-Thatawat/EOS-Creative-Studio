@@ -556,6 +556,7 @@ body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0
 @media (max-width: 700px) { body:has([data-page="usage"]) .page-gutter { padding-inline: 10px; } }
 @media (max-width: 767px) { body:has([data-page="gen-image"]) .pl-\[var\(--sidebar-width\)\] { padding-left: 0; } }
 @media (max-width: 700px) { body:has([data-page="gen-image"]) .page-gutter { padding-inline: 10px; } }
+@media (max-width: 767px) { body:has([data-mobile-bottom-navigation]) .page-gutter { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); } }
 .login-button { flex:0 0 250px; min-width:250px; white-space:nowrap; }
 @media (max-width: 800px) { .login-button { flex:0 0 190px; min-width:190px; width:190px; height:60px; } }
 @media (max-width: 800px) { .tool-strip { grid-template-columns:repeat(2,1fr); grid-template-rows:repeat(3,1fr); }.tool-item:nth-child(3) { border-right:1px solid #ddd; }.tool-item:nth-child(2n) { border-right:0; } }
@@ -637,6 +638,9 @@ body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0
 body:has(.audio-studio-page) .eos-studio-right-rail { display: none !important; }
 body:has(.audio-studio-page) .page-gutter { max-width: none; gap: 0; padding-inline: 0; padding-top: 0; padding-bottom: 0; }
 body:has(.audio-studio-page) .page-gutter > main { width: 100%; }
+@media (max-width: 767px) {
+  body:has(.audio-studio-page) .page-gutter { padding-inline: 12px; padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+}
 @media (max-width: 800px) {
   .auth-modal-panel { top:auto; bottom:3%; max-height:calc(100% - 24px); padding-bottom:30px; }
   .auth-signup { margin-top:14px; padding-bottom:2px; }
