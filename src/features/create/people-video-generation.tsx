@@ -305,6 +305,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
+  const [generationId, setGenerationId] = useState<string | null>(null);
   const sourceInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -582,6 +583,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     setGenerationError(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setGenerationId(null);
     setGenerationProgress(0);
     setGenerationStatus("uploading");
     setNotice(null);
@@ -620,6 +622,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         : await createPeopleVideoGeneration(request, controller.signal);
       if (typeof created.workspaceId === "string") window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
+      setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) emitGenerationStarted({ feature: isLipsync ? "lipsync" : "people-video", generationId, pollUrl, workspaceId: typeof created.workspaceId === "string" ? created.workspaceId : undefined, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
       let status: PeopleVideoGenerationStatus | LipsyncGenerationStatus = {
@@ -790,6 +793,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         <VideoResultLibrary
           feature={workspaceFeature}
           currentVideoUrl={finalVideoUrl}
+          currentSourceGenerationId={generationId}
           selectedVideoUrl={displayedVideoUrl}
           refreshKey={libraryRefreshKey}
           onVideoSelect={(url) => setPreviewVideoUrl(url)}

@@ -77,7 +77,7 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
     { label: "Feature settings", href: "/admin/feature-settings", icon: ShieldCheck, disabled: true },
   ] satisfies Array<NavigationItem & { disabled?: boolean }>;
   const operations = [
-    { label: "Users & roles", href: "/admin/users", icon: UsersRound, disabled: true },
+    { label: "Members & roles", href: "/admin/members", icon: UsersRound },
     { label: "Credits & billing", href: "/admin/credits", icon: BarChart3 },
     { label: "System settings", href: "/admin/settings", icon: Settings, disabled: true },
   ] satisfies Array<NavigationItem & { disabled?: boolean }>;

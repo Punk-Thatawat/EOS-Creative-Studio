@@ -299,6 +299,7 @@ export function TextToVideoWorkspace() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
+  const [generationId, setGenerationId] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const referenceImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -469,6 +470,7 @@ export function TextToVideoWorkspace() {
     setNotice(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setGenerationId(null);
     setGenerationProgress(0);
     setGenerationStatus("uploading");
     try {
@@ -514,6 +516,7 @@ export function TextToVideoWorkspace() {
       const created = await createTextVideoGeneration(request, controller.signal);
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
+      setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) emitGenerationStarted({ feature: "text-to-video", generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
       if (generationId && pollUrl) jobRef.current = { id: generationId, workspaceId: created.workspaceId, pollUrl };
@@ -667,6 +670,7 @@ export function TextToVideoWorkspace() {
         <VideoResultLibrary
           feature="text-to-video"
           currentVideoUrl={finalVideoUrl}
+          currentSourceGenerationId={generationId}
           selectedVideoUrl={displayedVideoUrl}
           refreshKey={libraryRefreshKey}
           onVideoSelect={(url) => setPreviewVideoUrl(url)}

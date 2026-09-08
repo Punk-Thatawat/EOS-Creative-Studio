@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fetchHeaderAccountData, type HeaderAccountData } from "@/lib/api/account";
-import { getApiAccessToken } from "@/lib/auth/access-token";
+import { AUTH_SESSION_EXPIRED_EVENT, getApiAccessToken } from "@/lib/auth/access-token";
 import {
   CREDIT_BALANCE_CHANGED_EVENT,
   CREDIT_BALANCE_SYNC_EVENT,
@@ -23,6 +23,11 @@ export function useHeaderAccount() {
 
   useEffect(() => {
     let isMounted = true;
+    const handleSessionExpired = () => {
+      if (!isMounted) return;
+      setAccount(initialAccount);
+      window.location.replace("/?login=1&reason=session-expired");
+    };
     const refreshAccount = async (confirmedDelta = 0) => {
       try {
         const nextAccount = await fetchHeaderAccountData();
@@ -57,11 +62,13 @@ export function useHeaderAccount() {
     };
 
     void refreshAccount();
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
     window.addEventListener(CREDIT_BALANCE_CHANGED_EVENT, handleBalanceChanged);
     window.addEventListener(CREDIT_BALANCE_SYNC_EVENT, handleBalanceSync);
 
     return () => {
       isMounted = false;
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
       window.removeEventListener(CREDIT_BALANCE_CHANGED_EVENT, handleBalanceChanged);
       window.removeEventListener(CREDIT_BALANCE_SYNC_EVENT, handleBalanceSync);
     };

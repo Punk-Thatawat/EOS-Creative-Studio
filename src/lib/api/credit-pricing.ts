@@ -102,6 +102,14 @@ export async function listAdminCreditPricingRules(): Promise<CreditPricingSettin
   return await adminRequest("/admin/credit-pricing-rules") as CreditPricingSettings;
 }
 
+export type TopupPackage = { id: string; label: string; amountThb: number; credits: number; featured?: boolean };
+export async function getAdminTopups(): Promise<TopupPackage[]> {
+  return await adminRequest('/admin/billing/topups') as TopupPackage[];
+}
+export async function saveAdminTopups(packages: TopupPackage[]): Promise<TopupPackage[]> {
+  return await adminRequest('/admin/billing/topups', { method: 'PUT', body: JSON.stringify({ packages }) }) as TopupPackage[];
+}
+
 export async function upsertAdminCreditPricingRule(input: UpsertCreditPricingRuleInput): Promise<CreditPricingRule> {
   return await adminRequest("/admin/credit-pricing-rules", { method: "PATCH", body: JSON.stringify(input) }) as CreditPricingRule;
 }

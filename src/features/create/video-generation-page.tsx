@@ -2743,7 +2743,7 @@ export function VideoGenerationPage() {
                   </button>
                 </div> : null}
               </div>
-              <EosCutButton storyboardId={displayedVideoUrl ? displayedStoryboardId : null} />
+              <EosCutButton sourceGenerationId={displayedVideoUrl ? displayedStoryboardId : null} />
               <div className={styles.previewViewTabs} role="tablist" aria-label="Video preview views">
                     <button
                       type="button"

@@ -1,4 +1,5 @@
 import { PreLoginPage } from "@/features/landing/pre-login-page";
+import { RedirectAuthenticated } from "./redirect-authenticated";
 
 export const metadata = {
   title: "Create without limits",
@@ -6,5 +7,5 @@ export const metadata = {
 };
 
 export default function HomePage() {
-  return <PreLoginPage />;
+  return <RedirectAuthenticated><PreLoginPage /></RedirectAuthenticated>;
 }

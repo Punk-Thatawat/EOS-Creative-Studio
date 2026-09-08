@@ -6,6 +6,12 @@ const DEV_AUTH_BYPASS_TOKEN = "eos-dev-bypass";
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
 let refreshRequest: Promise<string | null> | null = null;
 
+export const AUTH_SESSION_EXPIRED_EVENT = "eos.auth.session-expired";
+
+function notifySessionExpired(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+}
+
 export function isDevAuthBypassEnabled(): boolean {
   return (
     process.env.NODE_ENV === "development" &&
@@ -38,7 +44,10 @@ async function refreshStoredSession(stored: BackendAuthSession): Promise<string 
   } catch {
     // Do not erase a newer login/session that another tab or request stored.
     const current = getStoredBackendSession();
-    if (!current || current.refreshToken === session.refreshToken) clearBackendSession();
+    if (!current || current.refreshToken === session.refreshToken) {
+      clearBackendSession();
+      notifySessionExpired();
+    }
     return null;
   }
 }

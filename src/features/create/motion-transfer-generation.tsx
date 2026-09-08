@@ -204,6 +204,7 @@ export function MotionTransferWorkspace() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
+  const [generationId, setGenerationId] = useState<string | null>(null);
   const sourceImageInputRef = useRef<HTMLInputElement | null>(null);
   const motionVideoInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -323,6 +324,7 @@ export function MotionTransferWorkspace() {
     setNotice(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setGenerationId(null);
     setGenerationProgress(0);
     setGenerationStatus("uploading");
     try {
@@ -343,6 +345,7 @@ export function MotionTransferWorkspace() {
       const created = await createMotionTransferGeneration(request, controller.signal);
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
+      setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) emitGenerationStarted({ feature: "motion-transfer", generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
       let status: MotionTransferGenerationStatus = { ...created, status: created.status ?? "processing" } as MotionTransferGenerationStatus;
@@ -446,7 +449,7 @@ export function MotionTransferWorkspace() {
         <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
            <div className={styles.videoPreview}><VideoPreviewLiveBadge />{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><WandSparkles size={26} /><strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong><span>{notice ?? "Transferring motion…"}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div><small>{generationProgress ? `${generationProgress}% complete` : "Working…"}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel="Generated motion transfer video" /> : selectedModelOption?.previewUrl ? <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div>
         </section>
-        <VideoResultLibrary feature="motion-transfer" currentVideoUrl={finalVideoUrl} selectedVideoUrl={displayedVideoUrl} refreshKey={libraryRefreshKey} onVideoSelect={(url) => setPreviewVideoUrl(url)} />
+        <VideoResultLibrary feature="motion-transfer" currentVideoUrl={finalVideoUrl} currentSourceGenerationId={generationId} selectedVideoUrl={displayedVideoUrl} refreshKey={libraryRefreshKey} onVideoSelect={(url) => setPreviewVideoUrl(url)} />
       </div>
       <aside className={styles.settings}>
         <MotionSectionTitle number={settingsStep}>SETTINGS</MotionSectionTitle>

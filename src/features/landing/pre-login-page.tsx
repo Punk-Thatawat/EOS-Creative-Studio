@@ -261,7 +261,7 @@ export function PreLoginPage() {
       observer.disconnect();
       videos.forEach((video) => video.pause());
     };
-  }, [showIntroVideo]);
+  }, [examples, showIntroVideo]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -296,7 +296,8 @@ export function PreLoginPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("login") !== "1" && params.get("auth_error") !== "1") return undefined;
+    const sessionExpired = params.get("reason") === "session-expired";
+    if (params.get("login") !== "1" && params.get("auth_error") !== "1" && !sessionExpired) return undefined;
 
     const timer = window.setTimeout(() => {
       if (params.get("auth_error") === "1") {
@@ -304,6 +305,7 @@ export function PreLoginPage() {
         setGoogleLoginError(storedError || t("auth.error.loginFailed"));
         window.sessionStorage.removeItem("eos.auth.login-error");
       }
+      if (sessionExpired) setAuthError(t("auth.error.sessionExpired"));
       setLoginOpen(true);
       window.history.replaceState(null, "", window.location.pathname);
     }, 0);
@@ -327,7 +329,7 @@ export function PreLoginPage() {
       };
     });
     return () => cleanups.forEach((cleanup) => cleanup?.());
-  }, []);
+  }, [examples]);
 
   return (
     <main className="landing-page">

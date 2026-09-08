@@ -9,6 +9,7 @@ import { EosCutButton } from "./eos-cut-button";
 type VideoResultLibraryProps = {
   feature: string;
   currentVideoUrl: string | null;
+  currentSourceGenerationId?: string | null;
   selectedVideoUrl: string | null;
   refreshKey?: number;
   onVideoSelect: (url: string, view: "latest" | "library") => void;
@@ -31,7 +32,35 @@ function completedHistory(items: GenerationHistoryItem[]): Array<{ id: string; u
     .filter((item): item is { id: string; url: string } => Boolean(item.url));
 }
 
-export function VideoResultLibrary({ feature, currentVideoUrl, selectedVideoUrl, refreshKey = 0, onVideoSelect }: VideoResultLibraryProps) {
+function VideoGalleryThumbnail({ url, playSize = 14 }: { url: string; playSize?: number }) {
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+
+  return (
+    <span className={styles.videoGalleryThumb}>
+      <video
+        src={url}
+        muted
+        playsInline
+        preload="auto"
+        controls={false}
+        disablePictureInPicture
+        disableRemotePlayback
+        tabIndex={-1}
+        aria-hidden="true"
+        onLoadedData={() => setLoadState("ready")}
+        onError={() => setLoadState("error")}
+      />
+      {loadState !== "ready" ? (
+        <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", padding: 4, background: "#11192366", color: "#fff", fontSize: 7, fontWeight: 800, textAlign: "center", pointerEvents: "none" }} aria-hidden="true">
+          {loadState === "loading" ? "กำลังโหลด…" : "กดเพื่อดู"}
+        </span>
+      ) : null}
+      <span className={styles.videoGalleryPlay}><Play size={playSize} fill="currentColor" /></span>
+    </span>
+  );
+}
+
+export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGenerationId, selectedVideoUrl, refreshKey = 0, onVideoSelect }: VideoResultLibraryProps) {
   const [items, setItems] = useState<Array<{ id: string; url: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,10 +110,14 @@ export function VideoResultLibrary({ feature, currentVideoUrl, selectedVideoUrl,
   };
 
   const latestVideoUrl = currentVideoUrl ?? selectedVideoUrl ?? items[0]?.url ?? null;
+  const selectedHistoryItem = selectedVideoUrl ? items.find((item) => item.url === selectedVideoUrl) : undefined;
+  const selectedSourceGenerationId = selectedHistoryItem?.id
+    ?? (selectedVideoUrl === currentVideoUrl ? currentSourceGenerationId : null)
+    ?? (!selectedVideoUrl ? currentSourceGenerationId ?? items[0]?.id : null);
 
   return (
     <section className={styles.videoResultLibrary} aria-label="Video results">
-      <EosCutButton />
+      <EosCutButton sourceGenerationId={selectedSourceGenerationId} />
       <div className={styles.previewViewTabs} role="tablist" aria-label="Video result views">
         <button type="button" role="tab" aria-selected={view === "latest"} className={view === "latest" ? styles.previewViewTabActive : undefined} onClick={selectLatest}>Latest result</button>
         <button type="button" role="tab" aria-selected={view === "library"} className={view === "library" ? styles.previewViewTabActive : undefined} onClick={() => setView("library")}>Video library</button>
@@ -95,7 +128,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, selectedVideoUrl,
           <div className={styles.videoCurrentGallery}>
             {latestVideoUrl ? (
               <button type="button" className={styles.videoCurrentCard} onClick={selectLatest} aria-label="Show latest generated video" aria-pressed={view === "latest" && selectedVideoUrl === latestVideoUrl}>
-                <span className={styles.videoGalleryThumb}><video src={latestVideoUrl} muted playsInline preload="metadata" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} aria-hidden="true" /><span className={styles.videoGalleryPlay}><Play size={14} fill="currentColor" /></span></span>
+                <VideoGalleryThumbnail key={latestVideoUrl} url={latestVideoUrl} />
                 <span className={styles.videoGalleryStatus}>Latest generated video</span>
               </button>
             ) : (
@@ -112,7 +145,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, selectedVideoUrl,
             <div className={styles.videoRecentRow} ref={recentRowRef}>
               {loading ? <div className={styles.videoGalleryEmpty}>Loading video history…</div> : error ? <div className={`${styles.videoGalleryEmpty} ${styles.videoGalleryError}`} role="alert">{error}</div> : items.length ? items.map((item) => (
                 <button key={item.id} type="button" className={`${styles.videoRecentCard} ${selectedVideoUrl === item.url && view === "library" ? styles.videoRecentCardSelected : ""}`} onClick={() => { setView("library"); onVideoSelect(item.url, "library"); }} aria-label="Open recent generated video" aria-pressed={selectedVideoUrl === item.url && view === "library"}>
-                  <span className={styles.videoGalleryThumb}><video src={item.url} muted playsInline preload="metadata" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} aria-hidden="true" /><span className={styles.videoGalleryPlay}><Play size={13} fill="currentColor" /></span></span>
+                  <VideoGalleryThumbnail key={item.url} url={item.url} playSize={13} />
                 </button>
               )) : <div className={styles.videoGalleryEmpty}>No generated videos yet.</div>}
             </div>
