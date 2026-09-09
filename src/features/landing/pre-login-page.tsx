@@ -39,6 +39,7 @@ const formatVideoDuration = (duration: number) => {
 };
 
 const introVideoShownDateKey = "eos-intro-video-shown-date-v1";
+const resendConfirmationCooldownSeconds = 30;
 
 const getLocalDateKey = () => {
   const now = new Date();
@@ -113,6 +114,7 @@ export function PreLoginPage() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [pendingLoginToken, setPendingLoginToken] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
@@ -199,6 +201,7 @@ export function PreLoginPage() {
         setAuthMode("confirmation");
         setAuthMessage(t("auth.confirmation.sent", { email: authEmail }));
         setPendingLoginToken(result.data.pendingLoginToken ?? null);
+        setResendCooldown(resendConfirmationCooldownSeconds);
         return;
       }
 
@@ -260,18 +263,26 @@ export function PreLoginPage() {
   }, [authMode, loginOpen, pendingLoginToken]);
 
   const handleResendConfirmation = async () => {
+    if (resendCooldown > 0) return;
     setAuthSubmitting(true);
     setAuthError(null);
     setAuthMessage(null);
     try {
       await resendConfirmationWithBackend(authEmail);
       setAuthMessage(t("auth.confirmation.resent", { email: authEmail }));
+      setResendCooldown(resendConfirmationCooldownSeconds);
     } catch (error: unknown) {
       setAuthError(error instanceof Error ? error.message : t("auth.error.resendConfirmation"));
     } finally {
       setAuthSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const timer = window.setTimeout(() => setResendCooldown((current) => Math.max(0, current - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   useEffect(() => {
     if (!loginOpen) return undefined;
@@ -449,7 +460,7 @@ export function PreLoginPage() {
           {authMode === "confirmation" ? <div className="auth-confirmation-state">
             <div className="auth-confirmation-icon"><MailCheck size={29} /></div>
             <p>{authMessage ?? t("auth.confirmation.defaultSent", { email: authEmail })}</p>
-            <button type="button" className="auth-secondary-button" onClick={() => { void handleResendConfirmation(); }} disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={15} className="auth-spin" /> {t("auth.action.sending")}</> : t("auth.action.resendConfirmation")}</button>
+            <button type="button" className="auth-secondary-button" onClick={() => { void handleResendConfirmation(); }} disabled={authSubmitting || resendCooldown > 0}>{authSubmitting ? <><LoaderCircle size={15} className="auth-spin" /> {t("auth.action.sending")}</> : resendCooldown > 0 ? t("auth.action.resendConfirmationCooldown", { seconds: resendCooldown }) : t("auth.action.resendConfirmation")}</button>
             {authError && <p className="auth-error" role="alert">{authError}</p>}
             <button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button>
           </div> : authMode === "forgot" && authMessage ? <div className="auth-confirmation-state"><div className="auth-confirmation-icon"><MailCheck size={29} /></div><p>{authMessage}</p><button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button></div> : <>
