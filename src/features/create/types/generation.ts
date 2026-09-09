@@ -1,1 +1,1 @@
-export type GenerationKind = "image" | "video" | "ai-presenter" | "audio" | "document" | "workflow";
+export type GenerationKind = "image" | "video" | "audio";

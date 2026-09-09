@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export function ProjectCarousel({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function ProjectCarousel({ children, className = "", previousLabel = "Previous projects", nextLabel = "Next projects" }: { children: ReactNode; className?: string; previousLabel?: string; nextLabel?: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -40,5 +40,5 @@ export function ProjectCarousel({ children, className = "" }: { children: ReactN
     });
   };
 
-  return <div className="relative"><div ref={scrollRef} onScroll={updateScrollState} className={`flex snap-x gap-3 overflow-x-auto pb-2 scrollbar-none ${className}`}>{children}</div>{canScrollLeft ? <button type="button" onClick={() => scroll("left")} className="absolute left-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-[var(--shadow-md)] transition hover:border-primary hover:text-primary" aria-label="Previous projects"><ChevronLeft size={20} /></button> : null}{canScrollRight ? <button type="button" onClick={() => scroll("right")} className="absolute right-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-[var(--shadow-md)] transition hover:border-primary hover:text-primary" aria-label="Next projects"><ChevronRight size={20} /></button> : null}</div>;
+  return <div className="relative"><div ref={scrollRef} onScroll={updateScrollState} className={`flex snap-x gap-3 overflow-x-auto pb-2 scrollbar-none ${className}`}>{children}</div>{canScrollLeft ? <button type="button" onClick={() => scroll("left")} className="absolute left-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-[var(--shadow-md)] transition hover:border-primary hover:text-primary" aria-label={previousLabel}><ChevronLeft size={20} /></button> : null}{canScrollRight ? <button type="button" onClick={() => scroll("right")} className="absolute right-5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-[var(--shadow-md)] transition hover:border-primary hover:text-primary" aria-label={nextLabel}><ChevronRight size={20} /></button> : null}</div>;
 }

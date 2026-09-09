@@ -11,6 +11,7 @@ export interface CreativeTool {
   readonly imageSrc?: string;
   readonly accent: "orange" | "pink" | "yellow" | "green" | "blue" | "black";
   readonly badge?: string;
+  readonly comingSoon?: boolean;
 }
 
 export interface RecentProject {

@@ -320,11 +320,16 @@ export function GenerationProgressFloating() {
   // hydration comparison.
   const [active, setActive] = useState<ActivePendingGeneration[]>([]);
   const [isCenterOpen, setIsCenterOpen] = useState(false);
+  const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const collapseRef = useRef<HTMLButtonElement>(null);
   const closeCenter = () => {
     setIsCenterOpen(false);
     requestAnimationFrame(() => launcherRef.current?.focus());
+  };
+  const closeAllCenter = () => {
+    setIsCenterOpen(false);
+    setIsOverlayDismissed(true);
   };
 
   useEffect(() => {
@@ -344,6 +349,7 @@ export function GenerationProgressFloating() {
     const handleGenerationStarted = (event: Event) => {
       const detail = (event as CustomEvent<{ feature?: string; generationId?: string; pollUrl?: string; workspaceId?: string; provider?: string; model?: string; status?: "queued" | "processing"; totalCount?: number; completedCount?: number }>).detail;
       if (!detail?.feature || !detail.generationId || !detail.pollUrl) return;
+      setIsOverlayDismissed(false);
       dismissedGenerationIdsRef.current.delete(detail.generationId);
       clearDismissedGeneration(detail.generationId);
       const config = featureConfig(detail.feature);
@@ -466,7 +472,7 @@ export function GenerationProgressFloating() {
     };
   }, [isImageCreatePage]);
 
-  if (isAssetsPage || active.length === 0) return null;
+  if (isAssetsPage || active.length === 0 || isOverlayDismissed) return null;
 
   const inProgress = active.filter((item) => item.pending.status !== "completed");
   const completedItems = active.filter((item) => item.pending.status === "completed");
@@ -543,7 +549,7 @@ export function GenerationProgressFloating() {
           <small>{active.length} {active.length === 1 ? t("shell.generation.generation") : t("shell.generation.generations")}</small>
         </div>
         <div className={styles.centerActions}>
-          <button type="button" className={styles.panelToggle} onClick={closeCenter} aria-label={t("shell.generation.close")} title={t("shell.generation.close")}><X size={17} /></button>
+          <button type="button" className={styles.panelToggle} onClick={closeAllCenter} aria-label={t("shell.generation.closeAll")} title={t("shell.generation.closeAll")}><X size={17} /></button>
           <button ref={collapseRef} type="button" className={styles.panelToggle} onClick={closeCenter} aria-label={t("shell.generation.collapse")} title={t("shell.generation.collapse")}><ChevronDown size={18} /></button>
         </div>
       </div>
