@@ -27,6 +27,8 @@ import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
+import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
+import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
 
 type MotionSchemaProperty = {
   type?: string;
@@ -89,19 +91,15 @@ function motionFindProperty(properties: Record<string, MotionSchemaProperty>, na
   return undefined;
 }
 
-function motionLabel(name: string): string {
-  return name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function motionHasValue(value: unknown): boolean {
   return value !== undefined && value !== null && value !== "" && (!Array.isArray(value) || value.length > 0);
 }
 
-function motionModelRole(model: GenerationModelOption | undefined): string {
-  if (!model) return "Transfer reference movement to a character";
-  if (model.model.includes("pixverse")) return "Fast character motion transfer";
-  if (model.model.includes("pro")) return "Highest motion fidelity and control";
-  return "Controlled character motion transfer";
+function motionModelRoleKey(model: GenerationModelOption | undefined): TranslationKey {
+  if (!model) return "create.video.motion.roleDefault";
+  if (model.model.includes("pixverse")) return "create.video.motion.roleFast";
+  if (model.model.includes("pro")) return "create.video.motion.roleFidelity";
+  return "create.video.motion.roleControlled";
 }
 
 function parseMotionValue(raw: string, property: MotionSchemaProperty): unknown {
@@ -126,7 +124,9 @@ function MotionSchemaField({
   labelOverride?: string;
   onChange: (value: unknown) => void;
 }) {
-  const label = labelOverride ?? property.title ?? motionLabel(name);
+  const { t } = useLocale();
+  const label = labelOverride ?? translateVideoSchemaLabel(name, property.title, t);
+  const description = translateVideoSchemaDescription(property.description, t);
   const type = property.type ?? (property.enum ? "string" : typeof property.default === "boolean" ? "boolean" : typeof property.default === "number" ? "number" : "string");
   if (property.enum?.length) {
     return (
@@ -135,18 +135,18 @@ function MotionSchemaField({
         <Dropdown
           value={value === undefined ? "" : String(value)}
           options={[
-            ...(!required ? [{ value: "", label: "Auto" }] : []),
-            ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+            ...(!required ? [{ value: "", label: t("create.video.common.auto") }] : []),
+            ...property.enum.map((option) => ({ value: String(option), label: translateVideoSchemaOption(option, t) })),
           ]}
           onChange={(nextValue) => onChange(parseMotionValue(nextValue, property))}
           ariaLabel={label}
-          placeholder="Auto"
+          placeholder={t("create.video.common.auto")}
           className={styles.dynamicDropdown}
           triggerClassName={styles.dynamicSelect}
           menuClassName={styles.dynamicDropdownMenu}
           optionClassName={styles.dynamicDropdownOption}
         />
-        {property.description ? <small>{property.description}</small> : null}
+        {description ? <small>{description}</small> : null}
       </label>
     );
   }
@@ -154,17 +154,17 @@ function MotionSchemaField({
     return <div className={styles.toggleRow}>{label}{required ? <b>*</b> : null}<button type="button" className={styles.toggle} aria-pressed={Boolean(value)} onClick={() => onChange(!Boolean(value))}><i /></button></div>;
   }
   if (type === "array") {
-    return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} value={Array.isArray(value) ? value.join(", ") : ""} placeholder="Add values separated by commas" onChange={(event) => onChange(event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} aria-required={required} />{property.description ? <small>{property.description}</small> : null}</label>;
+    return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} value={Array.isArray(value) ? value.join(", ") : ""} placeholder={t("create.video.common.addValues")} onChange={(event) => onChange(event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} aria-required={required} />{description ? <small>{description}</small> : null}</label>;
   }
   if (type === "object") {
     const objectValue = value && typeof value === "object" ? JSON.stringify(value, null, 2) : "";
-    return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><textarea className={styles.dynamicTextarea} value={objectValue} placeholder="Enter JSON" onChange={(event) => { try { onChange(event.target.value ? JSON.parse(event.target.value) : undefined); } catch { /* Keep the field editable until the JSON is complete. */ } }} aria-required={required} />{property.description ? <small>{property.description}</small> : null}</label>;
+    return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><textarea className={styles.dynamicTextarea} value={objectValue} placeholder={t("create.video.common.enterJson")} onChange={(event) => { try { onChange(event.target.value ? JSON.parse(event.target.value) : undefined); } catch { /* Keep the field editable until the JSON is complete. */ } }} aria-required={required} />{description ? <small>{description}</small> : null}</label>;
   }
   const numeric = type === "integer" || type === "number";
   if (numeric && property.minimum !== undefined && property.maximum !== undefined) {
-    return <div className={styles.settingBlock}><div className={styles.settingLabel}>{label}{required ? <b>*</b> : null}<strong>{value === undefined ? "Auto" : String(value)}</strong></div><input type="range" min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : 0.01)} value={typeof value === "number" ? value : property.minimum} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-label={label} /><div className={styles.rangeLabels}><span>{property.minimum}</span><span>{property.maximum}</span></div></div>;
+    return <div className={styles.settingBlock}><div className={styles.settingLabel}>{label}{required ? <b>*</b> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div><input type="range" min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : 0.01)} value={typeof value === "number" ? value : property.minimum} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-label={label} /><div className={styles.rangeLabels}><span>{property.minimum}</span><span>{property.maximum}</span></div>{description ? <small>{description}</small> : null}</div>;
   }
-  return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : "any")} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-required={required} />{property.description ? <small>{property.description}</small> : null}</label>;
+  return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : "any")} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-required={required} />{description ? <small>{description}</small> : null}</label>;
 }
 
 function MotionSectionTitle({ number, children }: { number?: string; children: string }) {
@@ -183,6 +183,7 @@ function motionProgress(payload: MotionTransferGenerationStatus, fallback: numbe
 }
 
 export function MotionTransferWorkspace() {
+  const { locale, t } = useLocale();
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
@@ -242,7 +243,7 @@ export function MotionTransferWorkspace() {
         setSelectedModel((current) => eligible.some((item) => item.model === current) ? current : eligible.find((item) => item.isDefault)?.model ?? eligible[0]?.model ?? "");
       })
       .catch((error: unknown) => {
-        if (active) setModelsError(error instanceof Error ? error.message : "Unable to load motion transfer models");
+        if (active) setModelsError(error instanceof Error ? error.message : t("create.video.common.loadingFeatureModels", { feature: t("create.video.tabs.motionTransfer") }));
       })
       .finally(() => {
         if (active) setModelsLoading(false);
@@ -250,7 +251,7 @@ export function MotionTransferWorkspace() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => () => { if (sourceImage?.url.startsWith("blob:")) URL.revokeObjectURL(sourceImage.url); }, [sourceImage]);
@@ -305,15 +306,15 @@ export function MotionTransferWorkspace() {
     && !modelParameterEntries.some(([name]) => requiredProperties.has(name) && !motionHasValue(modelParams[name])),
   );
   const validationMessage = !selectedModel
-    ? "Select a motion transfer model."
+    ? t("create.video.common.selectFeatureModel", { feature: t("create.video.tabs.motionTransfer") })
     : !sourceImage
-      ? "Upload a source image."
+      ? t("create.video.common.uploadSourceImage")
       : !motionVideo
-        ? "Upload a motion video."
+        ? t("create.video.common.uploadMotionVideo")
         : promptRequired && !motionHasValue(prompt)
-          ? "Prompt is required for this model."
+          ? t("create.video.common.requiresDriver", { driver: t("create.video.common.prompt").toLowerCase() })
           : modelParameterEntries.find(([name]) => requiredProperties.has(name) && !motionHasValue(modelParams[name]))
-            ? `${motionLabel(modelParameterEntries.find(([name]) => requiredProperties.has(name) && !motionHasValue(modelParams[name]))?.[0] ?? "Parameter")} is required for this model.`
+            ? t("create.video.common.parameterRequired", { parameter: translateVideoSchemaLabel(modelParameterEntries.find(([name]) => requiredProperties.has(name) && !motionHasValue(modelParams[name]))?.[0] ?? "Parameter", undefined, t) })
             : null;
 
   const handleGenerate = async () => {
@@ -328,9 +329,9 @@ export function MotionTransferWorkspace() {
     setGenerationProgress(0);
     setGenerationStatus("uploading");
     try {
-      setNotice("Uploading source image…");
+     setNotice(t("create.video.common.uploadingSourceImage"));
       const sourceImageUrl = sourceImage.file ? await uploadImageAsset(sourceImage.file, { purpose: "content", feature: "motion-transfer", uploadConstraints: capabilities?.uploadConstraints }) : sourceImage.url;
-      setNotice("Uploading motion video…");
+       setNotice(t("create.video.common.uploadingMotionVideo"));
       const motionVideoUrl = motionVideo.file ? await uploadImageAsset(motionVideo.file, { purpose: "content", feature: "motion-transfer", uploadConstraints: capabilities?.uploadConstraints }) : motionVideo.url;
       const request: MotionTransferGenerationInput = { sourceImage: sourceImageUrl, motionVideo: motionVideoUrl, model: selectedModel };
       if (promptOptimizerEnabled) request.promptOptimizerEnabled = true;
@@ -341,7 +342,7 @@ export function MotionTransferWorkspace() {
       if (keepSoundProperty) request[keepSoundProperty[0]] = keepOriginalSound;
       if (Object.keys(modelParams).length) request.modelParams = modelParams;
       setGenerationStatus("processing");
-      setNotice("Submitting motion transfer generation…");
+       setNotice(t("create.video.motion.submitting"));
       const created = await createMotionTransferGeneration(request, controller.signal);
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
@@ -356,7 +357,7 @@ export function MotionTransferWorkspace() {
           status = await getMotionTransferGenerationStatus(pollUrl, controller.signal);
           progress = motionProgress(status, progress);
           setGenerationProgress(progress);
-          setNotice(`Generating motion transfer… ${progress}%`);
+           setNotice(t("create.video.common.generatingFeatureProgress", { feature: t("create.video.tabs.motionTransfer"), percent: progress }));
           if (status.status === "completed" || status.status === "failed" || status.status === "cancelled") break;
           await new Promise<void>((resolve, reject) => {
             const timeout = window.setTimeout(resolve, 2500);
@@ -372,12 +373,12 @@ export function MotionTransferWorkspace() {
       setGenerationProgress(100);
       setGenerationStatus("completed");
       setLibraryRefreshKey((value) => value + 1);
-      setNotice("Video ready");
+       setNotice(t("create.video.common.videoReady"));
     } catch (error: unknown) {
       if (controller.signal.aborted) return;
       setGenerationStatus("failed");
       setNotice(null);
-      setGenerationError(formatGenerationError(error, "Unable to generate motion transfer video"));
+       setGenerationError(formatGenerationError(error, t("create.video.motion.generateError")));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -402,76 +403,70 @@ export function MotionTransferWorkspace() {
     modelParams: { ...modelParams, ...(qualityProperty && motionHasValue(qualityValue) ? { [qualityProperty[0]]: qualityValue } : {}) },
   } : null);
   const isGenerating = generationStatus === "uploading" || generationStatus === "processing";
-  const motionGuide = {
-    eyebrow: "REFERENCE MOTION",
-    description: "Drive a character with the movement from a reference video while keeping the target identity.",
-    note: "Use this when the movement is the source of truth—not the dialogue or mouth shape.",
-    chips: ["Copy movement", "Character image", "Driving video"],
-  };
   const guidanceVisible = promptSupported || negativePromptSupported;
   const settingsStep = guidanceVisible ? "4" : "3";
 
   return (
     <div className={styles.columns}>
       <div className={styles.leftColumn}>
-        <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="motion-transfer" featureName="Motion Transfer" /></div><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">MOTION TRANSFER</h2><Info size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{motionGuide.eyebrow}</span><p className={styles.textVideoDescription}>{motionGuide.description}</p><div className={styles.featurePills}>{motionGuide.chips.map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{motionGuide.note}</small></div></section></section>
+         <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="motion-transfer" featureName={t("create.video.tabs.motionTransfer")} /></div><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">{t("create.video.motion.title")}</h2><Info size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{t("create.video.motion.eyebrow")}</span><p className={styles.textVideoDescription}>{t("create.video.motion.description")}</p><div className={styles.featurePills}>{[t("create.video.motion.chipCopyMovement"), t("create.video.motion.chipCharacterImage"), t("create.video.motion.chipDrivingVideo")].map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{t("create.video.motion.note")}</small></div></section></section>
         <section className={styles.panel}>
-          <MotionSectionTitle number="1">CHARACTER IMAGE</MotionSectionTitle>
-          <div className={`${styles.peopleSourcePreview} ${!sourceImage ? styles.peopleSourceUploadEmpty : ""}`}>{sourceImage ? <div className={styles.peopleSourceMedia}><Image src={sourceImage.url} alt="Source character" fill unoptimized className="object-cover" /><button type="button" onClick={() => setSourceImage(null)} aria-label="Remove source image"><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => document.getElementById("motion-source-image")?.click()}><CloudUpload size={23} /><strong>Upload Image</strong><small>PNG / JPG / WEBP</small></button>}</div>
+           <MotionSectionTitle number="1">{t("create.video.common.characterImage")}</MotionSectionTitle>
+           <div className={`${styles.peopleSourcePreview} ${!sourceImage ? styles.peopleSourceUploadEmpty : ""}`}>{sourceImage ? <div className={styles.peopleSourceMedia}><Image src={sourceImage.url} alt={t("create.video.common.characterImage")} fill unoptimized className="object-cover" /><button type="button" onClick={() => setSourceImage(null)} aria-label={t("create.video.common.removeSourceImage")}><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => document.getElementById("motion-source-image")?.click()}><CloudUpload size={23} /><strong>{t("create.video.common.uploadImage")}</strong><small>{t("create.video.common.pngFormats")}</small></button>}</div>
           <input id="motion-source-image" ref={sourceImageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setMotionAsset(file, "image"); event.currentTarget.value = ""; }} />
         </section>
         <section className={styles.panel}>
-          <MotionSectionTitle number="2">DRIVING VIDEO</MotionSectionTitle>
-          <div className={`${styles.peopleSourcePreview} ${!motionVideo ? styles.peopleSourceUploadEmpty : ""}`}>{motionVideo ? <div className={styles.peopleSourceMedia}><video src={motionVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setMotionVideo(null)} aria-label="Remove motion video"><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => motionVideoInputRef.current?.click()}><CloudUpload size={23} /><strong>Upload Video</strong><small>MP4 / WEBM</small></button>}</div>
+           <MotionSectionTitle number="2">{t("create.video.common.drivingVideo")}</MotionSectionTitle>
+           <div className={`${styles.peopleSourcePreview} ${!motionVideo ? styles.peopleSourceUploadEmpty : ""}`}>{motionVideo ? <div className={styles.peopleSourceMedia}><video src={motionVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setMotionVideo(null)} aria-label={t("create.video.common.removeMotionVideo")}><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => motionVideoInputRef.current?.click()}><CloudUpload size={23} /><strong>{t("create.video.common.uploadVideo")}</strong><small>{t("create.video.common.videoFormats")}</small></button>}</div>
           <input ref={motionVideoInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setMotionAsset(file, "video"); event.currentTarget.value = ""; }} />
         </section>
         {guidanceVisible ? (
           <section className={`${styles.panel} ${promptSupported ? styles.videoPromptPanel : ""}`}>
             {promptSupported ? <>
               <div className={styles.videoPromptHeading}>
-                <h2>PROMPT <small>({promptRequired ? "Required" : "Optional"})</small></h2>
-                <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+                 <h2>{t("create.video.common.prompt")} <small>({promptRequired ? t("create.video.common.required") : t("create.video.common.optional")})</small></h2>
+                <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
               </div>
               <label className={styles.videoPromptInputLabel}>
-                <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Natural movement, keep the character's identity" maxLength={2000} />
+                 <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.motion.promptPlaceholder")} maxLength={2000} />
               </label>
               <div className={styles.videoPromptMeta}>
-                <span>Maximum 2,000 characters</span>
+                 <span>{t("create.video.common.maximumCharacters", { count: 2000 })}</span>
                 <span>{prompt.length.toLocaleString()} / 2,000</span>
               </div>
-            </> : <MotionSectionTitle number="3">MOTION GUIDANCE</MotionSectionTitle>}
+             </> : <MotionSectionTitle number="3">{t("create.video.common.motionGuidance")}</MotionSectionTitle>}
             {promptSupported ? <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /> : null}
-            {negativePromptSupported ? <label className={styles.peopleFieldLabel}>Negative Prompt <small>(Optional)</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="blurry, distorted, unnatural movement" /></label> : null}
+             {negativePromptSupported ? <label className={styles.peopleFieldLabel}>{t("create.video.common.negativePrompt")} <small>({t("create.video.common.optional")})</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder={t("create.video.motion.negativePlaceholder")} /></label> : null}
           </section>
         ) : null}
       </div>
       <div className={styles.centerColumn}>
         <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
-           <div className={styles.videoPreview}><VideoPreviewLiveBadge />{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><WandSparkles size={26} /><strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong><span>{notice ?? "Transferring motion…"}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div><small>{generationProgress ? `${generationProgress}% complete` : "Working…"}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel="Generated motion transfer video" /> : selectedModelOption?.previewUrl ? <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div>
+           <div className={styles.videoPreview}><VideoPreviewLiveBadge />{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><WandSparkles size={26} /><strong>{generationStatus === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong><span>{notice ?? t("create.video.motion.generatingNotice")}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div><small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={t("create.video.common.generatedVideo")} /> : selectedModelOption?.previewUrl ? <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div>
         </section>
         <VideoResultLibrary feature="motion-transfer" currentVideoUrl={finalVideoUrl} currentSourceGenerationId={generationId} selectedVideoUrl={displayedVideoUrl} refreshKey={libraryRefreshKey} onVideoSelect={(url) => setPreviewVideoUrl(url)} />
       </div>
       <aside className={styles.settings}>
-        <MotionSectionTitle number={settingsStep}>SETTINGS</MotionSectionTitle>
-        <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label>
+         <MotionSectionTitle number={settingsStep}>{t("create.video.common.settings")}</MotionSectionTitle>
+         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <Info size={11} /></label>
         <VideoModelDropdown
           models={models}
           value={selectedModel}
           loading={modelsLoading}
-          ariaLabel="Motion transfer model options"
-          placeholder="No motion transfer model"
+           ariaLabel={t("create.video.common.modelOptions", { feature: t("create.video.tabs.motionTransfer") })}
+           placeholder={t("create.video.common.noFeatureModel", { feature: t("create.video.tabs.motionTransfer") })}
           onChange={setSelectedModel}
         />
-        <p className={styles.selectedModelRole}>{motionModelRole(selectedModelOption)}</p>
+         <p className={styles.selectedModelRole}>{t(motionModelRoleKey(selectedModelOption))}</p>
         {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
-        {qualityProperty ? <MotionSchemaField name={qualityProperty[0]} property={qualityProperty[1]} value={qualityValue} required={requiredProperties.has(qualityProperty[0])} labelOverride="Quality" onChange={setQualityValue} /> : null}
-        {orientationProperty ? <MotionSchemaField name={orientationProperty[0]} property={orientationProperty[1]} value={orientationValue} required={requiredProperties.has(orientationProperty[0])} labelOverride="Character Orientation" onChange={setOrientationValue} /> : null}
-        {keepSoundProperty ? <MotionSchemaField name={keepSoundProperty[0]} property={keepSoundProperty[1]} value={keepOriginalSound} required={requiredProperties.has(keepSoundProperty[0])} labelOverride="Keep Original Sound" onChange={setKeepOriginalSound} /> : null}
-        {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>{modelParameterEntries.map(([name, property]) => <MotionSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}
-        <VideoCreditEstimate featureLabel="Motion Transfer" estimate={videoCreditEstimate}>
-          {!isComplete ? <p className={styles.settingsError} role="status">{modelsLoading ? "Loading motion transfer models…" : validationMessage}</p> : null}
+         {qualityProperty ? <MotionSchemaField name={qualityProperty[0]} property={qualityProperty[1]} value={qualityValue} required={requiredProperties.has(qualityProperty[0])} labelOverride={t("create.video.common.quality")} onChange={setQualityValue} /> : null}
+         {orientationProperty ? <MotionSchemaField name={orientationProperty[0]} property={orientationProperty[1]} value={orientationValue} required={requiredProperties.has(orientationProperty[0])} labelOverride={t("create.video.common.characterOrientation")} onChange={setOrientationValue} /> : null}
+         {keepSoundProperty ? <MotionSchemaField name={keepSoundProperty[0]} property={keepSoundProperty[1]} value={keepOriginalSound} required={requiredProperties.has(keepSoundProperty[0])} labelOverride={t("create.video.common.keepOriginalSound")} onChange={setKeepOriginalSound} /> : null}
+         {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>{t("create.video.common.modelParameters")}</div>{modelParameterEntries.map(([name, property]) => <MotionSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}
+         <VideoCreditEstimate featureLabel={t("create.video.tabs.motionTransfer")} estimate={videoCreditEstimate}>
+           {!isComplete ? <p className={styles.settingsError} role="status">{modelsLoading ? t("create.video.common.loadingModels", { feature: t("create.video.tabs.motionTransfer") }) : validationMessage}</p> : null}
           {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
-          <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><WandSparkles size={18} /> {isGenerating ? "GENERATING…" : "GENERATE VIDEO"}</button>
+           <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><WandSparkles size={18} /> {isGenerating ? t("create.video.common.generating") : t("create.video.common.generateVideo")}</button>
         </VideoCreditEstimate>
         {notice ? <p className={styles.peopleNotice}>{notice}</p> : null}
       </aside>

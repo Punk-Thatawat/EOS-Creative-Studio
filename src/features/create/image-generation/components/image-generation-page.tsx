@@ -14,6 +14,7 @@ import { PromptPanel } from "./prompt-panel";
 import { SettingsPanel } from "./settings-panel";
 import { getKnownImageUploadConstraints } from "@/lib/media/upload-validation";
 import { textToImagePromptMaxLength } from "../config";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 const imageTabByRoute = {
   "text-to-image": "Text to Image",
@@ -24,6 +25,7 @@ const imageTabByRoute = {
 } as const;
 
 export function ImageGenerationPage() {
+  const { t } = useLocale();
   const state = useImageGenerationState();
   useTemplatePrompt("image", prompt => {
     state.setPrompt(prompt);
@@ -151,7 +153,7 @@ export function ImageGenerationPage() {
   const generateCurrentTab = isTextToImageTab ? generateTextToImage : isImageToImageTab ? generateImageToImage : isStyleTransferTab ? generateStyleTransfer : isBackgroundTab ? generateBackground : isUpscaleTab ? generateUpscale : generateExtend;
 
   return <div className={cx("gen-image-page")} data-page="gen-image">
-    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><Image src="/generated-assets/gen-image-hero-transparent.png" alt="Gen Image creative studio hero artwork" width={2090} height={380} priority className={cx("gen-hero-artwork")} /></picture></section>
+    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><Image src="/generated-assets/gen-image-hero-transparent.png" alt={t("create.image.heroArtwork")} width={2090} height={380} priority className={cx("gen-hero-artwork")} /></picture></section>
     <ImageGenerationTabs activeTab={state.activeTab} onTabChange={(nextTab) => { setPreviewDisplayMode("current"); state.setActiveTab(nextTab); if (requestedTab) router.replace("/create/image", { scroll: false }); }} />
     <div className={cx("gen-workspace")}>
       <PromptPanel

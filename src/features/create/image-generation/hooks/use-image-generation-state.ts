@@ -45,6 +45,11 @@ const backgroundSourceImageStorageKey = "eos.generation.source-image.background"
 const extendSourceImageStorageKey = "eos.generation.source-image.extend";
 const styleReferenceImageStorageKey = "eos.generation.style-reference-image";
 const providerControlledModelParameters = new Set(["enable_sync_mode", "enable_base64_output", "output_format", "outputFormat", "format"]);
+const genericImageDimensionParameters = new Set([
+  "size", "image_size", "imageSize",
+  "width", "image_width", "imageWidth",
+  "height", "image_height", "imageHeight",
+]);
 
 function modelParameterValue(parameters: Record<string, unknown>, parameter: string | undefined, aliases: string[]): unknown {
   const names = [parameter, ...aliases].filter((value): value is string => Boolean(value));
@@ -886,7 +891,16 @@ export function useImageGenerationState() {
   // fallback. Native prompt-capable models receive the real solid mode and
   // selected color so their central prompt is applied server-side.
   const providerOutputFormat = isLocalSolidBackground ? "png" : effectiveOutputFormat;
-  const requestModelParams = Object.fromEntries(Object.entries(modelParams).filter(([name]) => !providerControlledModelParameters.has(name)));
+  // Image tabs expose one generic ratio control. Do not forward a hidden or
+  // previously selected size/width/height alongside it; otherwise a model's
+  // default dimension can survive a model switch and disagree with the ratio
+  // currently shown in the UI. The backend still performs the same
+  // reconciliation for direct API callers.
+  const genericRatioOwnsDimensions = Boolean(selectedModelCapabilities && !selectedModelCapabilities.aspectRatioParameter && activeTab !== "Upscale");
+  const requestModelParams = Object.fromEntries(Object.entries(modelParams).filter(([name]) =>
+    !providerControlledModelParameters.has(name)
+    && !(genericRatioOwnsDimensions && genericImageDimensionParameters.has(name)),
+  ));
   const nativeQuoteRatio = modelParameterValue(modelParams, selectedModelCapabilities?.aspectRatioParameter, ["aspect_ratio", "aspectRatio", "ratio"]);
   const nativeQuoteResolution = modelParameterValue(modelParams, selectedModelCapabilities?.resolutionParameter, ["resolution", "output_resolution", "outputResolution"]);
   const smartEnhanceQuoteEnabled = promptOptimizerEnabled

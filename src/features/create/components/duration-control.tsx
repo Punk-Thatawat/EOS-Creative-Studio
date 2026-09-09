@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale } from "@/lib/i18n/locale-provider";
 import styles from "../video-generation-page.module.css";
 
 export type DurationProperty = {
@@ -34,6 +35,7 @@ export function DurationControl({
   onChange: (value: number) => void;
   variant?: "settings" | "scene";
 }) {
+  const { t } = useLocale();
   const enumValues = (property.enum ?? []).map(toNumber).filter((item): item is number => item !== undefined);
   const hasEnum = enumValues.length > 0;
   const hasRange = property.minimum !== undefined && property.maximum !== undefined;
@@ -41,7 +43,7 @@ export function DurationControl({
   const enumIndex = hasEnum ? Math.max(0, enumValues.findIndex((item) => item === currentValue)) : 0;
   const minLabel = hasEnum ? enumValues[0] : property.minimum;
   const maxLabel = hasEnum ? enumValues[enumValues.length - 1] : property.maximum;
-  const label = property.title ?? "Duration";
+  const label = t("create.video.common.duration");
   const isScene = variant === "scene";
   const containerClass = isScene ? styles.sceneModalDuration : styles.settingBlock;
   const labelClass = isScene ? styles.sceneModalDurationLabel : styles.settingLabel;
@@ -51,7 +53,7 @@ export function DurationControl({
     <div className={containerClass}>
       <div className={labelClass}>
         {label}{required ? <b>*</b> : null}
-        <strong>{formatDuration(currentValue)} sec</strong>
+        <strong>{formatDuration(currentValue)} {t("create.video.common.seconds")}</strong>
       </div>
       {hasEnum ? (
         <input
@@ -86,8 +88,8 @@ export function DurationControl({
         />
       )}
       <div className={rangeLabelsClass}>
-        <span>{minLabel === undefined ? "" : `${formatDuration(minLabel)}s`}</span>
-        <span>{maxLabel === undefined ? "" : `${formatDuration(maxLabel)}s`}</span>
+        <span>{minLabel === undefined ? "" : `${formatDuration(minLabel)}${t("create.video.common.secondsShort")}`}</span>
+        <span>{maxLabel === undefined ? "" : `${formatDuration(maxLabel)}${t("create.video.common.secondsShort")}`}</span>
       </div>
     </div>
   );

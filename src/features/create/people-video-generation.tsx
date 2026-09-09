@@ -34,6 +34,8 @@ import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
+import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
+import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
 
 type PeopleSchemaProperty = {
   type?: string;
@@ -126,27 +128,23 @@ function peopleFindProperty(properties: Record<string, PeopleSchemaProperty>, na
   return undefined;
 }
 
-function peopleLabel(name: string): string {
-  return name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function peopleHasValue(value: unknown): boolean {
   return value !== undefined && value !== null && value !== "" && (!Array.isArray(value) || value.length > 0);
 }
 
-function peopleModelRole(model: GenerationModelOption | undefined, isLipsync: boolean): string {
+function peopleModelRoleKey(model: GenerationModelOption | undefined, isLipsync: boolean): TranslationKey {
   const capabilities = model?.capabilities;
-  if (!capabilities) return isLipsync ? "Lip synchronization" : "Talking character performance";
+  if (!capabilities) return isLipsync ? "create.video.lipsync.roleDefault" : "create.video.people.roleDefault";
   if (isLipsync) {
-    if (capabilities.videoParameter && capabilities.audioParameter) return "Video dubbing + mouth sync";
-    if (capabilities.imageParameter && capabilities.audioParameter) return "Image + audio mouth sync";
-    if (capabilities.scriptParameter && capabilities.voiceParameter) return "Script + voice mouth sync";
-    return "Lip synchronization";
+    if (capabilities.videoParameter && capabilities.audioParameter) return "create.video.lipsync.roleVideoDubbing";
+    if (capabilities.imageParameter && capabilities.audioParameter) return "create.video.lipsync.roleImageAudio";
+    if (capabilities.scriptParameter && capabilities.voiceParameter) return "create.video.lipsync.roleScriptVoice";
+    return "create.video.lipsync.roleDefault";
   }
-  if (capabilities.audioParameter && capabilities.promptParameter) return "Audio-driven full performance";
-  if (capabilities.audioParameter) return "Audio-driven talking character";
-  if (capabilities.scriptParameter || capabilities.promptParameter) return "Scripted talking character";
-  return "Talking character performance";
+  if (capabilities.audioParameter && capabilities.promptParameter) return "create.video.people.roleAudioPerformance";
+  if (capabilities.audioParameter) return "create.video.people.roleAudioTalking";
+  if (capabilities.scriptParameter || capabilities.promptParameter) return "create.video.people.roleScripted";
+  return "create.video.people.roleDefault";
 }
 
 function parsePeopleValue(raw: string, property: PeopleSchemaProperty): unknown {
@@ -191,9 +189,11 @@ function PeopleSchemaField({
   labelOverride?: string;
   onChange: (value: unknown) => void;
 }) {
-  const label = labelOverride ?? property.title ?? peopleLabel(name);
+  const { t } = useLocale();
+  const label = labelOverride ?? translateVideoSchemaLabel(name, property.title, t);
+  const description = translateVideoSchemaDescription(property.description, t);
   const type = property.type ?? (property.enum ? "string" : typeof property.default === "boolean" ? "boolean" : typeof property.default === "number" ? "number" : "string");
-  if (labelOverride === "Duration") {
+  if (["duration", "duration_seconds", "durationSeconds"].includes(name)) {
     return <DurationControl property={property} value={value} required={required} onChange={(nextValue) => onChange(nextValue)} />;
   }
   if (property.enum?.length) {
@@ -203,18 +203,18 @@ function PeopleSchemaField({
         <Dropdown
           value={value === undefined ? "" : String(value)}
           options={[
-            ...(!required ? [{ value: "", label: "Auto" }] : []),
-            ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+            ...(!required ? [{ value: "", label: t("create.video.common.auto") }] : []),
+            ...property.enum.map((option) => ({ value: String(option), label: translateVideoSchemaOption(option, t) })),
           ]}
           onChange={(nextValue) => onChange(parsePeopleValue(nextValue, property))}
           ariaLabel={label}
-          placeholder="Auto"
+          placeholder={t("create.video.common.auto")}
           className={styles.dynamicDropdown}
           triggerClassName={styles.dynamicSelect}
           menuClassName={styles.dynamicDropdownMenu}
           optionClassName={styles.dynamicDropdownOption}
         />
-        {property.description ? <small>{property.description}</small> : null}
+        {description ? <small>{description}</small> : null}
       </label>
     );
   }
@@ -233,7 +233,7 @@ function PeopleSchemaField({
         <textarea
           className={styles.dynamicInput}
           value={value === undefined ? "" : Array.isArray(value) ? value.join(", ") : typeof value === "object" ? JSON.stringify(value) : String(value)}
-          placeholder={type === "array" ? "Add values separated by commas" : "{}"}
+          placeholder={type === "array" ? t("create.video.common.addValues") : "{}"}
           onChange={(event) => onChange(type === "array" ? event.target.value.split(",").map((item) => item.trim()).filter(Boolean) : event.target.value)}
           aria-required={required}
         />
@@ -244,7 +244,7 @@ function PeopleSchemaField({
   if (numeric && property.minimum !== undefined && property.maximum !== undefined) {
     return (
       <div className={styles.settingBlock}>
-        <div className={styles.settingLabel}>{label}{required ? <b>*</b> : null}<strong>{value === undefined ? "Auto" : String(value)}</strong></div>
+        <div className={styles.settingLabel}>{label}{required ? <b>*</b> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div>
         <input type="range" min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : 0.01)} value={typeof value === "number" ? value : property.minimum} onChange={(event) => onChange(parsePeopleValue(event.target.value, property))} aria-label={label} />
         <div className={styles.rangeLabels}><span>{property.minimum}</span><span>{property.maximum}</span></div>
       </div>
@@ -254,7 +254,7 @@ function PeopleSchemaField({
     <label className={styles.dynamicField}>
       <span>{label}{required ? <b>*</b> : null}</span>
       <input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : "any")} onChange={(event) => onChange(parsePeopleValue(event.target.value, property))} aria-required={required} />
-      {property.description ? <small>{property.description}</small> : null}
+      {description ? <small>{description}</small> : null}
     </label>
   );
 }
@@ -276,9 +276,10 @@ function peopleProgress(payload: PeopleVideoGenerationStatus | LipsyncGeneration
 }
 
 export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "people-video" | "lipsync" }) {
+  const { locale, t } = useLocale();
   const isLipsync = variant === "lipsync";
   const workspaceFeature = isLipsync ? "lipsync" : "people-video";
-  const workspaceLabel = isLipsync ? "lipsync" : "people video";
+  const workspaceLabel = isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title");
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
@@ -357,19 +358,19 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     : sourceImageSupported
       ? "image/png,image/jpeg,image/webp"
       : "video/mp4,video/webm";
-  const driverLabel = scriptSupported ? "Script" : !isLipsync && promptSupported ? "Performance direction" : "Prompt";
+  const driverLabel = scriptSupported ? t("create.video.common.script") : !isLipsync && promptSupported ? t("create.video.common.performanceDirection") : t("create.video.common.prompt");
   const featureGuide = isLipsync
     ? {
-      eyebrow: "MOUTH SYNC",
-      description: "Match mouth movement to speech while keeping the source face and motion intact.",
-      note: "Use this when the main job is accurate dialogue sync—not a new acting performance.",
-      chips: ["Audio-driven", "Mouth alignment", "Preserve source motion"],
+      eyebrow: t("create.video.lipsync.eyebrow"),
+      description: t("create.video.lipsync.description"),
+      note: t("create.video.lipsync.note"),
+      chips: [t("create.video.lipsync.chipAudioDriven"), t("create.video.lipsync.chipMouthAlignment"), t("create.video.lipsync.chipPreserveMotion")],
     }
     : {
-      eyebrow: "FULL PERFORMANCE",
-      description: "Turn a person or character into a speaking performer with expression, pose, and natural head movement.",
-      note: "Use this when you want the character to perform, not only move the mouth.",
-      chips: ["Expression & pose", "Script or audio", "Talking character"],
+      eyebrow: t("create.video.people.eyebrow"),
+      description: t("create.video.people.description"),
+      note: t("create.video.people.note"),
+      chips: [t("create.video.people.chipExpressionPose"), t("create.video.people.chipScriptAudio"), t("create.video.people.chipTalkingCharacter")],
     };
   const textSectionVisible = driverTextSupported || negativePromptSupported || actingDirectionSupported;
   const audioSectionVisible = audioSupported || Boolean(voiceProperty);
@@ -454,7 +455,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     sourceUploadAbortRef.current = controller;
     setSourcePerson({ url, kind: isVideo ? "video" : "image", name: file.name, file, uploadStatus: "uploading" });
     setGenerationError(null);
-    setNotice("Uploading source media to calculate the exact price…");
+     setNotice(t("create.video.common.uploadingMediaToPrice"));
     try {
       const remoteUrl = await uploadPeopleMedia(file, controller.signal, capabilities?.uploadConstraints);
       setSourcePerson((current) => current?.file === file ? { ...current, remoteUrl, uploadStatus: "ready" } : current);
@@ -463,7 +464,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       if (controller.signal.aborted) return;
       setSourcePerson((current) => current?.file === file ? { ...current, uploadStatus: "error" } : current);
       setNotice(null);
-      setGenerationError(formatGenerationError(error, "Unable to upload source media"));
+      setGenerationError(formatGenerationError(error, t("create.video.common.uploadSourceMediaFailed")));
     } finally {
       if (sourceUploadAbortRef.current === controller) sourceUploadAbortRef.current = null;
     }
@@ -483,7 +484,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     setAudioDuration(null);
     setAudioUploadStatus("uploading");
     setGenerationError(null);
-    setNotice("Uploading audio to calculate the exact price…");
+    setNotice(t("create.video.common.uploadingMediaToPrice"));
     try {
       const [remoteUrl, duration] = await Promise.all([
         uploadPeopleMedia(file, controller.signal, capabilities?.uploadConstraints),
@@ -497,7 +498,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       if (controller.signal.aborted) return;
       setAudioUploadStatus("error");
       setNotice(null);
-      setGenerationError(formatGenerationError(error, "Unable to upload audio"));
+      setGenerationError(formatGenerationError(error, t("create.video.common.uploadAudioFailed")));
     } finally {
       if (audioUploadAbortRef.current === controller) audioUploadAbortRef.current = null;
     }
@@ -544,23 +545,23 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   );
 
   const validationMessage = !selectedModel
-      ? `Select a ${workspaceLabel} model.`
+      ? t("create.video.common.selectFeatureModel", { feature: workspaceLabel })
       : !sourcePerson
-        ? `Upload a source ${isLipsync ? "image or video" : "person image or video"}.`
+        ? t(isLipsync ? "create.video.common.uploadSourceMedia" : "create.video.common.uploadSourcePersonMedia")
       : !sourceKindSupported
-        ? `This model does not support a source ${sourcePerson.kind}.`
+        ? t("create.video.common.parameterRequired", { parameter: sourcePerson.kind === "image" ? t("create.video.common.uploadImage") : t("create.video.common.uploadVideo") })
         : !sourcePerson.remoteUrl
-          ? sourcePerson.uploadStatus === "uploading" ? "Uploading source media…" : "Upload the source media again."
+          ? sourcePerson.uploadStatus === "uploading" ? t("create.video.common.uploadingMediaToPrice") : t("create.video.common.uploadMediaAgain")
         : audioFile && !audioUrl
-          ? audioUploadStatus === "uploading" ? "Uploading audio…" : "Upload the audio again."
+          ? audioUploadStatus === "uploading" ? t("create.video.common.uploading") : t("create.video.common.uploadAudioAgain")
         : requiredAudioInput && !audioFile && !audioUrl
-          ? "This model requires an audio file."
-          : requiredScriptInput && !script.trim()
-              ? `This model requires ${driverLabel.toLowerCase()}.`
+          ? t("create.video.common.requiresAudio")
+        : requiredScriptInput && !script.trim()
+              ? t("create.video.common.requiresDriver", { driver: driverLabel.toLowerCase() })
       : !hasSupportedTextDriver && !hasSupportedAudioDriver
-        ? "Add a supported prompt/script or upload an audio file."
+        ? t("create.video.common.addDriver")
         : modelParameterEntries.find(([name]) => requiredProperties.has(name) && !peopleHasValue(modelParams[name]))
-          ? `${peopleLabel(modelParameterEntries.find(([name]) => requiredProperties.has(name) && !peopleHasValue(modelParams[name]))?.[0] ?? "Parameter")} is required for this model.`
+          ? t("create.video.common.parameterRequired", { parameter: translateVideoSchemaLabel(modelParameterEntries.find(([name]) => requiredProperties.has(name) && !peopleHasValue(modelParams[name]))?.[0] ?? "Parameter", undefined, t) })
           : null;
   const videoCreditEstimate = useVideoCreditEstimate(selectedModel && pricingMediaReady ? {
     feature: workspaceFeature,
@@ -588,7 +589,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     setGenerationStatus("uploading");
     setNotice(null);
     try {
-      setNotice("Preparing generation…");
+      setNotice(t("create.video.common.preparingGeneration"));
       const sourceUrl = sourcePerson.remoteUrl;
       const uploadedAudioUrl = audioUrl ?? undefined;
 
@@ -616,7 +617,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       if (Object.keys(nextModelParams).length) request.modelParams = nextModelParams;
 
       setGenerationStatus("processing");
-      setNotice(`Submitting ${workspaceLabel} generation…`);
+      setNotice(t("create.video.common.submittingFeature", { feature: workspaceLabel }));
       const created = isLipsync
         ? await createLipsyncGeneration(request, controller.signal)
         : await createPeopleVideoGeneration(request, controller.signal);
@@ -638,7 +639,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
             : await getPeopleVideoGenerationStatus(pollUrl, controller.signal);
           progress = peopleProgress(status, progress);
           setGenerationProgress(progress);
-          setNotice(`Generating ${workspaceLabel}… ${progress}%`);
+          setNotice(t("create.video.common.generatingFeatureProgress", { feature: workspaceLabel, percent: progress }));
           if (status.status === "completed" || status.status === "failed" || status.status === "cancelled") break;
           await new Promise<void>((resolve, reject) => {
             const timeout = window.setTimeout(resolve, 2500);
@@ -657,12 +658,12 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       setLibraryRefreshKey((value) => value + 1);
       setGenerationProgress(100);
       setGenerationStatus("completed");
-      setNotice("Video ready");
+      setNotice(t("create.video.common.videoReady"));
     } catch (error: unknown) {
       if (controller.signal.aborted) return;
       setGenerationStatus("failed");
       setNotice(null);
-      setGenerationError(formatGenerationError(error, `Unable to generate ${workspaceLabel}`));
+      setGenerationError(formatGenerationError(error, t("create.video.common.unableToGenerateFeature", { feature: workspaceLabel })));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -686,9 +687,9 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         <section className={styles.panel}>
           <section className={styles.videoModePanel} aria-labelledby={`${workspaceFeature}-title`}>
             <div className={styles.videoModeTutorial}>
-              <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? "Lipsync" : "People Video"} />
+               <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")} />
             </div>
-            <div className={styles.videoModeHeading}><h2 id={`${workspaceFeature}-title`}>{isLipsync ? "LIPSYNC" : "PEOPLE VIDEO"}</h2><Info size={11} /></div>
+            <div className={styles.videoModeHeading}><h2 id={`${workspaceFeature}-title`}>{isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")}</h2><Info size={11} /></div>
             <div className={styles.featureIdentity}>
               <span className={styles.featureIdentityEyebrow}>{featureGuide.eyebrow}</span>
               <p className={styles.textVideoDescription}>{featureGuide.description}</p>
@@ -698,18 +699,18 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
           </section>
         </section>
         <section className={styles.panel}>
-          <PeopleSectionTitle number="1">{isLipsync ? "SOURCE" : "CHARACTER SOURCE"}</PeopleSectionTitle>
+          <PeopleSectionTitle number="1">{isLipsync ? t("create.video.common.source") : t("create.video.common.characterSource")}</PeopleSectionTitle>
           <div className={`${styles.peopleSourcePreview} ${!sourcePerson ? styles.peopleSourceUploadEmpty : ""}`}>
             {sourcePerson ? (
               <div className={styles.peopleSourceMedia}>
-                {sourcePerson.kind === "video" ? <video src={sourcePerson.url} muted playsInline controls={false} /> : <Image src={sourcePerson.url} alt="Source person" fill unoptimized className="object-cover" />}
-                <button type="button" onClick={removeSourcePerson} aria-label="Remove source person"><X size={14} /></button>
+                {sourcePerson.kind === "video" ? <video src={sourcePerson.url} muted playsInline controls={false} /> : <Image src={sourcePerson.url} alt={t("create.video.common.sourcePerson")} fill unoptimized className="object-cover" />}
+                <button type="button" onClick={removeSourcePerson} aria-label={t("create.video.common.removeSourcePerson")}><X size={14} /></button>
               </div>
             ) : (
               <button type="button" className={styles.upload} onClick={() => sourceInputRef.current?.click()}>
                 <CloudUpload size={23} />
-                <strong>{sourceImageSupported && sourceVideoSupported ? "Upload Image or Video" : sourceImageSupported ? "Upload Image" : "Upload Video"}</strong>
-                <small>{sourceImageSupported ? "PNG / JPG / WEBP" : ""}{sourceImageSupported && sourceVideoSupported ? " / " : ""}{sourceVideoSupported ? "MP4 / WEBM" : ""}</small>
+                 <strong>{sourceImageSupported && sourceVideoSupported ? t("create.video.common.uploadImageOrVideo") : sourceImageSupported ? t("create.video.common.uploadImage") : t("create.video.common.uploadVideo")}</strong>
+                 <small>{sourceImageSupported ? t("create.video.common.pngFormats") : ""}{sourceImageSupported && sourceVideoSupported ? " / " : ""}{sourceVideoSupported ? t("create.video.common.videoFormats") : ""}</small>
               </button>
             )}
           </div>
@@ -721,48 +722,48 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
             {driverTextSupported ? (
               <>
                 <div className={styles.videoPromptHeading}>
-                  <h2>{scriptSupported ? "SCRIPT / DIALOGUE" : !isLipsync && promptSupported ? "PERFORMANCE DIRECTION" : "PROMPT"} <small>({requiredScriptInput ? "Required" : "Optional"})</small></h2>
-                  <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+                  <h2>{scriptSupported ? t("create.video.common.script") : !isLipsync && promptSupported ? t("create.video.common.performanceDirection") : t("create.video.common.prompt")} <small>({requiredScriptInput ? t("create.video.common.required") : t("create.video.common.optional")})</small></h2>
+                  <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
                 </div>
                 <label className={styles.videoPromptInputLabel}>
-                  <textarea className={styles.videoPromptTextarea} value={script} onChange={(event) => setScript(event.target.value)} placeholder={scriptSupported ? "Hello everyone, welcome to our show…" : "Describe the desired performance…"} maxLength={2000} />
+                  <textarea className={styles.videoPromptTextarea} value={script} onChange={(event) => setScript(event.target.value)} placeholder={scriptSupported ? t("create.video.people.scriptPlaceholder") : t("create.video.people.performancePlaceholder")} maxLength={2000} />
                 </label>
                 <div className={styles.videoPromptMeta}>
-                  <span>Maximum 2,000 characters</span>
+                  <span>{t("create.video.common.maximumCharacters", { count: 2000 })}</span>
                   <span>{script.length.toLocaleString()} / 2,000</span>
                 </div>
               </>
             ) : (
-              <PeopleSectionTitle number="2">{scriptSupported ? "SCRIPT / DIALOGUE" : !isLipsync && promptSupported ? "PERFORMANCE DIRECTION" : "PROMPT"}</PeopleSectionTitle>
+              <PeopleSectionTitle number="2">{scriptSupported ? t("create.video.common.script") : !isLipsync && promptSupported ? t("create.video.common.performanceDirection") : t("create.video.common.prompt")}</PeopleSectionTitle>
             )}
             {actingDirectionSupported ? (
               <label className={styles.peopleFieldLabel}>
-                Acting Direction <small>(Optional)</small>
-                <textarea value={actingDirection} onChange={(event) => setActingDirection(event.target.value)} placeholder="Smile, look into the camera, and nod naturally." />
+                {t("create.video.people.actingDirection")} <small>({t("create.video.common.optional")})</small>
+                <textarea value={actingDirection} onChange={(event) => setActingDirection(event.target.value)} placeholder={t("create.video.people.actingPlaceholder")} />
               </label>
             ) : null}
             {promptSupported ? <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /> : null}
             {negativePromptSupported ? (
               <label className={styles.peopleFieldLabel}>
-                Negative Prompt <small>(Optional)</small>
-                <input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="blurry, distorted, unnatural mouth" />
+                {t("create.video.common.negativePrompt")} <small>({t("create.video.common.optional")})</small>
+                <input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder={t("create.video.people.negativePlaceholder")} />
               </label>
             ) : null}
           </section>
         ) : null}
         {audioSectionVisible ? (
           <section className={styles.panel}>
-          <PeopleSectionTitle number={audioStep}>{isLipsync ? "SYNC AUDIO" : "VOICE / AUDIO"}</PeopleSectionTitle>
-            {voiceProperty ? <PeopleSchemaField name={voiceProperty[0]} property={voiceProperty[1]} value={voiceValue} required={requiredProperties.has(voiceProperty[0])} labelOverride="Voice" onChange={setVoiceValue} /> : null}
+          <PeopleSectionTitle number={audioStep}>{isLipsync ? t("create.video.common.syncAudio") : t("create.video.common.voiceAudio")}</PeopleSectionTitle>
+            {voiceProperty ? <PeopleSchemaField name={voiceProperty[0]} property={voiceProperty[1]} value={voiceValue} required={requiredProperties.has(voiceProperty[0])} labelOverride={t("create.video.common.voice")} onChange={setVoiceValue} /> : null}
             {audioSupported ? (
               <>
                 <button type="button" className={styles.peopleAudioUpload} onClick={() => audioInputRef.current?.click()}>
                   <Mic2 size={20} />
-                  <strong>{audioFile ? "Replace audio file" : "Upload audio file"}</strong>
-                  <small>{requiredAudioInput ? "Required for selected model" : "Optional"} · MP3 / WAV / M4A</small>
+                   <strong>{audioFile ? t("create.video.common.replaceAudioFile") : t("create.video.common.uploadAudioFile")}</strong>
+                   <small>{requiredAudioInput ? t("create.video.common.requiredForModel") : t("create.video.common.optional")} · {t("create.video.common.audioFormats")}</small>
                 </button>
                 <input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAudioFile(file); event.currentTarget.value = ""; }} />
-                {audioFile ? <div className={styles.peopleAudioFile}><span>{audioFile.name}</span><button type="button" onClick={removeAudioFile} aria-label="Remove audio file"><X size={13} /></button></div> : null}
+                 {audioFile ? <div className={styles.peopleAudioFile}><span>{audioFile.name}</span><button type="button" onClick={removeAudioFile} aria-label={t("create.video.common.removeAudioFile")}><X size={13} /></button></div> : null}
               </>
             ) : null}
           </section>
@@ -775,13 +776,13 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
             {generationStatus === "uploading" || generationStatus === "processing" ? (
               <div className={styles.videoGeneratingPreview} aria-busy="true">
                 <WandSparkles size={26} />
-                <strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong>
-                <span>{notice ?? "Your character is being animated…"}</span>
+                <strong>{generationStatus === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong>
+                <span>{notice ?? t("create.video.people.animatingCharacter")}</span>
                 <div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div>
-                <small>{generationProgress ? `${generationProgress}% complete` : "Working…"}</small>
+                <small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small>
               </div>
             ) : displayedVideoUrl ? (
-              <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={`Generated ${workspaceLabel}`} />
+              <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={`${t("create.video.common.generatedVideo")} ${workspaceLabel}`} />
             ) : selectedModelOption?.previewUrl ? (
               <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} />
             ) : (
@@ -800,26 +801,26 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         />
       </div>
       <aside className={styles.settings}>
-        <PeopleSectionTitle number={settingsStep}>SETTINGS</PeopleSectionTitle>
-        <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label>
+        <PeopleSectionTitle number={settingsStep}>{t("create.video.common.settings")}</PeopleSectionTitle>
+        <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <Info size={11} /></label>
         <VideoModelDropdown
           models={models}
           value={selectedModel}
           loading={modelsLoading}
-          ariaLabel={`${workspaceLabel} model options`}
-          placeholder={`No ${workspaceLabel} model`}
+          ariaLabel={t("create.video.common.modelOptions", { feature: workspaceLabel })}
+          placeholder={t("create.video.common.noFeatureModel", { feature: workspaceLabel })}
           onChange={setSelectedModel}
         />
-        <p className={styles.selectedModelRole}>{peopleModelRole(selectedModelOption, isLipsync)}</p>
+        <p className={styles.selectedModelRole}>{t(peopleModelRoleKey(selectedModelOption, isLipsync))}</p>
         {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
-        {durationProperty ? <PeopleSchemaField name={durationProperty[0]} property={durationProperty[1]} value={durationValue} required={requiredProperties.has(durationProperty[0])} labelOverride="Duration" onChange={setDurationValue} /> : null}
-        {resolutionProperty ? <PeopleSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride="Resolution" onChange={setResolutionValue} /> : null}
-        {aspectRatioProperty ? <PeopleSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride="Aspect Ratio" onChange={setAspectRatioValue} /> : null}
-        {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>{modelParameterEntries.map(([name, property]) => <PeopleSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => { const next = { ...current }; if (value === undefined || value === "") delete next[name]; else next[name] = value; return next; })} />)}</div> : null}
-        <VideoCreditEstimate featureLabel={workspaceLabel} duration={displayDuration} estimate={videoCreditEstimate} emptyLoading={mediaUploadInProgress} emptyMessage={mediaUploadInProgress ? "Uploading media to calculate price…" : "Upload media to see price"}>
-          {!isComplete ? <p className={styles.settingsError} role="status">{modelsLoading ? `Loading ${workspaceLabel} models…` : validationMessage}</p> : null}
+        {durationProperty ? <PeopleSchemaField name={durationProperty[0]} property={durationProperty[1]} value={durationValue} required={requiredProperties.has(durationProperty[0])} labelOverride={t("create.video.common.duration")} onChange={setDurationValue} /> : null}
+        {resolutionProperty ? <PeopleSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride={t("create.video.common.resolution")} onChange={setResolutionValue} /> : null}
+        {aspectRatioProperty ? <PeopleSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride={t("create.video.common.aspectRatio")} onChange={setAspectRatioValue} /> : null}
+        {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>{t("create.video.common.modelParameters")}</div>{modelParameterEntries.map(([name, property]) => <PeopleSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => { const next = { ...current }; if (value === undefined || value === "") delete next[name]; else next[name] = value; return next; })} />)}</div> : null}
+        <VideoCreditEstimate featureLabel={workspaceLabel} duration={displayDuration} estimate={videoCreditEstimate} emptyLoading={mediaUploadInProgress} emptyMessage={mediaUploadInProgress ? t("create.video.common.uploadingMediaToPrice") : t("create.video.common.uploadMediaToSeePrice")}>
+          {!isComplete ? <p className={styles.settingsError} role="status">{modelsLoading ? t("create.video.common.loadingModels", { feature: workspaceLabel }) : validationMessage}</p> : null}
           {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
-          <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || pricingBusy || generationStatus === "uploading" || generationStatus === "processing"}>{pricingBusy ? <LoaderCircle size={18} className={styles.creditSpinner} /> : <WandSparkles size={18} />} {generationStatus === "uploading" || generationStatus === "processing" ? "GENERATING…" : mediaUploadInProgress ? "UPLOADING…" : videoCreditEstimate.loading ? "CALCULATING PRICE…" : "GENERATE VIDEO"}</button>
+          <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || pricingBusy || generationStatus === "uploading" || generationStatus === "processing"}>{pricingBusy ? <LoaderCircle size={18} className={styles.creditSpinner} /> : <WandSparkles size={18} />} {generationStatus === "uploading" || generationStatus === "processing" ? t("create.video.common.generating") : mediaUploadInProgress ? t("create.video.common.uploading") : videoCreditEstimate.loading ? t("create.video.common.calculatingPrice") : t("create.video.common.generateVideo")}</button>
         </VideoCreditEstimate>
         {notice ? <p className={styles.peopleNotice}>{notice}</p> : null}
       </aside>

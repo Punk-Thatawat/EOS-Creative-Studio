@@ -7,7 +7,23 @@ import { listGenerationHistory, resumeGeneration, type GenerationHistoryItem, ty
 import { emitGenerationCompleted } from "@/lib/generation-progress-events";
 import { getDismissedProgressStorageKey, getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import { useHydrated } from "@/components/app-shell/use-hydrated";
+import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import styles from "./generation-progress-floating.module.css";
+
+const generationLabelKeys: Record<string, TranslationKey> = {
+  "text-to-image": "create.image.tabs.textToImage",
+  "image-to-image": "create.image.tabs.imageToImage",
+  "style-transfer": "create.image.tabs.styleTransfer",
+  "background-removal": "create.image.tabs.aiBackground",
+  upscale: "create.image.tabs.upscale",
+  "extend-image": "create.image.tabs.extendImage",
+  "image-to-video": "create.video.tabs.imageToVideo",
+  "text-to-video": "create.video.tabs.textToVideo",
+  "people-video": "create.video.tabs.peopleVideo",
+  "motion-transfer": "create.video.tabs.motionTransfer",
+  lipsync: "create.video.tabs.lipsync",
+  "extend-video": "create.video.tabs.extendVideo",
+};
 
 const generationFeatureOptions = [
   { feature: "text-to-image", key: "eos.generation.pending", label: "Text to Image", tab: "text-to-image", kind: "image" },
@@ -293,6 +309,7 @@ async function loadActiveGenerations(): Promise<ActivePendingGeneration[]> {
 }
 
 export function GenerationProgressFloating() {
+  const { t } = useLocale();
   const pathnameFromRouter = usePathname();
   const hydrated = useHydrated();
   const pathname = hydrated ? pathnameFromRouter : "";
@@ -485,6 +502,7 @@ export function GenerationProgressFloating() {
 
   const renderGenerationItem = (item: ActivePendingGeneration) => {
     const { label, tab, kind, pending } = item;
+    const localizedLabel = generationLabelKeys[item.feature] ? t(generationLabelKeys[item.feature]) : label;
     const generationId = pending.generationId;
     const total = Math.max(1, pending.totalCount);
     const completed = Math.min(total, Math.max(0, pending.completedCount));
@@ -500,50 +518,51 @@ export function GenerationProgressFloating() {
     };
 
     return <div className={styles.itemShell} key={generationId}>
-      <button type="button" className={styles.item} onClick={handleCardClick} aria-label={`Open ${label} generation`} title={`Open ${label} in ${kind === "video" ? "Video Studio" : "Image Studio"}`}>
+      <button type="button" className={styles.item} onClick={handleCardClick} aria-label={t("shell.generation.openItem", { label: localizedLabel })} title={t("shell.generation.openItemTitle", { label: localizedLabel, studio: kind === "video" ? t("shell.nav.video") : t("shell.nav.image") })}>
         <div className={styles.itemHeading}>
-          <span className={styles.itemLabel}><i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />{label}</span>
-          <b className={`${styles.status} ${statusClass}`}>{isCompleted ? "DONE" : isQueued ? "QUEUED" : "PROCESSING"}</b>
+          <span className={styles.itemLabel}><i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />{localizedLabel}</span>
+          <b className={`${styles.status} ${statusClass}`}>{isCompleted ? t("shell.generation.completed") : isQueued ? t("shell.generation.waitingStatus") : t("shell.generation.processingStatus")}</b>
         </div>
-        <div className={styles.track} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage} aria-label={`${label}: ${percentage}% complete`}>
+        <div className={styles.track} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage} aria-label={`${localizedLabel}: ${percentage}%`}>
           <span className={`${styles.bar} ${percentage === 0 ? styles.barIndeterminate : ""}`} style={{ width: `${visiblePercentage}%` }} />
         </div>
         <div className={styles.meta}>
-          <span>{completed}/{total} {kind === "video" ? (total === 1 ? "video" : "videos") : (total === 1 ? "image" : "images")} ready</span>
-          <span className={styles.eta}>{isCompleted ? <><CheckCircle2 size={12} /> <strong>Generation completed</strong></> : <><Clock3 size={12} /> <strong>{isQueued ? "Waiting for a slot" : "Processing"}</strong></>}</span>
+          <span>{t("shell.generation.ready", { completed, total, unit: kind === "video" ? (total === 1 ? t("shell.generation.videoUnit") : t("shell.generation.videosUnit")) : (total === 1 ? t("shell.generation.imageUnit") : t("shell.generation.imagesUnit")) })}</span>
+          <span className={styles.eta}>{isCompleted ? <><CheckCircle2 size={12} /> <strong>{t("shell.generation.completedStatus")}</strong></> : <><Clock3 size={12} /> <strong>{isQueued ? t("shell.generation.waitingStatus") : t("shell.generation.processingStatus")}</strong></>}</span>
         </div>
       </button>
-      {isCompleted && <button type="button" className={styles.dismiss} onClick={() => handleDismiss(item)} aria-label={`Dismiss ${label} generation`} title="Dismiss completed generation"><X size={13} /></button>}
+      {isCompleted && <button type="button" className={styles.dismiss} onClick={() => handleDismiss(item)} aria-label={t("shell.generation.dismissItem", { label: localizedLabel })} title={t("shell.generation.dismissItemTitle")}><X size={13} /></button>}
     </div>;
   };
 
   return <div className={styles.wrapper} data-expanded={isCenterOpen} onKeyDown={(event) => { if (event.key === "Escape" && isCenterOpen) { event.stopPropagation(); closeCenter(); } }}>
-    {isCenterOpen && <section id="generation-center-panel" className={styles.center} aria-label="Generation center">
+    {isCenterOpen && <section id="generation-center-panel" className={styles.center} aria-label={t("shell.generation.center")}>
       <div className={styles.centerHeader}>
         <div>
-          <span className={styles.centerTitle}><i className={`${styles.dot} ${inProgress.length > 0 ? "" : styles.dotCompleted}`} />GENERATION CENTER</span>
-          <small>{active.length} {active.length === 1 ? "generation" : "generations"}</small>
+          <span className={styles.centerTitle}><i className={`${styles.dot} ${inProgress.length > 0 ? "" : styles.dotCompleted}`} />{t("shell.generation.center")}</span>
+          <small>{active.length} {active.length === 1 ? t("shell.generation.generation") : t("shell.generation.generations")}</small>
         </div>
         <div className={styles.centerActions}>
-          <button ref={collapseRef} type="button" className={styles.panelToggle} onClick={closeCenter} aria-label="Collapse generation center" title="Collapse generation center"><ChevronDown size={18} /></button>
+          <button type="button" className={styles.panelToggle} onClick={closeCenter} aria-label={t("shell.generation.close")} title={t("shell.generation.close")}><X size={17} /></button>
+          <button ref={collapseRef} type="button" className={styles.panelToggle} onClick={closeCenter} aria-label={t("shell.generation.collapse")} title={t("shell.generation.collapse")}><ChevronDown size={18} /></button>
         </div>
       </div>
       {inProgress.length > 0 && <section className={styles.group} aria-labelledby="generation-center-progress">
-        <h3 id="generation-center-progress"><span className={styles.groupLabel}>IN PROGRESS</span><span className={styles.groupCount}>{inProgress.length}</span></h3>
+        <h3 id="generation-center-progress"><span className={styles.groupLabel}>{t("shell.generation.inProgress")}</span><span className={styles.groupCount}>{inProgress.length}</span></h3>
         {inProgress.map(renderGenerationItem)}
       </section>}
       {completedItems.length > 0 && <section className={styles.group} aria-labelledby="generation-center-completed">
         <h3 id="generation-center-completed">
-          <span className={styles.groupLabel}>COMPLETED</span>
+          <span className={styles.groupLabel}>{t("shell.generation.completed")}</span>
           <span className={styles.groupHeaderActions}>
-            <button type="button" className={styles.clearCompleted} onClick={handleClearCompleted}>Clear completed</button>
+            <button type="button" className={styles.clearCompleted} onClick={handleClearCompleted}>{t("shell.generation.clearCompleted")}</button>
             <span className={styles.groupCount}>{completedItems.length}</span>
           </span>
         </h3>
         {completedItems.map(renderGenerationItem)}
       </section>}
     </section>}
-    <button ref={launcherRef} type="button" className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`} onClick={() => setIsCenterOpen((open) => !open)} aria-expanded={isCenterOpen} aria-controls={isCenterOpen ? "generation-center-panel" : undefined} aria-label="Open generation center" title="Open generation center">
+    <button ref={launcherRef} type="button" className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`} onClick={() => setIsCenterOpen((open) => !open)} aria-expanded={isCenterOpen} aria-controls={isCenterOpen ? "generation-center-panel" : undefined} aria-label={t("shell.generation.open")} title={t("shell.generation.open")}>
       <i className={`${styles.dot} ${inProgress.length === 0 ? styles.dotCompleted : ""}`} />
       <span className={styles.launcherCopy}><strong aria-live="polite">{inProgress.length > 0 ? `กำลังสร้าง ${inProgress.length} งาน` : `สร้างเสร็จแล้ว ${completedItems.length} งาน`}</strong><small>แตะเพื่อดูรายละเอียด</small></span>
       {isCenterOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}

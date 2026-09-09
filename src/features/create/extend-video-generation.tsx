@@ -26,6 +26,8 @@ import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
 
 type SchemaProperty = {
   type?: string;
@@ -65,10 +67,6 @@ function schemaDefault(property: SchemaProperty | undefined): unknown {
   return undefined;
 }
 
-function labelFor(name: string): string {
-  return name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function parseValue(raw: string, property: SchemaProperty): unknown {
   if (property.enum) return property.enum.find((value) => String(value) === raw) ?? raw;
   if (property.type === "integer") return raw === "" ? undefined : Number.parseInt(raw, 10);
@@ -93,11 +91,13 @@ function progressOf(payload: ExtendVideoGenerationStatus, fallback: number): num
 }
 
 function SchemaField({ name, property, value, required, onChange }: { name: string; property: SchemaProperty; value: unknown; required: boolean; onChange: (value: unknown) => void }) {
-  const label = property.title ?? labelFor(name);
-  if (property.enum?.length) return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><Dropdown value={value === undefined ? "" : String(value)} options={[...(!required ? [{ value: "", label: "Auto" }] : []), ...property.enum.map((option) => ({ value: String(option), label: String(option) }))]} onChange={(nextValue) => onChange(parseValue(nextValue, property))} ariaLabel={label} placeholder="Auto" className={styles.dynamicDropdown} triggerClassName={styles.dynamicSelect} menuClassName={styles.dynamicDropdownMenu} optionClassName={styles.dynamicDropdownOption} />{property.description ? <small>{property.description}</small> : null}</label>;
+  const { t } = useLocale();
+  const label = translateVideoSchemaLabel(name, property.title, t);
+  const description = translateVideoSchemaDescription(property.description, t);
+  if (property.enum?.length) return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><Dropdown value={value === undefined ? "" : String(value)} options={[...(!required ? [{ value: "", label: t("create.video.common.auto") }] : []), ...property.enum.map((option) => ({ value: String(option), label: translateVideoSchemaOption(option, t) }))]} onChange={(nextValue) => onChange(parseValue(nextValue, property))} ariaLabel={label} placeholder={t("create.video.common.auto")} className={styles.dynamicDropdown} triggerClassName={styles.dynamicSelect} menuClassName={styles.dynamicDropdownMenu} optionClassName={styles.dynamicDropdownOption} />{description ? <small>{description}</small> : null}</label>;
   if (property.type === "boolean") return <div className={styles.toggleRow}>{label}{required ? <b>*</b> : null}<button type="button" className={styles.toggle} aria-pressed={Boolean(value)} onClick={() => onChange(!Boolean(value))}><i /></button></div>;
   const numeric = property.type === "integer" || property.type === "number";
-  return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (property.type === "integer" ? 1 : "any")} onChange={(event) => onChange(parseValue(event.target.value, property))} aria-required={required} />{property.description ? <small>{property.description}</small> : null}</label>;
+  return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (property.type === "integer" ? 1 : "any")} onChange={(event) => onChange(parseValue(event.target.value, property))} aria-required={required} />{description ? <small>{description}</small> : null}</label>;
 }
 
 function responseStatus(payload: ExtendVideoGenerationResponse): ExtendVideoGenerationStatus {
@@ -105,6 +105,7 @@ function responseStatus(payload: ExtendVideoGenerationResponse): ExtendVideoGene
 }
 
 export function ExtendVideoWorkspace() {
+  const { locale, t } = useLocale();
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
@@ -148,9 +149,9 @@ export function ExtendVideoWorkspace() {
       const enabled = items.filter((item) => item.enabled);
       setModels(enabled);
       setSelectedModel((current) => enabled.some((item) => item.model === current) ? current : enabled.find((item) => item.isDefault)?.model ?? enabled[0]?.model ?? "");
-    }).catch((reason: unknown) => { if (active) setModelsError(reason instanceof Error ? reason.message : "Unable to load Extend Video models"); }).finally(() => { if (active) setModelsLoading(false); });
+    }).catch((reason: unknown) => { if (active) setModelsError(reason instanceof Error ? reason.message : t("create.video.common.loadingFeatureModels", { feature: t("create.video.tabs.extendVideo") })); }).finally(() => { if (active) setModelsLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [t]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => () => { if (sourceVideo?.url.startsWith("blob:")) URL.revokeObjectURL(sourceVideo.url); }, [sourceVideo]);
@@ -190,7 +191,7 @@ export function ExtendVideoWorkspace() {
 
   const missingParameter = modelParameterEntries.find(([name]) => required.has(name) && !hasValue(modelParams[name]));
   const isComplete = Boolean(!modelsLoading && selectedModel && sourceVideo && prompt.trim() && (!videoParameter || sourceVideo) && (!promptParameter || prompt.trim()) && (!resolutionProperty || !required.has(resolutionProperty[0]) || hasValue(resolution)) && (!durationProperty || !required.has(durationProperty[0]) || hasValue(duration)) && !missingParameter);
-  const validationMessage = !selectedModel ? "Select an Extend Video model." : !sourceVideo ? "Upload a source video." : !prompt.trim() ? "Prompt is required." : missingParameter ? `${labelFor(missingParameter[0])} is required for this model.` : null;
+  const validationMessage = !selectedModel ? t("create.video.common.selectFeatureModel", { feature: t("create.video.tabs.extendVideo") }) : !sourceVideo ? t("create.video.common.uploadSourceVideo") : !prompt.trim() ? t("create.video.common.promptRequired") : missingParameter ? t("create.video.common.parameterRequired", { parameter: translateVideoSchemaLabel(missingParameter[0], missingParameter[1].title, t) }) : null;
 
   const handleGenerate = async () => {
     if (!isComplete || !sourceVideo) return;
@@ -198,10 +199,10 @@ export function ExtendVideoWorkspace() {
     abortRef.current = controller;
     setError(null); setNotice(null); setFinalVideoUrl(null); setPreviewVideoUrl(null); setGenerationId(null); setProgress(0); setState("uploading");
     try {
-      setNotice("Uploading source video…");
+       setNotice(t("create.video.common.uploadingSourceVideo"));
       const sourceVideoUrl = sourceVideo.file ? await uploadPeopleMedia(sourceVideo.file, controller.signal, selected?.capabilities.uploadConstraints) : sourceVideo.url;
       let audioUrl: string | undefined;
-      if (audio && audioParameter) { setNotice("Uploading audio…"); audioUrl = audio.file ? await uploadPeopleMedia(audio.file, controller.signal, selected?.capabilities.uploadConstraints) : audio.url; }
+       if (audio && audioParameter) { setNotice(t("create.video.common.uploadingAudioReference")); audioUrl = audio.file ? await uploadPeopleMedia(audio.file, controller.signal, selected?.capabilities.uploadConstraints) : audio.url; }
       const request: Parameters<typeof createExtendVideoGeneration>[0] = { model: selectedModel, sourceVideo: sourceVideoUrl, prompt: prompt.trim() };
       if (promptOptimizerEnabled) request.promptOptimizerEnabled = true;
       if (negativePrompt.trim()) request.negativePrompt = negativePrompt.trim();
@@ -209,7 +210,7 @@ export function ExtendVideoWorkspace() {
       if (duration !== undefined) request.duration = duration;
       if (hasValue(resolution)) request.resolution = String(resolution);
       if (Object.keys(modelParams).length) request.modelParams = modelParams;
-      setState("processing"); setNotice("Submitting Extend Video generation…");
+       setState("processing"); setNotice(t("create.video.extend.submitting"));
       const created = await createExtendVideoGeneration(request, controller.signal);
       const id = created.generationId ?? created.id;
       setGenerationId(id ?? null);
@@ -223,7 +224,7 @@ export function ExtendVideoWorkspace() {
         while (true) {
           status = await getExtendVideoGenerationStatus(pollUrl, controller.signal);
           currentProgress = progressOf(status, currentProgress);
-          setProgress(currentProgress); setNotice(`Extending video… ${currentProgress}%`);
+           setProgress(currentProgress); setNotice(t("create.video.common.generatingFeatureProgress", { feature: t("create.video.tabs.extendVideo"), percent: currentProgress }));
           if (["completed", "failed", "cancelled"].includes(status.status)) break;
           await new Promise<void>((resolve, reject) => { const timeout = window.setTimeout(resolve, 2200); controller.signal.addEventListener("abort", () => { window.clearTimeout(timeout); reject(new DOMException("Generation cancelled", "AbortError")); }, { once: true }); });
         }
@@ -231,10 +232,10 @@ export function ExtendVideoWorkspace() {
       if (status.status !== "completed") throw generationErrorFromStatus(status, `Extend Video generation ${status.status}`);
       const url = outputUrl(status);
       if (!url) throw new Error("Extend Video completed without an output URL");
-      setFinalVideoUrl(url); setPreviewVideoUrl(url); setProgress(100); setState("completed"); setLibraryRefreshKey((value) => value + 1); setNotice("Video ready");
+       setFinalVideoUrl(url); setPreviewVideoUrl(url); setProgress(100); setState("completed"); setLibraryRefreshKey((value) => value + 1); setNotice(t("create.video.common.videoReady"));
     } catch (reason: unknown) {
       if (controller.signal.aborted) return;
-      setState("failed"); setNotice(null); setError(formatGenerationError(reason, "Unable to extend video"));
+       setState("failed"); setNotice(null); setError(formatGenerationError(reason, t("create.video.extend.generateError")));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -244,7 +245,7 @@ export function ExtendVideoWorkspace() {
     const id = generationId;
     if (id) await cancelExtendVideoGeneration(id).catch(() => undefined);
     abortRef.current?.abort();
-    setState("cancelled"); setNotice("Generation cancelled");
+     setState("cancelled"); setNotice(t("create.video.extend.cancelled"));
   };
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
@@ -267,26 +268,26 @@ export function ExtendVideoWorkspace() {
   }});
   return <div className={styles.columns}>
     <div className={styles.leftColumn}>
-      <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="extend-video-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="extend-video" featureName="Extend Video" /></div><div className={styles.videoModeHeading}><h2 id="extend-video-title">EXTEND VIDEO</h2><Info size={11} /></div><p className={styles.textVideoDescription}>Continue an existing video with a new prompt-guided segment.</p></section></section>
-      <section className={styles.panel}><div className={styles.sectionTitle}><h2>1. SOURCE VIDEO</h2></div><div className={`${styles.peopleSourcePreview} ${!sourceVideo ? styles.peopleSourceUploadEmpty : ""}`}>{sourceVideo ? <div className={styles.peopleSourceMedia}><video src={sourceVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setSourceVideo(null)} aria-label="Remove source video"><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => sourceInputRef.current?.click()}><CloudUpload size={23} /><strong>Upload Video</strong><small>MP4 / WEBM</small></button>}</div><input ref={sourceInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "video"); event.currentTarget.value = ""; }} /></section>
+      <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="extend-video-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="extend-video" featureName={t("create.video.tabs.extendVideo")} /></div><div className={styles.videoModeHeading}><h2 id="extend-video-title">{t("create.video.extend.title")}</h2><Info size={11} /></div><p className={styles.textVideoDescription}>{t("create.video.extend.description")}</p></section></section>
+      <section className={styles.panel}><div className={styles.sectionTitle}><h2>1. {t("create.video.common.sourceVideo")}</h2></div><div className={`${styles.peopleSourcePreview} ${!sourceVideo ? styles.peopleSourceUploadEmpty : ""}`}>{sourceVideo ? <div className={styles.peopleSourceMedia}><video src={sourceVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setSourceVideo(null)} aria-label={t("create.video.common.removeSourceVideo")}><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => sourceInputRef.current?.click()}><CloudUpload size={23} /><strong>{t("create.video.common.uploadVideo")}</strong><small>{t("create.video.common.videoFormats")}</small></button>}</div><input ref={sourceInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "video"); event.currentTarget.value = ""; }} /></section>
       <section className={`${styles.panel} ${styles.videoPromptPanel}`}>
         <div className={styles.videoPromptHeading}>
-          <h2>PROMPT <small>(Required)</small></h2>
-          <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+          <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
+          <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
         </div>
         <label className={styles.videoPromptInputLabel}>
-          <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Continue the camera movement naturally, keep the same subject, lighting, and style…" maxLength={4000} required aria-required="true" />
+          <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.extend.promptPlaceholder")} maxLength={4000} required aria-required="true" />
         </label>
         <div className={styles.videoPromptMeta}>
-          <span>Maximum 4,000 characters</span>
+          <span>{t("create.video.common.maximumCharacters", { count: 4000 })}</span>
           <span>{prompt.length.toLocaleString()} / 4,000</span>
         </div>
         <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
-        <label className={styles.peopleFieldLabel}>Negative Prompt <small>(Optional)</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="blurry, jump cut, flicker, distorted subject" /></label>
+        <label className={styles.peopleFieldLabel}>{t("create.video.common.negativePrompt")} <small>({t("create.video.common.optional")})</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder={t("create.video.extend.negativePlaceholder")} /></label>
       </section>
-      {audioParameter ? <section className={styles.panel}><div className={styles.sectionTitle}><h2>3. OPTIONAL AUDIO</h2></div>{audio ? <div className={styles.peopleNotice}>{audio.name}<button type="button" onClick={() => setAudio(null)} aria-label="Remove audio"><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={20} /><strong>Upload audio reference</strong><small>MP3 / WAV / M4A</small></button>}<input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "audio"); event.currentTarget.value = ""; }} /></section> : null}
+      {audioParameter ? <section className={styles.panel}><div className={styles.sectionTitle}><h2>3. {t("create.video.common.optionalAudio")}</h2></div>{audio ? <div className={styles.peopleNotice}>{audio.name}<button type="button" onClick={() => setAudio(null)} aria-label={t("create.video.common.removeAudio")}><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={20} /><strong>{t("create.video.common.uploadAudioReference")}</strong><small>{t("create.video.common.audioFormats")}</small></button>}<input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "audio"); event.currentTarget.value = ""; }} /></section> : null}
     </div>
-    <div className={styles.centerColumn}><section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}><div className={styles.videoPreview}><VideoPreviewLiveBadge />{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><Plus size={26} /><strong>{state === "uploading" ? "PREPARING VIDEO" : "EXTENDING VIDEO"}</strong><span>{notice ?? "Working…"}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${progress || 12}%` }} /></div><small>{progress ? `${progress}% complete` : "Waiting for provider…"}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel="Extended video preview" /> : selected?.previewUrl ? <ModelPreviewMedia url={selected.previewUrl} type={selected.previewType} alt={`${selected.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div></section><VideoResultLibrary feature="extend-video" currentVideoUrl={finalVideoUrl} currentSourceGenerationId={generationId} selectedVideoUrl={displayedVideoUrl} refreshKey={libraryRefreshKey} onVideoSelect={(url) => setPreviewVideoUrl(url)} /></div>
-    <aside className={styles.settings}><div className={styles.sectionTitle}><h2>4. SETTINGS</h2></div><label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label><VideoModelDropdown models={models} value={selectedModel} loading={modelsLoading} ariaLabel="Extend Video model options" placeholder="No Extend Video model" onChange={setSelectedModel} />{modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}{resolutionProperty ? <SchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolution} required={required.has(resolutionProperty[0])} onChange={setResolution} /> : null}{durationProperty ? <div className={styles.settingBlock}><div className={styles.settingLabel}><span>{durationProperty[1].title ?? "Duration"}</span><strong>{duration ?? "Auto"} sec</strong></div><input type="range" min={durationProperty[1].minimum ?? 2} max={durationProperty[1].maximum ?? 15} step={durationProperty[1].step ?? 1} value={duration ?? durationProperty[1].minimum ?? 2} onChange={(event) => setDuration(Number(event.target.value))} aria-label="Duration" /><div className={styles.rangeLabels}><span>{durationProperty[1].minimum ?? 2}s</span><span>{durationProperty[1].maximum ?? 15}s</span></div></div> : null}{modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>{modelParameterEntries.map(([name, property]) => <SchemaField key={name} name={name} property={property} value={modelParams[name]} required={required.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}<VideoCreditEstimate featureLabel="Extend Video" duration={duration} estimate={videoCreditEstimate}>{!isGenerating ? <p className={styles.settingsError} role="status">{modelsLoading ? "Loading Extend Video models…" : validationMessage}</p> : null}{error ? <p className={styles.settingsError} role="alert">{error}</p> : null}{isGenerating ? <button type="button" className={styles.textVideoCancel} onClick={() => void handleCancel()}>Cancel generation</button> : null}<button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><Plus size={18} /> {isGenerating ? "GENERATING…" : "EXTEND VIDEO"}</button></VideoCreditEstimate>{notice && !isGenerating ? <p className={styles.peopleNotice}>{notice}</p> : null}</aside>
+      <div className={styles.centerColumn}><section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}><div className={styles.videoPreview}><VideoPreviewLiveBadge />{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><Plus size={26} /><strong>{state === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong><span>{notice ?? t("create.video.extend.generatingNotice")}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${progress || 12}%` }} /></div><small>{progress ? t("create.video.common.percentComplete", { percent: progress }) : t("create.video.common.working")}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={t("create.video.common.generatedVideo")} /> : selected?.previewUrl ? <ModelPreviewMedia url={selected.previewUrl} type={selected.previewType} alt={`${selected.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div></section><VideoResultLibrary feature="extend-video" currentVideoUrl={finalVideoUrl} currentSourceGenerationId={generationId} selectedVideoUrl={displayedVideoUrl} refreshKey={libraryRefreshKey} onVideoSelect={(url) => setPreviewVideoUrl(url)} /></div>
+     <aside className={styles.settings}><div className={styles.sectionTitle}><h2>4. {t("create.video.common.settings")}</h2></div><label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <Info size={11} /></label><VideoModelDropdown models={models} value={selectedModel} loading={modelsLoading} ariaLabel={t("create.video.common.modelOptions", { feature: t("create.video.tabs.extendVideo") })} placeholder={t("create.video.common.noFeatureModel", { feature: t("create.video.tabs.extendVideo") })} onChange={setSelectedModel} />{modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}{resolutionProperty ? <SchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolution} required={required.has(resolutionProperty[0])} onChange={setResolution} /> : null}{durationProperty ? <div className={styles.settingBlock}><div className={styles.settingLabel}><span>{t("create.video.common.duration")}</span><strong>{duration ?? t("create.video.common.auto")} {t("create.video.common.seconds")}</strong></div><input type="range" min={durationProperty[1].minimum ?? 2} max={durationProperty[1].maximum ?? 15} step={durationProperty[1].step ?? 1} value={duration ?? durationProperty[1].minimum ?? 2} onChange={(event) => setDuration(Number(event.target.value))} aria-label={t("create.video.common.duration")} /><div className={styles.rangeLabels}><span>{durationProperty[1].minimum ?? 2}{t("create.video.common.secondsShort")}</span><span>{durationProperty[1].maximum ?? 15}{t("create.video.common.secondsShort")}</span></div></div> : null}{modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>{t("create.video.common.modelParameters")}</div>{modelParameterEntries.map(([name, property]) => <SchemaField key={name} name={name} property={property} value={modelParams[name]} required={required.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}<VideoCreditEstimate featureLabel={t("create.video.tabs.extendVideo")} duration={duration} estimate={videoCreditEstimate}>{!isGenerating ? <p className={styles.settingsError} role="status">{modelsLoading ? t("create.video.common.loadingModels", { feature: t("create.video.tabs.extendVideo") }) : validationMessage}</p> : null}{error ? <p className={styles.settingsError} role="alert">{error}</p> : null}{isGenerating ? <button type="button" className={styles.textVideoCancel} onClick={() => void handleCancel()}>{t("create.video.common.cancelGenerationSentence")}</button> : null}<button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || isGenerating}><Plus size={18} /> {isGenerating ? t("create.video.common.generating") : t("create.video.extend.title")}</button></VideoCreditEstimate>{notice && !isGenerating ? <p className={styles.peopleNotice}>{notice}</p> : null}</aside>
   </div>;
 }

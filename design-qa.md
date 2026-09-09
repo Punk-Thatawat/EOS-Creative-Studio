@@ -39,6 +39,57 @@
 
 final result: passed
 
+# Design QA — Video Thai localization final pass (9 September 2026)
+
+## Evidence
+
+- Implementation route: `http://localhost:3000/create/video?qa=thai-audit-final`.
+- Browser state: Thai locale selected by default; fresh browser tab and full reload used for the final pass.
+- Video tabs checked: Image to Video, Text to Video, People Video, Motion Transfer, Lipsync, and Extend Video.
+- Nested states checked: generation-mode menu, model-driven settings, schema dropdown values/descriptions, result library, credit estimate empty/loading states, and video-player controls.
+
+## Verification
+
+- Provider schema labels and descriptions are routed through the shared key-based video schema copy helper, including resolution, seed, mask image, reference audio/video, and output-resolution guidance.
+- The credit panel now explains the required action in Thai, including `อัปโหลดรูปภาพหรือวิดีโอเพื่อดูเครดิตโดยประมาณ` and model-selection guidance.
+- Model and provider names remain unchanged; user-facing labels, descriptions, validation messages, controls, and accessible names are translated.
+- The Thai prompt guidance uses a real localized raster asset (`public/generated-assets/be-descriptive-th.png`); the original English artwork is retained for English locale and embedded brand artwork remains unchanged.
+- Fresh-tab console check returned no errors after the final reload.
+
+## Verification results
+
+- TypeScript: passed (`npx tsc --noEmit`, also completed during production build).
+- Production build: passed (`npm run build`).
+- Targeted ESLint: passed.
+- `git diff --check`: passed; only existing line-ending warnings were reported.
+
+final result: passed
+
+# Design QA — Video Thai localization follow-up (9 September 2026)
+
+## Evidence
+
+- Local route checked: `http://localhost:3000/create/video?qa=thai-audit-before`.
+- Responsive in-app browser viewport: approximately `694 × 698` CSS px.
+- Accessibility tree and visual screenshots checked after the final code changes.
+
+## Verification
+
+- All six video tabs were opened: Image to Video, Text to Video, People Video, Motion Transfer, Lipsync, and Extend Video.
+- Visible labels, descriptions, upload guidance, prompt helpers, settings, credit states, result-library states, validation copy, and accessible labels render in Thai by default.
+- The Image to Video mode menu was opened and all generation modes were confirmed translated.
+- People Video now explains the empty credit state in Thai: upload media first to see the estimated credits, then choose a People Video model.
+- Decorative prompt guidance is rendered as Thai text and uses the Noto Sans Thai font family; model/provider names remain unchanged.
+- No console errors observed while switching tabs. TypeScript, targeted ESLint, production build, and `git diff --check` passed.
+
+## Limits
+
+- Real media upload and provider generation were not run because the local QA state has no configured model/session inputs. Dynamic provider-supplied descriptions may still reflect the provider configuration.
+
+## Final result
+
+final result: passed
+
 ---
 
 # Previous QA report — Extend Image preview (preserved)

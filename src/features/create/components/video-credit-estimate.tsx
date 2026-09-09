@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Info, LoaderCircle, LockKeyhole } from "lucide-react";
 import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/api/video-generations";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import styles from "../video-generation-page.module.css";
 
 export function useVideoCreditEstimate(input: DirectVideoQuoteInput | null) {
@@ -51,23 +52,25 @@ export function useVideoCreditEstimate(input: DirectVideoQuoteInput | null) {
   return { creditCost, loading, error, hasInput: inputKey !== "null" };
 }
 
-export function VideoCreditEstimate({ featureLabel, duration, estimate, emptyMessage = "Pricing unavailable", emptyLoading = false, compactLabel = false, children }: { featureLabel: string; duration?: unknown; estimate: ReturnType<typeof useVideoCreditEstimate>; emptyMessage?: string; emptyLoading?: boolean; compactLabel?: boolean; children?: ReactNode }) {
+export function VideoCreditEstimate({ featureLabel, duration, estimate, emptyMessage, emptyLoading = false, compactLabel = false, children }: { featureLabel: string; duration?: unknown; estimate: ReturnType<typeof useVideoCreditEstimate>; emptyMessage?: string; emptyLoading?: boolean; compactLabel?: boolean; children?: ReactNode }) {
+  const { locale, t } = useLocale();
+  const noInputMessage = emptyMessage ?? t("create.video.common.pricingUnavailable");
   const value = !estimate.hasInput
     ? emptyLoading
-      ? <span className={styles.creditCalculating}><LoaderCircle size={12} className={styles.creditSpinner} />{emptyMessage}</span>
-      : emptyMessage
+      ? <span className={styles.creditCalculating}><LoaderCircle size={12} className={styles.creditSpinner} />{noInputMessage}</span>
+      : noInputMessage
     : estimate.loading
-    ? <span className={styles.creditCalculating}><LoaderCircle size={12} className={styles.creditSpinner} />Recalculating price…</span>
+    ? <span className={styles.creditCalculating}><LoaderCircle size={12} className={styles.creditSpinner} />{t("create.video.common.recalculatingPrice")}</span>
     : estimate.creditCost === null
-      ? "Pricing unavailable"
-      : `= ${estimate.creditCost.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits`;
-  const quantityLabel = duration !== undefined && duration !== "" ? `1 video × ${duration} sec` : compactLabel ? "1 video" : `1 video · ${featureLabel}`;
+      ? t("create.video.common.pricingUnavailable")
+      : t("create.video.common.creditsValue", { cost: estimate.creditCost.toLocaleString(locale === "th" ? "th-TH" : "en-US", { maximumFractionDigits: 2 }) });
+  const quantityLabel = duration !== undefined && duration !== "" ? t("create.video.common.creditsDuration", { duration: String(duration) }) : compactLabel ? t("create.video.common.creditsVideo") : t("create.video.common.creditsFeature", { feature: featureLabel });
   return <div className={styles.estimateBlock}>
     <div className={styles.estimate} title={estimate.error ?? undefined}>
-      <div>ESTIMATED CREDITS <Info size={11} /></div>
+      <div>{t("create.video.common.estimatedCredits")} <Info size={11} /></div>
       <span>{quantityLabel}<strong>{value}</strong></span>
     </div>
     {children}
-    <p className={styles.privateNote}><LockKeyhole size={12} /> Your generation is private and secure</p>
+    <p className={styles.privateNote}><LockKeyhole size={12} /> {t("create.settings.privateSecure")}</p>
   </div>;
 }

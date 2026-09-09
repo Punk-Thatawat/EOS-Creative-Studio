@@ -5,6 +5,7 @@ import { ChevronRight, Play } from "lucide-react";
 import { listGenerationHistory, type GenerationHistoryItem } from "@/lib/api/generations";
 import styles from "./video-generation-page.module.css";
 import { EosCutButton } from "./eos-cut-button";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 type VideoResultLibraryProps = {
   feature: string;
@@ -61,6 +62,7 @@ function VideoGalleryThumbnail({ url, playSize = 14 }: { url: string; playSize?:
 }
 
 export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGenerationId, selectedVideoUrl, refreshKey = 0, onVideoSelect }: VideoResultLibraryProps) {
+  const { t } = useLocale();
   const [items, setItems] = useState<Array<{ id: string; url: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +84,8 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
           if (active) setItems(completedHistory(history));
         })
         .catch((reason: unknown) => {
-          if (active) setError(reason instanceof Error ? reason.message : "Unable to load video history");
+          const message = reason instanceof Error ? reason.message : "";
+          if (active) setError(/please sign in/i.test(message) ? t("create.video.common.historySignIn") : message || t("create.video.common.loadingHistory"));
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -92,7 +95,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
       active = false;
       window.clearTimeout(timeoutId);
     };
-  }, [feature, refreshKey]);
+  }, [feature, refreshKey, t]);
 
   useEffect(() => {
     const latest = items[0];
@@ -116,40 +119,40 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
     ?? (!selectedVideoUrl ? currentSourceGenerationId ?? items[0]?.id : null);
 
   return (
-    <section className={styles.videoResultLibrary} aria-label="Video results">
+    <section className={styles.videoResultLibrary} aria-label={t("create.video.common.videoResults")}>
       <EosCutButton sourceGenerationId={selectedSourceGenerationId} />
-      <div className={styles.previewViewTabs} role="tablist" aria-label="Video result views">
-        <button type="button" role="tab" aria-selected={view === "latest"} className={view === "latest" ? styles.previewViewTabActive : undefined} onClick={selectLatest}>Latest result</button>
-        <button type="button" role="tab" aria-selected={view === "library"} className={view === "library" ? styles.previewViewTabActive : undefined} onClick={() => setView("library")}>Video library</button>
+      <div className={styles.previewViewTabs} role="tablist" aria-label={t("create.video.common.videoPreviewViews")}>
+        <button type="button" role="tab" aria-selected={view === "latest"} className={view === "latest" ? styles.previewViewTabActive : undefined} onClick={selectLatest}>{t("create.video.common.latestResult")}</button>
+        <button type="button" role="tab" aria-selected={view === "library"} className={view === "library" ? styles.previewViewTabActive : undefined} onClick={() => setView("library")}>{t("create.video.common.videoLibrary")}</button>
       </div>
       <div className={styles.videoGalleryGrid}>
         <div className={styles.videoGalleryColumn}>
-          <div className={styles.videoGalleryHeading}><h3>CURRENT VIDEO</h3></div>
+          <div className={styles.videoGalleryHeading}><h3>{t("create.video.common.currentVideo")}</h3></div>
           <div className={styles.videoCurrentGallery}>
             {latestVideoUrl ? (
-              <button type="button" className={styles.videoCurrentCard} onClick={selectLatest} aria-label="Show latest generated video" aria-pressed={view === "latest" && selectedVideoUrl === latestVideoUrl}>
+              <button type="button" className={styles.videoCurrentCard} onClick={selectLatest} aria-label={t("create.video.common.latestVideo")} aria-pressed={view === "latest" && selectedVideoUrl === latestVideoUrl}>
                 <VideoGalleryThumbnail key={latestVideoUrl} url={latestVideoUrl} />
-                <span className={styles.videoGalleryStatus}>Latest generated video</span>
+                <span className={styles.videoGalleryStatus}>{t("create.video.common.latestVideo")}</span>
               </button>
             ) : (
-              <div className={styles.videoGalleryEmpty}>Latest generated video will appear here.</div>
+              <div className={styles.videoGalleryEmpty}>{t("create.video.common.latestVideoEmpty")}</div>
             )}
           </div>
         </div>
         <div className={`${styles.videoGalleryColumn} ${styles.videoRecentColumn}`}>
           <div className={styles.videoGalleryHeading}>
-            <h3>RECENT VIDEOS</h3>
-            <button type="button" onClick={() => setView("library")}>View history</button>
+            <h3>{t("create.video.common.recentVideos")}</h3>
+            <button type="button" onClick={() => setView("library")}>{t("create.video.common.viewHistory")}</button>
           </div>
           <div className={styles.videoRecentGallery}>
             <div className={styles.videoRecentRow} ref={recentRowRef}>
-              {loading ? <div className={styles.videoGalleryEmpty}>Loading video history…</div> : error ? <div className={`${styles.videoGalleryEmpty} ${styles.videoGalleryError}`} role="alert">{error}</div> : items.length ? items.map((item) => (
-                <button key={item.id} type="button" className={`${styles.videoRecentCard} ${selectedVideoUrl === item.url && view === "library" ? styles.videoRecentCardSelected : ""}`} onClick={() => { setView("library"); onVideoSelect(item.url, "library"); }} aria-label="Open recent generated video" aria-pressed={selectedVideoUrl === item.url && view === "library"}>
+              {loading ? <div className={styles.videoGalleryEmpty}>{t("create.video.common.loadingHistory")}</div> : error ? <div className={`${styles.videoGalleryEmpty} ${styles.videoGalleryError}`} role="alert">{error}</div> : items.length ? items.map((item) => (
+                <button key={item.id} type="button" className={`${styles.videoRecentCard} ${selectedVideoUrl === item.url && view === "library" ? styles.videoRecentCardSelected : ""}`} onClick={() => { setView("library"); onVideoSelect(item.url, "library"); }} aria-label={t("create.video.common.latestVideo")} aria-pressed={selectedVideoUrl === item.url && view === "library"}>
                   <VideoGalleryThumbnail key={item.url} url={item.url} playSize={13} />
                 </button>
-              )) : <div className={styles.videoGalleryEmpty}>No generated videos yet.</div>}
+              )) : <div className={styles.videoGalleryEmpty}>{t("create.video.common.noVideos")}</div>}
             </div>
-            {items.length > 3 ? <button type="button" className={styles.videoGalleryNext} onClick={() => recentRowRef.current?.scrollBy({ left: 290, behavior: "smooth" })} aria-label="Next recent videos"><ChevronRight size={18} /></button> : null}
+            {items.length > 3 ? <button type="button" className={styles.videoGalleryNext} onClick={() => recentRowRef.current?.scrollBy({ left: 290, behavior: "smooth" })} aria-label={t("create.video.common.nextRecentVideos")}><ChevronRight size={18} /></button> : null}
           </div>
         </div>
       </div>

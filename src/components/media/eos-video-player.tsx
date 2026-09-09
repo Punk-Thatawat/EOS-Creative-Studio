@@ -2,6 +2,7 @@
 
 import { Captions, Check, Maximize, Pause, Play, RotateCcw, RotateCw, Settings, Volume2, VolumeX } from "lucide-react";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 function formatVideoDuration(duration: number): string {
   if (!Number.isFinite(duration)) return "--:--";
@@ -30,6 +31,8 @@ export function EosVideoPlayer({
   mediaFrameStyle?: CSSProperties;
   ariaLabel?: string;
 }) {
+  const { t } = useLocale();
+  const videoAriaLabel = ariaLabel === "Video player" ? t("create.video.common.videoPlayer") : ariaLabel;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -152,7 +155,7 @@ export function EosVideoPlayer({
         preload="metadata"
         disablePictureInPicture
         disableRemotePlayback
-        aria-label={ariaLabel}
+        aria-label={videoAriaLabel}
         onClick={handleVideoClick}
         onLoadedMetadata={(event) => {
           setDuration(event.currentTarget.duration);
@@ -209,41 +212,41 @@ export function EosVideoPlayer({
               setCurrentTime(nextTime);
               if (videoRef.current) videoRef.current.currentTime = nextTime;
             }}
-            aria-label="Video progress"
+            aria-label={t("create.video.common.videoProgress")}
           />
         </div>
         <div className="intro-video-control-row">
           <div className="intro-video-volume-control">
-            <button type="button" className="intro-video-icon-button" aria-label={muted ? "Unmute video" : "Mute video"} onClick={toggleMute}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+            <button type="button" className="intro-video-icon-button" aria-label={muted ? t("create.video.common.unmuteVideo") : t("create.video.common.muteVideo")} onClick={toggleMute}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
             <input
               type="range"
               min="0"
               max="1"
               step="0.01"
               value={muted ? 0 : volume}
-              aria-label="Volume"
+              aria-label={t("create.video.common.volume")}
               onChange={(event) => changeVolume(Number(event.currentTarget.value))}
             />
           </div>
           <div className="intro-video-center-controls">
             <div className="intro-video-transport">
-              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label="Rewind 10 seconds" onClick={() => seek(-10)}><RotateCcw size={17} /><span>10</span></button>
-              <button type="button" className="intro-video-play-button" aria-label={paused ? "Play video" : "Pause video"} onClick={togglePlay}>{paused ? <Play size={21} fill="white" /> : <Pause size={21} />}</button>
-              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label="Forward 10 seconds" onClick={() => seek(10)}><RotateCw size={17} /><span>10</span></button>
+              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label={t("create.video.common.rewind10")} onClick={() => seek(-10)}><RotateCcw size={17} /><span>10</span></button>
+              <button type="button" className="intro-video-play-button" aria-label={paused ? t("create.video.common.playVideo") : t("create.video.common.pauseVideo")} onClick={togglePlay}>{paused ? <Play size={21} fill="white" /> : <Pause size={21} />}</button>
+              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label={t("create.video.common.forward10")} onClick={() => seek(10)}><RotateCw size={17} /><span>10</span></button>
             </div>
             <span className="intro-video-time">{formatVideoDuration(currentTime)} / {formatVideoDuration(duration)}</span>
           </div>
           <div className="intro-video-extra-controls">
-            <button type="button" className="intro-video-icon-button" aria-label="Captions"><Captions size={16} /></button>
+            <button type="button" className="intro-video-icon-button" aria-label={t("create.video.common.captions")}><Captions size={16} /></button>
             <div className="intro-video-settings">
               {isSettingsOpen ? (
-                <div className="intro-video-settings-popover" role="dialog" aria-label="Video settings">
-                  <strong>Quality</strong>
+                <div className="intro-video-settings-popover" role="dialog" aria-label={t("create.video.common.videoSettings")}>
+                  <strong>{t("create.video.common.quality")}</strong>
                   <div className="intro-video-quality-value">
-                    <span>Source quality</span>
-                    <small>{videoResolution ?? "Auto"}</small>
+                    <span>{t("create.video.common.sourceQuality")}</span>
+                    <small>{videoResolution ?? t("create.video.common.auto")}</small>
                   </div>
-                  <strong>Playback speed</strong>
+                  <strong>{t("create.video.common.playbackSpeed")}</strong>
                   {[0.5, 1, 1.5, 2].map((rate) => (
                     <button key={rate} type="button" onClick={() => changePlaybackRate(rate)}>
                       <span>{rate}x</span>
@@ -252,9 +255,9 @@ export function EosVideoPlayer({
                   ))}
                 </div>
               ) : null}
-              <button type="button" className="intro-video-icon-button" aria-label="Video settings" aria-expanded={isSettingsOpen} onClick={() => setIsSettingsOpen((open) => !open)}><Settings size={17} /></button>
+              <button type="button" className="intro-video-icon-button" aria-label={t("create.video.common.videoSettings")} aria-expanded={isSettingsOpen} onClick={() => setIsSettingsOpen((open) => !open)}><Settings size={17} /></button>
             </div>
-            <button type="button" className="intro-video-icon-button" aria-label="Fullscreen" onClick={toggleFullscreen}><Maximize size={17} /></button>
+            <button type="button" className="intro-video-icon-button" aria-label={t("create.video.common.fullscreen")} onClick={toggleFullscreen}><Maximize size={17} /></button>
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CirclePlay, LoaderCircle, Video, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { listPublicTutorials, type AdminTutorialSlot } from "@/lib/api/tutorials";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { cx } from "../styles";
 
 function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature: string; featureName: string; mode?: string; onClose: () => void }) {
@@ -47,10 +48,11 @@ function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature:
 }
 
 export function ImageTutorialButton({ feature, featureName, mode }: { feature: string; featureName: string; mode?: string }) {
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
 
   return <>
-    <button type="button" className={cx("gen-tutorial-trigger")} onClick={() => setOpen(true)} aria-haspopup="dialog"><CirclePlay size={15} /><span>Tutorial</span></button>
+    <button type="button" className={cx("gen-tutorial-trigger")} onClick={() => setOpen(true)} aria-haspopup="dialog"><CirclePlay size={15} /><span>{t("create.image.tutorial")}</span></button>
     {open ? <ImageTutorialDialog feature={feature} featureName={featureName} mode={mode} onClose={() => setOpen(false)} /> : null}
   </>;
 }

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { Download, Heart, ImageIcon } from "lucide-react";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import styles from "./video-generation-page.module.css";
 
 type VideoPreviewPlaceholderProps = {
@@ -14,6 +15,7 @@ type VideoPreviewOverlayActionsProps = {
 };
 
 export function VideoPreviewOverlayActions({ videoUrl }: VideoPreviewOverlayActionsProps) {
+  const { t } = useLocale();
   const [isFavorite, setIsFavorite] = useState(false);
 
   const downloadVideo = async () => {
@@ -36,10 +38,10 @@ export function VideoPreviewOverlayActions({ videoUrl }: VideoPreviewOverlayActi
 
   return (
     <div className={styles.videoPreviewOverlayActions}>
-      <button type="button" onClick={() => void downloadVideo()} disabled={!videoUrl} aria-label="Download video" title="Download video">
+      <button type="button" onClick={() => void downloadVideo()} disabled={!videoUrl} aria-label={t("create.video.common.downloadVideo")} title={t("create.video.common.downloadVideo")}>
         <Download size={16} />
       </button>
-      <button type="button" onClick={() => setIsFavorite((favorite) => !favorite)} disabled={!videoUrl} aria-label="Favorite video" title="Favorite video" className={isFavorite ? styles.videoFavoriteActive : undefined}>
+      <button type="button" onClick={() => setIsFavorite((favorite) => !favorite)} disabled={!videoUrl} aria-label={t("create.video.common.favoriteVideo")} title={t("create.video.common.favoriteVideo")} className={isFavorite ? styles.videoFavoriteActive : undefined}>
         <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
       </button>
     </div>
@@ -47,16 +49,18 @@ export function VideoPreviewOverlayActions({ videoUrl }: VideoPreviewOverlayActi
 }
 
 export function VideoPreviewLiveBadge() {
-  return <Image src="/generated-assets/preview-live.png" alt="Preview live" width={1536} height={1024} className={styles.videoPreviewLiveBadge} />;
+  const { t } = useLocale();
+  return <Image src="/generated-assets/preview-live.png" alt={t("create.preview")} width={1536} height={1024} className={styles.videoPreviewLiveBadge} />;
 }
 
 /** Shared empty state for every video-generation preview. */
 export function VideoPreviewPlaceholder({ showActions = true }: VideoPreviewPlaceholderProps) {
+  const { t } = useLocale();
   return (
-    <div className={styles.videoPreviewPlaceholder} aria-label="Video preview not generated">
+    <div className={styles.videoPreviewPlaceholder} aria-label={t("create.video.common.videoPreview")}>
       <div className={styles.videoPreviewPlaceholderContent}>
         <ImageIcon size={30} />
-        <strong>PREVIEW VIDEO</strong>
+        <strong>{t("create.video.common.previewVideoLabel")}</strong>
       </div>
       {showActions ? <VideoPreviewOverlayActions videoUrl={null} /> : null}
     </div>

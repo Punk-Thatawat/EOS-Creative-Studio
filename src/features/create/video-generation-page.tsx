@@ -50,6 +50,7 @@ import { MotionTransferWorkspace } from "./motion-transfer-generation";
 import { ExtendVideoWorkspace } from "./extend-video-generation";
 import { VideoPreviewLiveBadge, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
+import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import styles from "./video-generation-page.module.css";
@@ -144,8 +145,8 @@ const sceneSourceOptions = [
   { value: "previous_last_frame", label: "Previous frame" },
 ] as const;
 const referenceImageRoles = [
-  { key: "avatar", label: "Avatar", description: "Character or person to keep consistent" },
-  { key: "product", label: "Product", description: "Product shape, logo, and details" },
+  { key: "avatar", labelKey: "create.video.common.avatar", descriptionKey: "create.video.common.avatarDescription" },
+  { key: "product", labelKey: "create.video.common.product", descriptionKey: "create.video.common.productDescription" },
 ] as const;
 type ReferenceImageRole = (typeof referenceImageRoles)[number]["key"];
 type ReferenceImageSlot = {
@@ -729,13 +730,6 @@ const lastImageParameterAliases = [
   "endFrame",
 ];
 
-function labelFromParameterName(name: string): string {
-  return name
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function parseSchemaEnumValue(rawValue: string, property: SchemaProperty): unknown {
   if (rawValue === "") return undefined;
   return property.enum?.find((option) => String(option) === rawValue) ?? rawValue;
@@ -886,7 +880,8 @@ function formatHistoryDate(value?: string): string {
 }
 
 export function VideoGenerationPage() {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
+  const localizedParameterLabel = (name: string, title?: string) => translateVideoSchemaLabel(name, title, t);
   const searchParams = useSearchParams();
   const [activeVideoTab, setActiveVideoTab] = useState<"image-to-video" | "text-to-video" | "people-video" | "motion-transfer" | "lipsync" | "extend-video">("image-to-video");
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -908,7 +903,6 @@ export function VideoGenerationPage() {
   const [postAudioSfxEnabled, setPostAudioSfxEnabled] = useState(false);
   const [postAudioMusicEnabled, setPostAudioMusicEnabled] = useState(false);
   const [generationMode, setGenerationMode] = useState<GenerationMode>("image-to-video");
-  const [generationModeLabels, setGenerationModeLabels] = useState<Record<string, string>>({});
   const [videoMode, setVideoMode] =
     useState<(typeof videoModeOptions)[number]["value"]>("storyboard");
   const [models, setModels] = useState<GenerationModelOption[]>([]);
@@ -1000,7 +994,7 @@ export function VideoGenerationPage() {
   });
   const referenceImageUrls = referenceImageEntries.map((entry) => entry.url);
   const referenceRolePrompt = referenceImageEntries.length > 0
-    ? `Reference image roles: ${referenceImageEntries.map((entry, index) => `Image ${index + 1} = ${entry.label}`).join("; ")}. Use each image according to its role, preserving the avatar identity and product details.`
+    ? `Reference image roles: ${referenceImageEntries.map((entry, index) => `Image ${index + 1} = ${t(entry.labelKey)}`).join("; ")}. Use each image according to its role, preserving the avatar identity and product details.`
     : "";
   const promptWithReferenceRoles = (value: string) => (generationMode === "reference-to-video" || generationMode === "single-image") && referenceRolePrompt
     ? `${value}\n\n${referenceRolePrompt}`
@@ -1107,11 +1101,12 @@ export function VideoGenerationPage() {
     try {
       setVideoHistory(await listVideoStoryboardHistory(workspace));
     } catch (error: unknown) {
-      setVideoHistoryError(error instanceof Error ? error.message : "Unable to load generated videos");
+      const message = error instanceof Error ? error.message : "";
+      setVideoHistoryError(/please sign in/i.test(message) ? t("create.video.common.historySignIn") : message || t("create.video.common.loadingHistory"));
     } finally {
       setVideoHistoryLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const storedWorkspaceId = window.sessionStorage.getItem("eos.generation.workspace-id");
@@ -1193,7 +1188,7 @@ export function VideoGenerationPage() {
         completed: status.completedScenes ?? fallback.completed,
         total: status.totalScenes ?? fallback.total,
       });
-      setNotice("Generating video…");
+      setNotice(t("create.video.common.generatingVideo"));
     };
 
     const restoreProcessingStoryboard = async () => {
@@ -1205,7 +1200,7 @@ export function VideoGenerationPage() {
         setLatestCompletedStoryboardId(persisted.generationId);
         setGenerationProgress({ completed: persisted.completed || persisted.total, total: persisted.total });
         setGenerationStatus("completed");
-        setNotice("Video ready");
+        setNotice(t("create.video.common.videoReady"));
         void loadVideoHistory();
         return;
       }
@@ -1214,7 +1209,7 @@ export function VideoGenerationPage() {
       setGenerationStatus("processing");
       setGenerationError(null);
       setGenerationProgress({ completed: persisted.completed, total: persisted.total });
-      setNotice("Generating video…");
+      setNotice(t("create.video.common.generatingVideo"));
 
       const fetchStatusWithRetry = async (): Promise<Awaited<ReturnType<typeof getVideoStoryboardStatus>> | null> => {
         while (!disposed) {
@@ -1250,22 +1245,22 @@ export function VideoGenerationPage() {
         setFinalVideoUrl(status.finalVideoUrl);
         setLatestCompletedStoryboardId(persisted.generationId);
         setGenerationStatus("completed");
-        setNotice("Video ready");
+        setNotice(t("create.video.common.videoReady"));
         void loadVideoHistory(status.workspaceId ?? undefined);
         return;
       }
       setActiveStoryboardId(null);
       setGenerationStatus(status.status === "cancelled" ? "cancelled" : "failed");
-      setNotice(status.status === "cancelled" ? "Video generation cancelled" : null);
+      setNotice(status.status === "cancelled" ? t("create.video.common.videoGenerationCancelled") : null);
     };
 
     void restoreProcessingStoryboard().catch(() => {
-      if (!disposed) setNotice("Generating video…");
+      if (!disposed) setNotice(t("create.video.common.generatingVideo"));
     });
     return () => {
       disposed = true;
     };
-  }, [loadVideoHistory, searchParams]);
+  }, [loadVideoHistory, searchParams, t]);
   useEffect(() => {
     let active = true;
     void getVideoStoryboardSettings()
@@ -1277,7 +1272,6 @@ export function VideoGenerationPage() {
         if (Number.isInteger(settings.maxScenes) && settings.maxScenes >= 1) {
           setMaxStoryboardScenes(Math.min(settings.maxScenes, hardMax));
         }
-        if (settings.modeLabels) setGenerationModeLabels(settings.modeLabels);
       })
       .catch(() => {
         // Keep the backend default while an older deployment is still migrating.
@@ -1444,9 +1438,9 @@ export function VideoGenerationPage() {
       }
       setStoryboardSlices(slices);
       setStoryboardSlicesSourceFile(file);
-      setStoryboardGridLabel(`${result.rows} × ${result.columns} · ${result.slices.length} scenes`);
+      setStoryboardGridLabel(t("create.video.common.storyboardGridLabel", { rows: result.rows, columns: result.columns, count: result.slices.length }));
       setStoryboardQualityNote(result.minSceneWidth < 768 || result.minSceneHeight < 768
-        ? `แต่ละ scene มีขนาดประมาณ ${result.minSceneWidth}×${result.minSceneHeight}px — ระบบจะอัปสเกลเป็น 2K อัตโนมัติก่อนสร้างวิดีโอ`
+        ? t("create.video.common.storyboardQualityNote", { width: result.minSceneWidth, height: result.minSceneHeight })
         : null);
       setStoryboardScenes((current) => {
         const firstScene = current[0];
@@ -1478,7 +1472,7 @@ export function VideoGenerationPage() {
     } finally {
       if (storyboardSplitRequestRef.current === requestId) setStoryboardSplitting(false);
     }
-  }, [duration, maxStoryboardScenes, modelParams, prompt]);
+  }, [duration, maxStoryboardScenes, modelParams, prompt, t]);
   useEffect(() => {
     if (generationMode !== "single-image") {
       storyboardSplitRequestRef.current += 1;
@@ -1885,17 +1879,15 @@ export function VideoGenerationPage() {
   const estimateDurations = generationScenes.map((scene) => durationProperty ? scene.duration : duration);
   const estimateTotalDuration = estimateDurations.reduce((total, value) => total + (Number.isFinite(value) ? value : 0), 0);
   const allScenesShareDuration = estimateDurations.every((value) => value === estimateDurations[0]);
-  const estimateDescription = generationMode === "single-image"
-    ? `${estimateSceneCount} ${estimateSceneCount === 1 ? "scene" : "scenes"} x ${estimateDurations[0] ?? 0} sec`
-    : allScenesShareDuration
-    ? `${estimateSceneCount} ${estimateSceneCount === 1 ? "scene" : "scenes"} x ${estimateDurations[0] ?? 0} sec`
-    : `${estimateSceneCount} scenes x ${estimateTotalDuration} sec total`;
+  const estimateDescription = generationMode === "single-image" || allScenesShareDuration
+    ? t("create.video.common.scenesDuration", { count: estimateSceneCount, duration: estimateDurations[0] ?? 0 })
+    : t("create.video.common.scenesDurationTotal", { count: estimateSceneCount, duration: estimateTotalDuration });
   const totalCreditEstimate = creditEstimate;
   const formattedCreditEstimate: ReactNode = creditEstimateLoading
-    ? <span className={styles.creditCalculating}><LoaderCircle size={12} className={styles.creditSpinner} />Recalculating price…</span>
+    ? <span className={styles.creditCalculating}><LoaderCircle size={12} className={styles.creditSpinner} />{t("create.video.common.recalculatingPrice")}</span>
     : totalCreditEstimate === null
-      ? "Pricing unavailable"
-      : `${totalCreditEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })} Credits`;
+      ? t("create.video.common.pricingUnavailable")
+      : `${totalCreditEstimate.toLocaleString("th-TH", { maximumFractionDigits: 2 })} ${t("create.video.common.creditsWord")}`;
   const firstScene = storyboardScenes[0];
   const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
   const sceneLimitReached = storyboardScenes.length >= maxStoryboardScenes;
@@ -1904,8 +1896,8 @@ export function VideoGenerationPage() {
     && !sceneLimitReached
     && Boolean(firstScene?.image && firstSceneHasPrompt);
   const addSceneDisabledReason = sceneLimitReached
-    ? `Storyboard supports up to ${maxStoryboardScenes} scenes.`
-    : "Complete Scene 1 with a start image and prompt first";
+    ? t("create.video.common.storyboardLimitTitle", { count: maxStoryboardScenes })
+    : t("create.video.common.completeSceneShort");
   const selectedVideoMode =
     videoModeOptions.find((option) => option.value === videoMode) ??
     videoModeOptions[0];
@@ -1989,16 +1981,16 @@ export function VideoGenerationPage() {
   };
   const saveScene = () => {
     if (sceneStartFrameSource === "manual" && !sceneImage)
-      return setSceneError("Please upload an image for this scene.");
+      return setSceneError(t("create.video.common.sceneImageRequired"));
     if (!scenePrompt.trim())
-      return setSceneError("Please add a prompt for this scene.");
+      return setSceneError(t("create.video.common.scenePromptRequired"));
     const missingSceneParam = modelParameterEntries.find(([name]) => {
       if (!requiredProperties.has(name)) return false;
       const value = sceneModelParams[name];
       return value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
     });
     if (missingSceneParam)
-      return setSceneError(`${labelFromParameterName(missingSceneParam[0])} is required for this scene.`);
+      return setSceneError(t("create.video.common.parameterRequiredForScene", { parameter: localizedParameterLabel(missingSceneParam[0], missingSceneParam[1].title) }));
     const existingScene = editingSceneIndex === null ? undefined : storyboardScenes[editingSceneIndex];
     const lockStartImage = generationMode === "single-image" && Boolean(existingScene);
     const nextScene: StoryboardScene = {
@@ -2051,31 +2043,31 @@ export function VideoGenerationPage() {
         ? aspectRatioProperty[0]
         : null;
   const videoValidationMessage = modelsLoading
-    ? "Loading model options..."
+    ? t("create.video.common.loadingVideoModels")
     : !selectedModel || !selectedModelOption
-      ? "Select a video model before generating."
+      ? t("create.video.common.selectVideoModel")
       : generationMode === "reference-to-video" && !supportsReferenceImages
-        ? "The selected model does not support reference images. Choose a compatible model."
+        ? t("create.video.common.unsupportedReferenceImages")
         : generationMode === "reference-to-video" && referenceImageUrls.length === 0
-          ? "Add at least one reference image before generating."
+          ? t("create.video.common.addReferenceImage")
           : generationMode === "single-image" && !sourcePreviewImage
-            ? "Upload a storyboard image before generating."
+            ? t("create.video.common.uploadStoryboardImage")
             : generationMode === "single-image" && storyboardSplitting
-              ? "Preparing storyboard scenes..."
+              ? t("create.video.common.preparingStoryboard")
               : generationMode === "single-image" && !hasCurrentStoryboardSlices
-                ? "Preparing storyboard scenes from the uploaded image."
+                ? t("create.video.common.preparingStoryboardFromImage")
                 : !prompt.trim()
-                  ? "Add a prompt before generating."
+                  ? t("create.video.common.addPrompt")
                   : !storyboardReady
-                    ? "Finish preparing the storyboard before generating."
+                    ? t("create.video.common.finishStoryboard")
                     : !allGenerationScenesHavePrompts
-                      ? "Every scene needs a prompt before generating."
+                      ? t("create.video.common.everyScenePrompt")
                       : !allManualScenesHaveImages
-                        ? "Every manual scene needs a storyboard image."
+                        ? t("create.video.common.everyManualSceneImage")
                         : requiredStructuredField
-                          ? `${labelFromParameterName(requiredStructuredField)} is required for this model.`
+                          ? t("create.video.common.parameterRequiredForModel", { parameter: localizedParameterLabel(requiredStructuredField) })
                           : missingRequiredModelParameter
-                            ? `${labelFromParameterName(missingRequiredModelParameter[0])} is required for this model.`
+                            ? t("create.video.common.parameterRequiredForModel", { parameter: localizedParameterLabel(missingRequiredModelParameter[0], missingRequiredModelParameter[1].title) })
                             : null;
   const canGenerate = Boolean(!videoValidationMessage && !isGeneratingVideo && !creditEstimateLoading);
   const safeVideoLibraryIndex = Math.min(videoLibraryIndex, Math.max(videoHistory.length - 1, 0));
@@ -2122,27 +2114,27 @@ export function VideoGenerationPage() {
   };
   const handleGenerate = async () => {
     if (!selectedModel || !selectedModelOption) {
-      setGenerationError("Select a video model first.");
+      setGenerationError(t("create.video.common.selectModel"));
       return;
     }
     if (generationMode === "reference-to-video" && !supportsReferenceImages) {
-      setGenerationError("The selected model does not support reference images. Choose a compatible model.");
+      setGenerationError(t("create.video.common.unsupportedReferenceImages"));
       return;
     }
     if (generationMode === "reference-to-video" && referenceImageUrls.length === 0) {
-      setGenerationError("Add at least one reference image before generating.");
+      setGenerationError(t("create.video.common.addReferenceImage"));
       return;
     }
     if (!prompt.trim()) {
-      setGenerationError("Add a prompt before generating.");
+      setGenerationError(t("create.video.common.addPrompt"));
       return;
     }
     if (generationMode === "single-image" && storyboardSplitting) {
-      setGenerationError("กำลังแยก storyboard เป็นฉาก กรุณารอสักครู่ก่อน Generate");
+      setGenerationError(t("create.video.common.preparingStoryboard"));
       return;
     }
     if (generationMode === "single-image" && !hasCurrentStoryboardSlices) {
-      setGenerationError("กรุณารอให้ระบบสร้างฉากจาก storyboard ให้เสร็จก่อน Generate");
+      setGenerationError(t("create.video.common.preparingStoryboardFromImage"));
       return;
     }
     const missingRequiredParam = settingsModelParameterEntries.find(([name]) => {
@@ -2151,7 +2143,7 @@ export function VideoGenerationPage() {
       return value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
     });
     if (missingRequiredParam) {
-      setGenerationError(`${labelFromParameterName(missingRequiredParam[0])} is required for this model.`);
+      setGenerationError(t("create.video.common.parameterRequiredForModel", { parameter: localizedParameterLabel(missingRequiredParam[0], missingRequiredParam[1].title) }));
       return;
     }
     const requiredStructuredField = durationProperty && requiredProperties.has(durationProperty[0]) && (!Number.isFinite(duration) || duration <= 0)
@@ -2162,16 +2154,16 @@ export function VideoGenerationPage() {
           ? aspectRatioProperty[0]
           : null;
     if (requiredStructuredField) {
-      setGenerationError(`${labelFromParameterName(requiredStructuredField)} is required for this model.`);
+      setGenerationError(t("create.video.common.parameterRequiredForModel", { parameter: localizedParameterLabel(requiredStructuredField) }));
       return;
     }
     const sceneSources = generationScenes.map((scene, index) => getSceneSource(scene, index));
     if (generationMode !== "reference-to-video" && sceneSources.some((source, index) => source === "manual" && !generationScenes[index].image)) {
-      setGenerationError("Every manual scene needs a storyboard image.");
+      setGenerationError(t("create.video.common.everyManualSceneImage"));
       return;
     }
     if (generationScenes.some((scene) => !scene.prompt.trim())) {
-      setGenerationError("Every scene needs a prompt before generating.");
+      setGenerationError(t("create.video.common.everyScenePrompt"));
       return;
     }
 
@@ -2190,7 +2182,7 @@ export function VideoGenerationPage() {
       for (let index = 0; index < generationScenes.length; index += 1) {
         const scene = generationScenes[index];
         if (generationMode !== "reference-to-video" && sceneSources[index] === "manual") {
-          setNotice(`Uploading Scene ${index + 1} of ${generationScenes.length}…`);
+          setNotice(t("create.video.common.uploadingScene", { number: index + 1, total: generationScenes.length }));
           const file = await fileFromSceneImage(scene.image as string, index, scene.imageFile);
           uploadedImages[index] = await uploadImageAsset(file, {
             purpose: "content",
@@ -2203,8 +2195,8 @@ export function VideoGenerationPage() {
 
       if ((generationMode === "reference-to-video" || generationMode === "single-image") && supportsReferenceImages) {
         for (let index = 0; index < referenceImageEntries.length; index += 1) {
-          setNotice(`Uploading ${referenceImageEntries[index].label.toLowerCase()} ${index + 1} of ${referenceImageEntries.length}…`);
           const entry = referenceImageEntries[index];
+          setNotice(t("create.video.common.uploadingReference", { label: t(entry.labelKey).toLowerCase(), number: index + 1, total: referenceImageEntries.length }));
           const file = await fileFromSceneImage(entry.url, index, entry.file, "reference");
           uploadedReferenceImages.push(await uploadImageAsset(file, {
             purpose: "content",
@@ -2247,7 +2239,7 @@ export function VideoGenerationPage() {
       if (resolutionProperty && resolution) request.resolution = resolution;
       if (supportsAspectRatio && aspectRatio && !storyboardHasMixedAspectRatios) request.aspectRatio = aspectRatio;
       if (audioInputMode && audioFile) {
-        setNotice("Uploading audio reference…");
+        setNotice(t("create.video.common.uploadingAudioReference"));
         request.audioUrl = await uploadPeopleMedia(audioFile, undefined, capabilities?.uploadConstraints);
         throwIfVideoCancellationRequested();
       }
@@ -2260,7 +2252,7 @@ export function VideoGenerationPage() {
         else request.modelParams = { ...(request.modelParams ?? {}), [audioProperty[0]]: autoSound };
       }
 
-      setNotice("Submitting video generation…");
+      setNotice(t("create.video.common.submittingVideo"));
       const created = await createVideoStoryboard(request);
       if (!created.storyboardId) throw new Error("Video generation did not return a storyboard ID");
       setActiveStoryboardId(created.storyboardId);
@@ -2292,8 +2284,8 @@ export function VideoGenerationPage() {
         setGenerationProgress({ completed: status.completedScenes ?? 0, total: status.totalScenes ?? scenes.length });
         setContinuationInfo(status.continuation ?? null);
         setNotice(generationMode === "single-image"
-          ? "Generating video from storyboard image…"
-          : `Generating video… ${status.completedScenes ?? 0}/${status.totalScenes ?? scenes.length} scenes complete`);
+          ? t("create.video.common.generatingFromStoryboardImage")
+          : t("create.video.common.generatingScenesProgress", { completed: status.completedScenes ?? 0, total: status.totalScenes ?? scenes.length }));
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
         throwIfVideoCancellationRequested();
         status = await getVideoStoryboardStatus(created.storyboardId);
@@ -2312,7 +2304,7 @@ export function VideoGenerationPage() {
       setLatestCompletedStoryboardId(created.storyboardId);
       setPreviewView("latest");
       setGenerationStatus("completed");
-      setNotice("Video ready");
+      setNotice(t("create.video.common.videoReady"));
       setActiveStoryboardId(null);
       setIsCancellingVideo(false);
       requestCreditBalanceSync(acceptedCreditCost);
@@ -2344,7 +2336,7 @@ export function VideoGenerationPage() {
       if (cancelRequestedRef.current || (error instanceof Error && error.message === "Video generation was cancelled")) {
         setGenerationStatus("cancelled");
         setGenerationError(null);
-        setNotice("Video generation cancelled");
+        setNotice(t("create.video.common.videoGenerationCancelled"));
         setActiveStoryboardId(null);
         setIsCancellingVideo(false);
         return;
@@ -2362,14 +2354,14 @@ export function VideoGenerationPage() {
     cancelRequestedRef.current = true;
     setIsCancellingVideo(true);
     setGenerationError(null);
-    setNotice("Cancelling video generation…");
+    setNotice(t("create.video.common.cancellingVideo"));
     const storyboardId = activeStoryboardId;
     if (!storyboardId) return;
     try {
       await cancelVideoStoryboard(storyboardId);
       setGenerationStatus("cancelled");
       setActiveStoryboardId(null);
-      setNotice("Video generation cancelled");
+      setNotice(t("create.video.common.videoGenerationCancelled"));
     } catch (error: unknown) {
       cancelRequestedRef.current = false;
       setIsCancellingVideo(false);
@@ -2397,7 +2389,7 @@ export function VideoGenerationPage() {
       <div className={styles.hero}>
         <Image
           src="/generated-assets/create-video-hero-transparent-v6-eos.png"
-          alt="Create video that moves"
+          alt={t("create.video.common.createVideoHeroAlt")}
           fill
           sizes="100vw"
         />
@@ -2457,7 +2449,7 @@ export function VideoGenerationPage() {
                   />
                 </div>
                 <div className={styles.videoModeHeading}>
-                  <h2 id="video-mode-title">GENERATION MODE</h2>
+                  <h2 id="video-mode-title">{t("create.video.common.generationMode")}</h2>
                   <Info size={11} />
                 </div>
                 <Dropdown
@@ -2468,13 +2460,13 @@ export function VideoGenerationPage() {
                       value: option.value,
                       label: (
                         <>
-                          <strong>{generationModeLabels[option.value]?.trim() || t(copyKeys.labelKey)}</strong>
+                          <strong>{t(copyKeys.labelKey)}</strong>
                           <small>{t(copyKeys.descriptionKey)}</small>
                         </>
                       ),
                     };
                   })}
-                  ariaLabel="Video generation mode options"
+                  ariaLabel={t("create.video.common.generationModeOptions")}
                   onChange={(nextMode) => selectGenerationMode(nextMode as GenerationMode)}
                   className={`${styles.modelDropdown} ${styles.generationModeDropdown}`}
                   triggerClassName={styles.modelDropdownTrigger}
@@ -2484,30 +2476,30 @@ export function VideoGenerationPage() {
                 {generationMode === "single-image" ? (
                   <div className={`${styles.sequenceNotice} ${styles.sequenceNoticeNative}`}>
                     <ImageIcon size={13} />
-                    <span>The storyboard sheet is split into scenes, generated in order, and merged into one video.</span>
+                     <span>{t("create.video.common.storyboardSheetNotice")}</span>
                   </div>
                 ) : null}
                 {generationMode === "continuous" ? (
                   <div className={`${styles.sequenceNotice} ${hasNativeExtend ? styles.sequenceNoticeNative : styles.sequenceNoticeWarning}`}>
                     <Link2 size={13} />
                     <span>{hasNativeExtend
-                      ? "Native Extend will continue scenes in order"
-                      : "No Native Extend; continuation may not be seamless"}</span>
+                       ? t("create.video.common.nativeExtendNotice")
+                       : t("create.video.common.noNativeExtendNotice")}</span>
                   </div>
                 ) : null}
                 {continuationInfo ? (
                   <div className={styles.continuationResult}>
-                    <strong>{continuationInfo.nativeExtend ? "Native Extend" : "Frame Continuation"}</strong>
-                    <span>{continuationInfo.strategy ?? "Backend continuation"}</span>
-                    <small>{continuationInfo.seamless === true ? "Seamless continuation" : "Continuation may use a hard cut"}</small>
+                     <strong>{continuationInfo.nativeExtend ? t("create.video.common.nativeExtend") : t("create.video.generationModes.continuous")}</strong>
+                     <span>{continuationInfo.strategy ?? t("create.video.common.backendContinuation")}</span>
+                     <small>{continuationInfo.seamless === true ? t("create.video.common.seamlessContinuation") : t("create.video.common.hardCutContinuation")}</small>
                   </div>
                 ) : null}
               </section>
             </section>
             <section className={`${styles.panel} ${styles.promptPanel} ${styles.videoPromptPanel}`}>
               <div className={styles.videoPromptHeading}>
-                <h2>PROMPT <small>(Required)</small></h2>
-                <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+                 <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
+                <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
               </div>
               <label className={styles.videoPromptInputLabel}>
                 <textarea
@@ -2520,29 +2512,29 @@ export function VideoGenerationPage() {
                       generationMode === "single-image" || index === 0 ? { ...scene, prompt: value } : scene
                     )));
                   }}
-                  placeholder="Describe your video"
+                   placeholder={t("create.video.common.describeVideo")}
                   maxLength={2000}
                   required
                   aria-required="true"
                 />
               </label>
               <div className={styles.videoPromptMeta}>
-                <span>Maximum 2,000 characters</span>
+                 <span>{t("create.video.common.maximumCharacters", { count: 2000 })}</span>
                 <span>{prompt.length.toLocaleString()} / 2,000</span>
               </div>
               <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
               <label className="block text-[10px] font-bold">
-                Negative Prompt <small>(Optional)</small>
+                 {t("create.video.common.negativePrompt")} <small>({t("create.video.common.optional")})</small>
                 <input
                   value={negativePrompt}
                   onChange={(event) => setNegativePrompt(event.target.value)}
-                  placeholder="e.g. blurry, low quality, watermark"
+                  placeholder={t("create.video.common.negativePromptPlaceholder")}
                 />
               </label>
               {generationMode === "reference-to-video" || generationMode === "single-image" ? (
-                <div className={styles.referenceInputs} aria-label="Reference image uploads">
+                   <div className={styles.referenceInputs} aria-label={t("create.video.common.referenceImages")}>
                   <div className={styles.referenceInputsHeading}>
-                    <span>REFERENCE IMAGES {generationMode === "reference-to-video" ? <b>*</b> : null}</span>
+                     <span>{t("create.video.common.referenceImages")} {generationMode === "reference-to-video" ? <b>*</b> : null}</span>
                   </div>
                   <div className={styles.referenceMediaField}>
                     {supportsReferenceImages ? (
@@ -2553,18 +2545,18 @@ export function VideoGenerationPage() {
                             <div
                               className={styles.referenceRoleField}
                               key={role.key}
-                              title={role.description}
-                              aria-label={`${role.label}: ${role.description}`}
+                              title={t(role.descriptionKey)}
+                              aria-label={`${t(role.labelKey)}: ${t(role.descriptionKey)}`}
                             >
                               <div className={styles.referenceMediaLabel}>
-                                <span>{role.label}</span>
-                                <small>{role.description}</small>
+                                <span>{t(role.labelKey)}</span>
+                                     <small>{t(role.descriptionKey)}</small>
                               </div>
                               {slot ? (
                                 <div className={styles.referenceRolePreview}>
                                   <Image
                                     src={slot.url}
-                                    alt={role.label}
+                                    alt={t(role.labelKey)}
                                     width={112}
                                     height={78}
                                     unoptimized
@@ -2573,8 +2565,8 @@ export function VideoGenerationPage() {
                                   <button
                                     type="button"
                                     onClick={() => removeReferenceImage(role.key)}
-                                    aria-label={`Remove ${role.label}`}
-                                    title={`Remove ${role.label}`}
+                                    aria-label={`${t("create.video.common.remove")} ${t(role.labelKey)}`}
+                                    title={`${t("create.video.common.remove")} ${t(role.labelKey)}`}
                                   >
                                     <X size={12} />
                                   </button>
@@ -2584,11 +2576,11 @@ export function VideoGenerationPage() {
                                   type="button"
                                   className={styles.referenceRoleUpload}
                                   onClick={() => referenceImageInputRefs.current[role.key]?.click()}
-                                  aria-label={`Upload ${role.label}`}
+                                  aria-label={`${t("create.video.common.uploadImage")} ${t(role.labelKey)}`}
                                 >
                                   <CloudUpload size={17} />
-                                  <strong>Upload image</strong>
-                                  <small>PNG / JPG / WEBP</small>
+                                   <strong>{t("create.video.common.uploadImage")}</strong>
+                                   <small>{t("create.video.common.pngFormats")}</small>
                                 </button>
                               )}
                               <input
@@ -2609,37 +2601,37 @@ export function VideoGenerationPage() {
                         })}
                       </div>
                     ) : (
-                      <p className={styles.sceneRequirement}>The selected model does not support reference images.</p>
+                      <p className={styles.sceneRequirement}>{t("create.video.common.unsupportedReferenceImages")}</p>
                     )}
                   </div>
                 </div>
               ) : null}
             </section>
             {generationMode !== "reference-to-video" ? <section className={`${styles.panel} ${generationMode === "single-image" ? styles.storyboardImagePanel : ""}`}>
-              <SectionTitle number="2">SOURCE</SectionTitle>
+               <SectionTitle number="2">{t("create.video.common.source")}</SectionTitle>
               <label className="mb-2 block text-[10px] font-bold">
-                Start Frame <small>(Required)</small>
+                 {t("create.video.common.startFrame")} <small>({t("create.video.common.required")})</small>
               </label>
               {sourcePreviewImage ? (
                 <div className={styles.sourcePreview}>
                   <Image
                     src={sourcePreviewImage}
-                    alt="Uploaded start frame"
+                    alt={t("create.video.common.uploadedStartFrameAlt")}
                     fill
                     unoptimized
                     className={generationMode === "single-image" ? "object-contain" : "object-cover"}
                   />
                   <div className={styles.sourceImageActions}>
-                    <button type="button" onClick={() => sourceInputRef.current?.click()}>Replace</button>
-                    <button type="button" onClick={clearSource}>Remove</button>
+                     <button type="button" onClick={() => sourceInputRef.current?.click()}>{t("create.video.common.replaceSource")}</button>
+                     <button type="button" onClick={clearSource}>{t("create.video.common.removeSource")}</button>
                   </div>
                 </div>
               ) : (
                 <label className={styles.upload}>
                   <CloudUpload size={22} />
                   <span className={styles.uploadCopy}>
-                    <strong>Upload Image</strong>
-                    <small>PNG / JPG / WEBP</small>
+                     <strong>{t("create.video.common.uploadImage")}</strong>
+                     <small>{t("create.video.common.pngFormats")}</small>
                   </span>
                   <input
                     ref={sourceInputRef}
@@ -2669,19 +2661,19 @@ export function VideoGenerationPage() {
               ) : null}
               {generationMode === "single-image" ? (
                 <>
-                  <p className={styles.sourceModeNote}>The sheet is split into separate scenes before generation, then merged into one video.</p>
+                   <p className={styles.sourceModeNote}>{t("create.video.common.sourceModeNote")}</p>
                   {sourcePreviewImage ? (
                     <div className={styles.storyboardSplitSummary} aria-live="polite">
                       <div className={styles.storyboardSplitHeader}>
-                        <strong>{storyboardSplitting ? "Detecting storyboard grid…" : hasCurrentStoryboardSlices ? storyboardGridLabel ?? "Upload a storyboard sheet to detect scenes" : "Preparing storyboard scenes…"}</strong>
-                        <small>{storyboardSplitting ? "Preparing scene images" : hasCurrentStoryboardSlices && storyboardSlices.length > 0 ? "Each panel becomes one video scene" : "Use a sheet with clear gutters between panels"}</small>
+                         <strong>{storyboardSplitting ? t("create.video.common.detectingStoryboardGrid") : hasCurrentStoryboardSlices ? storyboardGridLabel ?? t("create.video.common.uploadStoryboardSheet") : t("create.video.common.preparingStoryboardScenes")}</strong>
+                         <small>{storyboardSplitting ? t("create.video.common.preparingSceneImages") : hasCurrentStoryboardSlices && storyboardSlices.length > 0 ? t("create.video.common.eachPanelScene") : t("create.video.common.clearGutters")}</small>
                         {storyboardQualityNote ? <small className={styles.storyboardQualityNote} role="status">{storyboardQualityNote}</small> : null}
                       </div>
                       {hasCurrentStoryboardSlices && storyboardSlices.length > 0 ? (
                         <div className={styles.storyboardSliceRow}>
                           {storyboardSlices.map((slice, index) => (
                             <div key={slice.id} className={styles.storyboardSlice}>
-                              <Image src={slice.image} alt={`Storyboard scene ${index + 1}`} fill unoptimized />
+                              <Image src={slice.image} alt={t("create.video.common.storyboardSceneAlt", { number: index + 1 })} fill unoptimized />
                               <span>{index + 1}</span>
                             </div>
                           ))}
@@ -2695,21 +2687,21 @@ export function VideoGenerationPage() {
           </div>
           <div className={styles.centerColumn}>
             <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
-              <SectionTitle>PREVIEW</SectionTitle>
+               <SectionTitle>{t("create.preview")}</SectionTitle>
               <div className={styles.videoPreview}>
                 <VideoPreviewLiveBadge />
                 {isGeneratingVideo ? (
                   <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: "16 / 9" }}>
                     <div className={styles.videoGeneratingPreview} aria-busy="true">
                       <WandSparkles size={26} />
-                      <strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong>
+                      <strong>{generationStatus === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong>
                       <span>{generationStatus === "uploading"
-                        ? generationMode === "single-image" ? "Splitting and uploading storyboard scenes…" : "Uploading scene assets…"
-                        : generationMode === "single-image" ? "Generating scenes from the storyboard sheet…" : "Your scenes are being generated in order…"}</span>
+                         ? generationMode === "single-image" ? t("create.video.common.splittingScenes") : t("create.video.common.uploadingSceneAssets")
+                         : generationMode === "single-image" ? t("create.video.common.generatingStoryboardScenes") : t("create.video.common.generatingScenesInOrder")}</span>
                       <div className={styles.videoGenerationProgress}>
                         <i style={{ width: `${generationProgress.total ? Math.round((generationProgress.completed / generationProgress.total) * 100) : 12}%` }} />
                       </div>
-                      <small>{generationProgress.completed}/{generationProgress.total || generationScenes.length} scenes complete</small>
+                       <small>{t("create.video.common.scenesComplete", { completed: generationProgress.completed, total: generationProgress.total || generationScenes.length })}</small>
                     </div>
                   </div>
                 ) : displayedVideoUrl ? (
@@ -2720,7 +2712,7 @@ export function VideoGenerationPage() {
                     mediaFrameClassName={styles.videoPreviewMediaFrame}
                     mediaFrameStyle={{ aspectRatio: previewMediaAspectRatio }}
                     onAspectRatioChange={handlePreviewAspectRatioChange}
-                    ariaLabel="Generated video"
+                    ariaLabel={t("create.video.common.generatedVideo")}
                   />
                 ) : selectedModelOption?.previewUrl ? (
                   <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
@@ -2742,8 +2734,8 @@ export function VideoGenerationPage() {
                     type="button"
                     onClick={() => void downloadDisplayedVideo()}
                     disabled={!displayedVideoUrl}
-                    aria-label="Download video"
-                    title="Download video"
+                    aria-label={t("create.video.common.downloadVideo")}
+                    title={t("create.video.common.downloadVideo")}
                   >
                     <Download size={16} />
                   </button>
@@ -2751,8 +2743,8 @@ export function VideoGenerationPage() {
                     type="button"
                     onClick={() => setIsVideoFavorite((favorite) => !favorite)}
                     disabled={!displayedVideoUrl}
-                    aria-label="Favorite video"
-                    title="Favorite video"
+                    aria-label={t("create.video.common.favoriteVideo")}
+                    title={t("create.video.common.favoriteVideo")}
                     className={isVideoFavorite ? styles.videoFavoriteActive : undefined}
                   >
                     <Heart size={16} fill={isVideoFavorite ? "currentColor" : "none"} />
@@ -2760,7 +2752,7 @@ export function VideoGenerationPage() {
                 </div> : null}
               </div>
               <EosCutButton sourceGenerationId={displayedVideoUrl ? displayedStoryboardId : null} />
-              <div className={styles.previewViewTabs} role="tablist" aria-label="Video preview views">
+              <div className={styles.previewViewTabs} role="tablist" aria-label={t("create.video.common.videoPreviewViews")}>
                     <button
                       type="button"
                       role="tab"
@@ -2768,7 +2760,7 @@ export function VideoGenerationPage() {
                       className={previewView === "latest" ? styles.previewViewTabActive : undefined}
                       onClick={() => setPreviewView("latest")}
                     >
-                      Latest result
+                      {t("create.video.common.latestResult")}
                     </button>
                     <button
                       type="button"
@@ -2777,13 +2769,13 @@ export function VideoGenerationPage() {
                       className={previewView === "library" ? styles.previewViewTabActive : undefined}
                       onClick={() => setPreviewView("library")}
                     >
-                      Video library
+                      {t("create.video.common.videoLibrary")}
                     </button>
               </div>
               <div className={styles.videoGalleryGrid}>
                   <div className={styles.videoGalleryColumn}>
                     <div className={styles.videoGalleryHeading}>
-                      <h3>CURRENT VIDEO</h3>
+                     <h3>{t("create.video.common.currentVideo")}</h3>
                     </div>
                     <div className={styles.videoCurrentGallery}>
                       {latestVideoUrl ? (
@@ -2791,23 +2783,23 @@ export function VideoGenerationPage() {
                           type="button"
                           className={styles.videoCurrentCard}
                           onClick={() => setPreviewView("latest")}
-                          aria-label="Show latest generated video"
+                           aria-label={t("create.video.common.latestVideo")}
                           aria-pressed={previewView === "latest"}
                         >
                           <span className={styles.videoGalleryThumb}>
                             <video src={latestVideoUrl} muted playsInline preload="metadata" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} aria-hidden="true" />
                             <span className={styles.videoGalleryPlay}><Play size={14} fill="currentColor" /></span>
                           </span>
-                          <span className={styles.videoGalleryStatus}>Latest generated video</span>
+                           <span className={styles.videoGalleryStatus}>{t("create.video.common.latestVideo")}</span>
                         </button>
                       ) : (
-                        <div className={styles.videoGalleryEmpty}>Latest generated video will appear here.</div>
+                         <div className={styles.videoGalleryEmpty}>{t("create.video.common.latestVideoEmpty")}</div>
                       )}
                     </div>
                   </div>
                   <div className={`${styles.videoGalleryColumn} ${styles.videoRecentColumn}`}>
                     <div className={styles.videoGalleryHeading}>
-                      <h3>RECENT VIDEOS</h3>
+                         <h3>{t("create.video.common.recentVideos")}</h3>
                       <button
                         type="button"
                         onClick={() => {
@@ -2815,13 +2807,13 @@ export function VideoGenerationPage() {
                           void loadVideoHistory(workspaceId);
                         }}
                       >
-                        View history
+                         {t("create.video.common.viewHistory")}
                       </button>
                     </div>
                     <div className={styles.videoRecentGallery}>
                       <div className={styles.videoRecentRow} ref={videoRecentRowRef}>
                         {videoHistoryLoading && videoHistory.length === 0 ? (
-                          <div className={styles.videoGalleryEmpty}>Loading video history…</div>
+                           <div className={styles.videoGalleryEmpty}>{t("create.video.common.loadingHistory")}</div>
                         ) : videoHistoryError ? (
                           <div className={`${styles.videoGalleryEmpty} ${styles.videoGalleryError}`} role="alert">
                             {videoHistoryError}
@@ -2840,7 +2832,7 @@ export function VideoGenerationPage() {
                                   setVideoLibraryIndex(itemIndex);
                                   setPreviewView("library");
                                 }}
-                                aria-label={`Open generated video from ${formatHistoryDate(item.createdAt)}`}
+                                aria-label={t("create.video.common.openGeneratedVideo", { date: formatHistoryDate(item.createdAt) })}
                                 aria-pressed={selected}
                               >
                                 <span className={styles.videoGalleryThumb}>
@@ -2851,7 +2843,7 @@ export function VideoGenerationPage() {
                             );
                           })
                         ) : (
-                          <div className={styles.videoGalleryEmpty}>No generated videos yet.</div>
+                           <div className={styles.videoGalleryEmpty}>{t("create.video.common.noVideos")}</div>
                         )}
                       </div>
                       {videoHistory.length > 3 ? (
@@ -2861,7 +2853,7 @@ export function VideoGenerationPage() {
                               type="button"
                               className={styles.videoGalleryPrev}
                               onClick={() => videoRecentRowRef.current?.scrollBy({ left: -290, behavior: "smooth" })}
-                              aria-label="Previous recent videos"
+                              aria-label={t("create.video.common.previousRecentVideos")}
                             >
                               <ChevronLeft size={18} />
                             </button>
@@ -2870,7 +2862,7 @@ export function VideoGenerationPage() {
                             type="button"
                             className={styles.videoGalleryNext}
                             onClick={() => videoRecentRowRef.current?.scrollBy({ left: 290, behavior: "smooth" })}
-                            aria-label="Next recent videos"
+                            aria-label={t("create.video.common.nextRecentVideos")}
                             disabled={!videoRecentScrollState.canScrollRight}
                           >
                             <ChevronRight size={18} />
@@ -2884,8 +2876,8 @@ export function VideoGenerationPage() {
             {generationMode !== "reference-to-video" && supportsReferenceImages ? (
               <section className={styles.stripSection}>
                 <div className={styles.subheading}>
-                  SHOT / FRAME REFERENCES
-                  <small>(Optional · shared across scenes)</small>
+                   {t("create.video.common.shotFrameReferences")}
+                   <small>({t("create.video.common.sharedAcrossScenes")})</small>
                 </div>
                 {supportsReferenceImages ? (
                   <div className={styles.thumbRow}>
@@ -2894,7 +2886,7 @@ export function VideoGenerationPage() {
                       className={styles.addFrame}
                       onClick={() => frameInputRef.current?.click()}
                     >
-                      <Plus size={16} /> Add Frame
+                       <Plus size={16} /> {t("create.video.common.addFrame")}
                     </button>
                     <input
                       ref={frameInputRef}
@@ -2922,15 +2914,15 @@ export function VideoGenerationPage() {
                   </div>
                 ) : (
                   <p className={styles.sceneRequirement}>{referenceModeHasNoModel
-                    ? "No Reference to Video model is configured. Ask an Admin to assign one in Admin > Model routes > Image to Video > Reference to Video."
-                    : "The selected model does not support reference images. Choose a compatible model."}</p>
+                    ? t("create.video.common.noReferenceVideoModel")
+                    : t("create.video.common.unsupportedReferenceImages")}</p>
                 )}
               </section>
             ) : null}
             {!isSingleSceneGenerationMode(generationMode) ? (
             <section className={styles.stripSection}>
               <div className={styles.subheading}>
-                STORYBOARD {generationMode === "single-image" ? <small>(Auto-created from uploaded sheet)</small> : <small>(Optional)</small>}
+                {t("create.video.common.storyboard")} {generationMode === "single-image" ? <small>({t("create.video.common.autoCreatedFromSheet")})</small> : <small>({t("create.video.common.optional")})</small>}
               </div>
               <div className={styles.sceneScroller}>
                 <div ref={sceneRowRef} className={styles.sceneRow}>
@@ -2946,14 +2938,14 @@ export function VideoGenerationPage() {
                           className={`${styles.scene} ${index === activeSceneIndex ? styles.selected : ""}`}
                         >
                           <div className={styles.sceneCardHeader}>
-                            <span>Scene {index + 1}</span>
+                            <span>{t("create.video.common.scene")} {index + 1}</span>
                             <div className={styles.sceneCardMeta}>
-                              {durationProperty ? <small>{scene.duration}s</small> : null}
+                              {durationProperty ? <small>{scene.duration}{t("create.video.common.secondsShort")}</small> : null}
                               <button
                                 type="button"
                                 className={styles.sceneEdit}
-                                aria-label={`Edit Scene ${index + 1}`}
-                                title={`Edit Scene ${index + 1}`}
+                                aria-label={`${t("create.video.common.editSceneTitle", { number: index + 1 })}`}
+                                title={`${t("create.video.common.editSceneTitle", { number: index + 1 })}`}
                                 onClick={() => openEditSceneModal(index)}
                               >
                                 <Pencil size={10} />
@@ -2962,8 +2954,8 @@ export function VideoGenerationPage() {
                                 <button
                                   type="button"
                                   className={styles.sceneDelete}
-                                  aria-label={`Delete Scene ${index + 1}`}
-                                  title={`Delete Scene ${index + 1}`}
+                                  aria-label={`${t("create.video.common.deleteSceneConfirm", { number: index + 1 })}`}
+                                  title={`${t("create.video.common.deleteSceneConfirm", { number: index + 1 })}`}
                                   onClick={() => deleteScene(index)}
                                 >
                                   <Trash2 size={10} />
@@ -2983,20 +2975,23 @@ export function VideoGenerationPage() {
                           ) : source === "manual" ? (
                             <div className={styles.missingFrame}>
                               <CloudUpload size={15} />
-                              <span>Upload image</span>
+                             <span>{t("create.video.common.uploadImage")}</span>
                             </div>
                           ) : (
                             <div className={styles.previousFrame}>
                               <Link2 size={16} />
-                              <span>Previous last frame</span>
+                             <span>{t("create.video.common.previousFrame")}</span>
                             </div>
                           )}
                           <div className={styles.sceneCardFooter}>
                             {index > 0 && videoMode === "flexible" ? (
                               <Dropdown
                                 value={scene.startFrameSource}
-                                options={sceneSourceOptions}
-                                ariaLabel={`Start frame source for Scene ${index + 1}`}
+                                options={sceneSourceOptions.map((option) => ({
+                                  ...option,
+                                  label: option.value === "manual" ? t("create.video.common.newImage") : t("create.video.common.previousFrame"),
+                                }))}
+                                ariaLabel={`${t("create.video.common.startFrame")} ${t("create.video.common.scene")} ${index + 1}`}
                                 onChange={(nextSource) => updateSceneSource(index, nextSource as StartFrameSource)}
                                 className={styles.sceneSourceDropdown}
                                 triggerClassName={styles.sceneSourceTrigger}
@@ -3007,8 +3002,8 @@ export function VideoGenerationPage() {
                             ) : (
                               <em className={styles.sceneAutoNote}>
                                 {index > 0 && videoMode === "continuous"
-                                  ? "Auto from previous"
-                                  : "Start frame"}
+                                   ? t("create.video.common.autoFromPrevious")
+                                   : t("create.video.common.startFrame")}
                               </em>
                             )}
                           </div>
@@ -3016,7 +3011,7 @@ export function VideoGenerationPage() {
                         {nextSource === "previous_last_frame" ? (
                           <div
                             className={styles.sceneConnector}
-                            aria-label={`Scene ${index + 2} continues from Scene ${index + 1}`}
+                            aria-label={`${t("create.video.common.scene")} ${index + 2} ${t("create.video.common.continuesFromPreviousScene", { number: index + 1 })}`}
                           >
                             <Link2 size={14} />
                           </div>
@@ -3032,11 +3027,11 @@ export function VideoGenerationPage() {
                       disabled={!canAddScene}
                       title={canAddScene ? "Add another scene" : addSceneDisabledReason}
                     >
-                      <Plus size={16} /> Add Scene
+                       <Plus size={16} /> {t("create.video.common.addScene")}
                     </button>
                   ) : null}
                 </div>
-                {generationMode !== "single-image" && !canAddScene ? <p className={styles.sceneRequirement}>{sceneLimitReached ? `You can create up to ${maxStoryboardScenes} scenes in one storyboard.` : "Complete Scene 1 with a start image and prompt before adding another scene."}</p> : null}
+                 {generationMode !== "single-image" && !canAddScene ? <p className={styles.sceneRequirement}>{sceneLimitReached ? t("create.video.common.sceneLimit", { count: maxStoryboardScenes }) : t("create.video.common.completeSceneBeforeAdd")}</p> : null}
                 {sceneScrollState.canScrollLeft ||
                 sceneScrollState.canScrollRight ? (
                   <>
@@ -3045,7 +3040,7 @@ export function VideoGenerationPage() {
                         type="button"
                         className={styles.scenePrev}
                         onClick={() => scrollScenes("left")}
-                        aria-label="Scroll storyboard scenes left"
+                        aria-label={t("create.video.common.previousStoryboardScenes")}
                       >
                         <ChevronLeft size={20} />
                       </button>
@@ -3055,7 +3050,7 @@ export function VideoGenerationPage() {
                         type="button"
                         className={styles.sceneNext}
                         onClick={() => scrollScenes("right")}
-                        aria-label="Scroll storyboard scenes right"
+                        aria-label={t("create.video.common.nextStoryboardScenes")}
                       >
                         <ChevronRight size={20} />
                       </button>
@@ -3067,15 +3062,15 @@ export function VideoGenerationPage() {
             ) : null}
           </div>
           <aside className={styles.settings}>
-            <SectionTitle number="3">SETTINGS</SectionTitle>
+             <SectionTitle number="3">{t("create.video.common.settings")}</SectionTitle>
             <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">
-              Model <Info size={11} />
+               {t("create.video.common.model")} <Info size={11} />
             </label>
             <VideoModelDropdown
               models={models}
               value={selectedModel}
               loading={modelsLoading}
-              ariaLabel="Video model options"
+               ariaLabel={t("create.video.common.modelOptions", { feature: t("create.video.tabs.imageToVideo") })}
               onChange={(nextModel) => {
                 const option = models.find((item) => item.model === nextModel);
                 if (option) {
@@ -3103,15 +3098,15 @@ export function VideoGenerationPage() {
             ) : null}
             {resolutionProperty ? (
               <div className={styles.settingBlock}>
-                <div className={styles.settingLabel}>{resolutionProperty[1].title ?? "Resolution"} <Info size={11} /></div>
+                 <div className={styles.settingLabel}>{t("create.video.common.resolution")} <Info size={11} /></div>
                 <Dropdown
                   value={resolution}
                   options={(resolutionProperty[1].enum ?? []).map((value) => ({
                     value: String(value),
                     label: String(value),
                   }))}
-                  ariaLabel="Resolution options"
-                  placeholder="Select resolution"
+                   ariaLabel={t("create.video.common.resolutionOptions")}
+                   placeholder={t("create.video.common.selectResolution")}
                   onChange={setResolution}
                   className={styles.modelDropdown}
                   triggerClassName={`${styles.modelDropdownTrigger} ${styles.resolutionDropdownTrigger}`}
@@ -3123,11 +3118,11 @@ export function VideoGenerationPage() {
             {supportsAspectRatio && aspectRatioOptions.length > 0 ? (
               <div className={styles.settingBlock}>
                 <div className={styles.settingLabel}>
-                  {aspectRatioProperty?.[1].title ?? "Aspect Ratio"} <Info size={11} />
+                   {t("create.video.common.aspectRatio")} <Info size={11} />
                   {storyboardHasMixedAspectRatios
-                    ? <small className={styles.autoAspectRatioHint}>Per scene</small>
+                     ? <small className={styles.autoAspectRatioHint}>{t("create.video.common.perScene")}</small>
                     : !canSelectAspectRatio && detectedImageAspectRatio !== null
-                      ? <small className={styles.autoAspectRatioHint}>Auto from image</small>
+                       ? <small className={styles.autoAspectRatioHint}>{t("create.video.common.autoFromImage")}</small>
                       : null}
                 </div>
                 <div className={styles.ratios}>
@@ -3139,10 +3134,10 @@ export function VideoGenerationPage() {
                         onClick={() => setAspectRatio(ratio)}
                         disabled={storyboardHasMixedAspectRatios}
                         title={storyboardHasMixedAspectRatios
-                          ? "Each storyboard scene uses its own aspect ratio"
+                           ? t("create.video.common.eachSceneAspectRatio")
                           : !canSelectAspectRatio && detectedImageAspectRatio !== null
-                            ? "Aspect ratio detected from the uploaded image"
-                            : `Use ${ratio}`}
+                             ? t("create.video.common.detectedAspectRatio")
+                             : t("create.video.common.useRatio", { ratio })}
                         key={ratio}
                       >
                         <i className={ratio === "1:1" ? styles.square : Number(ratio.split(":")[0]) < Number(ratio.split(":")[1]) ? styles.portrait : styles.landscape} />
@@ -3155,7 +3150,7 @@ export function VideoGenerationPage() {
             ) : null}
             {audioProperty && !audioInputMode ? (
               <div className={styles.toggleRow}>
-                {audioProperty[1].title ?? "Audio"}{" "}
+                 {t("create.video.common.audio")}{" "}
                 <button
                   type="button"
                   className={styles.toggle}
@@ -3168,49 +3163,49 @@ export function VideoGenerationPage() {
             ) : null}
             {audioInputMode && generationMode !== "reference-to-video" ? (
               <div className={styles.audioReferenceField}>
-                <div className={styles.settingLabel}><span>Audio Reference</span><small>Optional</small></div>
-                {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label="Remove audio"><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={18} /><strong>Upload audio reference</strong><small>MP3 / WAV / M4A</small></button>}
+                 <div className={styles.settingLabel}><span>{t("create.video.common.audioReference")}</span><small>{t("create.video.common.optional")}</small></div>
+                 {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label={t("create.video.common.removeAudio")}><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={18} /><strong>{t("create.video.common.uploadAudioReference")}</strong><small>{t("create.video.common.audioFormats")}</small></button>}
                 <input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAudioFile(file); event.currentTarget.value = ""; }} />
               </div>
             ) : null}
             {showPostAudioOptions ? (
               <div className={styles.postAudioCard}>
-                <div className={styles.settingLabel}><span>ADD AUDIO AFTER VIDEO</span><small>Optional</small></div>
-                <div className={styles.postAudioOptions} role="group" aria-label="Add audio after video">
+                 <div className={styles.settingLabel}><span>{t("create.video.common.addAudioAfterVideo")}</span><small>{t("create.video.common.optional")}</small></div>
+                 <div className={styles.postAudioOptions} role="group" aria-label={t("create.video.common.addAudioAfterVideo")}>
                   <div className={styles.toggleRow}>
-                    <span>Video to SFX</span>
+                     <span>{t("create.video.common.videoToSfx")}</span>
                     <button
                       type="button"
                       className={`${styles.toggle} ${postAudioSfxEnabled ? "" : styles.toggleOff}`}
                       onClick={() => setPostAudioSfxEnabled((value) => !value)}
                       aria-pressed={postAudioSfxEnabled}
-                      aria-label="Enable Video to SFX"
+                       aria-label={t("create.video.common.enableVideoToSfx")}
                     >
                       <i />
                     </button>
                   </div>
                   <div className={styles.toggleRow}>
-                    <span>Video to Music</span>
+                     <span>{t("create.video.common.videoToMusic")}</span>
                     <button
                       type="button"
                       className={`${styles.toggle} ${postAudioMusicEnabled ? "" : styles.toggleOff}`}
                       onClick={() => setPostAudioMusicEnabled((value) => !value)}
                       aria-pressed={postAudioMusicEnabled}
-                      aria-label="Enable Video to Music"
+                       aria-label={t("create.video.common.enableVideoToMusic")}
                     >
                       <i />
                     </button>
                   </div>
                 </div>
                 {postAudioMode !== "none" ? (
-                  <small className={styles.postAudioHint}>ระบบจะใช้โมเดล default ที่ตั้งไว้ใน Admin ของแต่ละประเภท และรวมเสียงที่เลือกเข้ากับวิดีโอ</small>
+                   <small className={styles.postAudioHint}>{t("create.video.common.postAudioHint")}</small>
                 ) : null}
               </div>
             ) : null}
             {settingsModelParameterEntries.map(([name, property]) => {
               const value = modelParams[name];
               const isRequired = requiredProperties.has(name);
-              const label = property.title ?? labelFromParameterName(name);
+              const label = localizedParameterLabel(name, property.title);
               if (property.enum?.length) {
                 return (
                   <label className={styles.dynamicField} key={name}>
@@ -3218,18 +3213,18 @@ export function VideoGenerationPage() {
                     <Dropdown
                       value={value === undefined ? "" : String(value)}
                       options={[
-                        ...(!isRequired ? [{ value: "", label: `Select ${label.toLowerCase()}` }] : []),
-                        ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+                        ...(!isRequired ? [{ value: "", label: `${t("create.video.common.selectPrefix")} ${label.toLowerCase()}` }] : []),
+                        ...property.enum.map((option) => ({ value: String(option), label: translateVideoSchemaOption(option, t) })),
                       ]}
                       onChange={(nextValue) => updateModelParam(name, parseSchemaEnumValue(nextValue, property))}
                       ariaLabel={label}
-                      placeholder={`Select ${label.toLowerCase()}`}
+                      placeholder={`${t("create.video.common.selectPrefix")} ${label.toLowerCase()}`}
                       className={styles.dynamicDropdown}
                       triggerClassName={styles.dynamicSelect}
                       menuClassName={styles.dynamicDropdownMenu}
                       optionClassName={styles.dynamicDropdownOption}
                     />
-                    {property.description ? <small>{property.description}</small> : null}
+                    {translateVideoSchemaDescription(property.description, t) ? <small>{translateVideoSchemaDescription(property.description, t)}</small> : null}
                   </label>
                 );
               }
@@ -3253,7 +3248,7 @@ export function VideoGenerationPage() {
                     <input
                       className={styles.dynamicInput}
                       value={Array.isArray(value) ? value.join(", ") : ""}
-                      placeholder="Add values separated by commas"
+                      placeholder={t("create.video.common.addValues")}
                       onChange={(event) => updateModelParam(name, event.target.value.split(",").map((item) => item.trim()).filter(Boolean))}
                       aria-required={isRequired}
                     />
@@ -3293,7 +3288,7 @@ export function VideoGenerationPage() {
             <div className={styles.estimateBlock}>
               <div className={styles.estimate} title={creditEstimateError ?? undefined}>
                 <div>
-                  ESTIMATED CREDITS <Info size={11} />
+                   {t("create.video.common.estimatedCredits")} <Info size={11} />
                 </div>
                 <span>
                   {estimateDescription}
@@ -3301,7 +3296,7 @@ export function VideoGenerationPage() {
                 </span>
                 {shouldAutoUpscaleStoryboard ? (
                   <small className={styles.autoUpscaleNote}>
-                    Includes automatic 2K AI Upscale for {generationScenes.length} storyboard scenes.
+                     {t("create.video.extend.autoUpscaleNote", { count: generationScenes.length })}
                   </small>
                 ) : null}
               </div>
@@ -3315,7 +3310,7 @@ export function VideoGenerationPage() {
                   disabled={isCancellingVideo}
                 >
                   {isCancellingVideo ? <LoaderCircle size={14} className={styles.creditSpinner} /> : <X size={14} />}
-                  {isCancellingVideo ? "CANCELLING…" : "CANCEL GENERATION"}
+                   {isCancellingVideo ? t("create.video.common.cancelling") : t("create.video.common.cancelGeneration")}
                 </button>
               ) : null}
               <button
@@ -3324,14 +3319,14 @@ export function VideoGenerationPage() {
                 onClick={handleGenerate}
                 disabled={!canGenerate}
               >
-                <WandSparkles size={18} /> {generationStatus === "uploading" || generationStatus === "processing" ? "GENERATING…" : "GENERATE VIDEO"}
+                 <WandSparkles size={18} /> {generationStatus === "uploading" || generationStatus === "processing" ? t("create.video.common.generating") : t("create.video.common.generateVideo")}
               </button>
               <p className={styles.privateNote}>
-                <LockKeyhole size={12} /> Your generation is private and secure
+                 <LockKeyhole size={12} /> {t("create.settings.privateSecure")}
               </p>
             </div>
             {generationProgress.total > 0 && (generationStatus === "uploading" || generationStatus === "processing" || generationStatus === "completed") ? (
-              <p className={styles.generationProgress}>{generationProgress.completed}/{generationProgress.total} scenes complete</p>
+               <p className={styles.generationProgress}>{t("create.video.common.scenesComplete", { completed: generationProgress.completed, total: generationProgress.total })}</p>
             ) : null}
           </aside>
         </div>}
@@ -3352,32 +3347,32 @@ export function VideoGenerationPage() {
           >
             <div className={styles.sceneModalHeader}>
               <div>
-                <h2 id="scene-modal-title">{editingSceneIndex === null ? "Add Scene" : `Edit Scene ${editingSceneIndex + 1}`}</h2>
+                <h2 id="scene-modal-title">{editingSceneIndex === null ? t("create.video.common.addSceneTitle") : t("create.video.common.editSceneTitle", { number: editingSceneIndex + 1 })}</h2>
                 <p>
                   {videoMode === "continuous"
-                    ? "Describe the motion. The previous scene's last frame is used automatically."
+                    ? t("create.video.common.scenePromptHintContinuous")
                     : videoMode === "flexible"
-                      ? "Choose how this scene starts, then describe the motion."
-                      : "Upload a storyboard image and describe the motion."}
+                      ? t("create.video.common.scenePromptHintFlexible")
+                      : t("create.video.common.scenePromptHintStoryboard")}
                 </p>
               </div>
               <button
                 type="button"
                 className={styles.sceneModalClose}
                 onClick={closeSceneModal}
-                aria-label={editingSceneIndex === null ? "Close add scene dialog" : "Close edit scene dialog"}
+                aria-label={editingSceneIndex === null ? t("create.video.common.closeAddScene") : t("create.video.common.closeEditScene")}
               >
                 <X size={18} />
               </button>
             </div>
             <div className={`${styles.sceneModalMode} ${styles[`sceneModalMode${selectedVideoMode.label}`]}`}>
-              <strong>{selectedVideoMode.label} mode</strong>
+              <strong>{t("create.video.common.modeSuffix", { mode: t(generationModeCopyKeys[videoMode].labelKey) })}</strong>
               <span>
                 {videoMode === "storyboard"
-                  ? "This scene starts from its own image."
+                  ? t("create.video.common.sceneStartsOwnImage")
                   : videoMode === "continuous"
-                    ? "This scene starts from the previous scene's last frame."
-                    : "Choose whether this scene starts with a new image or the previous frame."}
+                    ? t("create.video.common.sceneStartsPreviousFrame")
+                    : t("create.video.common.sceneStartsNewOrPrevious")}
               </span>
             </div>
             {sceneError ? (
@@ -3388,7 +3383,7 @@ export function VideoGenerationPage() {
                     <div className={styles.sceneModalImagePreview}>
                   <Image
                     src={sceneImage}
-                    alt="New scene"
+                    alt={t("create.video.common.newSceneImage")}
                     fill
                     unoptimized
                     className="object-cover"
@@ -3400,7 +3395,7 @@ export function VideoGenerationPage() {
                             type="button"
                             onClick={() => sceneInputRef.current?.click()}
                           >
-                            Replace
+                            {t("create.video.common.replace")}
                           </button>
                           <button
                             type="button"
@@ -3408,7 +3403,7 @@ export function VideoGenerationPage() {
                               clearSceneModalImage();
                             }}
                           >
-                            Remove
+                            {t("create.video.common.remove")}
                           </button>
                         </div>
                       ) : null}
@@ -3416,8 +3411,8 @@ export function VideoGenerationPage() {
               ) : sceneStartFrameSource === "previous_last_frame" ? (
                 <div className={styles.sceneModalPreviousFrame}>
                   <Link2 size={22} />
-                  <strong>Previous scene frame</strong>
-                  <small>This scene continues automatically</small>
+                  <strong>{t("create.video.common.previousSceneFrame")}</strong>
+                  <small>{t("create.video.common.sceneContinuesAutomatically")}</small>
                 </div>
               ) : (
                 <button
@@ -3426,8 +3421,8 @@ export function VideoGenerationPage() {
                   onClick={() => sceneInputRef.current?.click()}
                 >
                   <CloudUpload size={24} />
-                  <strong>Upload scene image</strong>
-                  <small>PNG / JPG / WEBP</small>
+                  <strong>{t("create.video.common.uploadSceneImage")}</strong>
+                  <small>{t("create.video.common.pngFormats")}</small>
                 </button>
               )}
               <input
@@ -3445,8 +3440,8 @@ export function VideoGenerationPage() {
             {videoMode === "flexible" ? (
               <div className={styles.sceneModalSourceField}>
                 <div className={styles.sceneModalSourceHeader}>
-                  <span>Start frame</span>
-                  <small>Choose how this scene begins</small>
+                  <span>{t("create.video.common.startFrame")}</span>
+                  <small>{t("create.video.common.chooseSceneStart")}</small>
                 </div>
                 <div className={styles.sceneModalSourceOptions}>
                   <button
@@ -3461,8 +3456,8 @@ export function VideoGenerationPage() {
                       setSceneError(null);
                     }}
                   >
-                    <strong>New image</strong>
-                    <small>Upload a new start frame</small>
+                    <strong>{t("create.video.common.newImage")}</strong>
+                    <small>{t("create.video.common.uploadNewStartFrame")}</small>
                   </button>
                   <button
                     type="button"
@@ -3477,27 +3472,26 @@ export function VideoGenerationPage() {
                       setSceneError(null);
                     }}
                   >
-                    <strong>Previous frame</strong>
-                    <small>Continue from the scene before</small>
+                    <strong>{t("create.video.common.previousFrame")}</strong>
+                    <small>{t("create.video.common.continueFromSceneBefore")}</small>
                   </button>
                 </div>
               </div>
             ) : null}
             {videoMode === "continuous" ? (
               <div className={styles.sceneModalPreviousNote}>
-                <Link2 size={13} /> This scene will use the previous
-                scene&apos;s last frame.
+                <Link2 size={13} /> {t("create.video.common.thisSceneUsesPreviousFrame")}
               </div>
             ) : null}
             <label className={styles.sceneModalField}>
               <span className={styles.sceneModalFieldHeader}>
-                <span>Prompt <b>*</b></span>
+                <span>{t("create.video.common.prompt")} <b>*</b></span>
                 <small>{scenePrompt.length} / 2000</small>
               </span>
               <textarea
                 value={scenePrompt}
                 onChange={(event) => setScenePrompt(event.target.value)}
-                placeholder="Camera slowly moves forward"
+                placeholder={t("create.video.common.scenePromptPlaceholder")}
                 maxLength={2000}
               />
             </label>
@@ -3513,11 +3507,11 @@ export function VideoGenerationPage() {
             ) : null}
             {modelParameterEntries.length ? (
               <div className={styles.sceneModelParams}>
-                <div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>
+                 <div className={styles.sceneModelParamsTitle}>{t("create.video.common.modelParameters")}</div>
                 {modelParameterEntries.map(([name, property]) => {
                   const value = sceneModelParams[name];
                   const isRequired = requiredProperties.has(name);
-                  const label = property.title ?? labelFromParameterName(name);
+                  const label = localizedParameterLabel(name, property.title);
                   if (property.enum?.length) {
                     return (
                       <label className={styles.dynamicField} key={name}>
@@ -3525,12 +3519,12 @@ export function VideoGenerationPage() {
                         <Dropdown
                           value={value === undefined ? "" : String(value)}
                           options={[
-                            ...(!isRequired ? [{ value: "", label: `Select ${label.toLowerCase()}` }] : []),
-                            ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+                            ...(!isRequired ? [{ value: "", label: `${t("create.video.common.selectPrefix")} ${label.toLowerCase()}` }] : []),
+                            ...property.enum.map((option) => ({ value: String(option), label: translateVideoSchemaOption(option, t) })),
                           ]}
                           onChange={(nextValue) => setSceneModelParams((current) => ({ ...current, [name]: parseSchemaEnumValue(nextValue, property) }))}
                           ariaLabel={label}
-                          placeholder={`Select ${label.toLowerCase()}`}
+                          placeholder={`${t("create.video.common.selectPrefix")} ${label.toLowerCase()}`}
                           className={styles.dynamicDropdown}
                           triggerClassName={styles.dynamicSelect}
                           menuClassName={styles.dynamicDropdownMenu}
@@ -3559,7 +3553,7 @@ export function VideoGenerationPage() {
                         <input
                           className={styles.dynamicInput}
                           value={Array.isArray(value) ? value.join(", ") : ""}
-                          placeholder="Add values separated by commas"
+                          placeholder={t("create.video.common.addValues")}
                           onChange={(event) => setSceneModelParams((current) => ({ ...current, [name]: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))}
                           aria-required={isRequired}
                         />
@@ -3604,7 +3598,7 @@ export function VideoGenerationPage() {
                 className={styles.sceneModalCancel}
                 onClick={closeSceneModal}
               >
-                Cancel
+                {t("create.video.common.cancel")}
               </button>
               <button
                 type="button"
@@ -3612,7 +3606,7 @@ export function VideoGenerationPage() {
                 onClick={saveScene}
                 disabled={!canSaveScene}
               >
-                {editingSceneIndex === null ? "Save Scene" : "Save Changes"}
+                {editingSceneIndex === null ? t("create.video.common.saveScene") : t("create.video.common.saveChanges")}
               </button>
             </div>
           </div>
@@ -3637,9 +3631,9 @@ export function VideoGenerationPage() {
               <AlertTriangle size={20} />
             </div>
             <div className={styles.confirmModalCopy}>
-              <h2 id="delete-scene-title">Delete Scene {deleteSceneIndex + 1}?</h2>
+            <h2 id="delete-scene-title">{t("create.video.common.deleteSceneConfirm", { number: deleteSceneIndex + 1 })}</h2>
               <p id="delete-scene-description">
-                This scene and its uploaded images will be removed from the storyboard.
+                {t("create.video.common.deleteSceneDescription")}
               </p>
             </div>
             <div className={styles.confirmModalActions}>
@@ -3649,14 +3643,14 @@ export function VideoGenerationPage() {
                 onClick={closeDeleteSceneDialog}
                 autoFocus
               >
-                Cancel
+                {t("create.video.common.cancel")}
               </button>
               <button
                 type="button"
                 className={styles.confirmModalDelete}
                 onClick={confirmDeleteScene}
               >
-                Delete Scene
+                {t("create.video.common.deleteScene")}
               </button>
             </div>
           </div>

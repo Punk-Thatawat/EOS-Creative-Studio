@@ -30,6 +30,8 @@ import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
 
 type SchemaProperty = {
   type?: string;
@@ -110,10 +112,6 @@ function findSchemaProperty(properties: Record<string, SchemaProperty>, names: s
   return undefined;
 }
 
-function labelFromParameterName(name: string): string {
-  return name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function hasValue(value: unknown): boolean {
   return value !== undefined && value !== null && value !== "" && (!Array.isArray(value) || value.length > 0);
 }
@@ -154,9 +152,11 @@ function TextSchemaField({
   labelOverride?: string;
   choices?: boolean;
 }) {
-  const label = labelOverride ?? property.title ?? labelFromParameterName(name);
+  const { t } = useLocale();
+  const label = labelOverride ?? translateVideoSchemaLabel(name, property.title, t);
+  const description = translateVideoSchemaDescription(property.description, t);
   const type = property.type ?? (property.enum ? "string" : typeof property.default === "boolean" ? "boolean" : typeof property.default === "number" ? "number" : "string");
-  if (labelOverride === "Duration") {
+  if (["duration", "duration_seconds", "durationSeconds"].includes(name)) {
     return <DurationControl property={property} value={value} required={required} onChange={(nextValue) => onChange(nextValue)} />;
   }
   if (choices && property.enum?.length) {
@@ -171,7 +171,7 @@ function TextSchemaField({
               className={String(value) === String(option) ? styles.ratioSelected : ""}
               onClick={() => onChange(option)}
             >
-              {String(option)}
+              {translateVideoSchemaOption(option, t)}
             </button>
           ))}
         </div>
@@ -185,18 +185,18 @@ function TextSchemaField({
         <Dropdown
           value={value === undefined ? "" : String(value)}
           options={[
-            ...(!required ? [{ value: "", label: "Auto" }] : []),
-            ...property.enum.map((option) => ({ value: String(option), label: String(option) })),
+             ...(!required ? [{ value: "", label: t("create.video.common.auto") }] : []),
+            ...property.enum.map((option) => ({ value: String(option), label: translateVideoSchemaOption(option, t) })),
           ]}
           onChange={(nextValue) => onChange(parseSchemaValue(nextValue, property, property.enum))}
           ariaLabel={label}
-          placeholder="Auto"
+           placeholder={t("create.video.common.auto")}
           className={styles.dynamicDropdown}
           triggerClassName={styles.dynamicSelect}
           menuClassName={styles.dynamicDropdownMenu}
           optionClassName={styles.dynamicDropdownOption}
         />
-        {property.description ? <small>{property.description}</small> : null}
+        {description ? <small>{description}</small> : null}
       </label>
     );
   }
@@ -215,7 +215,7 @@ function TextSchemaField({
         <textarea
           className={styles.dynamicInput}
           value={value === undefined ? "" : Array.isArray(value) ? value.join(", ") : typeof value === "object" ? JSON.stringify(value) : String(value)}
-          placeholder={type === "array" ? "Add values separated by commas" : "{}"}
+           placeholder={type === "array" ? t("create.video.common.addValues") : "{}"}
           onChange={(event) => onChange(type === "array" ? event.target.value.split(",").map((item) => item.trim()).filter(Boolean) : event.target.value)}
           aria-required={required}
         />
@@ -226,7 +226,7 @@ function TextSchemaField({
   if (isNumber && property.minimum !== undefined && property.maximum !== undefined) {
     return (
       <div className={styles.settingBlock}>
-        <div className={styles.settingLabel}>{label} {required ? <b>*</b> : null}<strong>{value === undefined ? "Auto" : String(value)}</strong></div>
+        <div className={styles.settingLabel}>{label} {required ? <b>*</b> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div>
         <input
           type="range"
           min={property.minimum}
@@ -253,7 +253,7 @@ function TextSchemaField({
         onChange={(event) => onChange(parseSchemaValue(event.target.value, property))}
         aria-required={required}
       />
-      {property.description ? <small>{property.description}</small> : null}
+      {description ? <small>{description}</small> : null}
     </label>
   );
 }
@@ -275,6 +275,7 @@ function outputVideoUrl(payload: TextVideoGenerationResponse | TextVideoGenerati
 }
 
 export function TextToVideoWorkspace() {
+  const { locale, t } = useLocale();
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
@@ -355,18 +356,18 @@ export function TextToVideoWorkspace() {
     referenceParameter && requiredProperties.has(referenceParameter) && !referenceImage ? referenceParameter : null,
   ].find(Boolean);
   const validationMessage = modelsLoading
-    ? "Loading text-to-video models..."
-    : !selectedModel
-      ? "Select a text-to-video model."
-      : prompt.length > 2000
-        ? "Prompt must be 2,000 characters or fewer."
-        : !prompt.trim()
-          ? "Add a prompt before generating."
-          : missingRequiredCoreParameter
-            ? `${labelFromParameterName(String(missingRequiredCoreParameter))} is required for this model.`
-            : missingRequiredModelParameter
-              ? `${labelFromParameterName(missingRequiredModelParameter[0])} is required for this model.`
-              : null;
+     ? t("create.video.common.loadingModels", { feature: t("create.video.tabs.textToVideo") })
+     : !selectedModel
+       ? t("create.video.common.selectFeatureModel", { feature: t("create.video.tabs.textToVideo") })
+       : prompt.length > 2000
+         ? t("create.video.common.promptTooLong")
+         : !prompt.trim()
+           ? t("create.video.common.addPrompt")
+           : missingRequiredCoreParameter
+             ? t("create.video.common.parameterRequired", { parameter: translateVideoSchemaLabel(String(missingRequiredCoreParameter), undefined, t) })
+             : missingRequiredModelParameter
+               ? t("create.video.common.parameterRequired", { parameter: translateVideoSchemaLabel(missingRequiredModelParameter[0], missingRequiredModelParameter[1].title, t) })
+               : null;
   const canGenerate = Boolean(!validationMessage && !isGenerating && !videoCreditEstimate.loading);
 
   useEffect(() => {
@@ -381,7 +382,7 @@ export function TextToVideoWorkspace() {
           : eligible.find((item) => item.isDefault)?.model ?? eligible[0]?.model ?? "");
       })
       .catch((error: unknown) => {
-        if (active) setModelsError(error instanceof Error ? error.message : "Unable to load text-to-video models");
+        if (active) setModelsError(error instanceof Error ? error.message : t("create.video.common.loadingFeatureModels", { feature: t("create.video.tabs.textToVideo") }));
       })
       .finally(() => {
         if (active) setModelsLoading(false);
@@ -389,7 +390,7 @@ export function TextToVideoWorkspace() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!selectedModel) return;
@@ -450,10 +451,10 @@ export function TextToVideoWorkspace() {
   };
 
   const handleGenerate = async () => {
-    if (modelsLoading) return setGenerationError("Loading text-to-video models…");
-    if (!prompt.trim()) return setGenerationError("Add a prompt before generating.");
+    if (modelsLoading) return setGenerationError(t("create.video.common.loadingFeatureModels", { feature: t("create.video.tabs.textToVideo") }));
+    if (!prompt.trim()) return setGenerationError(t("create.video.common.addPrompt"));
     const missingParameter = modelParameterEntries.find(([name]) => requiredProperties.has(name) && !hasValue(modelParams[name]));
-    if (missingParameter) return setGenerationError(`${labelFromParameterName(missingParameter[0])} is required for this model.`);
+    if (missingParameter) return setGenerationError(t("create.video.common.parameterRequired", { parameter: translateVideoSchemaLabel(missingParameter[0], missingParameter[1].title, t) }));
     const requiredCore = [
       durationProperty && requiredProperties.has(durationProperty[0]) && !hasValue(durationValue) ? durationProperty[0] : null,
       resolutionProperty && requiredProperties.has(resolutionProperty[0]) && !hasValue(resolutionValue) ? resolutionProperty[0] : null,
@@ -462,7 +463,7 @@ export function TextToVideoWorkspace() {
       seedProperty && requiredProperties.has(seedProperty[0]) && !hasValue(seedValue) ? seedProperty[0] : null,
       referenceParameter && requiredProperties.has(referenceParameter) && !referenceImage ? referenceParameter : null,
     ].find(Boolean);
-    if (requiredCore) return setGenerationError(`${labelFromParameterName(String(requiredCore))} is required for this model.`);
+    if (requiredCore) return setGenerationError(t("create.video.common.parameterRequired", { parameter: translateVideoSchemaLabel(String(requiredCore), undefined, t) }));
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -482,7 +483,7 @@ export function TextToVideoWorkspace() {
           const blob = await response.blob();
           return new File([blob], "reference-image.png", { type: blob.type || "image/png" });
         })();
-        setNotice("Uploading reference image…");
+        setNotice(t("create.video.common.uploadingReferenceImage"));
         uploadedReferenceUrl = await uploadImageAsset(file, { purpose: "content", feature: "text-to-video", uploadConstraints: capabilities?.uploadConstraints });
       }
 
@@ -498,7 +499,7 @@ export function TextToVideoWorkspace() {
       if (cameraMotionProperty && hasValue(cameraMotionValue)) request[cameraMotionProperty[0]] = cameraMotionValue;
       if (audioProperty && !audioInputMode) request.generateAudio = audioValue;
       if (audioInputMode && audioFile) {
-        setNotice("Uploading audio reference…");
+        setNotice(t("create.video.common.uploadingAudioReference"));
         request.audioUrl = await uploadPeopleMedia(audioFile, controller.signal, capabilities?.uploadConstraints);
       }
       if (!selectedModelOption) {
@@ -512,7 +513,7 @@ export function TextToVideoWorkspace() {
       if (Object.keys(modelParams).length) request.modelParams = modelParams;
 
       setGenerationStatus("processing");
-      setNotice("Submitting text-to-video generation…");
+      setNotice(t("create.video.common.submittingFeature", { feature: t("create.video.tabs.textToVideo") }));
       const created = await createTextVideoGeneration(request, controller.signal);
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
@@ -530,7 +531,7 @@ export function TextToVideoWorkspace() {
           status = await getTextVideoGenerationStatus(pollUrl, controller.signal);
           const nextProgress = textVideoProgress(status, generationProgress);
           setGenerationProgress(nextProgress);
-          setNotice(`Generating video… ${nextProgress}%`);
+          setNotice(t("create.video.common.generatingFeatureProgress", { feature: t("create.video.tabs.textToVideo"), percent: nextProgress }));
           if (status.status === "completed" || status.status === "failed" || status.status === "cancelled") break;
           await new Promise<void>((resolve, reject) => {
             const timeout = window.setTimeout(resolve, 2500);
@@ -549,12 +550,12 @@ export function TextToVideoWorkspace() {
       setLibraryRefreshKey((value) => value + 1);
       setGenerationProgress(100);
       setGenerationStatus("completed");
-      setNotice("Video ready");
+      setNotice(t("create.video.common.videoReady"));
     } catch (error: unknown) {
       if (controller.signal.aborted) return;
       setGenerationStatus("failed");
       setNotice(null);
-      setGenerationError(formatGenerationError(error, "Unable to generate text-to-video"));
+      setGenerationError(formatGenerationError(error, t("create.video.common.unableToGenerateFeature", { feature: t("create.video.tabs.textToVideo") })));
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
     }
@@ -571,7 +572,7 @@ export function TextToVideoWorkspace() {
       }
     }
     setGenerationStatus("cancelled");
-    setNotice("Generation cancelled");
+    setNotice(t("create.video.common.generationCancelled"));
     setGenerationError(null);
   };
 
@@ -597,47 +598,47 @@ export function TextToVideoWorkspace() {
         <section className={styles.panel}>
           <section className={styles.videoModePanel} aria-labelledby="text-video-title">
             <div className={styles.videoModeTutorial}>
-              <ImageTutorialButton feature="text-to-video" featureName="Text to Video" />
+              <ImageTutorialButton feature="text-to-video" featureName={t("create.video.tabs.textToVideo")} />
             </div>
             <div className={styles.videoModeHeading}>
-              <h2 id="text-video-title">TEXT TO VIDEO</h2>
+               <h2 id="text-video-title">{t("create.video.text.title")}</h2>
               <Info size={11} />
             </div>
-            <p className={styles.textVideoDescription}>Describe the scene and let the selected model create the motion.</p>
+             <p className={styles.textVideoDescription}>{t("create.video.text.description")}</p>
           </section>
         </section>
         <section className={`${styles.panel} ${styles.videoPromptPanel}`}>
           <div className={styles.videoPromptHeading}>
-            <h2>PROMPT <small>(Required)</small></h2>
-            <span className={styles.videoPromptAnnotation} aria-hidden="true" />
+             <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
+          <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
           </div>
           <label className={styles.videoPromptInputLabel}>
-            <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A cinematic drone shot flying through a futuristic city at night" maxLength={2000} required aria-required="true" />
+             <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.text.promptPlaceholder")} maxLength={2000} required aria-required="true" />
           </label>
           <div className={styles.videoPromptMeta}>
-            <span>Maximum 2,000 characters</span>
+             <span>{t("create.video.common.maximumCharacters", { count: 2000 })}</span>
             <span>{prompt.length.toLocaleString()} / 2,000</span>
           </div>
           <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
           <label className="block text-[10px] font-bold">
-            Negative Prompt <small>(Optional)</small>
-            <input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder="e.g. blurry, watermark, distorted" />
+             {t("create.video.common.negativePrompt")} <small>({t("create.video.common.optional")})</small>
+             <input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder={t("create.video.text.negativePlaceholder")} />
           </label>
         </section>
         {referenceParameter ? (
           <section className={styles.panel}>
-            <div className={styles.sectionTitle}><h2>2. REFERENCE IMAGE <small>(Optional)</small></h2></div>
+             <div className={styles.sectionTitle}><h2>2. {t("create.video.common.referenceImage")} <small>({t("create.video.common.optional")})</small></h2></div>
             <div className={styles.textVideoReference}>
               {referenceImage ? (
                 <div className={styles.textVideoReferencePreview}>
-                  <Image src={referenceImage} alt="Reference image" fill unoptimized className="object-cover" />
-                  <button type="button" onClick={clearReferenceImage} aria-label="Remove reference image"><X size={14} /></button>
+                   <Image src={referenceImage} alt={t("create.video.common.referenceImage")} fill unoptimized className="object-cover" />
+                   <button type="button" onClick={clearReferenceImage} aria-label={t("create.video.common.removeReferenceImage")}><X size={14} /></button>
                 </div>
               ) : (
                 <button type="button" className={styles.upload} onClick={() => referenceImageInputRef.current?.click()}>
                   <CloudUpload size={22} />
-                  <strong>Upload Image</strong>
-                  <small>PNG / JPG / WEBP</small>
+                   <strong>{t("create.video.common.uploadImage")}</strong>
+                   <small>{t("create.video.common.pngFormats")}</small>
                 </button>
               )}
               <input ref={referenceImageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleReferenceImage(file); event.currentTarget.value = ""; }} />
@@ -652,13 +653,13 @@ export function TextToVideoWorkspace() {
             {isGenerating ? (
               <div className={styles.videoGeneratingPreview} aria-busy="true">
                 <WandSparkles size={26} />
-                <strong>{generationStatus === "uploading" ? "PREPARING VIDEO" : "GENERATING VIDEO"}</strong>
-                <span>{notice ?? "Your text prompt is being turned into a video…"}</span>
+                 <strong>{generationStatus === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong>
+                 <span>{notice ?? t("create.video.text.generatingNotice")}</span>
                 <div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div>
-                <small>{generationProgress ? `${generationProgress}% complete` : "Working…"}</small>
+                 <small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small>
               </div>
             ) : displayedVideoUrl ? (
-              <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={styles.generatedVideoPlayer} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel="Generated text-to-video" />
+               <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={styles.generatedVideoPlayer} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={t("create.video.common.generatedVideo")} />
             ) : selectedModelOption?.previewUrl ? (
               <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={styles.generatedVideoPlayer} frameClassName={styles.videoPreviewMediaFrame} />
             ) : (
@@ -677,46 +678,46 @@ export function TextToVideoWorkspace() {
         />
       </div>
       <aside className={styles.settings}>
-        <div className={styles.sectionTitle}><h2>3. SETTINGS</h2></div>
-        <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">Model <Info size={11} /></label>
+         <div className={styles.sectionTitle}><h2>3. {t("create.video.common.settings")}</h2></div>
+         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <Info size={11} /></label>
         <VideoModelDropdown
           models={models}
           value={selectedModel}
           loading={modelsLoading}
-          ariaLabel="Text-to-video model options"
-          placeholder="No compatible model"
+           ariaLabel={t("create.video.common.modelOptions", { feature: t("create.video.tabs.textToVideo") })}
+           placeholder={t("create.video.common.noCompatibleModel")}
           onChange={setSelectedModel}
         />
         {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
-        {durationProperty ? <TextSchemaField name={durationProperty[0]} property={durationProperty[1]} value={durationValue} required={requiredProperties.has(durationProperty[0])} labelOverride="Duration" onChange={setDurationValue} /> : null}
-        {resolutionProperty ? <TextSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride="Resolution" onChange={setResolutionValue} /> : null}
-        {aspectRatioProperty ? <TextSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride="Aspect Ratio" choices onChange={setAspectRatioValue} /> : null}
-        {fpsProperty ? <TextSchemaField name={fpsProperty[0]} property={fpsProperty[1]} value={fpsValue} required={requiredProperties.has(fpsProperty[0])} labelOverride="FPS" onChange={setFpsValue} /> : null}
-        {cameraMotionProperty ? <TextSchemaField name={cameraMotionProperty[0]} property={cameraMotionProperty[1]} value={cameraMotionValue} required={requiredProperties.has(cameraMotionProperty[0])} labelOverride="Camera Motion" onChange={setCameraMotionValue} /> : null}
-        {audioProperty && !audioInputMode ? <TextSchemaField name={audioProperty[0]} property={audioProperty[1]} value={audioValue} required={requiredProperties.has(audioProperty[0])} labelOverride="Generate Audio" onChange={setAudioValue} /> : null}
+         {durationProperty ? <TextSchemaField name={durationProperty[0]} property={durationProperty[1]} value={durationValue} required={requiredProperties.has(durationProperty[0])} labelOverride={t("create.video.common.duration")} onChange={setDurationValue} /> : null}
+         {resolutionProperty ? <TextSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride={t("create.video.common.resolution")} onChange={setResolutionValue} /> : null}
+         {aspectRatioProperty ? <TextSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride={t("create.video.common.aspectRatio")} choices onChange={setAspectRatioValue} /> : null}
+         {fpsProperty ? <TextSchemaField name={fpsProperty[0]} property={fpsProperty[1]} value={fpsValue} required={requiredProperties.has(fpsProperty[0])} labelOverride={t("create.video.common.fps")} onChange={setFpsValue} /> : null}
+         {cameraMotionProperty ? <TextSchemaField name={cameraMotionProperty[0]} property={cameraMotionProperty[1]} value={cameraMotionValue} required={requiredProperties.has(cameraMotionProperty[0])} labelOverride={t("create.video.common.cameraMotion")} onChange={setCameraMotionValue} /> : null}
+         {audioProperty && !audioInputMode ? <TextSchemaField name={audioProperty[0]} property={audioProperty[1]} value={audioValue} required={requiredProperties.has(audioProperty[0])} labelOverride={t("create.video.common.generateAudio")} onChange={setAudioValue} /> : null}
         {audioInputMode ? (
           <section className={styles.audioReferenceField}>
-            <div className={styles.settingLabel}><span>Audio Reference</span><small>Optional</small></div>
-            {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label="Remove audio"><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={18} /><strong>Upload audio reference</strong><small>MP3 / WAV / M4A</small></button>}
+             <div className={styles.settingLabel}><span>{t("create.video.common.audioReference")}</span><small>{t("create.video.common.optional")}</small></div>
+             {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label={t("create.video.common.removeAudio")}><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={18} /><strong>{t("create.video.common.uploadAudioReference")}</strong><small>{t("create.video.common.audioFormats")}</small></button>}
             <input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAudioFile(file); event.currentTarget.value = ""; }} />
           </section>
         ) : null}
         {modelParameterEntries.length ? (
           <div className={styles.sceneModelParams}>
-            <div className={styles.sceneModelParamsTitle}>MODEL PARAMETERS</div>
+             <div className={styles.sceneModelParamsTitle}>{t("create.video.common.modelParameters")}</div>
             {modelParameterEntries.map(([name, property]) => <TextSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}
           </div>
         ) : null}
-        <VideoCreditEstimate featureLabel="Text to Video" duration={durationValue} estimate={videoCreditEstimate}>
+         <VideoCreditEstimate featureLabel={t("create.video.tabs.textToVideo")} duration={durationValue} estimate={videoCreditEstimate}>
           {!isGenerating && validationMessage ? <p className={styles.settingsError} role="status">{validationMessage}</p> : null}
           {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
           {isGenerating ? (
-            <button type="button" className={styles.textVideoCancel} onClick={() => void cancelGeneration()}><X size={14} /> CANCEL GENERATION</button>
+             <button type="button" className={styles.textVideoCancel} onClick={() => void cancelGeneration()}><X size={14} /> {t("create.video.common.cancelGeneration")}</button>
           ) : (
-            <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!canGenerate}><WandSparkles size={18} /> GENERATE VIDEO</button>
+             <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!canGenerate}><WandSparkles size={18} /> {t("create.video.common.generateVideo")}</button>
           )}
         </VideoCreditEstimate>
-        {generationStatus === "failed" || generationStatus === "cancelled" ? <button type="button" className={styles.textVideoRetry} onClick={() => void handleGenerate()}><RotateCcw size={13} /> RETRY</button> : null}
+         {generationStatus === "failed" || generationStatus === "cancelled" ? <button type="button" className={styles.textVideoRetry} onClick={() => void handleGenerate()}><RotateCcw size={13} /> {t("create.video.common.retry")}</button> : null}
       </aside>
     </div>
   );

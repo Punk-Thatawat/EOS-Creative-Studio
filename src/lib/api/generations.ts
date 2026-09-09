@@ -570,7 +570,8 @@ export type GenerationHistoryItem = {
 };
 
 export async function listGenerationHistory(workspaceId?: string | null, feature?: string): Promise<GenerationHistoryItem[]> {
-  const accessToken = await getAccessToken();
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in to view your video history");
   const params = new URLSearchParams();
   if (workspaceId) params.set("workspaceId", workspaceId);
   if (feature) params.set("feature", feature);
