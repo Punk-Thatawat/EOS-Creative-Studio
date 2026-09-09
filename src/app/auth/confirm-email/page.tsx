@@ -23,10 +23,18 @@ export default function ConfirmEmailPage() {
       const email = params.get("email");
       const type = params.get("type") === "email" ? "email" : "signup";
 
+      if (params.get("confirmed") === "1") {
+        setMessage("Email confirmed. You can now open your creative workspace.");
+        setState("success");
+        return;
+      }
+
       let accessToken: string | null = null;
       let backendSession: BackendAuthSession | null = null;
 
-      if (tokenHash || (token && email)) {
+      // Backend-generated confirmation links contain the one-time token only.
+      // The email query parameter is optional and must not prevent confirmation.
+      if (tokenHash || token) {
         const result = await confirmEmailWithBackend({
           ...(tokenHash ? { token_hash: tokenHash } : { token: token ?? undefined, email: email ?? undefined }),
           type,
@@ -40,10 +48,9 @@ export default function ConfirmEmailPage() {
       const backendProfile = await fetchBackendSession(accessToken);
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
       if (!active) return;
-      setMessage("Email confirmed. Opening your creative workspace...");
+      setMessage("Email confirmed. You can now open your creative workspace.");
       setState("success");
-      window.history.replaceState(null, "", window.location.pathname);
-      window.setTimeout(() => window.location.replace("/home"), 700);
+      window.history.replaceState(null, "", `${window.location.pathname}?confirmed=1`);
     }
 
     confirm().catch((error: unknown) => {
@@ -62,9 +69,10 @@ export default function ConfirmEmailPage() {
       <section className="auth-confirm-card" aria-live="polite">
         {state === "loading" || state === "success" ? <div className={`auth-confirm-mark${state === "success" ? " is-success" : ""}`} aria-hidden="true">{state === "success" ? "✓" : <span />}</div> : <div className="auth-confirm-mark is-error" aria-hidden="true">!</div>}
         <Image src="/generated-assets/eos-logo.png" alt="EOS Creative Studio" width={422} height={152} className="auth-confirm-logo" />
-        <h1>{state === "error" ? "Confirmation failed" : state === "success" ? "Welcome to EOS" : "Confirming your email"}</h1>
+        <h1>{state === "error" ? "Confirmation failed" : state === "success" ? "Email confirmed" : "Confirming your email"}</h1>
         <p>{message}</p>
         {state === "error" && <Link href="/?login=1">Back to login</Link>}
+        {state === "success" && <Link href="/home">Go to home</Link>}
       </section>
     </main>
   );

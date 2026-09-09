@@ -6,7 +6,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { EosLogo } from "@/components/brand/eos-logo";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
-import { loginWithBackend, persistBackendSession, registerWithBackend, requestPasswordResetWithBackend, resendConfirmationWithBackend } from "@/lib/auth/backend-auth";
+import { completePendingEmailLoginWithBackend, loginWithBackend, persistBackendSession, registerWithBackend, requestPasswordResetWithBackend, resendConfirmationWithBackend } from "@/lib/auth/backend-auth";
 import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 import { listPublicVideoShowcase } from "@/lib/api/video-showcase";
@@ -112,6 +112,7 @@ export function PreLoginPage() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [pendingLoginToken, setPendingLoginToken] = useState<string | null>(null);
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
@@ -147,6 +148,7 @@ export function PreLoginPage() {
     setConfirmationPasswordVisible(false);
     setAuthError(null);
     setAuthMessage(null);
+    setPendingLoginToken(null);
     setGoogleLoginLoading(false);
     setGoogleLoginError(null);
     setLoginOpen(true);
@@ -159,6 +161,7 @@ export function PreLoginPage() {
     setAuthSubmitting(false);
     setAuthError(null);
     setAuthMessage(null);
+    setPendingLoginToken(null);
     setGoogleLoginLoading(false);
     setGoogleLoginError(null);
   };
@@ -169,6 +172,7 @@ export function PreLoginPage() {
     setConfirmationPasswordVisible(false);
     setAuthError(null);
     setAuthMessage(null);
+    setPendingLoginToken(null);
     setGoogleLoginError(null);
   };
 
@@ -194,6 +198,7 @@ export function PreLoginPage() {
         }
         setAuthMode("confirmation");
         setAuthMessage(t("auth.confirmation.sent", { email: authEmail }));
+        setPendingLoginToken(result.data.pendingLoginToken ?? null);
         return;
       }
 
@@ -204,6 +209,12 @@ export function PreLoginPage() {
       }
 
       const result = await loginWithBackend(authEmail, authPassword);
+      if (result.data.emailConfirmationRequired && !result.data.session) {
+        setAuthMode("confirmation");
+        setAuthMessage(t("auth.confirmation.loginRequired", { email: authEmail }));
+        setPendingLoginToken(result.data.pendingLoginToken ?? null);
+        return;
+      }
       if (!result.data.session) throw new Error(t("auth.validation.sessionMissing"));
       clearGenerationProgressStorage();
       const accessToken = await persistBackendSession(result.data.session);
@@ -216,6 +227,37 @@ export function PreLoginPage() {
       setAuthSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (!loginOpen || authMode !== "confirmation" || !pendingLoginToken) return undefined;
+    let active = true;
+    let timer: number | undefined;
+
+    const poll = async () => {
+      try {
+        const result = await completePendingEmailLoginWithBackend(pendingLoginToken);
+        if (!active || !result.data.session) return;
+        setAuthSubmitting(false);
+        setPendingLoginToken(null);
+        clearGenerationProgressStorage();
+        const accessToken = await persistBackendSession(result.data.session);
+        const backendProfile = await fetchBackendSession(accessToken);
+        window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
+        window.location.replace("/home");
+        return;
+      } catch {
+        // The account is normally still waiting for confirmation. Retry while
+        // this browser remains on the waiting screen.
+      }
+      if (active) timer = window.setTimeout(() => { void poll(); }, 3000);
+    };
+
+    timer = window.setTimeout(() => { void poll(); }, 3000);
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [authMode, loginOpen, pendingLoginToken]);
 
   const handleResendConfirmation = async () => {
     setAuthSubmitting(true);

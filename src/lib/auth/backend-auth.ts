@@ -20,6 +20,7 @@ type BackendAuthResponse = {
     } | null;
     session: BackendAuthSession | null;
     emailConfirmationRequired?: boolean;
+    pendingLoginToken?: string;
     sent?: boolean;
     resetToken?: string;
   };
@@ -47,6 +48,10 @@ async function postAuth(path: string, body: Record<string, string>): Promise<Bac
 
 export function loginWithBackend(email: string, password: string) {
   return postAuth("login", { email, password });
+}
+
+export function completePendingEmailLoginWithBackend(pendingLoginToken: string) {
+  return postAuth("complete-pending-login", { pending_login_token: pendingLoginToken });
 }
 
 export function registerWithBackend(input: { email: string; password: string; display_name?: string }) {
