@@ -218,3 +218,9 @@
 .hero picture { position: absolute; inset: 0; display: block; }
 .hero img { object-fit: cover; object-position: center; }
 @media(max-width:700px){.hero{aspect-ratio:2 / 1}}
+
+/* Keep the video hero compact on every viewport. */
+.hero { height: min(220px, 18vw); min-height: 0; aspect-ratio: auto; }
+.hero picture { display: block; width: 100%; height: 100%; }
+.hero img { width: 100%; height: 100%; object-fit: cover; object-position: center 55%; }
+@media(max-width:700px){.hero{height:115px;aspect-ratio:auto}.hero img{object-position:center}}

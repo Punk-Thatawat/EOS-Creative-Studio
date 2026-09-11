@@ -1125,8 +1125,8 @@ export function AudioGenerationPage() {
   return <div className={`${styles.audioPage} audio-studio-page`}>
     <section className={styles.heroBanner} aria-label="Gen Audio hero">
       <picture>
-        <source media="(max-width: 700px)" srcSet="/generated-assets/gen-audio-hero-mobile-v2-transparent.png" />
-        <Image src="/generated-assets/gen-audio-hero-desktop-v2-transparent.png" alt="Gen Audio — AI audio generation studio" width={2172} height={724} priority unoptimized sizes="100vw" />
+        <source media="(max-width: 700px)" srcSet="/generated-assets/gen-audio-hero-v3-transparent.png" />
+        <Image src="/generated-assets/gen-audio-hero-v3-transparent.png" alt="Gen Audio — AI audio generation studio" width={2172} height={724} priority unoptimized sizes="100vw" />
       </picture>
     </section>
 

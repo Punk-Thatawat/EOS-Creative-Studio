@@ -153,7 +153,7 @@ export function ImageGenerationPage() {
   const generateCurrentTab = isTextToImageTab ? generateTextToImage : isImageToImageTab ? generateImageToImage : isStyleTransferTab ? generateStyleTransfer : isBackgroundTab ? generateBackground : isUpscaleTab ? generateUpscale : generateExtend;
 
   return <div className={cx("gen-image-page")} data-page="gen-image">
-    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><source media="(max-width: 700px)" srcSet="/generated-assets/gen-image-hero-mobile-v3-transparent.png" /><Image src="/generated-assets/gen-image-hero-desktop-v2-transparent.png" alt={t("create.image.heroArtwork")} width={2172} height={724} priority className={cx("gen-hero-artwork")} /></picture></section>
+    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><source media="(max-width: 700px)" srcSet="/generated-assets/gen-image-hero-v3-transparent.png" /><Image src="/generated-assets/gen-image-hero-v3-transparent.png" alt={t("create.image.heroArtwork")} width={2170} height={725} priority className={cx("gen-hero-artwork")} /></picture></section>
     <ImageGenerationTabs activeTab={state.activeTab} onTabChange={(nextTab) => { setPreviewDisplayMode("current"); state.setActiveTab(nextTab); if (requestedTab) router.replace("/create/image", { scroll: false }); }} />
     <div className={cx("gen-workspace")}>
       <PromptPanel

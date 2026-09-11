@@ -586,7 +586,11 @@
 .gen-upload > small { color: #7b7e84; font-size: 9px; }
 .gen-upload > span { flex: initial; }
 
-/* Use the dedicated transparent desktop hero on wide layouts. */
-.gen-image-hero { aspect-ratio: 3 / 1; background: transparent; }
-.gen-hero-artwork { object-fit: cover; object-position: center; }
-@media (max-width: 700px) { .gen-image-hero { aspect-ratio: 2 / 1; } }
+/* Keep the transparent hero compact so the creation controls stay above the fold. */
+.gen-image-hero { height: min(220px, 18vw); min-height: 0; aspect-ratio: auto; background: transparent; }
+.gen-hero-picture { display: block; width: 100%; height: 100%; }
+.gen-hero-artwork { width: 100%; height: 100%; object-fit: cover; object-position: center 58%; }
+@media (max-width: 700px) {
+  .gen-image-hero { height: 115px; aspect-ratio: auto; }
+  .gen-hero-artwork { object-position: center center; }
+}

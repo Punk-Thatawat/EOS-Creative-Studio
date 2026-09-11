@@ -2348,9 +2348,9 @@ export function VideoGenerationPage() {
     <div className={styles.page} data-page="gen-video">
       <div className={styles.hero}>
         <picture>
-          <source media="(max-width: 700px)" srcSet="/generated-assets/create-video-hero-mobile-v2-transparent.png" />
+          <source media="(max-width: 700px)" srcSet="/generated-assets/create-video-hero-v3-transparent.png" />
         <Image
-          src="/generated-assets/create-video-hero-desktop-v2-transparent.png"
+          src="/generated-assets/create-video-hero-v3-transparent.png"
           alt={t("create.video.common.createVideoHeroAlt")}
           fill
           sizes="100vw"

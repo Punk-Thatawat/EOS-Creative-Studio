@@ -89,10 +89,17 @@ export type CreditTopupPackage = {
   featured?: boolean;
 };
 
+export type CustomTopupConfig = {
+  minAmountThb: number;
+  maxAmountThb: number;
+  creditsPerThb: number;
+};
+
 export type CheckoutCatalog = {
   provider: "stripe";
   promptPay: boolean;
   topups: CreditTopupPackage[];
+  customTopup?: CustomTopupConfig;
 };
 
 async function backendRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -132,9 +139,9 @@ export function createBillingPortalSession(): Promise<{ id: string; url: string;
   return backendRequest<{ id: string; url: string; customerId: string }>("/users/me/billing/portal-session", { method: "POST" });
 }
 
-export function createCreditCheckoutSession(packageId: string): Promise<{ id: string; url: string; customerId: string }> {
+export function createCreditCheckoutSession(packageId?: string, customAmountThb?: number): Promise<{ id: string; url: string; customerId: string }> {
   return backendRequest<{ id: string; url: string; customerId: string }>("/users/me/billing/checkout-session", {
     method: "POST",
-    body: JSON.stringify({ packageId, mode: "payment" }),
+    body: JSON.stringify({ ...(packageId ? { packageId } : {}), ...(customAmountThb !== undefined ? { customAmountThb } : {}), mode: "payment" }),
   });
 }

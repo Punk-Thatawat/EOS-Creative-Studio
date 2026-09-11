@@ -103,6 +103,16 @@
 .packages span { flex:1; }
 .packages strong { font-size:26px; }
 .packages b { font-size:18px; }
+.packages small { display:block; margin-top:4px; color:#777781; font-size:12px; }
+.customPackTitle { font-size:22px!important; }
+.customTopup { margin:-2px 0 12px; padding:14px 16px; border:1px dashed #f0a381; border-radius:8px; background:#fffaf7; }
+.customTopup label { display:block; font-size:12px; font-weight:600; }
+.customInput { display:flex; align-items:center; gap:8px; margin-top:8px; min-height:44px; padding:0 12px; border:1px solid #dddde4; border-radius:8px; background:#fff; }
+.customInput:focus-within { border-color:#ff5800; box-shadow:0 0 0 3px rgba(255,88,0,.12); }
+.customInput span { flex:none; color:#777781; }
+.customInput input { width:100%; min-width:0; border:0; outline:0; background:transparent; font:inherit; }
+.customTopup p { margin:8px 0 0; color:#656570; font-size:11px; }
+.customError { display:block; margin-top:6px; color:#b33b2e; font-size:11px; }
 .order { padding:24px; background:#fff8f3; border-radius:10px; align-self:start; }
 .order>svg { color:#e04c00; }
 .order h3 { font-size:20px; font-weight:700; margin:12px 0; }
