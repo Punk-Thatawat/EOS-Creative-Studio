@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, AudioLines, Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileClock, Image as ImageIcon, LoaderCircle, RefreshCw, Search, SlidersHorizontal, Sparkles, Video, X } from "lucide-react";
+import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
 import { fetchHistory, type HistoryItem, type HistoryResponse, type HistoryStatus, type HistoryType } from "@/lib/api/history";
 import { templateCopy } from "@/features/templates/template-copy";
 import s from "./history-page.module.css";
@@ -28,6 +29,7 @@ function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) 
   const Icon = item.mediaKind === "image" ? ImageIcon : item.mediaKind === "video" ? Video : AudioLines;
   if (failed || !item.outputUrl) return <div className={s.mediaFallback}><Icon size={32} /><strong>{failed || item.status === "completed" ? "ยังแสดงตัวอย่างไม่ได้" : statuses[item.status]}</strong><span>{item.status === "queued" || item.status === "processing" ? "ผลงานจะแสดงเมื่อสร้างเสร็จ" : "สถานะงานยังคงเดิม"}</span>{failed && <button onClick={() => { setFailed(false); setAttempt(v => v + 1); }}>ลองโหลดใหม่</button>}</div>;
   if (item.mediaKind === "image") return <img key={attempt} src={item.outputUrl} alt={title(item)} loading="lazy" onError={() => setFailed(true)} className={large ? s.fullImage : s.cardImage} />;
+  if (item.mediaKind === "video" && !large) return <VideoFrameThumbnail key={item.outputUrl} src={item.outputUrl} alt={`ภาพตัวอย่าง ${title(item)}`} className={s.videoThumbnail} fallback={<div className={s.mediaFallback}><Video size={32} /><strong>ยังแสดงตัวอย่างไม่ได้</strong></div>} />;
   if (item.mediaKind === "video") return <video key={attempt} src={item.outputUrl} controls playsInline preload="metadata" onError={() => setFailed(true)} aria-label={`วิดีโอ ${title(item)}`} className={s.video} />;
   return <div className={s.audio}><AudioLines size={42} /><span>เสียงของไอเดียคุณ</span><audio key={attempt} src={item.outputUrl} controls preload="none" onError={() => setFailed(true)} aria-label={`เสียง ${title(item)}`} /></div>;
 }

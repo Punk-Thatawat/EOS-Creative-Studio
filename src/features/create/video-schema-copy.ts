@@ -16,7 +16,6 @@ const schemaLabelKeys: Record<string, TranslationKey> = {
   keepsound: "create.video.common.keepOriginalSound",
   modelparameters: "create.video.common.modelParameters",
   seed: "create.video.common.seed",
-  camerafixed: "create.video.common.cameraFixed",
   guidance: "create.video.common.guidance",
   strength: "create.video.common.strength",
   steps: "create.video.common.steps",

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- standalone Node QA utility */
 // Isolated browser + real React hook. All backend/media calls mocked; no credits used.
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -22,7 +23,7 @@ const mocks={
  '@/features/templates/use-template-settings':`export const useTemplateSettings=()=>{};`,
 };
 async function main(){
- const bundle=await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {useImageGenerationState} from './src/features/create/image-generation/hooks/use-image-generation-state';function App(){window.hook=useImageGenerationState();return React.createElement('output',null,window.hook.activeTab)}createRoot(document.getElementById('root')).render(React.createElement(App));`,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',define:{'process.env.NODE_ENV':'"test"'},plugins:[{name:'isolated-api',setup(b){b.onResolve({filter:/.*/},args=>{if(mocks[args.path])return {path:args.path,namespace:'mock'};if(args.path.startsWith('@/'))return {path:path.join(root,'src',args.path.slice(2))+'.ts'};});b.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:mocks[args.path],loader:'js'}));}}]});
+  const bundle=await build({stdin:{contents:`import React from 'react';import {createRoot} from 'react-dom/client';import {useImageGenerationState} from './src/features/create/image-generation/hooks/use-image-generation-state';function App(){window.hook=useImageGenerationState();return React.createElement('output',null,window.hook.activeTab)}createRoot(document.getElementById('root')).render(React.createElement(App));`,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',define:{'process.env.NODE_ENV':'"test"','process.env.NEXT_PUBLIC_BACKEND_URL':'"http://localhost:4000"'},plugins:[{name:'isolated-api',setup(b){b.onResolve({filter:/.*/},args=>{if(mocks[args.path])return {path:args.path,namespace:'mock'};if(args.path.startsWith('@/'))return {path:path.join(root,'src',args.path.slice(2))+'.ts'};});b.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:mocks[args.path],loader:'js'}));}}]});
  const browser=await chromium.launch({channel:'msedge',headless:true});
  const cases=[['Text to Image','text-to-image','generateImage','generatedImageUrls','isGenerating'],['Image to Image','image-to-image','transformImage','imageToImageUrls','imageToImageIsGenerating'],['AI Style Transfer','style-transfer','generateStyleTransfer','styleTransferUrls','styleTransferIsGenerating'],['AI Background','background-removal','generateBackground','backgroundUrls','backgroundIsGenerating'],['Extend Image','extend-image','extendImage','extendUrls','extendIsGenerating'],['Upscale','upscale','generateUpscale','upscaleUrls','upscaleIsGenerating']];
  let passed=0;
@@ -35,15 +36,18 @@ async function main(){
     await page.goto('http://localhost:18765');
     if(mode==='history')await page.evaluate(({feature,tab})=>{
      window.historyFixtures=[{id:'qa-job',workspaceId:'qa',feature,kind:'image',provider:'qa',model:'qa-model',pollUrl:'/status',status:'processing',totalCount:1,completedCount:0,output:[],createdAt:new Date().toISOString()}];
-     sessionStorage.setItem('eos.generation.image-draft.v1',JSON.stringify({activeTab:tab}));
+      sessionStorage.setItem('eos.generation.image-draft.v1.anonymous',JSON.stringify({activeTab:tab}));
     },{feature,tab});
     if(mode==='resume')await page.evaluate(({feature,tab})=>{
-     const key=feature==='text-to-image'?'eos.generation.pending':'eos.generation.pending.'+feature;
-     sessionStorage.setItem(key,JSON.stringify({generationId:'qa-job',workspaceId:'qa',provider:'qa',model:'qa-model',pollUrl:'/status',status:'processing',totalCount:1,completedCount:0,output:[]}));
-     sessionStorage.setItem('eos.generation.image-draft.v1',JSON.stringify({activeTab:tab}));
+      const key=(feature==='text-to-image'?'eos.generation.pending':'eos.generation.pending.'+feature)+'.anonymous';
+      sessionStorage.setItem(key,JSON.stringify({generationId:'qa-job',workspaceId:'qa',provider:'qa',model:'qa-model',pollUrl:'/status',status:'processing',totalCount:1,completedCount:0,output:[]}));
+      sessionStorage.setItem('eos.generation.image-draft.v1.anonymous',JSON.stringify({activeTab:tab}));
     },{feature,tab});
-    await page.addScriptTag({content:bundle.outputFiles[0].text});
-    await page.waitForFunction(()=>window.hook&&!window.hook.isLoadingModels);
+     await page.addScriptTag({content:bundle.outputFiles[0].text});
+     await page.waitForFunction(()=>window.hook&&!window.hook.isLoadingModels).catch(async error=>{
+      console.error('Initial hook did not become ready',errors,await page.evaluate(()=>({hasHook:Boolean(window.hook),loading:window.hook?.isLoadingModels})).catch(reason=>String(reason)));
+      throw error;
+     });
     // Style Transfer is supported internally but intentionally absent from the visible tab list.
     if(mode==='history' && tab==='AI Style Transfer') {
      await page.evaluate(tab=>window.hook.setActiveTab(tab),tab);

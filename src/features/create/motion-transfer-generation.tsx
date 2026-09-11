@@ -5,7 +5,7 @@ import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Dropdown } from "@/components/ui/dropdown";
-import { CloudUpload, Info, WandSparkles, X } from "lucide-react";
+import { CloudUpload, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
@@ -24,6 +24,7 @@ import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
+import { InfoTooltip } from "./components/info-tooltip";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
@@ -409,7 +410,7 @@ export function MotionTransferWorkspace() {
   return (
     <div className={styles.columns}>
       <div className={styles.leftColumn}>
-         <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="motion-transfer" featureName={t("create.video.tabs.motionTransfer")} /></div><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">{t("create.video.motion.title")}</h2><Info size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{t("create.video.motion.eyebrow")}</span><p className={styles.textVideoDescription}>{t("create.video.motion.description")}</p><div className={styles.featurePills}>{[t("create.video.motion.chipCopyMovement"), t("create.video.motion.chipCharacterImage"), t("create.video.motion.chipDrivingVideo")].map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{t("create.video.motion.note")}</small></div></section></section>
+         <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="motion-transfer" featureName={t("create.video.tabs.motionTransfer")} /></div><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">{t("create.video.motion.title")}</h2><InfoTooltip content={t("create.video.motion.description")} size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{t("create.video.motion.eyebrow")}</span><p className={styles.textVideoDescription}>{t("create.video.motion.description")}</p><div className={styles.featurePills}>{[t("create.video.motion.chipCopyMovement"), t("create.video.motion.chipCharacterImage"), t("create.video.motion.chipDrivingVideo")].map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{t("create.video.motion.note")}</small></div></section></section>
         <section className={styles.panel}>
            <MotionSectionTitle number="1">{t("create.video.common.characterImage")}</MotionSectionTitle>
            <div className={`${styles.peopleSourcePreview} ${!sourceImage ? styles.peopleSourceUploadEmpty : ""}`}>{sourceImage ? <div className={styles.peopleSourceMedia}><Image src={sourceImage.url} alt={t("create.video.common.characterImage")} fill unoptimized className="object-cover" /><button type="button" onClick={() => setSourceImage(null)} aria-label={t("create.video.common.removeSourceImage")}><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => document.getElementById("motion-source-image")?.click()}><CloudUpload size={23} /><strong>{t("create.video.common.uploadImage")}</strong><small>{t("create.video.common.pngFormats")}</small></button>}</div>
@@ -448,7 +449,7 @@ export function MotionTransferWorkspace() {
       </div>
       <aside className={styles.settings}>
          <MotionSectionTitle number={settingsStep}>{t("create.video.common.settings")}</MotionSectionTitle>
-         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <Info size={11} /></label>
+         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} /></label>
         <VideoModelDropdown
           models={models}
           value={selectedModel}

@@ -10,10 +10,10 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
+  AudioLines,
   Download,
   Heart,
   ImageIcon,
-  Info,
   LoaderCircle,
   Link2,
   LockKeyhole,
@@ -23,6 +23,7 @@ import {
   Pencil,
   Trash2,
   WandSparkles,
+  type LucideIcon,
   X,
 } from "lucide-react";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
@@ -33,7 +34,6 @@ import { uploadImageAsset } from "@/lib/api/storage";
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
 import {
   createVideoStoryboard,
-  cancelVideoStoryboard,
   getVideoStoryboardSettings,
   getVideoStoryboardStatus,
   listVideoStoryboardHistory,
@@ -48,6 +48,7 @@ import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { MotionTransferWorkspace } from "./motion-transfer-generation";
 import { ExtendVideoWorkspace } from "./extend-video-generation";
+import { MobileModeDropdown } from "./components/mobile-mode-dropdown";
 import { VideoPreviewLiveBadge, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
@@ -55,6 +56,7 @@ import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
+import { InfoTooltip } from "./components/info-tooltip";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
@@ -76,6 +78,22 @@ const videoTabKeys = {
   Lipsync: "create.video.tabs.lipsync",
   "Extend Video": "create.video.tabs.extendVideo",
 } as const;
+const videoModeIcons: Record<typeof videoModes[number], LucideIcon> = {
+  "Image to Video": ImageIcon,
+  "Text to Video": WandSparkles,
+  "People Video": Mic2,
+  "Motion Transfer": WandSparkles,
+  Lipsync: AudioLines,
+  "Extend Video": ImageIcon,
+};
+const mobileVideoModeOptions = [
+  { value: "image-to-video", label: "Image to Video", icon: videoModeIcons["Image to Video"] },
+  { value: "text-to-video", label: "Text to Video", icon: videoModeIcons["Text to Video"] },
+  { value: "people-video", label: "People Video", icon: videoModeIcons["People Video"] },
+  { value: "motion-transfer", label: "Motion Transfer", icon: videoModeIcons["Motion Transfer"] },
+  { value: "lipsync", label: "Lipsync", icon: videoModeIcons.Lipsync },
+  { value: "extend-video", label: "Extend Video", icon: videoModeIcons["Extend Video"] },
+] as const;
 const videoModeOptions = [
   {
     value: "storyboard",
@@ -751,10 +769,8 @@ function isSeedParameter(name: string, title?: string): boolean {
 
 function modelParamsForGeneration(
   params: Record<string, unknown>,
-  generationMode: GenerationMode,
   options?: { omitSeed?: boolean },
 ): Record<string, unknown> {
-  if (generationMode !== "single-image") return params;
   return Object.fromEntries(
     Object.entries(params).filter(([name]) => !isCameraFixedParameter(name) && !(options?.omitSeed && isSeedParameter(name))),
   );
@@ -914,8 +930,6 @@ export function VideoGenerationPage() {
   const [modelParams, setModelParams] = useState<Record<string, unknown>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<VideoGenerationStatus>("idle");
-  const [activeStoryboardId, setActiveStoryboardId] = useState<string | null>(null);
-  const [isCancellingVideo, setIsCancellingVideo] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ completed: 0, total: 0 });
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewMediaAspectRatioState, setPreviewMediaAspectRatioState] = useState<{
@@ -987,7 +1001,6 @@ export function VideoGenerationPage() {
   const sceneRowRef = useRef<HTMLDivElement | null>(null);
   const storyboardSplitRequestRef = useRef(0);
   const storyboardPreparedFileRef = useRef<File | null>(null);
-  const cancelRequestedRef = useRef(false);
   const referenceImageEntries = referenceImageRoles.flatMap((role) => {
     const slot = referenceImageSlots[role.key];
     return slot ? [{ ...role, ...slot }] : [];
@@ -1079,7 +1092,7 @@ export function VideoGenerationPage() {
       && name !== referenceVideosParameter
       && name !== lastImageParameter
       && name !== capabilities?.negativePromptParameter
-      && !(generationMode === "single-image" && isCameraFixedParameter(name, properties[name]?.title));
+      && !isCameraFixedParameter(name, properties[name]?.title);
   });
   const settingsModelParameterEntries = modelParameterEntries.filter(([name, property]) =>
     !(generationMode === "single-image" && isSeedParameter(name, property.title))
@@ -1180,10 +1193,8 @@ export function VideoGenerationPage() {
 
     const applyProcessingStatus = (status: Awaited<ReturnType<typeof getVideoStoryboardStatus>>, generationId: string, fallback: { completed: number; total: number }) => {
       if (disposed) return;
-      setActiveStoryboardId(status.storyboardId ?? generationId);
       setGenerationStatus("processing");
       setGenerationError(null);
-      setIsCancellingVideo(false);
       setGenerationProgress({
         completed: status.completedScenes ?? fallback.completed,
         total: status.totalScenes ?? fallback.total,
@@ -1205,7 +1216,6 @@ export function VideoGenerationPage() {
         return;
       }
 
-      setActiveStoryboardId(persisted.generationId);
       setGenerationStatus("processing");
       setGenerationError(null);
       setGenerationProgress({ completed: persisted.completed, total: persisted.total });
@@ -1240,7 +1250,6 @@ export function VideoGenerationPage() {
         completed: status.completedScenes ?? (status.status === "completed" ? status.totalScenes ?? persisted.total : persisted.completed),
         total: status.totalScenes ?? persisted.total,
       });
-      setIsCancellingVideo(false);
       if (status.status === "completed" && status.finalVideoUrl) {
         setFinalVideoUrl(status.finalVideoUrl);
         setLatestCompletedStoryboardId(persisted.generationId);
@@ -1249,7 +1258,6 @@ export function VideoGenerationPage() {
         void loadVideoHistory(status.workspaceId ?? undefined);
         return;
       }
-      setActiveStoryboardId(null);
       setGenerationStatus(status.status === "cancelled" ? "cancelled" : "failed");
       setNotice(status.status === "cancelled" ? t("create.video.common.videoGenerationCancelled") : null);
     };
@@ -1788,7 +1796,7 @@ export function VideoGenerationPage() {
       ? storyboardScenes.slice(0, 1)
       : storyboardScenes;
   const shouldAutoUpscaleStoryboard = generationMode === "single-image" && Boolean(storyboardQualityNote) && generationScenes.length > 0;
-  const requestModelParams = modelParamsForGeneration(modelParams, generationMode, { omitSeed: true });
+  const requestModelParams = modelParamsForGeneration(modelParams, { omitSeed: true });
   const creditQuoteInput: Omit<VideoGenerationInput, "idempotencyKey"> | null = (() => {
     if (activeVideoTab !== "image-to-video" || !selectedModelOption || generationScenes.length === 0) return null;
     const scenes = generationScenes.map((scene, index) => {
@@ -1808,7 +1816,7 @@ export function VideoGenerationPage() {
       if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
       if (durationProperty) sceneInput.duration = scene.duration;
       if (scene.aspectRatio) sceneInput.aspectRatio = scene.aspectRatio;
-      const sceneModelParams = modelParamsForGeneration(scene.modelParams, generationMode);
+      const sceneModelParams = modelParamsForGeneration(scene.modelParams);
       if (Object.keys(sceneModelParams).length) sceneInput.modelParams = sceneModelParams;
       return sceneInput;
     });
@@ -2109,9 +2117,6 @@ export function VideoGenerationPage() {
     const blob = await response.blob();
     return new File([blob], `${prefix}-${index + 1}.png`, { type: blob.type || "image/png" });
   };
-  const throwIfVideoCancellationRequested = () => {
-    if (cancelRequestedRef.current) throw new Error("Video generation was cancelled");
-  };
   const handleGenerate = async () => {
     if (!selectedModel || !selectedModelOption) {
       setGenerationError(t("create.video.common.selectModel"));
@@ -2172,9 +2177,6 @@ export function VideoGenerationPage() {
     setLatestCompletedStoryboardId(null);
     setPreviewView("latest");
     setContinuationInfo(null);
-    cancelRequestedRef.current = false;
-    setActiveStoryboardId(null);
-    setIsCancellingVideo(false);
     setGenerationStatus("uploading");
     try {
       const uploadedImages: Array<string | undefined> = [];
@@ -2189,7 +2191,6 @@ export function VideoGenerationPage() {
             feature: "image-to-video",
             uploadConstraints: capabilities?.uploadConstraints,
           });
-          throwIfVideoCancellationRequested();
         }
       }
 
@@ -2203,7 +2204,6 @@ export function VideoGenerationPage() {
             feature: "image-to-video",
             uploadConstraints: capabilities?.uploadConstraints,
           }));
-          throwIfVideoCancellationRequested();
         }
       }
 
@@ -2222,7 +2222,7 @@ export function VideoGenerationPage() {
         if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
         if (durationProperty) sceneInput.duration = scene.duration;
         if (scene.aspectRatio) sceneInput.aspectRatio = scene.aspectRatio;
-        const sceneModelParams = modelParamsForGeneration(scene.modelParams, generationMode);
+        const sceneModelParams = modelParamsForGeneration(scene.modelParams);
         if (Object.keys(sceneModelParams).length) sceneInput.modelParams = sceneModelParams;
         return sceneInput;
       });
@@ -2241,7 +2241,6 @@ export function VideoGenerationPage() {
       if (audioInputMode && audioFile) {
         setNotice(t("create.video.common.uploadingAudioReference"));
         request.audioUrl = await uploadPeopleMedia(audioFile, undefined, capabilities?.uploadConstraints);
-        throwIfVideoCancellationRequested();
       }
       if (postAudioMode !== "none") {
         request.audioMode = postAudioMode;
@@ -2255,11 +2254,6 @@ export function VideoGenerationPage() {
       setNotice(t("create.video.common.submittingVideo"));
       const created = await createVideoStoryboard(request);
       if (!created.storyboardId) throw new Error("Video generation did not return a storyboard ID");
-      setActiveStoryboardId(created.storyboardId);
-      if (cancelRequestedRef.current) {
-        await cancelVideoStoryboard(created.storyboardId);
-        throw new Error("Video generation was cancelled");
-      }
       emitGenerationStarted({ feature: "image-to-video", generationId: created.storyboardId, pollUrl: created.pollUrl ?? `/api/v1/generations/video/image-to-video/${encodeURIComponent(created.storyboardId)}/status`, workspaceId: workspaceId ?? undefined, model: selectedModel, status: "queued", totalCount: created.totalScenes ?? scenes.length, completedCount: created.completedScenes ?? 0 });
       const returnedCreditCost = Number(created.totalCreditCost);
       const quotedVideoCreditCost = Number(creditEstimate);
@@ -2287,7 +2281,6 @@ export function VideoGenerationPage() {
           ? t("create.video.common.generatingFromStoryboardImage")
           : t("create.video.common.generatingScenesProgress", { completed: status.completedScenes ?? 0, total: status.totalScenes ?? scenes.length }));
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
-        throwIfVideoCancellationRequested();
         status = await getVideoStoryboardStatus(created.storyboardId);
       }
       setGenerationProgress({ completed: status.completedScenes ?? scenes.length, total: status.totalScenes ?? scenes.length });
@@ -2305,8 +2298,6 @@ export function VideoGenerationPage() {
       setPreviewView("latest");
       setGenerationStatus("completed");
       setNotice(t("create.video.common.videoReady"));
-      setActiveStoryboardId(null);
-      setIsCancellingVideo(false);
       requestCreditBalanceSync(acceptedCreditCost);
       const completedWorkspaceId = status.workspaceId ?? workspaceId ?? undefined;
       const completedHistoryItem: VideoStoryboardHistoryItem = {
@@ -2333,39 +2324,8 @@ export function VideoGenerationPage() {
       });
     } catch (error: unknown) {
       const message = formatGenerationError(error, "Unable to generate video");
-      if (cancelRequestedRef.current || (error instanceof Error && error.message === "Video generation was cancelled")) {
-        setGenerationStatus("cancelled");
-        setGenerationError(null);
-        setNotice(t("create.video.common.videoGenerationCancelled"));
-        setActiveStoryboardId(null);
-        setIsCancellingVideo(false);
-        return;
-      }
       setGenerationStatus("failed");
       setGenerationError(message);
-      setActiveStoryboardId(null);
-      setIsCancellingVideo(false);
-      setNotice(null);
-    }
-  };
-
-  const handleCancelVideo = async () => {
-    if (!isGeneratingVideo || isCancellingVideo) return;
-    cancelRequestedRef.current = true;
-    setIsCancellingVideo(true);
-    setGenerationError(null);
-    setNotice(t("create.video.common.cancellingVideo"));
-    const storyboardId = activeStoryboardId;
-    if (!storyboardId) return;
-    try {
-      await cancelVideoStoryboard(storyboardId);
-      setGenerationStatus("cancelled");
-      setActiveStoryboardId(null);
-      setNotice(t("create.video.common.videoGenerationCancelled"));
-    } catch (error: unknown) {
-      cancelRequestedRef.current = false;
-      setIsCancellingVideo(false);
-      setGenerationError(formatGenerationError(error, "Unable to cancel video generation"));
       setNotice(null);
     }
   };
@@ -2387,12 +2347,15 @@ export function VideoGenerationPage() {
   return (
     <div className={styles.page} data-page="gen-video">
       <div className={styles.hero}>
+        <picture>
+          <source media="(max-width: 700px)" srcSet="/generated-assets/create-video-hero-mobile-v2-transparent.png" />
         <Image
-          src="/generated-assets/create-video-hero-transparent-v6-eos.png"
+          src="/generated-assets/create-video-hero-desktop-v2-transparent.png"
           alt={t("create.video.common.createVideoHeroAlt")}
           fill
           sizes="100vw"
         />
+        </picture>
       </div>
       <div className={styles.workspaceCard}>
         {notice ? (
@@ -2434,6 +2397,21 @@ export function VideoGenerationPage() {
             );
           })}
         </nav>
+        <MobileModeDropdown
+          menuId="video-mode-menu"
+          value={activeVideoTab}
+          options={mobileVideoModeOptions.map((option) => ({ ...option, label: t(videoTabKeys[option.label]) }))}
+          ariaLabel={t("create.video.tools")}
+          currentModeLabel={t("create.mode.current")}
+          switchModeLabel={t("create.mode.switch")}
+          otherModesLabel={t("create.mode.other")}
+          onChange={(tab) => {
+            if (tab !== activeVideoTab) {
+              setPromptOptimizerEnabled(false);
+              setActiveVideoTab(tab);
+            }
+          }}
+        />
         {activeVideoTab === "text-to-video" ? <TextToVideoWorkspace /> : activeVideoTab === "people-video" ? <PeopleVideoWorkspace /> : activeVideoTab === "motion-transfer" ? <MotionTransferWorkspace /> : activeVideoTab === "lipsync" ? <LipsyncWorkspace /> : activeVideoTab === "extend-video" ? <ExtendVideoWorkspace /> : <div className={styles.columns}>
           <div className={styles.leftColumn}>
             <section className={styles.panel}>
@@ -2450,7 +2428,7 @@ export function VideoGenerationPage() {
                 </div>
                 <div className={styles.videoModeHeading}>
                   <h2 id="video-mode-title">{t("create.video.common.generationMode")}</h2>
-                  <Info size={11} />
+                  <InfoTooltip content={t("create.video.common.info.generationMode")} size={11} />
                 </div>
                 <Dropdown
                   value={generationMode}
@@ -3064,7 +3042,7 @@ export function VideoGenerationPage() {
           <aside className={styles.settings}>
              <SectionTitle number="3">{t("create.video.common.settings")}</SectionTitle>
             <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">
-               {t("create.video.common.model")} <Info size={11} />
+               {t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} />
             </label>
             <VideoModelDropdown
               models={models}
@@ -3098,7 +3076,7 @@ export function VideoGenerationPage() {
             ) : null}
             {resolutionProperty ? (
               <div className={styles.settingBlock}>
-                 <div className={styles.settingLabel}>{t("create.video.common.resolution")} <Info size={11} /></div>
+                 <div className={styles.settingLabel}>{t("create.video.common.resolution")} <InfoTooltip content={t("create.video.common.info.resolution")} size={11} /></div>
                 <Dropdown
                   value={resolution}
                   options={(resolutionProperty[1].enum ?? []).map((value) => ({
@@ -3118,7 +3096,7 @@ export function VideoGenerationPage() {
             {supportsAspectRatio && aspectRatioOptions.length > 0 ? (
               <div className={styles.settingBlock}>
                 <div className={styles.settingLabel}>
-                   {t("create.video.common.aspectRatio")} <Info size={11} />
+                   {t("create.video.common.aspectRatio")} <InfoTooltip content={t("create.video.common.info.aspectRatio")} size={11} />
                   {storyboardHasMixedAspectRatios
                      ? <small className={styles.autoAspectRatioHint}>{t("create.video.common.perScene")}</small>
                     : !canSelectAspectRatio && detectedImageAspectRatio !== null
@@ -3288,7 +3266,7 @@ export function VideoGenerationPage() {
             <div className={styles.estimateBlock}>
               <div className={styles.estimate} title={creditEstimateError ?? undefined}>
                 <div>
-                   {t("create.video.common.estimatedCredits")} <Info size={11} />
+                   {t("create.video.common.estimatedCredits")} <InfoTooltip content={t("create.video.common.info.estimatedCredits")} size={11} />
                 </div>
                 <span>
                   {estimateDescription}
@@ -3302,17 +3280,6 @@ export function VideoGenerationPage() {
               </div>
               {!isGeneratingVideo && videoValidationMessage ? <p className={styles.settingsError} role="status">{videoValidationMessage}</p> : null}
               {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
-              {isGeneratingVideo ? (
-                <button
-                  type="button"
-                  className={styles.textVideoCancel}
-                  onClick={() => void handleCancelVideo()}
-                  disabled={isCancellingVideo}
-                >
-                  {isCancellingVideo ? <LoaderCircle size={14} className={styles.creditSpinner} /> : <X size={14} />}
-                   {isCancellingVideo ? t("create.video.common.cancelling") : t("create.video.common.cancelGeneration")}
-                </button>
-              ) : null}
               <button
                 type="button"
                 className={styles.generate}

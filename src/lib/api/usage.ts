@@ -50,7 +50,7 @@ export type UsageDashboard = {
       transactionType: string;
       title: string;
       subtitle: string;
-      artwork?: { generationId: string; name: string; outputUrl: string | null; thumbnailUrl: string | null } | null;
+      artwork?: { generationId: string; name: string; outputUrl: string | null; thumbnailUrl: string | null; mediaKind?: "image" | "video" | "audio" } | null;
       amount: number;
       balanceAfter: number;
       referenceType: string | null;

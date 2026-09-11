@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ArrowRight, Download, RefreshCw, Plus, Search, QrCode, Info, X, AlertCircle } from "lucide-react";
+import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
 import { createBillingPortalSession, createCreditCheckoutSession, fetchCheckoutCatalog, fetchUsageDashboard, type CheckoutCatalog, type UsageDashboard, type UsagePeriodKey } from "@/lib/api/usage";
 import { activityCsv, activityLabel, creditLabel, csvCell, chartBounds, dateLabel, monthLabel, number, signed, visibleTrend, type Activity } from "./usage-utils";
 import styles from "./usage-page.module.css";
@@ -15,6 +16,9 @@ function ToolIcon({ tool, large = false }: { tool: string; large?: boolean }) {
 function ArtworkThumbnail({ item }: { item: Activity }) {
   const [failed, setFailed] = useState(false);
   if (!item.artwork) return item.amount > 0 ? <span className={styles.addIcon}><Plus size={20} /></span> : <ToolIcon tool={Object.keys(icons).find(key => item.title.toLowerCase().includes(key)) ?? "image"} />;
+  if (item.artwork.mediaKind === "video" && item.artwork.outputUrl) {
+    return <VideoFrameThumbnail key={item.artwork.outputUrl} src={item.artwork.outputUrl} alt={`ภาพตัวอย่าง ${item.artwork.name}`} className={styles.artworkThumbnail} fallback={<span className={styles.artworkPlaceholder}>ไม่มีภาพตัวอย่าง</span>} />;
+  }
   return item.artwork.thumbnailUrl && !failed
     ? <Image unoptimized src={item.artwork.thumbnailUrl} width={48} height={48} alt={`ผลงาน ${item.artwork.name}`} className={styles.artworkThumbnail} onError={() => setFailed(true)} />
     : <span className={styles.artworkPlaceholder}>{failed ? "โหลดภาพไม่ได้" : "ไม่มีภาพตัวอย่าง"}</span>;

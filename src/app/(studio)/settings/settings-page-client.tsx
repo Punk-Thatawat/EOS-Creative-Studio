@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import {
   Bell,
   Check,
@@ -13,14 +14,14 @@ import {
   Mail,
   Monitor,
   Save,
-  Settings2,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { changePasswordWithBackend, getStoredBackendSession } from "@/lib/auth/backend-auth";
 import { getApiAccessToken } from "@/lib/auth/access-token";
+import { fetchBackendAuthProvider } from "@/lib/auth/backend-session";
 import { useLocale, type Locale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import styles from "./settings-page.module.css";
 
@@ -39,20 +40,27 @@ const settingsKeys = {
   font: "settings.font",
   fontValue: "settings.fontValue",
   fontHint: "settings.fontHint",
-  workspace: "settings.workspace",
-  workspaceDescription: "settings.workspaceDescription",
-  workspaceName: "settings.workspaceName",
-  workspaceNameValue: "settings.workspaceNameValue",
-  defaultProject: "settings.defaultProject",
-  defaultProjectValue: "settings.defaultProjectValue",
-  defaultProjectHint: "settings.defaultProjectHint",
   security: "settings.security",
   securityDescription: "settings.securityDescription",
   authentication: "settings.authentication",
   authenticationValue: "settings.authenticationValue",
+  authenticationEmail: "settings.authenticationEmail",
+  authenticationGoogle: "settings.authenticationGoogle",
+  authenticationLoading: "settings.authenticationLoading",
   activeSessions: "settings.activeSessions",
   activeSessionsValue: "settings.activeSessionsValue",
   reviewSessions: "settings.reviewSessions",
+  password: "settings.password",
+  passwordDescription: "settings.passwordDescription",
+  currentPassword: "settings.currentPassword",
+  newPassword: "settings.newPassword",
+  confirmPassword: "settings.confirmPassword",
+  changePassword: "settings.changePassword",
+  changingPassword: "settings.changingPassword",
+  passwordChanged: "settings.passwordChanged",
+  passwordLoginRequired: "settings.passwordLoginRequired",
+  passwordManagedByGoogle: "settings.passwordManagedByGoogle",
+  passwordChangeFailed: "settings.passwordChangeFailed",
   notifications: "settings.notifications",
   notificationsDescription: "settings.notificationsDescription",
   emailUpdates: "settings.emailUpdates",
@@ -74,7 +82,7 @@ const settingsKeys = {
 
 type Copy = { [Key in keyof typeof settingsKeys]: string };
 
-const sectionIds = ["language", "workspace", "security"] as const;
+const sectionIds = ["language", "security"] as const;
 const showNotificationSettings = false;
 
 async function syncLocale(locale: Locale) {
@@ -143,11 +151,30 @@ export function SettingsPageClient() {
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<(typeof sectionIds)[number]>("language");
   const [notifications, setNotifications] = useState({ email: true, project: true, security: true });
+  const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [authProvider, setAuthProvider] = useState<"loading" | "email" | "google" | "unknown">("loading");
 
   const t: Copy = useMemo(
     () => Object.fromEntries(Object.entries(settingsKeys).map(([name, key]) => [name, translateKey(key as TranslationKey)])) as Copy,
     [translateKey],
   );
+
+  useEffect(() => {
+    let active = true;
+    void getApiAccessToken()
+      .then((accessToken) => accessToken ? fetchBackendAuthProvider(accessToken) : null)
+      .then((provider) => {
+        if (active) setAuthProvider(provider ?? "unknown");
+      })
+      .catch(() => {
+        if (active) setAuthProvider("unknown");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function changeLocale(nextLocale: Locale) {
     setLocale(nextLocale);
@@ -168,10 +195,40 @@ export function SettingsPageClient() {
     }
   }
 
+  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (passwordForm.next.length < 8 || passwordForm.next !== passwordForm.confirm) {
+      setPasswordMessage({ tone: "error", text: passwordForm.next.length < 8 ? translateKey("auth.validation.passwordMinFull") : translateKey("auth.validation.passwordMismatch") });
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordMessage(null);
+    try {
+      const accessToken = await getApiAccessToken({ forceRefresh: true });
+      const session = getStoredBackendSession();
+      if (!accessToken) throw new Error(t.passwordLoginRequired);
+      await changePasswordWithBackend({ currentPassword: passwordForm.current, newPassword: passwordForm.next, refreshToken: session?.refreshToken }, accessToken);
+      setPasswordForm({ current: "", next: "", confirm: "" });
+      setPasswordMessage({ tone: "success", text: t.passwordChanged });
+    } catch (error: unknown) {
+      setPasswordMessage({ tone: "error", text: error instanceof Error ? error.message : t.passwordChangeFailed });
+    } finally {
+      setPasswordSaving(false);
+    }
+  }
+
   function scrollToSection(id: (typeof sectionIds)[number]) {
     setActiveSection(id);
     document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  const authenticationDescription = authProvider === "google"
+    ? t.authenticationGoogle
+    : authProvider === "email"
+      ? t.authenticationEmail
+      : authProvider === "loading"
+        ? t.authenticationLoading
+        : t.authenticationValue;
 
   return (
     <div className={`${styles.settingsPage} font-sans`}>
@@ -194,8 +251,8 @@ export function SettingsPageClient() {
         <aside className={styles.sectionNav} aria-label={t.overview}>
           <p className={styles.navLabel}>{t.overview}</p>
           {sectionIds.map((id) => {
-            const labels = { language: t.language, workspace: t.workspace, security: t.security, notifications: t.notifications };
-            const icons = { language: Languages, workspace: Settings2, security: LockKeyhole, notifications: Bell };
+            const labels = { language: t.language, security: t.security };
+            const icons = { language: Languages, security: LockKeyhole };
             const Icon = icons[id];
             return (
               <button key={id} type="button" className={`${styles.navItem} ${activeSection === id ? styles.navItemActive : ""}`} onClick={() => scrollToSection(id)}>
@@ -229,22 +286,29 @@ export function SettingsPageClient() {
             </div>
           </Card>
 
-          <Card className={styles.settingsCard} id="settings-workspace">
-            <SectionHeading icon={Settings2} title={t.workspace} description={t.workspaceDescription} tone="orange" />
-            <div className={styles.cardBody}>
-              <label className={styles.fieldLabel} htmlFor="workspace-name">{t.workspaceName}</label>
-              <Input id="workspace-name" defaultValue={t.workspaceNameValue} className={styles.fieldInput} />
-              <div className={styles.preferenceRow}>
-                <div><p className={styles.rowTitle}>{t.defaultProject}</p><p className={styles.rowDescription}>{t.defaultProjectHint}</p></div>
-                <span className={styles.preferenceValue}>{t.defaultProjectValue}</span>
-              </div>
-            </div>
-          </Card>
-
           <Card className={styles.settingsCard} id="settings-security">
             <SectionHeading icon={ShieldCheck} title={t.security} description={t.securityDescription} tone="pink" />
             <div className={styles.cardBody}>
-              <SettingRow icon={KeyRound} title={t.authentication} description={t.authenticationValue} value="✓" />
+              <SettingRow icon={KeyRound} title={t.authentication} description={authenticationDescription} value="✓" />
+              <div className={styles.passwordPanel}>
+                <div>
+                  <p className={styles.rowTitle}>{t.password}</p>
+                  <p className={styles.rowDescription}>{authProvider === "google" ? t.passwordManagedByGoogle : t.passwordDescription}</p>
+                </div>
+                {authProvider === "google" ? (
+                  <p className={styles.passwordGoogleNote} role="status">{t.passwordManagedByGoogle}</p>
+                ) : authProvider === "loading" ? (
+                  <p className={styles.passwordGoogleNote} role="status">{t.authenticationLoading}</p>
+                ) : (
+                  <form className={styles.passwordForm} onSubmit={handleChangePassword}>
+                    <label>{t.currentPassword}<input type="password" autoComplete="current-password" required value={passwordForm.current} onChange={(event) => setPasswordForm((current) => ({ ...current, current: event.target.value }))} /></label>
+                    <label>{t.newPassword}<input type="password" autoComplete="new-password" minLength={8} required value={passwordForm.next} onChange={(event) => setPasswordForm((current) => ({ ...current, next: event.target.value }))} /></label>
+                    <label>{t.confirmPassword}<input type="password" autoComplete="new-password" minLength={8} required value={passwordForm.confirm} onChange={(event) => setPasswordForm((current) => ({ ...current, confirm: event.target.value }))} /></label>
+                    <Button type="submit" variant="outline" size="sm" className={styles.passwordButton} disabled={passwordSaving}>{passwordSaving ? t.changingPassword : t.changePassword}</Button>
+                    {passwordMessage ? <p className={passwordMessage.tone === "success" ? styles.passwordSuccess : styles.passwordError} role="status">{passwordMessage.text}</p> : null}
+                  </form>
+                )}
+              </div>
               <SettingRow icon={Monitor} title={t.activeSessions} description={t.activeSessionsValue}>
                 <Button variant="outline" size="sm" className={styles.rowButton}>{t.reviewSessions}</Button>
               </SettingRow>
@@ -266,7 +330,7 @@ export function SettingsPageClient() {
             </div>
           </Card>}
 
-          <div className={styles.helpRow}><span>{t.help}</span><button type="button">{t.helpLink}<ChevronRight size={14} /></button></div>
+          <div className={styles.helpRow}><span>{t.help}</span><a href="mailto:support@eoslabs.tech">{t.helpLink}<ChevronRight size={14} /></a></div>
         </div>
       </div>
     </div>

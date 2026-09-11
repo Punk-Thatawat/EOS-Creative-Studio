@@ -5,7 +5,7 @@ import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Dropdown } from "@/components/ui/dropdown";
-import { CloudUpload, Info, LoaderCircle, Mic2, WandSparkles, X } from "lucide-react";
+import { CloudUpload, LoaderCircle, Mic2, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
@@ -30,6 +30,7 @@ import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
+import { InfoTooltip } from "./components/info-tooltip";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
@@ -518,11 +519,6 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     setNotice(null);
   };
   const mediaUploadInProgress = sourcePerson?.uploadStatus === "uploading" || audioUploadStatus === "uploading";
-  const pricingMediaReady = Boolean(
-    sourcePerson?.remoteUrl
-    && (!audioFile || Boolean(audioUrl))
-    && (!requiredAudioInput || Boolean(audioUrl)),
-  );
   const effectiveDurationValue = audioDuration !== null ? Number(audioDuration.toFixed(2)) : durationValue;
   const displayDuration = audioDuration !== null
     ? effectiveDurationValue
@@ -563,7 +559,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         : modelParameterEntries.find(([name]) => requiredProperties.has(name) && !peopleHasValue(modelParams[name]))
           ? t("create.video.common.parameterRequired", { parameter: translateVideoSchemaLabel(modelParameterEntries.find(([name]) => requiredProperties.has(name) && !peopleHasValue(modelParams[name]))?.[0] ?? "Parameter", undefined, t) })
           : null;
-  const videoCreditEstimate = useVideoCreditEstimate(selectedModel && pricingMediaReady ? {
+  const videoCreditEstimate = useVideoCreditEstimate(selectedModel ? {
     feature: workspaceFeature,
     model: selectedModel,
     prompt: script.trim() || actingDirection.trim() || undefined,
@@ -571,7 +567,9 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     resolution: resolutionValue,
     aspectRatio: aspectRatioValue,
     promptOptimizerEnabled,
-    ...(sourcePerson?.kind === "image" ? { sourceImage: sourcePerson.remoteUrl } : { sourceVideo: sourcePerson?.remoteUrl }),
+    ...(sourcePerson?.remoteUrl
+      ? sourcePerson.kind === "image" ? { sourceImage: sourcePerson.remoteUrl } : { sourceVideo: sourcePerson.remoteUrl }
+      : {}),
     ...(audioUrl ? { audioUrl } : {}),
     modelParams,
   } : null);
@@ -689,7 +687,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
             <div className={styles.videoModeTutorial}>
                <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")} />
             </div>
-            <div className={styles.videoModeHeading}><h2 id={`${workspaceFeature}-title`}>{isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")}</h2><Info size={11} /></div>
+            <div className={styles.videoModeHeading}><h2 id={`${workspaceFeature}-title`}>{isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")}</h2><InfoTooltip content={isLipsync ? t("create.video.lipsync.description") : t("create.video.people.description")} size={11} /></div>
             <div className={styles.featureIdentity}>
               <span className={styles.featureIdentityEyebrow}>{featureGuide.eyebrow}</span>
               <p className={styles.textVideoDescription}>{featureGuide.description}</p>
@@ -802,7 +800,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       </div>
       <aside className={styles.settings}>
         <PeopleSectionTitle number={settingsStep}>{t("create.video.common.settings")}</PeopleSectionTitle>
-        <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <Info size={11} /></label>
+        <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} /></label>
         <VideoModelDropdown
           models={models}
           value={selectedModel}
@@ -817,7 +815,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         {resolutionProperty ? <PeopleSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride={t("create.video.common.resolution")} onChange={setResolutionValue} /> : null}
         {aspectRatioProperty ? <PeopleSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride={t("create.video.common.aspectRatio")} onChange={setAspectRatioValue} /> : null}
         {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>{t("create.video.common.modelParameters")}</div>{modelParameterEntries.map(([name, property]) => <PeopleSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => { const next = { ...current }; if (value === undefined || value === "") delete next[name]; else next[name] = value; return next; })} />)}</div> : null}
-        <VideoCreditEstimate featureLabel={workspaceLabel} duration={displayDuration} estimate={videoCreditEstimate} emptyLoading={mediaUploadInProgress} emptyMessage={mediaUploadInProgress ? t("create.video.common.uploadingMediaToPrice") : t("create.video.common.uploadMediaToSeePrice")}>
+        <VideoCreditEstimate featureLabel={workspaceLabel} duration={displayDuration} estimate={videoCreditEstimate} emptyLoading={modelsLoading} emptyMessage={modelsLoading ? t("create.video.common.loadingModels", { feature: workspaceLabel }) : validationMessage ?? t("create.video.common.pricingUnavailable")}>
           {!isComplete ? <p className={styles.settingsError} role="status">{modelsLoading ? t("create.video.common.loadingModels", { feature: workspaceLabel }) : validationMessage}</p> : null}
           {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
           <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!isComplete || pricingBusy || generationStatus === "uploading" || generationStatus === "processing"}>{pricingBusy ? <LoaderCircle size={18} className={styles.creditSpinner} /> : <WandSparkles size={18} />} {generationStatus === "uploading" || generationStatus === "processing" ? t("create.video.common.generating") : mediaUploadInProgress ? t("create.video.common.uploading") : videoCreditEstimate.loading ? t("create.video.common.calculatingPrice") : t("create.video.common.generateVideo")}</button>

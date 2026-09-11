@@ -800,10 +800,6 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    setSelectedFeature(initialFeature);
-  }, [initialFeature]);
-
   const save = async () => {
     if (!draft) return;
     setSaving(true);
@@ -1252,10 +1248,10 @@ function AdminModelRoutesContent() {
         {error ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc2c2] bg-[#fff6f6] p-4 text-sm text-[#9f3b3b]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={18} /><div><p className="font-bold">Couldn&apos;t load model routes</p><p className="mt-1 text-xs leading-5">{error}</p><button type="button" className="mt-2 text-xs font-bold underline underline-offset-2" onClick={() => void load()}>Try again</button></div></div> : null}
         {message ? <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#bfe1cc] bg-[#f3fbf5] p-4 text-sm text-[#347454]" role="status"><CheckCircle2 size={18} /><p className="font-semibold">{message}</p></div> : null}
 
-         {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
+            {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
 
             <FeatureTutorialPanel feature={tutorialFeature} featureName={tutorialFeatureName} includeFeatureOverview={feature !== "image-to-video"} />
-            {feature === "audio" ? <AudioProviderSettingsPanel initialFeature={audioFeatureParam ?? undefined} /> : null}
+            {feature === "audio" ? <AudioProviderSettingsPanel key={audioFeatureParam ?? "textToSpeech"} initialFeature={audioFeatureParam ?? undefined} /> : null}
         {feature === "image-to-video" ? <VideoStoryboardSettingsPanel catalog={catalog} routeOverview={routeOverview} onRoutesChanged={load} onDetails={setDetailsModel} /> : null}
 
         {feature === "audio" || feature === "image-to-video" ? null : <div className="grid gap-6 lg:grid-cols-1 lg:items-start">

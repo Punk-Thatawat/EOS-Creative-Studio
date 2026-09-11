@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MailCheck, UserRound, X, type LucideIcon } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { EosLogo } from "@/components/brand/eos-logo";
@@ -45,6 +46,11 @@ const getLocalDateKey = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
+
+function resolveSafeLoginRedirect(value: string | null | undefined): string {
+  if (!value) return "/home";
+  return value.startsWith("/") && !value.startsWith("//") ? value : "/home";
+}
 
 type AuthMode = "login" | "register" | "confirmation" | "forgot";
 
@@ -103,6 +109,7 @@ export function PreLoginPage() {
   const [videoDurations, setVideoDurations] = useState<Record<number, string>>({});
   const [showIntroVideo, setShowIntroVideo] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [authRedirect, setAuthRedirect] = useState("/home");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
@@ -137,7 +144,7 @@ export function PreLoginPage() {
     setGoogleLoginLoading(true);
     setGoogleLoginError(null);
     try {
-      await signInWithGoogle();
+      await signInWithGoogle({ redirectTarget: authRedirect });
     } catch (error: unknown) {
       setGoogleLoginLoading(false);
       setGoogleLoginError(error instanceof Error ? error.message : t("auth.error.googleStart"));
@@ -146,6 +153,7 @@ export function PreLoginPage() {
 
   const openLogin = () => {
     setAuthMode("login");
+    setAuthRedirect("/home");
     setPasswordVisible(false);
     setConfirmationPasswordVisible(false);
     setAuthError(null);
@@ -195,7 +203,7 @@ export function PreLoginPage() {
           const accessToken = await persistBackendSession(result.data.session);
           const backendProfile = await fetchBackendSession(accessToken);
           window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
-          window.location.replace("/home");
+          window.location.replace(authRedirect);
           return;
         }
         setAuthMode("confirmation");
@@ -223,7 +231,7 @@ export function PreLoginPage() {
       const accessToken = await persistBackendSession(result.data.session);
       const backendProfile = await fetchBackendSession(accessToken);
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
-      window.location.replace("/home");
+      window.location.replace(authRedirect);
     } catch (error: unknown) {
       setAuthError(error instanceof Error ? error.message : t("auth.error.authenticationFailed"));
     } finally {
@@ -246,7 +254,7 @@ export function PreLoginPage() {
         const accessToken = await persistBackendSession(result.data.session);
         const backendProfile = await fetchBackendSession(accessToken);
         window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
-        window.location.replace("/home");
+        window.location.replace(authRedirect);
         return;
       } catch {
         // The account is normally still waiting for confirmation. Retry while
@@ -356,9 +364,11 @@ export function PreLoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sessionExpired = params.get("reason") === "session-expired";
-    if (params.get("login") !== "1" && params.get("auth_error") !== "1" && !sessionExpired) return undefined;
+    const authRequired = params.get("reason") === "auth-required";
+    if (params.get("login") !== "1" && params.get("auth_error") !== "1" && !sessionExpired && !authRequired) return undefined;
 
     const timer = window.setTimeout(() => {
+      setAuthRedirect(resolveSafeLoginRedirect(params.get("redirect")));
       if (params.get("auth_error") === "1") {
         const storedError = window.sessionStorage.getItem("eos.auth.login-error");
         setGoogleLoginError(storedError || t("auth.error.loginFailed"));
@@ -463,7 +473,7 @@ export function PreLoginPage() {
             <button type="button" className="auth-secondary-button" onClick={() => { void handleResendConfirmation(); }} disabled={authSubmitting || resendCooldown > 0}>{authSubmitting ? <><LoaderCircle size={15} className="auth-spin" /> {t("auth.action.sending")}</> : resendCooldown > 0 ? t("auth.action.resendConfirmationCooldown", { seconds: resendCooldown }) : t("auth.action.resendConfirmation")}</button>
             {authError && <p className="auth-error" role="alert">{authError}</p>}
             <button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button>
-          </div> : authMode === "forgot" && authMessage ? <div className="auth-confirmation-state"><div className="auth-confirmation-icon"><MailCheck size={29} /></div><p>{authMessage}</p><button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button></div> : <>
+          </div> : authMode === "forgot" && authMessage ? <div className="auth-confirmation-state"><div className="auth-confirmation-icon"><MailCheck size={29} /></div><p>{authMessage}</p><p className="auth-provider-note">{t("auth.reset.googleNote")}</p><button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button></div> : <>
             <form onSubmit={handleEmailAuth}>
               {authMode === "register" && <AuthField id="modal-name" label={t("auth.form.name")} optional optionalLabel={t("auth.form.optional")} value={authName} onChange={setAuthName} type="text" placeholder={t("auth.form.namePlaceholder")} autoComplete="name" icon={UserRound} disabled={authSubmitting} />}
               <AuthField id="modal-email" label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete="email" icon={Mail} required disabled={authSubmitting} error={authEmailError} />
@@ -477,7 +487,7 @@ export function PreLoginPage() {
               </>}
               {authMode === "login" && <><label className="auth-remember"><input type="checkbox" defaultChecked /> {t("auth.form.keepSignedIn")}</label><button type="button" className="auth-forgot-link" onClick={() => switchAuthMode("forgot")}>{t("auth.action.forgotPassword")}</button></>}
               {authError && <p className="auth-error" role="alert">{authError}</p>}
-              <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="submit" className="auth-submit" disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={18} className="auth-spin" /> {authMode === "login" ? t("auth.action.signingIn") : t("auth.action.sending")}</> : <>{authMode === "login" ? t("auth.action.login") : authMode === "forgot" ? t("auth.action.sending") : t("auth.action.register")} <ArrowRight size={20} /></>}</button></div>
+              <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="submit" className="auth-submit" disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={18} className="auth-spin" /> {authMode === "login" ? t("auth.action.signingIn") : t("auth.action.sending")}</> : <>{authMode === "login" ? t("auth.action.login") : authMode === "forgot" ? t("auth.action.resetPassword") : t("auth.action.register")} <ArrowRight size={20} /></>}</button></div>
             </form>
             {authMode !== "forgot" && <div className="auth-divider"><span>{t("auth.action.continueWith")}</span></div>}
             {googleLoginError && <p className="auth-error" role="alert">{googleLoginError}</p>}
@@ -499,6 +509,7 @@ export function PreLoginPage() {
           </button>
         </div>
       </footer>
+      <div className="landing-legal-links"><span>EOS Creative Studio</span><Link href="/legal">Legal Center</Link><Link href="/legal/cookies">Cookies</Link><Link href="/legal/privacy">Privacy</Link><Link href="/legal/terms-of-use">Terms</Link></div>
     </main>
   );
 }

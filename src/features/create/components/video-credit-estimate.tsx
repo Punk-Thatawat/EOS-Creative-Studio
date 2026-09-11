@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Info, LoaderCircle, LockKeyhole } from "lucide-react";
+import { LoaderCircle, LockKeyhole } from "lucide-react";
 import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/api/video-generations";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { InfoTooltip } from "./info-tooltip";
 import styles from "../video-generation-page.module.css";
 
 export function useVideoCreditEstimate(input: DirectVideoQuoteInput | null) {
@@ -67,7 +68,7 @@ export function VideoCreditEstimate({ featureLabel, duration, estimate, emptyMes
   const quantityLabel = duration !== undefined && duration !== "" ? t("create.video.common.creditsDuration", { duration: String(duration) }) : compactLabel ? t("create.video.common.creditsVideo") : t("create.video.common.creditsFeature", { feature: featureLabel });
   return <div className={styles.estimateBlock}>
     <div className={styles.estimate} title={estimate.error ?? undefined}>
-      <div>{t("create.video.common.estimatedCredits")} <Info size={11} /></div>
+      <div>{t("create.video.common.estimatedCredits")} <InfoTooltip content={t("create.video.common.info.estimatedCredits")} size={11} /></div>
       <span>{quantityLabel}<strong>{value}</strong></span>
     </div>
     {children}

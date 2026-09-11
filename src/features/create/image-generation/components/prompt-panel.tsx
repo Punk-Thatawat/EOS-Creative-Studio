@@ -1,9 +1,10 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, CircleOff, Info } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, CircleOff } from "lucide-react";
 import { textToImagePromptMaxLength, type ExtendAmount, type ExtendDirection, type ImageGenerationTab, type StylePreset, type StyleSourceMode, type StyleTransferPreset } from "../config";
 import type { GenerationStylePreset } from "@/lib/api/style-presets";
+import type { PendingImageSlot, PendingImageUpload } from "@/lib/media/deferred-upload";
 import type { ImageUploadConstraints } from "@/lib/media/upload-validation";
 import { cx } from "../styles";
 import { PromptField } from "@/components/ui/prompt-field";
@@ -12,6 +13,8 @@ import { BackgroundPanel } from "./background-panel";
 import { ExtendPanel } from "./extend-panel";
 import { UpscalePanel } from "./upscale-panel";
 import { PromptOptimizerToggle } from "./prompt-optimizer-toggle";
+import { InfoTooltip } from "@/features/create/components/info-tooltip";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 type PromptPanelProps = {
   activeTab: ImageGenerationTab;
@@ -40,6 +43,10 @@ type PromptPanelProps = {
   onSourceImageChange: (imageUrl: string) => void;
   onSourceImagesChange?: (imageUrls: string[]) => void;
   onSourceImageClear: () => void;
+  onPendingImageChange: (slot: PendingImageSlot, file: File | null, previewUrl: string | null) => void;
+  onPendingImagesChange: (slot: PendingImageSlot, items: PendingImageUpload[]) => void;
+  onPendingImageRemove: (slot: PendingImageSlot, previewUrl: string) => void;
+  onPendingImagesClear: (slot: PendingImageSlot) => void;
   onStyleSourceModeChange: (mode: StyleSourceMode) => void;
   onStyleTransferPresetChange: (preset: StyleTransferPreset) => void;
   onStyleReferenceImageChange: (imageUrl: string) => void;
@@ -83,7 +90,8 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function PromptPanel({ activeTab, tutorialButton, prompt, negativePrompt, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
+export function PromptPanel({ activeTab, tutorialButton, prompt, negativePrompt, style, stylePresetOptions, styleTransferPresetOptions, sourceImage, sourceImages = [], maxSourceImages = 1, imageUploadConstraints, workspaceId, styleSourceMode, styleTransferPreset, styleReferenceImage, imageStrength, contentPreservation, facePreservation, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onStyleChange, onSourceImageChange, onSourceImagesChange, onSourceImageClear, onPendingImageChange, onPendingImagesChange, onPendingImageRemove, onPendingImagesClear, onStyleSourceModeChange, onStyleTransferPresetChange, onStyleReferenceImageChange, onStyleReferenceImageClear, onImageStrengthChange, onContentPreservationChange, onFacePreservationChange, styleTransferSupportsInput = true, styleTransferSupportsReference = true, styleTransferSupportsStrength = true, styleTransferSupportsContentPreservation = true, backgroundMode, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, backgroundSupportsInput, backgroundSupportsPrompt = true, extendPrompt, extendDirection, extendAmount, onBackgroundModeChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onExtendPromptChange, onExtendDirectionChange, onExtendAmountChange }: PromptPanelProps) {
+  const { t } = useLocale();
   const imageToImage = activeTab === "Image to Image";
   const styleTransfer = activeTab === "AI Style Transfer";
   const background = activeTab === "AI Background";
@@ -133,15 +141,15 @@ export function PromptPanel({ activeTab, tutorialButton, prompt, negativePrompt,
   };
 
   if (background) {
-    return <BackgroundPanel tutorialButton={tutorialButton} backgroundMode={backgroundMode} sourceImage={sourceImage} backgroundReferenceImage={backgroundReferenceImage} backgroundPrompt={backgroundPrompt} backgroundColor={backgroundColor} preserveSubject={preserveSubject} edgeCleanup={edgeCleanup} addShadow={addShadow} matchLighting={matchLighting} style={style} stylePresetOptions={stylePresetOptions} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} backgroundSupportsInput={backgroundSupportsInput} backgroundSupportsPrompt={backgroundSupportsPrompt} onBackgroundModeChange={onBackgroundModeChange} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onBackgroundReferenceImageChange={onBackgroundReferenceImageChange} onBackgroundReferenceImageClear={onBackgroundReferenceImageClear} onBackgroundPromptChange={onBackgroundPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onBackgroundColorChange={onBackgroundColorChange} onPreserveSubjectChange={onPreserveSubjectChange} onEdgeCleanupChange={onEdgeCleanupChange} onAddShadowChange={onAddShadowChange} onMatchLightingChange={onMatchLightingChange} onStyleChange={onStyleChange} />;
+    return <BackgroundPanel tutorialButton={tutorialButton} backgroundMode={backgroundMode} sourceImage={sourceImage} backgroundReferenceImage={backgroundReferenceImage} backgroundPrompt={backgroundPrompt} backgroundColor={backgroundColor} preserveSubject={preserveSubject} edgeCleanup={edgeCleanup} addShadow={addShadow} matchLighting={matchLighting} style={style} stylePresetOptions={stylePresetOptions} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} backgroundSupportsInput={backgroundSupportsInput} backgroundSupportsPrompt={backgroundSupportsPrompt} onBackgroundModeChange={onBackgroundModeChange} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onPendingSourceImageChange={(file, previewUrl) => onPendingImageChange("background-source", file, previewUrl)} onBackgroundReferenceImageChange={onBackgroundReferenceImageChange} onBackgroundReferenceImageClear={onBackgroundReferenceImageClear} onPendingReferenceImageChange={(file, previewUrl) => onPendingImageChange("background-reference", file, previewUrl)} onBackgroundPromptChange={onBackgroundPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onBackgroundColorChange={onBackgroundColorChange} onPreserveSubjectChange={onPreserveSubjectChange} onEdgeCleanupChange={onEdgeCleanupChange} onAddShadowChange={onAddShadowChange} onMatchLightingChange={onMatchLightingChange} onStyleChange={onStyleChange} />;
   }
 
   if (extend) {
-    return <ExtendPanel tutorialButton={tutorialButton} sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} prompt={extendPrompt} negativePrompt={negativePrompt} direction={extendDirection} amount={extendAmount} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onPromptChange={onExtendPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onNegativePromptChange={onNegativePromptChange} onDirectionChange={onExtendDirectionChange} onAmountChange={onExtendAmountChange} />;
+    return <ExtendPanel tutorialButton={tutorialButton} sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} prompt={extendPrompt} negativePrompt={negativePrompt} direction={extendDirection} amount={extendAmount} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onPendingImageChange={(file, previewUrl) => onPendingImageChange("extend-source", file, previewUrl)} onPromptChange={onExtendPromptChange} promptOptimizerEnabled={promptOptimizerEnabled} onPromptOptimizerChange={onPromptOptimizerChange} onNegativePromptChange={onNegativePromptChange} onDirectionChange={onExtendDirectionChange} onAmountChange={onExtendAmountChange} />;
   }
 
   if (upscale) {
-    return <UpscalePanel tutorialButton={tutorialButton} sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} />;
+    return <UpscalePanel tutorialButton={tutorialButton} sourceImage={sourceImage} workspaceId={workspaceId} imageUploadConstraints={imageUploadConstraints} onSourceImageChange={onSourceImageChange} onSourceImageClear={onSourceImageClear} onPendingImageChange={(file, previewUrl) => onPendingImageChange("upscale-source", file, previewUrl)} />;
   }
 
   if (styleTransfer) {
@@ -151,7 +159,7 @@ export function PromptPanel({ activeTab, tutorialButton, prompt, negativePrompt,
       <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
 
       <div className={cx("gen-section-heading")}><h3>CONTENT IMAGE <em>(Required)</em></h3></div>
-      <SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} purpose="content" feature="ai-style-transfer" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} disabled={!styleTransferSupportsInput} />
+      <SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} purpose="content" feature="ai-style-transfer" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} disabled={!styleTransferSupportsInput} onPendingImageChange={(file, previewUrl) => onPendingImageChange("style-transfer-source", file, previewUrl)} />
       <p className={cx("gen-inline-helper")}>Upload the image you want to restyle while keeping its subject and composition.</p>
 
       <div className={cx("gen-section-heading")}><h3>STYLE SOURCE <em>(Choose one)</em></h3></div>
@@ -169,12 +177,12 @@ export function PromptPanel({ activeTab, tutorialButton, prompt, negativePrompt,
         {stylePresetScrollState.canGoBack && <button type="button" className={cx("gen-gallery-prev")} onClick={() => scrollStylePresets(-1)} aria-label="Previous style transfer presets"><ChevronLeft size={18} /></button>}
         {stylePresetScrollState.canGoForward && <button type="button" className={cx("gen-gallery-next")} onClick={() => scrollStylePresets(1)} aria-label="Next style transfer presets"><ChevronRight size={18} /></button>}
       </div> : <div className={cx("gen-style-transfer-reference")}>
-        <SourceImageUpload imageUrl={styleReferenceImage} onImageChange={onStyleReferenceImageChange} onClear={onStyleReferenceImageClear} purpose="style-reference" feature="ai-style-transfer" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} disabled={!styleTransferSupportsReference} />
+        <SourceImageUpload imageUrl={styleReferenceImage} onImageChange={onStyleReferenceImageChange} onClear={onStyleReferenceImageClear} purpose="style-reference" feature="ai-style-transfer" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} disabled={!styleTransferSupportsReference} onPendingImageChange={(file, previewUrl) => onPendingImageChange("style-transfer-reference", file, previewUrl)} />
         <p className={cx("gen-inline-helper")}>Use another image as the visual style reference.</p>
       </div>}{!styleTransferSupportsReference && <p className={cx("gen-upload-helper", "is-disabled")}>This model does not support style reference images. Use a preset or prompt.</p>}
 
-      <div className={cx("gen-range-control", !styleTransferSupportsStrength && "is-disabled")}><div><span>STYLE STRENGTH <Info size={12} /></span><strong>{imageStrength}%</strong></div><input type="range" min="0" max="100" step="1" value={imageStrength} onChange={(event) => onImageStrengthChange(Number(event.target.value))} aria-label="Style strength" disabled={!styleTransferSupportsStrength} /><p><span>Low keeps the original image</span><span>High makes the new style stronger</span></p>{!styleTransferSupportsStrength && <small>This model does not support style strength.</small>}</div>
-      <div className={cx("gen-range-control", !styleTransferSupportsContentPreservation && "is-disabled")}><div><span>CONTENT PRESERVATION <Info size={12} /></span><strong>{contentPreservation}%</strong></div><input type="range" min="0" max="100" step="1" value={contentPreservation} onChange={(event) => onContentPreservationChange(Number(event.target.value))} aria-label="Content preservation" disabled={!styleTransferSupportsContentPreservation} /><p><span>Loose transformation</span><span>Keep face, objects & composition</span></p>{!styleTransferSupportsContentPreservation && <small>This model does not support content preservation.</small>}</div>
+      <div className={cx("gen-range-control", !styleTransferSupportsStrength && "is-disabled")}><div><span>STYLE STRENGTH <InfoTooltip content={t("create.settings.info.styleStrength")} size={12} /></span><strong>{imageStrength}%</strong></div><input type="range" min="0" max="100" step="1" value={imageStrength} onChange={(event) => onImageStrengthChange(Number(event.target.value))} aria-label="Style strength" disabled={!styleTransferSupportsStrength} /><p><span>Low keeps the original image</span><span>High makes the new style stronger</span></p>{!styleTransferSupportsStrength && <small>This model does not support style strength.</small>}</div>
+      <div className={cx("gen-range-control", !styleTransferSupportsContentPreservation && "is-disabled")}><div><span>CONTENT PRESERVATION <InfoTooltip content={t("create.settings.info.contentPreservation")} size={12} /></span><strong>{contentPreservation}%</strong></div><input type="range" min="0" max="100" step="1" value={contentPreservation} onChange={(event) => onContentPreservationChange(Number(event.target.value))} aria-label="Content preservation" disabled={!styleTransferSupportsContentPreservation} /><p><span>Loose transformation</span><span>Keep face, objects & composition</span></p>{!styleTransferSupportsContentPreservation && <small>This model does not support content preservation.</small>}</div>
 
       <details className={cx("gen-advanced")}>
         <summary><span>ADVANCED</span><ChevronDown size={15} /></summary>
@@ -190,7 +198,7 @@ export function PromptPanel({ activeTab, tutorialButton, prompt, negativePrompt,
     <div className={cx("gen-prompt-top-action")}>{tutorialButton}</div><div className={cx("gen-panel-title")}><h2>PROMPT <em>(Required)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
     <PromptField id="gen-prompt-input" value={prompt} onChange={onPromptChange} placeholder={imageToImage ? "Describe how you want to transform the image" : undefined} ariaLabel={imageToImage ? "Describe how you want to transform the image" : "Prompt"} maxLength={textToImagePromptMaxLength} required={!imageToImage} wrapperClassName={cx("gen-textarea-wrap")} metaClassName={cx("gen-prompt-meta")} />
     <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
-    {imageToImage && <><div className={cx("gen-section-heading")}><h3>REFERENCE IMAGES <em>(Required{maxSourceImages > 1 ? ` · up to ${maxSourceImages}` : ""})</em></h3></div><SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} imageUrls={sourceImages} onImagesChange={onSourceImagesChange} maxImages={maxSourceImages} purpose="content" feature="image-to-image" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} /></>}
+    {imageToImage && <><div className={cx("gen-section-heading")}><h3>REFERENCE IMAGES <em>(Required{maxSourceImages > 1 ? ` · up to ${maxSourceImages}` : ""})</em></h3></div><SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} imageUrls={sourceImages} onImagesChange={onSourceImagesChange} maxImages={maxSourceImages} purpose="content" feature="image-to-image" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} onPendingImageChange={(file, previewUrl) => onPendingImageChange("image-to-image", file, previewUrl)} onPendingImagesChange={(items) => onPendingImagesChange("image-to-image", items)} onPendingImageRemove={(previewUrl) => onPendingImageRemove("image-to-image", previewUrl)} onPendingImagesClear={() => onPendingImagesClear("image-to-image")} /></>}
     <div className={cx("gen-section-heading")}><h3>STYLE PRESETS</h3><button type="button">View all</button></div>
     <div className={cx("gen-style-preset-gallery")}>
       <div className={cx("gen-style-grid")} ref={stylePresetRowRef}>

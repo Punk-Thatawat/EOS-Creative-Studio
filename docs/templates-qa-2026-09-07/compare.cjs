@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- standalone Node QA utility */
 const sharp = require('sharp');
 const path = require('path');
 (async()=>{

@@ -568,10 +568,13 @@ export function GenerationProgressFloating() {
         {completedItems.map(renderGenerationItem)}
       </section>}
     </section>}
-    <button ref={launcherRef} type="button" className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`} onClick={() => setIsCenterOpen((open) => !open)} aria-expanded={isCenterOpen} aria-controls={isCenterOpen ? "generation-center-panel" : undefined} aria-label={t("shell.generation.open")} title={t("shell.generation.open")}>
-      <i className={`${styles.dot} ${inProgress.length === 0 ? styles.dotCompleted : ""}`} />
-      <span className={styles.launcherCopy}><strong aria-live="polite">{inProgress.length > 0 ? `กำลังสร้าง ${inProgress.length} งาน` : `สร้างเสร็จแล้ว ${completedItems.length} งาน`}</strong><small>แตะเพื่อดูรายละเอียด</small></span>
-      {isCenterOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-    </button>
+    <div className={styles.launcherRow}>
+      <button ref={launcherRef} type="button" className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`} onClick={() => setIsCenterOpen((open) => !open)} aria-expanded={isCenterOpen} aria-controls={isCenterOpen ? "generation-center-panel" : undefined} aria-label={t("shell.generation.open")} title={t("shell.generation.open")}>
+        <i className={`${styles.dot} ${inProgress.length === 0 ? styles.dotCompleted : ""}`} />
+        <span className={styles.launcherCopy}><strong aria-live="polite">{inProgress.length > 0 ? `กำลังสร้าง ${inProgress.length} งาน` : `สร้างเสร็จแล้ว ${completedItems.length} งาน`}</strong><small>แตะเพื่อดูรายละเอียด</small></span>
+        {isCenterOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+      </button>
+      {inProgress.length === 0 && completedItems.length > 0 ? <button type="button" className={styles.launcherDismiss} onClick={handleClearCompleted} aria-label={t("shell.generation.clearCompleted")} title={t("shell.generation.clearCompleted")}><X size={15} /></button> : null}
+    </div>
   </div>;
 }

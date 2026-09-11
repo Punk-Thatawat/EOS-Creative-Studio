@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Eraser, Info, Upload, WandSparkles } from "lucide-react";
+import { Eraser, Upload, WandSparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { backgroundModes, type BackgroundMode, type StylePreset } from "../config";
 import type { GenerationStylePreset } from "@/lib/api/style-presets";
@@ -11,6 +11,7 @@ import { PromptField } from "@/components/ui/prompt-field";
 import { SourceImageUpload } from "./source-image-upload";
 import { PromptOptimizerToggle } from "./prompt-optimizer-toggle";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { InfoTooltip } from "@/features/create/components/info-tooltip";
 
 type BackgroundPanelProps = {
   tutorialButton?: ReactNode;
@@ -32,8 +33,10 @@ type BackgroundPanelProps = {
   onBackgroundModeChange: (mode: BackgroundMode) => void;
   onSourceImageChange: (imageUrl: string) => void;
   onSourceImageClear: () => void;
+  onPendingSourceImageChange: (file: File | null, previewUrl: string | null) => void;
   onBackgroundReferenceImageChange: (imageUrl: string) => void;
   onBackgroundReferenceImageClear: () => void;
+  onPendingReferenceImageChange: (file: File | null, previewUrl: string | null) => void;
   onBackgroundPromptChange: (prompt: string) => void;
   promptOptimizerEnabled: boolean;
   onPromptOptimizerChange: (enabled: boolean) => void;
@@ -63,20 +66,20 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function BackgroundPanel({ tutorialButton, backgroundMode, sourceImage, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, style, stylePresetOptions, workspaceId, imageUploadConstraints, backgroundSupportsInput, backgroundSupportsPrompt, onBackgroundModeChange, onSourceImageChange, onSourceImageClear, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onBackgroundPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onStyleChange }: BackgroundPanelProps) {
+export function BackgroundPanel({ tutorialButton, backgroundMode, sourceImage, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, style, stylePresetOptions, workspaceId, imageUploadConstraints, backgroundSupportsInput, backgroundSupportsPrompt, onBackgroundModeChange, onSourceImageChange, onSourceImageClear, onPendingSourceImageChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onPendingReferenceImageChange, onBackgroundPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onStyleChange }: BackgroundPanelProps) {
   const { t } = useLocale();
   return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-background-panel")}>
-    <div className={cx("gen-prompt-top-action")}>{tutorialButton}</div><div className={cx("gen-section-heading")}><h3>{t("create.mode")}</h3><Info size={12} /></div>
+    <div className={cx("gen-prompt-top-action")}>{tutorialButton}</div><div className={cx("gen-section-heading")}><h3>{t("create.mode")}</h3><InfoTooltip content={t("create.settings.info.backgroundMode")} size={12} /></div>
     <BackgroundModeSelector value={backgroundMode} onChange={onBackgroundModeChange} />
 
     {(backgroundMode === "replace" || backgroundMode === "generate") && backgroundSupportsPrompt && <section className={cx("gen-background-section")}><div className={cx("gen-panel-title")}><h2>{t("create.prompt")} <em>({t("create.required")})</em></h2><Image src="/generated-assets/be-descriptive.png" alt={t("create.prompt")} width={2051} height={509} className={cx("gen-prompt-annotation")} /></div><PromptField id="gen-background-prompt" value={backgroundPrompt} onChange={onBackgroundPromptChange} ariaLabel={`${backgroundMode === "replace" ? t("create.image.background.reference") : t("create.image.background.stylePresets")} ${t("create.prompt")}`} required wrapperClassName={cx("gen-textarea-wrap", "gen-background-prompt")} metaClassName={cx("gen-prompt-meta")} /><PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} /></section>}
     {(backgroundMode === "replace" || backgroundMode === "generate") && !backgroundSupportsPrompt && <p className={cx("gen-inline-helper")}>{t("create.image.background.noPromptHelper")}</p>}
 
     <div className={cx("gen-section-heading")}><h3>{t("create.image.background.sourceImage")} <em>({t("create.required")})</em></h3></div>
-    <SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} purpose="content" feature="background-removal" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} disabled={!backgroundSupportsInput} />
+    <SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} purpose="content" feature="background-removal" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} disabled={!backgroundSupportsInput} onPendingImageChange={onPendingSourceImageChange} />
     <p className={cx("gen-inline-helper")}>{t("create.image.background.sourceHelper")}</p>
 
-    {backgroundMode === "replace" && <section className={cx("gen-background-section")}><div className={cx("gen-section-heading")}><h3>{t("create.image.background.reference")} <em>({t("create.optional")})</em></h3></div><SourceImageUpload imageUrl={backgroundReferenceImage} onImageChange={onBackgroundReferenceImageChange} onClear={onBackgroundReferenceImageClear} purpose="background-reference" feature="background-removal" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} /><p className={cx("gen-inline-helper")}>{t("create.image.background.referenceHelper")}</p></section>}
+    {backgroundMode === "replace" && <section className={cx("gen-background-section")}><div className={cx("gen-section-heading")}><h3>{t("create.image.background.reference")} <em>({t("create.optional")})</em></h3></div><SourceImageUpload imageUrl={backgroundReferenceImage} onImageChange={onBackgroundReferenceImageChange} onClear={onBackgroundReferenceImageClear} purpose="background-reference" feature="background-removal" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} onPendingImageChange={onPendingReferenceImageChange} /><p className={cx("gen-inline-helper")}>{t("create.image.background.referenceHelper")}</p></section>}
 
     {backgroundMode === "generate" && <section className={cx("gen-background-section")}><div className={cx("gen-section-heading")}><h3>{t("create.image.background.stylePresets")}</h3></div><div className={cx("gen-background-style-grid")}>
       {stylePresetOptions.map((preset) => <button type="button" key={preset.id} className={cx(style === preset.name && "is-selected")} aria-pressed={style === preset.name} onClick={() => onStyleChange(style === preset.name ? null : preset.name)}><span style={presetThumbStyle(preset.imageUrl)} role="img" aria-label={`${preset.name} background style`} /><small>{preset.name}</small></button>)}

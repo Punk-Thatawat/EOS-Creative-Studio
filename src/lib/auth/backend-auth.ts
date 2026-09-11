@@ -23,6 +23,8 @@ type BackendAuthResponse = {
     pendingLoginToken?: string;
     sent?: boolean;
     resetToken?: string;
+    updated?: boolean;
+    sessionsRevoked?: boolean;
   };
 };
 
@@ -40,6 +42,22 @@ async function postAuth(path: string, body: Record<string, string>): Promise<Bac
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
+  });
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(getErrorMessage(payload));
+  return payload as BackendAuthResponse;
+}
+
+async function postAuthenticatedAuth(path: string, body: Record<string, string>, accessToken: string): Promise<BackendAuthResponse> {
+  const response = await fetch(`${backendUrl}/api/v1/auth/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+    credentials: "include",
   });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new Error(getErrorMessage(payload));
@@ -70,6 +88,12 @@ export function requestPasswordResetWithBackend(email: string) {
 
 export function resetPasswordWithBackend(input: { token: string; newPassword: string }) {
   return postAuth("reset-password", { token: input.token, new_password: input.newPassword });
+}
+
+export function changePasswordWithBackend(input: { currentPassword: string; newPassword: string; refreshToken?: string }, accessToken: string) {
+  const body: Record<string, string> = { current_password: input.currentPassword, new_password: input.newPassword };
+  if (input.refreshToken) body.refresh_token = input.refreshToken;
+  return postAuthenticatedAuth("change-password", body, accessToken);
 }
 
 export function confirmEmailWithBackend(input: { token_hash?: string; token?: string; email?: string; type?: "signup" | "email" }) {

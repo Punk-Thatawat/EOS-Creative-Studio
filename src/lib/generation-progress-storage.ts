@@ -21,6 +21,18 @@ const generationPendingStorageKeys = [
   "eos.generation.pending.extend-video",
 ];
 
+const accountScopedCreateStorageKeys = [
+  ...generationPendingStorageKeys,
+  "eos.generation.image-draft.v1",
+  "eos.generation.source-image.image-to-image",
+  "eos.generation.source-images.image-to-image",
+  "eos.generation.source-image.style-transfer",
+  "eos.generation.source-image.background",
+  "eos.generation.source-image.upscale",
+  "eos.generation.source-image.extend",
+  "eos.generation.style-reference-image",
+];
+
 function readProfileUserId(): string | null {
   if (typeof window === "undefined") return null;
 
@@ -54,7 +66,7 @@ function readTokenUserId(): string | null {
   }
 }
 
-function getAccountScope(): string {
+export function getAccountScope(): string {
   if (typeof window === "undefined") return "anonymous";
   // Prefer the current access token during account switches; the profile in
   // sessionStorage can briefly still belong to the previous account.
@@ -62,12 +74,16 @@ function getAccountScope(): string {
   return userId ? encodeURIComponent(userId) : "anonymous";
 }
 
+export function getAccountScopedStorageKey(baseKey: string): string {
+  return `${baseKey}.${getAccountScope()}`;
+}
+
 export function getGenerationProgressStorageKey(): string {
-  return `${generationProgressStorageBaseKey}.${getAccountScope()}`;
+  return getAccountScopedStorageKey(generationProgressStorageBaseKey);
 }
 
 export function getDismissedProgressStorageKey(): string {
-  return `${dismissedProgressStorageBaseKey}.${getAccountScope()}`;
+  return getAccountScopedStorageKey(dismissedProgressStorageBaseKey);
 }
 
 /**
@@ -78,12 +94,18 @@ export function clearGenerationProgressStorage(): void {
   if (typeof window === "undefined") return;
 
   try {
+    const accountScope = getAccountScope();
+    const scopedKey = (baseKey: string) => `${baseKey}.${accountScope}`;
+
     window.localStorage.removeItem(generationProgressStorageBaseKey);
     window.localStorage.removeItem(dismissedProgressStorageBaseKey);
-    window.localStorage.removeItem(getGenerationProgressStorageKey());
-    window.localStorage.removeItem(getDismissedProgressStorageKey());
+    window.localStorage.removeItem(scopedKey(generationProgressStorageBaseKey));
+    window.localStorage.removeItem(scopedKey(dismissedProgressStorageBaseKey));
     window.sessionStorage.removeItem(generationWorkspaceStorageKey);
-    generationPendingStorageKeys.forEach((key) => window.sessionStorage.removeItem(key));
+    accountScopedCreateStorageKeys.forEach((key) => {
+      window.sessionStorage.removeItem(key);
+      window.sessionStorage.removeItem(scopedKey(key));
+    });
   } catch {
     // Storage may be unavailable in private browsing.
   }

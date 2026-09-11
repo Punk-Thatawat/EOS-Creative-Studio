@@ -20,7 +20,6 @@ import {
   GripVertical,
   History,
   FileAudio,
-  Info,
   LockKeyhole,
   Maximize2,
   Mic2,
@@ -42,10 +41,13 @@ import {
   Zap,
 } from "lucide-react";
 import styles from "./audio-generation-page.module.css";
+import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
+import { InfoTooltip } from "@/features/create/components/info-tooltip";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { createDialogue, createSoundEffects, createTextToSpeech, createTextToSpeechScenes, createVoiceClone, deleteAudioHistory, fetchAudioHistoryAudio, getAudioCreditBalance, listAudioBackgroundMusic, listAudioHistory, listAudioModels, listAudioVoices, previewVoiceClone, quoteTextToSpeech, quoteTextToSpeechScenes, saveAudioHistory, type AudioBackgroundMusic, type AudioCreditQuote, type AudioHistoryEntry, type AudioModel, type AudioVoice, type SaveAudioHistoryInput, type SoundEffectVariant, type TextToSpeechResponse } from "@/lib/api/audio";
 
-type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Audio Cleanup";
+const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
+type AudioTab = typeof audioModes[number];
 
 // Keep the main audio workflow visible while the advanced audio tools are being finalized.
 const visibleTabs = ["Text to Speech"] as const;
@@ -56,6 +58,13 @@ const audioTabKeys = {
   "Voice Clone": "create.audio.tabs.voiceClone",
   "Sound Effects": "create.audio.tabs.soundEffects",
   "Audio Cleanup": "create.audio.tabs.audioCleanup",
+} as const;
+const audioModeIcons = {
+  "Text to Speech": AudioLines,
+  "Podcast & Dialogue": AudioWaveform,
+  "Voice Clone": Mic2,
+  "Sound Effects": Waves,
+  "Audio Cleanup": WandSparkles,
 } as const;
 
 const tones = [
@@ -296,9 +305,11 @@ function PodcastDialogueLayout({ onHistorySaved, scenesTimeline }: { onHistorySa
       <label className={styles.podcastSelectField}><span className={styles.podcastFieldLabel}>SPEAKING STYLE</span><select value={speakingStyle} onChange={(event) => setSpeakingStyle(event.target.value as typeof speakingStyle)}><option value="Interview">Conversational</option><option value="Roundtable">Roundtable</option><option value="Storytelling">Storytelling</option></select><ChevronDown size={14} /></label>
       <div className={styles.podcastSettingGroup}><div className={styles.podcastSpeedHeader}><span className={styles.podcastFieldLabel}>PACING / SPEED</span><b>{speed.toFixed(2)}x</b></div><input className={styles.podcastSpeedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.podcastSpeedLabels}><span>0.5x</span><span>1x</span><span>1.5x</span><span>2x</span></div></div>
       <div className={styles.podcastToggleGroup}><label><span><strong>Background Music</strong><small>เพิ่มเพลงประกอบระหว่างบทพูด</small></span><button type="button" className={backgroundMusic ? styles.podcastToggleOn : styles.podcastToggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic}><i /></button></label><label><span><strong>Normalize Audio</strong><small>ปรับระดับเสียงให้สม่ำเสมอ</small></span><button type="button" className={normalizeAudio ? styles.podcastToggleOn : styles.podcastToggleOff} onClick={() => setNormalizeAudio((current) => !current)} aria-pressed={normalizeAudio}><i /></button></label></div>
-      <div className={styles.podcastEstimate}><div><span>Estimated Duration</span><strong>{formatSceneSeconds(totalDuration)}</strong></div><div><span>Estimated Credits</span><strong>~ {estimatedCredits} Credits</strong></div><small>{estimatedCredits} Credits available · Failed generations refunded</small></div>
-      <button type="button" className={styles.podcastGenerateButton} onClick={() => void handleGenerate()} disabled={status === "generating" || !episodeScript.trim()}>{status === "generating" ? "GENERATING..." : "Generate Podcast"} <Sparkles size={16} /></button>
-      <p className={styles.podcastSecurityNote}><LockKeyhole size={11} /> Secure generation. Your data is private.</p>
+      <div className={styles.mobileActionDock}>
+        <div className={styles.podcastEstimate}><div><span>Estimated Duration</span><strong>{formatSceneSeconds(totalDuration)}</strong></div><div><span>Estimated Credits</span><strong>~ {estimatedCredits} Credits</strong></div><small>{estimatedCredits} Credits available · Failed generations refunded</small></div>
+        <button type="button" className={styles.podcastGenerateButton} onClick={() => void handleGenerate()} disabled={status === "generating" || !episodeScript.trim()}>{status === "generating" ? "GENERATING..." : "Generate Podcast"} <Sparkles size={16} /></button>
+        <p className={styles.podcastSecurityNote}><LockKeyhole size={11} /> Secure generation. Your data is private.</p>
+      </div>
     </aside>
   </div>;
 }
@@ -384,7 +395,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
       <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>EXPRESSIVENESS</span><b>64%</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="64" /></div>
       <label className={styles.altField}><span>LANGUAGE</span><select defaultValue="English (US)"><option>English (US)</option><option>English (UK)</option><option>Thai</option></select></label>
       <div className={styles.altSettingBlock}><span className={styles.altFieldLabel}>OUTPUT FORMAT</span><div className={styles.altFormatGrid}><button type="button" className={styles.altFormatActive}>MP3</button><button type="button" className={styles.altFormat}>WAV</button><button type="button" className={styles.altFormat}>OGG</button></div></div>
-      <button type="button" className={styles.altGenerateButton} onClick={() => void handleCreate()} disabled={status === "creating" || !sampleFile}>{status === "creating" ? "CREATING..." : "CREATE VOICE"} <Sparkles size={16} /></button>
+      <div className={styles.mobileActionDock}><button type="button" className={styles.altGenerateButton} onClick={() => void handleCreate()} disabled={status === "creating" || !sampleFile}>{status === "creating" ? "CREATING..." : "CREATE VOICE"} <Sparkles size={16} /></button></div>
     </aside>
   </div>;
 }
@@ -459,7 +470,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       <label className={styles.altToggleRow}><span>Seamless loop</span><button disabled type="button" className={styles.altToggleOff}><i /></button></label>
       <label className={styles.altToggleRow}><span>Normalize loudness</span><button disabled type="button" className={styles.altToggleOn}><i /></button></label>
       <div className={styles.altSettingBlock}><span className={styles.altFieldLabel}>OUTPUT FORMAT</span><div className={styles.altFormatGrid}><button disabled type="button" className={styles.altFormat}>WAV</button><button disabled type="button" className={styles.altFormatActive}>MP3</button><button disabled type="button" className={styles.altFormat}>OGG</button></div></div>
-      <button type="button" className={styles.altGenerateButton} onClick={() => void handleGenerate()} disabled={status === "generating" || !description.trim()}>{status === "generating" ? "GENERATING..." : "GENERATE SOUND"} <Sparkles size={16} /></button>
+      <div className={styles.mobileActionDock}><button type="button" className={styles.altGenerateButton} onClick={() => void handleGenerate()} disabled={status === "generating" || !description.trim()}>{status === "generating" ? "GENERATING..." : "GENERATE SOUND"} <Sparkles size={16} /></button></div>
     </aside>
   </div>;
 }
@@ -487,7 +498,7 @@ function AudioCleanupLayout() {
       <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>VOICE PRESENCE</span><b>76%</b></div><input disabled className={styles.altRange} type="range" min="0" max="100" defaultValue="76" /></div>
       <label className={styles.altToggleRow}><span>Preserve natural tone</span><button disabled type="button" className={styles.altToggleOn}><i /></button></label>
       <label className={styles.altField}><span>OUTPUT FORMAT</span><select disabled defaultValue="MP3"><option>MP3</option><option>WAV</option><option>OGG</option></select></label>
-      <button disabled type="button" className={styles.altGenerateButton}>CLEAN AUDIO <Sparkles size={16} /></button>
+      <div className={styles.mobileActionDock}><button disabled type="button" className={styles.altGenerateButton}>CLEAN AUDIO <Sparkles size={16} /></button></div>
     </aside>
   </div>;
 }
@@ -496,10 +507,6 @@ export function AudioGenerationPage() {
   const { t } = useLocale();
   const [activeTab, setActiveTab] = useState<AudioTab>("Text to Speech");
   const [prompt, setPrompt] = useState(DEFAULT_AUDIO_PROMPT);
-  useTemplatePrompt("audio", value => {
-    setPrompt(value);
-    setAudioScenes(current => current.map((scene, index) => index === 0 ? { ...scene, text: value } : scene));
-  });
   const [tone, setTone] = useState("Energetic");
   const [language, setLanguage] = useState("English (US)");
   const [pronunciation, setPronunciation] = useState("");
@@ -546,6 +553,11 @@ export function AudioGenerationPage() {
   const audioHistoryRef = useRef<AudioHistoryItem[]>([]);
   const historySequenceRef = useRef(0);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
+
+  useTemplatePrompt("audio", value => {
+    setPrompt(value);
+    setAudioScenes(current => current.map((scene, index) => index === 0 ? { ...scene, text: value } : scene));
+  });
 
   useEffect(() => {
     return () => { audioHistoryRef.current.filter((item) => item.localUrl).forEach((item) => URL.revokeObjectURL(item.url)); };
@@ -631,6 +643,9 @@ export function AudioGenerationPage() {
 
   useEffect(() => {
     if (!availableVoices.length) return;
+    // Voice metadata arrives asynchronously; reconcile persisted scene voices
+    // after the external catalog has loaded.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAudioScenes((current) => current.map((scene, index) => availableVoices.some((voice) => voice.key === scene.voice)
       ? scene
       : { ...scene, voice: availableVoices[index % availableVoices.length]!.key }));
@@ -798,10 +813,16 @@ export function AudioGenerationPage() {
     let active = true;
     const request = creditQuoteKey === "null" ? null : JSON.parse(creditQuoteKey) as NonNullable<typeof creditQuoteRequest>;
     if (!request) {
-      setCreditEstimate(null);
-      setCreditEstimateError(null);
-      setCreditEstimateLoading(false);
-      return;
+      const resetTimer = window.setTimeout(() => {
+        if (!active) return;
+        setCreditEstimate(null);
+        setCreditEstimateError(null);
+        setCreditEstimateLoading(false);
+      }, 0);
+      return () => {
+        active = false;
+        window.clearTimeout(resetTimer);
+      };
     }
     const timer = window.setTimeout(() => {
       setCreditEstimateLoading(true);
@@ -1103,7 +1124,10 @@ export function AudioGenerationPage() {
   }});
   return <div className={`${styles.audioPage} audio-studio-page`}>
     <section className={styles.heroBanner} aria-label="Gen Audio hero">
-      <Image src="/generated-assets/audio-ui/gen-audio-hero-clean.png" alt="Gen Audio — AI audio generation studio" width={2200} height={400} priority unoptimized sizes="100vw" />
+      <picture>
+        <source media="(max-width: 700px)" srcSet="/generated-assets/gen-audio-hero-mobile-v2-transparent.png" />
+        <Image src="/generated-assets/gen-audio-hero-desktop-v2-transparent.png" alt="Gen Audio — AI audio generation studio" width={2172} height={724} priority unoptimized sizes="100vw" />
+      </picture>
     </section>
 
     <nav className={styles.featureTabs} aria-label={t("create.audio.tools")}>
@@ -1111,10 +1135,20 @@ export function AudioGenerationPage() {
         {t(audioTabKeys[label])}
       </button>)}
     </nav>
+    <MobileModeDropdown
+      menuId="audio-mode-menu"
+      value={activeTab}
+      options={audioModes.map((label) => ({ value: label, label: t(audioTabKeys[label]), icon: audioModeIcons[label] }))}
+      ariaLabel={t("create.audio.tools")}
+      currentModeLabel={t("create.mode.current")}
+      switchModeLabel={t("create.mode.switch")}
+      otherModesLabel={t("create.mode.other")}
+      onChange={setActiveTab}
+    />
 
     {activeTab === "Text to Speech" ? <div className={styles.audioGrid}>
       <section className={styles.scriptPanel} aria-label="Audio script and prompt">
-        <div className={styles.panelHeading}><h2><span>1</span> SCRIPT / PROMPT</h2><Info size={14} /></div>
+        <div className={styles.panelHeading}><h2><span>1</span> SCRIPT / PROMPT</h2><InfoTooltip content={t("create.audio.info.script")} size={14} /></div>
         <div className={styles.promptBox}>
           <textarea aria-label="Script or prompt" value={prompt} onChange={(event) => { const value = event.target.value; setPrompt(value); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: value } : scene)); }} maxLength={2000} />
           <div className={styles.promptMeta}><span>{prompt.length} / 2000</span><button type="button" onClick={() => { setPrompt(""); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: "" } : scene)); }}>Clear <Trash2 size={13} /></button></div>
@@ -1136,7 +1170,7 @@ export function AudioGenerationPage() {
 
       <section className={styles.centerColumn} aria-label="Audio preview and scenes">
         <div className={`${styles.sectionBlock} ${styles.voiceSection}`}>
-          <div className={styles.sectionHeading}><h2>VOICE / SPEAKER</h2><button type="button" className={styles.linkAction}><Settings2 size={14} /> Manage voices</button></div>
+          <div className={styles.sectionHeading}><h2>VOICE / SPEAKER</h2></div>
           <div className={styles.voiceCarousel}>
             <button type="button" className={`${styles.voiceCarouselButton} ${styles.voiceCarouselButtonLeft}`} onClick={() => scrollVoices(-1)} disabled={!canScrollVoicesLeft} aria-label="เลื่อน Voice ไปทางซ้าย" aria-controls="audio-voice-carousel"><ChevronLeft size={16} /></button>
             <div ref={voiceRowRef} id="audio-voice-carousel" className={styles.voiceRow}>
@@ -1148,9 +1182,9 @@ export function AudioGenerationPage() {
                 <button type="button" className={selectedVoice === voice.key ? styles.voiceCardActive : styles.voiceCard} onClick={() => setSelectedVoice(voice.key)} aria-pressed={selectedVoice === voice.key}>
                   <div className={styles.voiceImage}><Image src={voice.imageUrl || voiceImages[(pageIndex * 10 + index) % voiceImages.length]} alt="" fill unoptimized sizes="60px" /></div><strong>{voice.name}</strong><small>{voice.description || "Voice"}</small>{selectedVoice === voice.key ? <Check size={14} className={styles.voiceCheck} /> : null}
                 </button>
-                {voice.previewUrl ? <button type="button" data-voice-key={voice.key} className={`${styles.voicePreviewButton} ${previewingVoiceKey === voice.key ? styles.voicePreviewButtonActive : ""}`} onClick={handleVoicePreviewClick} aria-label={previewingVoiceKey === voice.key ? `หยุดตัวอย่างเสียง ${voice.name}` : `ฟังตัวอย่างเสียง ${voice.name}`} title="ฟังตัวอย่างเสียง">
+                <button type="button" data-voice-key={voice.key} className={`${styles.voicePreviewButton} ${previewingVoiceKey === voice.key ? styles.voicePreviewButtonActive : ""}`} onClick={handleVoicePreviewClick} disabled={!voice.previewUrl} aria-label={voice.previewUrl ? (previewingVoiceKey === voice.key ? `หยุดตัวอย่างเสียง ${voice.name}` : `ฟังตัวอย่างเสียง ${voice.name}`) : `ยังไม่มีตัวอย่างเสียง ${voice.name}`} title={voice.previewUrl ? "ฟังตัวอย่างเสียง" : "ยังไม่มีตัวอย่างเสียง"}>
                   {previewingVoiceKey === voice.key ? <span className={styles.voicePauseGlyph} /> : <Play size={11} fill="currentColor" />}
-                </button> : null}
+                </button>
               </div>)}
             </div>) : null}
             </div>
@@ -1197,10 +1231,12 @@ export function AudioGenerationPage() {
         <div className={styles.settingBlock}><FieldLabel>OUTPUT FORMAT</FieldLabel><div className={styles.formatRow}>{["MP3", "WAV", "OGG"].map((item) => <button type="button" key={item} className={format === item ? styles.formatActive : styles.formatButton} onClick={() => setFormat(item)}>{item}</button>)}</div></div>
         <div className={styles.settingBlock}><div className={styles.speedHeader}><FieldLabel>SPEECH SPEED</FieldLabel><strong>{speed.toFixed(2)}x</strong></div><input className={styles.speedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.rangeLabels}><span>0.5x</span><span>1x</span><span>2x</span></div></div>
         <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>AUTO BACKGROUND MUSIC</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}><span /></button></div>{backgroundMusic ? <SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}>{backgroundMusicLoadState === "loading" ? <option value="">Loading music...</option> : backgroundMusicPresets.length ? backgroundMusicPresets.map((preset) => <option key={preset.key} value={preset.key}>{preset.name}</option>) : <option value="">No music configured</option>}</SelectField> : null}</div>
-        <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}><div className={styles.creditEstimateHeader}><strong>ESTIMATED CREDITS <Info size={11} aria-hidden="true" /></strong><b>{creditEstimateLoading ? "Calculating…" : creditEstimate ? `= ${formatCreditAmount(creditEstimate.creditCost)} Credits` : "—"}</b></div><p className={styles.creditEstimateCount}>{isSceneMode ? `${audioScenes.length} scene${audioScenes.length === 1 ? "" : "s"}` : "1 audio"}</p></div>
+        <div className={styles.mobileActionDock}>
+          <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}><div className={styles.creditEstimateHeader}><strong>ESTIMATED CREDITS <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} /></strong><b>{creditEstimateLoading || modelLoadState === "loading" || voiceLoadState === "loading" ? "Calculating…" : creditEstimate ? `= ${formatCreditAmount(creditEstimate.creditCost)} Credits` : "—"}</b></div><p className={styles.creditEstimateCount}>{isSceneMode ? `${audioScenes.length} scene${audioScenes.length === 1 ? "" : "s"}` : "1 audio"}</p></div>
           {generationValidationMessage ? <p className={styles.generationValidation} role="status">{generationValidationMessage}</p> : null}
           <button type="button" className={styles.generateButton} onClick={() => void (isSceneMode ? handleGenerateScenes() : handleGenerate())} disabled={isGenerating || !selectedModel || voiceLoadState !== "ready" || (isSceneMode ? hasIncompleteScene : !prompt.trim() || !selectedVoice)}>{isGenerating ? <><span className={styles.spinner} /> GENERATING...</> : <>GENERATE AUDIO <Sparkles size={17} /></>}</button>
-        <p className={styles.securityNote}><LockKeyhole size={11} /> Your generation is private and secure</p>
+          <p className={styles.securityNote}><LockKeyhole size={11} /> Your generation is private and secure</p>
+        </div>
       </aside>
   </div> : activeTab === "Podcast & Dialogue" ? <PodcastDialogueLayout onHistorySaved={persistGeneratedAudio} scenesTimeline={scenesTimeline} /> : activeTab === "Voice Clone" ? <VoiceCloneLayout onHistorySaved={persistGeneratedAudio} /> : activeTab === "Sound Effects" ? <SoundEffectsLayout onHistorySaved={persistGeneratedAudio} /> : <AudioCleanupLayout />}
   </div>;

@@ -1,0 +1,27 @@
+.trigger {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: currentColor;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: help;
+}
+
+.trigger:hover,
+.trigger:focus-visible {
+  color: #ed5c2d;
+  outline: 2px solid #ed5c2d55;
+  outline-offset: 2px;
+}
+
+.content {
+  max-width: min(280px, calc(100vw - 24px));
+  line-height: 1.5;
+  white-space: normal;
+}

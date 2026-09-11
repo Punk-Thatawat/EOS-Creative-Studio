@@ -6,7 +6,9 @@ import { cancelGeneration, createBackgroundGeneration, createExtendImage, create
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { listStylePresets, type GenerationStylePreset, type StylePresetFeature } from "@/lib/api/style-presets";
 import { uploadImageAsset, uploadMaskAsset } from "@/lib/api/storage";
+import type { PendingImageSlot, PendingImageUpload } from "@/lib/media/deferred-upload";
 import { formatGenerationError } from "@/lib/api/generation-errors";
+import { getAccountScopedStorageKey } from "@/lib/generation-progress-storage";
 import { useImageCreditEstimate } from "./use-image-credit-estimate";
 import {
   imageCountOptions,
@@ -41,7 +43,7 @@ const imageToImageSourceImageStorageKey = "eos.generation.source-image.image-to-
 const imageToImageSourceImagesStorageKey = "eos.generation.source-images.image-to-image";
 const styleTransferSourceImageStorageKey = "eos.generation.source-image.style-transfer";
 const backgroundSourceImageStorageKey = "eos.generation.source-image.background";
-  const upscaleSourceImageStorageKey = "eos.generation.source-image.upscale";
+const upscaleSourceImageStorageKey = "eos.generation.source-image.upscale";
 const extendSourceImageStorageKey = "eos.generation.source-image.extend";
 const styleReferenceImageStorageKey = "eos.generation.style-reference-image";
 const providerControlledModelParameters = new Set(["enable_sync_mode", "enable_base64_output", "output_format", "outputFormat", "format"]);
@@ -60,18 +62,19 @@ const fallbackStylePresetOptions: GenerationStylePreset[] = stylePresets.map((na
 fallbackStylePresetOptions.push(...styleTransferPresets.map((preset, index) => ({ id: `fallback-style-${preset.name}`, slug: preset.name.toLowerCase().replace(/\s+/g, "-"), name: preset.name, prompt: preset.name, imageUrl: preset.image, features: ["style-transfer"] as StylePresetFeature[], enabled: true, sortOrder: 110 + index * 10, createdAt: "", updatedAt: "" })));
 
 function pendingGenerationStorageKeyForFeature(feature: string): string {
-  return feature === "text-to-image" ? pendingGenerationStorageKey : `${pendingGenerationStorageKey}.${feature}`;
+  const baseKey = feature === "text-to-image" ? pendingGenerationStorageKey : `${pendingGenerationStorageKey}.${feature}`;
+  return getAccountScopedStorageKey(baseKey);
 }
 
 function readStoredImageUrl(key: string): string | null {
   if (typeof window === "undefined") return null;
-  return window.sessionStorage.getItem(key);
+  return window.sessionStorage.getItem(getAccountScopedStorageKey(key));
 }
 
 function readStoredImageUrls(key: string): string[] {
   if (typeof window === "undefined") return [];
   try {
-    const parsed = JSON.parse(window.sessionStorage.getItem(key) ?? "null");
+    const parsed = JSON.parse(window.sessionStorage.getItem(getAccountScopedStorageKey(key)) ?? "null");
     return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string" && value.length > 0) : [];
   } catch {
     return [];
@@ -80,14 +83,21 @@ function readStoredImageUrls(key: string): string[] {
 
 function storeImageUrl(key: string, imageUrl: string | null): void {
   if (typeof window === "undefined") return;
-  if (imageUrl) window.sessionStorage.setItem(key, imageUrl);
-  else window.sessionStorage.removeItem(key);
+  const scopedKey = getAccountScopedStorageKey(key);
+  if (imageUrl && !isTemporaryPreviewUrl(imageUrl)) window.sessionStorage.setItem(scopedKey, imageUrl);
+  else window.sessionStorage.removeItem(scopedKey);
+}
+
+function isTemporaryPreviewUrl(imageUrl: string | null): boolean {
+  return Boolean(imageUrl?.startsWith("blob:"));
 }
 
 function storeImageUrls(key: string, imageUrls: string[]): void {
   if (typeof window === "undefined") return;
-  if (imageUrls.length > 0) window.sessionStorage.setItem(key, JSON.stringify(imageUrls));
-  else window.sessionStorage.removeItem(key);
+  const scopedKey = getAccountScopedStorageKey(key);
+  const persistedUrls = imageUrls.filter((imageUrl) => !isTemporaryPreviewUrl(imageUrl));
+  if (persistedUrls.length > 0) window.sessionStorage.setItem(scopedKey, JSON.stringify(persistedUrls));
+  else window.sessionStorage.removeItem(scopedKey);
 }
 
 function readPendingGeneration(feature = "text-to-image"): PendingGeneration | null {
@@ -270,14 +280,14 @@ function readImageGenerationDraft(): Partial<ImageGenerationDraft> | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.sessionStorage.getItem(imageGenerationDraftStorageKey);
+    const raw = window.sessionStorage.getItem(getAccountScopedStorageKey(imageGenerationDraftStorageKey));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? parsed as Partial<ImageGenerationDraft>
       : null;
   } catch {
-    window.sessionStorage.removeItem(imageGenerationDraftStorageKey);
+    window.sessionStorage.removeItem(getAccountScopedStorageKey(imageGenerationDraftStorageKey));
     return null;
   }
 }
@@ -286,7 +296,7 @@ function writeImageGenerationDraft(draft: ImageGenerationDraft): void {
   if (typeof window === "undefined") return;
 
   try {
-    window.sessionStorage.setItem(imageGenerationDraftStorageKey, JSON.stringify(draft));
+    window.sessionStorage.setItem(getAccountScopedStorageKey(imageGenerationDraftStorageKey), JSON.stringify(draft));
   } catch {
     // Session storage can be unavailable or full; the in-memory form still works.
   }
@@ -394,6 +404,15 @@ export function useImageGenerationState() {
   const [backgroundCompletedCount, setBackgroundCompletedCount] = useState(0);
   const [backgroundError, setBackgroundError] = useState<string | null>(null);
   const [extendGenerated, setExtendGenerated] = useState(false);
+  const pendingImageUploadsRef = useRef<Record<PendingImageSlot, PendingImageUpload[]>>({
+    "image-to-image": [],
+    "style-transfer-source": [],
+    "style-transfer-reference": [],
+    "background-source": [],
+    "background-reference": [],
+    "upscale-source": [],
+    "extend-source": [],
+  });
   const [extendUrls, setExtendUrls] = useState<string[]>([]);
   const [extendPendingGeneration, setExtendPendingGeneration] = useState<PendingGeneration | null>(null);
   const [extendIsGenerating, setExtendIsGenerating] = useState(false);
@@ -632,18 +651,18 @@ export function useImageGenerationState() {
       extendPrompt,
       promptOptimizerEnabled,
       negativePrompt,
-      imageToImageSourceImages,
-      imageToImageSourceImage,
-      styleTransferSourceImage,
-      backgroundSourceImage,
-      upscaleSourceImage,
-      extendSourceImage,
+      imageToImageSourceImages: imageToImageSourceImages.filter((imageUrl) => !isTemporaryPreviewUrl(imageUrl)),
+      imageToImageSourceImage: isTemporaryPreviewUrl(imageToImageSourceImage) ? null : imageToImageSourceImage,
+      styleTransferSourceImage: isTemporaryPreviewUrl(styleTransferSourceImage) ? null : styleTransferSourceImage,
+      backgroundSourceImage: isTemporaryPreviewUrl(backgroundSourceImage) ? null : backgroundSourceImage,
+      upscaleSourceImage: isTemporaryPreviewUrl(upscaleSourceImage) ? null : upscaleSourceImage,
+      extendSourceImage: isTemporaryPreviewUrl(extendSourceImage) ? null : extendSourceImage,
       extendDirection,
       extendAmount,
       styleSourceMode,
       styleTransferPreset,
-      styleReferenceImage,
-      backgroundReferenceImage,
+      styleReferenceImage: isTemporaryPreviewUrl(styleReferenceImage) ? null : styleReferenceImage,
+      backgroundReferenceImage: isTemporaryPreviewUrl(backgroundReferenceImage) ? null : backgroundReferenceImage,
       backgroundMode,
       backgroundColor,
       maskTool,
@@ -931,19 +950,18 @@ export function useImageGenerationState() {
       case "Text to Image":
         return { feature: "text-to-image", ...shared, prompt: prompt.trim() || "Image generation", ...(style ? { style } : {}), count: effectiveCount, negativePrompt };
       case "Image to Image":
-        return { feature: "image-to-image", ...shared, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt.trim() || "Transform the source image", ...(style ? { style } : {}), count: effectiveCount, negativePrompt };
+        return { feature: "image-to-image", ...shared, ...(imageToImageSourceImage && !isTemporaryPreviewUrl(imageToImageSourceImage) ? { sourceImage: imageToImageSourceImage } : {}), ...((imageToImageSourceImages.filter((imageUrl) => !isTemporaryPreviewUrl(imageUrl)).length > 0) ? { sourceImages: imageToImageSourceImages.filter((imageUrl) => !isTemporaryPreviewUrl(imageUrl)) } : {}), prompt: imageToImagePrompt.trim() || "Transform the source image", ...(style ? { style } : {}), count: effectiveCount, negativePrompt };
       case "AI Style Transfer":
-        return { feature: "style-transfer", ...shared, sourceImage: styleTransferSourceImage, ...(styleSourceMode === "preset" && styleTransferPreset ? { stylePreset: styleTransferPreset } : {}), ...(styleSourceMode === "reference" && styleReferenceImage ? { styleReferenceImage } : {}), ...(styleTransferPrompt.trim() ? { prompt: styleTransferPrompt.trim() } : {}), ...(styleTransferSupportsStrength ? { styleStrength: imageStrength / 100 } : {}), ...(styleTransferSupportsContentPreservation ? { contentPreservation: contentPreservation / 100 } : {}), count: effectiveCount, negativePrompt };
+        return { feature: "style-transfer", ...shared, ...(styleTransferSourceImage && !isTemporaryPreviewUrl(styleTransferSourceImage) ? { sourceImage: styleTransferSourceImage } : {}), ...(styleSourceMode === "preset" && styleTransferPreset ? { stylePreset: styleTransferPreset } : {}), ...(styleSourceMode === "reference" && styleReferenceImage && !isTemporaryPreviewUrl(styleReferenceImage) ? { styleReferenceImage } : {}), ...(styleTransferPrompt.trim() ? { prompt: styleTransferPrompt.trim() } : {}), ...(styleTransferSupportsStrength ? { styleStrength: imageStrength / 100 } : {}), ...(styleTransferSupportsContentPreservation ? { contentPreservation: contentPreservation / 100 } : {}), count: effectiveCount, negativePrompt };
       case "AI Background":
-        return { feature: "background-removal", ...shared, mode: isLocalSolidBackground ? "remove" : backgroundMode, sourceImage: backgroundSourceImage, ...(backgroundReferenceImage ? { backgroundReferenceImage } : {}), ...(backgroundSupportsPrompt && (backgroundMode === "replace" || backgroundMode === "generate") && backgroundPrompt.trim() ? { prompt: backgroundPrompt.trim() } : {}), ...(style ? { style } : {}), ...(backgroundMask ? { mask: backgroundMask } : {}), ...((backgroundMode === "remove" || isLocalSolidBackground) ? { autoDetectSubject: !backgroundMask } : {}), transparent: backgroundMode === "remove" || isLocalSolidBackground, ...(supportsNativeSolidBackground ? { backgroundColor } : {}), preserveSubject, edgeCleanup, addShadow, matchLighting, count: effectiveCount };
+        return { feature: "background-removal", ...shared, mode: isLocalSolidBackground ? "remove" : backgroundMode, ...(backgroundSourceImage && !isTemporaryPreviewUrl(backgroundSourceImage) ? { sourceImage: backgroundSourceImage } : {}), ...(backgroundReferenceImage && !isTemporaryPreviewUrl(backgroundReferenceImage) ? { backgroundReferenceImage } : {}), ...(backgroundSupportsPrompt && (backgroundMode === "replace" || backgroundMode === "generate") && backgroundPrompt.trim() ? { prompt: backgroundPrompt.trim() } : {}), ...(style ? { style } : {}), ...(backgroundMask ? { mask: backgroundMask } : {}), ...((backgroundMode === "remove" || isLocalSolidBackground) ? { autoDetectSubject: !backgroundMask } : {}), transparent: backgroundMode === "remove" || isLocalSolidBackground, ...(supportsNativeSolidBackground ? { backgroundColor } : {}), preserveSubject, edgeCleanup, addShadow, matchLighting, count: effectiveCount };
       case "Extend Image":
-        return { feature: "extend-image", ...shared, sourceImage: extendSourceImage, ...(extendPrompt.trim() ? { prompt: extendPrompt.trim() } : {}), direction: extendDirection, amount: extendAmount, count: effectiveCount, negativePrompt };
+        return { feature: "extend-image", ...shared, ...(extendSourceImage && !isTemporaryPreviewUrl(extendSourceImage) ? { sourceImage: extendSourceImage } : {}), ...(extendPrompt.trim() ? { prompt: extendPrompt.trim() } : {}), direction: extendDirection, amount: extendAmount, count: effectiveCount, negativePrompt };
       case "Upscale":
-        return { feature: "upscale", model: activeSelectedModel || undefined, sourceImage: upscaleSourceImage, targetResolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}) };
+        return { feature: "upscale", model: activeSelectedModel || undefined, ...(upscaleSourceImage && !isTemporaryPreviewUrl(upscaleSourceImage) ? { sourceImage: upscaleSourceImage } : {}), targetResolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}) };
     }
   })();
   const imageCreditEstimate = useImageCreditEstimate(imageCreditQuoteInput);
-
   useEffect(() => {
     const properties = selectedModelCapabilities?.apiSchema?.request_schema?.properties ?? {};
     const timeoutId = window.setTimeout(() => {
@@ -1128,6 +1146,53 @@ export function useImageGenerationState() {
     storeImageUrl(styleReferenceImageStorageKey, imageUrl);
   }, []);
 
+  const setPendingImageUpload = useCallback((slot: PendingImageSlot, file: File | null, previewUrl: string | null) => {
+    pendingImageUploadsRef.current[slot] = file && previewUrl ? [{ file, previewUrl }] : [];
+  }, []);
+
+  const appendPendingImageUploads = useCallback((slot: PendingImageSlot, items: PendingImageUpload[]) => {
+    pendingImageUploadsRef.current[slot] = [...pendingImageUploadsRef.current[slot], ...items];
+  }, []);
+
+  const removePendingImageUpload = useCallback((slot: PendingImageSlot, previewUrl: string) => {
+    pendingImageUploadsRef.current[slot] = pendingImageUploadsRef.current[slot].filter((item) => item.previewUrl !== previewUrl);
+  }, []);
+
+  const clearPendingImageUploads = useCallback((slot: PendingImageSlot) => {
+    pendingImageUploadsRef.current[slot] = [];
+  }, []);
+
+  type PendingUploadOptions = Parameters<typeof uploadImageAsset>[1];
+  const uploadPendingSingleImage = async (slot: PendingImageSlot, imageUrl: string | null, options: PendingUploadOptions): Promise<string | null> => {
+    if (!imageUrl) return null;
+    const pending = pendingImageUploadsRef.current[slot].find((item) => item.previewUrl === imageUrl);
+    if (!pending) {
+      if (isTemporaryPreviewUrl(imageUrl)) throw new Error("Please choose the image again before generating.");
+      return imageUrl;
+    }
+    const uploadedUrl = await uploadImageAsset(pending.file, options);
+    pendingImageUploadsRef.current[slot] = pendingImageUploadsRef.current[slot].filter((item) => item !== pending);
+    return uploadedUrl;
+  };
+
+  const uploadPendingImageList = async (slot: PendingImageSlot, imageUrls: string[], options: PendingUploadOptions): Promise<string[]> => {
+    const pendingByPreview = new Map(pendingImageUploadsRef.current[slot].map((item) => [item.previewUrl, item]));
+    if (pendingByPreview.size === 0) {
+      if (imageUrls.some(isTemporaryPreviewUrl)) throw new Error("Please choose the image again before generating.");
+      return imageUrls;
+    }
+    const resolvedUrls = await Promise.all(imageUrls.map(async (imageUrl) => {
+      const pending = pendingByPreview.get(imageUrl);
+      if (!pending) {
+        if (isTemporaryPreviewUrl(imageUrl)) throw new Error("Please choose the image again before generating.");
+        return imageUrl;
+      }
+      return uploadImageAsset(pending.file, options);
+    }));
+    pendingImageUploadsRef.current[slot] = [];
+    return resolvedUrls;
+  };
+
   const restorePendingForTab = useCallback((tab: ImageGenerationTab) => {
     const pending = readPendingGeneration(featureKeyForTab(tab));
     if (!pending || pending.status === "completed") return;
@@ -1202,25 +1267,32 @@ export function useImageGenerationState() {
 
   const clearSourceImageForTab = useCallback((tab: ImageGenerationTab) => {
     if (tab === "Image to Image") {
+      clearPendingImageUploads("image-to-image");
       setImageToImageSourceImage(null);
       setImageToImageSourceImages([]);
       storeImageUrl(imageToImageSourceImageStorageKey, null);
       storeImageUrls(imageToImageSourceImagesStorageKey, []);
     } else if (tab === "AI Style Transfer") {
+      clearPendingImageUploads("style-transfer-source");
+      clearPendingImageUploads("style-transfer-reference");
       setStyleTransferSourceImage(null);
       storeImageUrl(styleTransferSourceImageStorageKey, null);
     } else if (tab === "AI Background") {
+      clearPendingImageUploads("background-source");
+      clearPendingImageUploads("background-reference");
       setBackgroundSourceImage(null);
       storeImageUrl(backgroundSourceImageStorageKey, null);
       setBackgroundMask(null);
     } else if (tab === "Extend Image") {
+      clearPendingImageUploads("extend-source");
       setExtendSourceImage(null);
       storeImageUrl(extendSourceImageStorageKey, null);
     } else if (tab === "Upscale") {
+      clearPendingImageUploads("upscale-source");
       setUpscaleSourceImage(null);
       storeImageUrl(upscaleSourceImageStorageKey, null);
     }
-  }, []);
+  }, [clearPendingImageUploads]);
 
   const applyGenerationProgress = useCallback((progress: GenerationProgress) => {
     setIsGenerating(progress.status === "queued" || progress.status === "processing");
@@ -1354,7 +1426,7 @@ export function useImageGenerationState() {
         setGenerationStatus("failed");
       setGenerationError(formatGenerationError(error, "Unable to resume image generation"));
       }
-      window.sessionStorage.removeItem(pendingGenerationStorageKey);
+      window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("text-to-image"));
       setPendingGeneration(null);
     }).finally(() => {
       if (generationAbortRef.current === abortController) generationAbortRef.current = null;
@@ -1553,6 +1625,8 @@ export function useImageGenerationState() {
     setBackgroundTotalCount(pending.totalCount);
     setBackgroundCompletedCount(pending.completedCount);
     if (!isLocalSolidBackground) {
+      // Hydrate the persisted job snapshot before resuming its polling loop.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBackgroundUrls(pending.output.map(output=>output.url).filter(Boolean));
       setBackgroundGenerated(pending.output.some(output=>Boolean(output.url)));
     }
@@ -1618,7 +1692,7 @@ export function useImageGenerationState() {
       generationAbortRef.current?.abort();
       setIsGenerating(false);
       setGenerationStatus("cancelled");
-      window.sessionStorage.removeItem(pendingGenerationStorageKey);
+      window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("text-to-image"));
       setPendingGeneration(null);
     }, setGenerationError);
   }, [generationId, isGenerating, pendingGeneration, requestGenerationCancellation, workspaceId]);
@@ -1912,6 +1986,10 @@ export function useImageGenerationState() {
     setImageStrength,
     setImageToImageSourceImage: setImageToImageSourceImageAndPersist,
     setImageToImageSourceImages: setImageToImageSourceImagesAndPersist,
+    setPendingImageUpload,
+    appendPendingImageUploads,
+    removePendingImageUpload,
+    clearPendingImageUploads,
     setStyleTransferSourceImage: setStyleTransferSourceImageAndPersist,
     setBackgroundSourceImage: setBackgroundSourceImageAndPersist,
     setUpscaleSourceImage: setUpscaleSourceImageAndPersist,
@@ -1940,7 +2018,7 @@ export function useImageGenerationState() {
       if (activeTab !== "Text to Image" || isGenerating || !prompt.trim() || prompt.length > textToImagePromptMaxLength) return;
       generationRunRef.current = true;
       setPendingGeneration(null);
-      window.sessionStorage.removeItem(pendingGenerationStorageKey);
+      window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("text-to-image"));
       setIsGenerating(true);
       setGenerationError(null);
       setGenerated(false);
@@ -2000,9 +2078,12 @@ export function useImageGenerationState() {
       setExtendTotalCount(Number(effectiveCount));
       setExtendCompletedCount(0);
       try {
+        const uploadedSourceImage = await uploadPendingSingleImage("extend-source", extendSourceImage, { purpose: "content", feature: "extend-image", workspaceId });
+        if (!uploadedSourceImage) throw new Error("Please choose a source image before extending.");
+        setExtendSourceImageAndPersist(uploadedSourceImage);
         const result = await createExtendImage({
           workspaceId,
-          sourceImage: extendSourceImage,
+          sourceImage: uploadedSourceImage,
           prompt: extendPrompt,
           promptOptimizerEnabled,
           direction: extendDirection,
@@ -2059,9 +2140,12 @@ export function useImageGenerationState() {
       setUpscaleTotalCount(1);
       setUpscaleCompletedCount(0);
       try {
+        const uploadedSourceImage = await uploadPendingSingleImage("upscale-source", upscaleSourceImage, { purpose: "content", feature: "upscale", workspaceId });
+        if (!uploadedSourceImage) throw new Error("Please choose an image before upscaling.");
+        setUpscaleSourceImageAndPersist(uploadedSourceImage);
         const result = await createUpscale({
           workspaceId,
-          sourceImage: upscaleSourceImage,
+          sourceImage: uploadedSourceImage,
           targetResolution: effectiveResolution,
           ...(qualityEnabled ? { quality: effectiveQuality } : {}),
           ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}),
@@ -2109,7 +2193,12 @@ export function useImageGenerationState() {
       setImageToImageTotalCount(Number(count));
       setImageToImageCompletedCount(0);
       try {
-        const result = await createImageToImage({ workspaceId, sourceImage: imageToImageSourceImage, ...(imageToImageSourceImages.length > 0 ? { sourceImages: imageToImageSourceImages } : {}), prompt: imageToImagePrompt, promptOptimizerEnabled, ...(style ? { style } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, applyImageToImageProgress, abortController.signal);
+        const sourceImageInputs = imageToImageSourceImages.length > 0 ? imageToImageSourceImages : imageToImageSourceImage ? [imageToImageSourceImage] : [];
+        const uploadedSourceImages = await uploadPendingImageList("image-to-image", sourceImageInputs, { purpose: "content", feature: "image-to-image", workspaceId });
+        const uploadedSourceImage = uploadedSourceImages[0];
+        if (!uploadedSourceImage) throw new Error("Please choose a reference image before transforming.");
+        setImageToImageSourceImagesAndPersist(uploadedSourceImages);
+        const result = await createImageToImage({ workspaceId, sourceImage: uploadedSourceImage, ...(uploadedSourceImages.length > 0 ? { sourceImages: uploadedSourceImages } : {}), prompt: imageToImagePrompt, promptOptimizerEnabled, ...(style ? { style } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, applyImageToImageProgress, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
@@ -2151,10 +2240,17 @@ export function useImageGenerationState() {
       setStyleTransferTotalCount(Number(count));
       setStyleTransferCompletedCount(0);
       try {
+        const uploadedSourceImage = await uploadPendingSingleImage("style-transfer-source", styleTransferSourceImage, { purpose: "content", feature: "ai-style-transfer", workspaceId });
+        const uploadedStyleReferenceImage = styleSourceMode === "reference"
+          ? await uploadPendingSingleImage("style-transfer-reference", styleReferenceImage, { purpose: "style-reference", feature: "ai-style-transfer", workspaceId })
+          : styleReferenceImage;
+        if (!uploadedSourceImage) throw new Error("Please choose a content image before applying a style.");
+        setStyleTransferSourceImageAndPersist(uploadedSourceImage);
+        if (styleSourceMode === "reference") setStyleReferenceImageAndPersist(uploadedStyleReferenceImage);
         const result = await createStyleTransfer({
           workspaceId,
-          sourceImage: styleTransferSourceImage,
-          styleReferenceImage: styleSourceMode === "reference" ? styleReferenceImage : null,
+          sourceImage: uploadedSourceImage,
+          styleReferenceImage: styleSourceMode === "reference" ? uploadedStyleReferenceImage : null,
           stylePreset: styleSourceMode === "preset" ? styleTransferPreset : undefined,
           prompt: styleTransferPrompt,
           promptOptimizerEnabled,
@@ -2213,13 +2309,20 @@ export function useImageGenerationState() {
       setBackgroundTotalCount(Number(effectiveCount));
       setBackgroundCompletedCount(0);
       try {
+        const uploadedSourceImage = await uploadPendingSingleImage("background-source", backgroundSourceImage, { purpose: "content", feature: "background-removal", workspaceId });
+        const uploadedBackgroundReferenceImage = backgroundMode === "replace"
+          ? await uploadPendingSingleImage("background-reference", backgroundReferenceImage, { purpose: "background-reference", feature: "background-removal", workspaceId })
+          : backgroundReferenceImage;
+        if (!uploadedSourceImage) throw new Error("Please choose a source image before changing the background.");
+        setBackgroundSourceImageAndPersist(uploadedSourceImage);
+        if (backgroundMode === "replace") setBackgroundReferenceImage(uploadedBackgroundReferenceImage);
         const uploadedMask = backgroundMask ? await uploadMaskAsset(backgroundMask, workspaceId) : null;
         const requestMode: BackgroundMode = isLocalSolidBackground ? "remove" : backgroundMode;
         const result = await createBackgroundGeneration({
           workspaceId,
           mode: requestMode,
-          sourceImage: backgroundSourceImage,
-          backgroundReferenceImage: requestMode === "replace" ? backgroundReferenceImage : null,
+          sourceImage: uploadedSourceImage,
+          backgroundReferenceImage: requestMode === "replace" ? uploadedBackgroundReferenceImage : null,
           prompt: backgroundSupportsPrompt && (requestMode === "replace" || requestMode === "generate") ? backgroundPrompt : undefined,
           ...(backgroundSupportsPrompt && (requestMode === "replace" || requestMode === "generate") ? { promptOptimizerEnabled } : {}),
           style: requestMode === "generate" ? style : undefined,

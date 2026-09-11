@@ -1,0 +1,111 @@
+.switcher { display: none; }
+
+@media (max-width: 700px) {
+  .switcher {
+    position: relative;
+    z-index: 20;
+    display: block;
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 10px;
+    border: 1px solid #e5e1de;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(58, 42, 30, .05);
+  }
+
+  .current {
+    display: flex;
+    width: 100%;
+    min-height: 68px;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 12px;
+    color: #202124;
+    background: #fffaf7;
+    border: 1.5px solid #f26b38;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(245, 21, 145, .12);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .current:hover,
+  .current:focus-visible { background: #fff5ef; }
+
+  .current:focus-visible,
+  .option:focus-visible,
+  .optionSelected:focus-visible {
+    outline: 2px solid rgba(245, 21, 145, .45);
+    outline-offset: 2px;
+  }
+
+  .icon {
+    display: grid;
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(135deg, #ff6819, #f51591);
+    border-radius: 12px;
+    box-shadow: 0 5px 12px rgba(245, 21, 145, .2);
+  }
+
+  .currentCopy {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: 3px;
+  }
+
+  .currentCopy small,
+  .currentCopy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .currentCopy small { color: #8a9098; font-size: 9px; }
+  .currentCopy strong { font-size: 16px; line-height: 1.15; }
+  .chevron,
+  .chevronOpen { flex: 0 0 auto; transition: transform .18s ease; }
+  .chevronOpen { transform: rotate(180deg); }
+
+  .menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 10px;
+    left: 10px;
+    display: grid;
+    gap: 3px;
+    padding: 7px;
+    border: 1px solid #e4ded9;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 14px 30px rgba(33, 29, 25, .16);
+  }
+
+  .option,
+  .optionSelected {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    min-height: 42px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px;
+    color: #39404c;
+    background: #fff;
+    border: 0;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .option:hover,
+  .optionSelected { color: #f15b20; background: #fff7f3; }
+  .option small,
+  .optionSelected small { color: #8a9098; font-size: 8px; font-weight: 400; text-align: right; }
+}

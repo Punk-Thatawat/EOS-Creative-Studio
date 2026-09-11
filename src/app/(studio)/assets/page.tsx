@@ -5,6 +5,7 @@ import "./assets-universe.css";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
 import {
   AlertCircle,
   Archive,
@@ -237,7 +238,7 @@ function FilterSelect({
 
 function AssetPreview({ asset }: { asset: Asset }) {
   if (asset.mediaKind === "video" && asset.url && asset.image === asset.url) {
-    return <video className="asset-preview-video" src={asset.url} preload="metadata" muted playsInline aria-hidden="true" />;
+    return <VideoFrameThumbnail key={asset.url} src={asset.url} alt={`ภาพตัวอย่าง ${asset.title}`} className="asset-preview-video" fallback={<span className="flex h-full w-full items-center justify-center text-white/70"><Video size={32} /></span>} />;
   }
   return <Image src={asset.image} alt="" fill sizes="(max-width: 1100px) 50vw, 22vw" loading="lazy" unoptimized />;
 }

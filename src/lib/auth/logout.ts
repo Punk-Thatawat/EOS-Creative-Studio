@@ -15,8 +15,8 @@ export async function signOutFromEOS() {
       credentials: "include",
     }).catch(() => undefined);
   }
-  clearBackendSession();
   clearGenerationProgressStorage();
+  clearBackendSession();
 
   window.sessionStorage.removeItem("eos.backend.user-profile");
   window.location.replace("/?login=1");

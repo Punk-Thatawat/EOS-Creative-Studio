@@ -1,6 +1,6 @@
-import { Info } from "lucide-react";
 import { cx } from "../styles";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { InfoTooltip } from "@/features/create/components/info-tooltip";
 
 type PromptOptimizerToggleProps = {
   enabled: boolean;
@@ -10,7 +10,7 @@ type PromptOptimizerToggleProps = {
 export function PromptOptimizerToggle({ enabled, onChange }: PromptOptimizerToggleProps) {
   const { t } = useLocale();
   return <div className={cx("gen-toggle-row", "gen-prompt-optimizer-toggle")}>
-    <span>{t("create.smartEnhance")} <Info size={12} /></span>
+    <span>{t("create.smartEnhance")} <InfoTooltip content={t("create.settings.info.smartEnhance")} size={12} /></span>
     <button
       type="button"
       className={cx("gen-toggle", enabled && "is-on")}

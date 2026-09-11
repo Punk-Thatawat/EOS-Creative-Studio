@@ -3,6 +3,7 @@
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
 
 export type BackendUserProfile = Record<string, unknown>;
+export type BackendAuthProvider = "email" | "google";
 
 export async function fetchBackendSession(accessToken: string): Promise<BackendUserProfile> {
   const response = await fetch(`${backendUrl}/api/v1/auth/session`, {
@@ -23,4 +24,12 @@ export async function fetchBackendSession(accessToken: string): Promise<BackendU
   }
 
   return payload as BackendUserProfile;
+}
+
+export async function fetchBackendAuthProvider(accessToken: string): Promise<BackendAuthProvider | null> {
+  const session = await fetchBackendSession(accessToken) as {
+    data?: { auth?: { provider?: unknown } };
+  };
+  const provider = session.data?.auth?.provider;
+  return provider === "email" || provider === "google" ? provider : null;
 }

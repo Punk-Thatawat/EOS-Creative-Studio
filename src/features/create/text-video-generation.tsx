@@ -5,14 +5,13 @@ import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Dropdown } from "@/components/ui/dropdown";
-import { CloudUpload, Info, Mic2, RotateCcw, WandSparkles, X } from "lucide-react";
+import { CloudUpload, Mic2, RotateCcw, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { uploadImageAsset } from "@/lib/api/storage";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
 import {
-  cancelTextVideoGeneration,
   createTextVideoGeneration,
   getTextVideoGenerationStatus,
   type TextVideoGenerationInput,
@@ -29,6 +28,7 @@ import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { InfoTooltip } from "./components/info-tooltip";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
@@ -306,7 +306,6 @@ export function TextToVideoWorkspace() {
   const referenceImageInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const jobRef = useRef<{ id: string; workspaceId?: string; pollUrl: string } | null>(null);
 
   const selectedModelOption = models.find((model) => model.model === selectedModel);
   const properties = schemaProperties(selectedModelOption);
@@ -520,7 +519,6 @@ export function TextToVideoWorkspace() {
       setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) emitGenerationStarted({ feature: "text-to-video", generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
-      if (generationId && pollUrl) jobRef.current = { id: generationId, workspaceId: created.workspaceId, pollUrl };
       let status: TextVideoGenerationStatus = {
         ...created,
         status: created.status ?? "processing",
@@ -561,21 +559,6 @@ export function TextToVideoWorkspace() {
     }
   };
 
-  const cancelGeneration = async () => {
-    const job = jobRef.current;
-    abortRef.current?.abort();
-    if (job?.id) {
-      try {
-        await cancelTextVideoGeneration(job.id, job.workspaceId);
-      } catch {
-        // The local abort still prevents another poll if the cancel endpoint is unavailable.
-      }
-    }
-    setGenerationStatus("cancelled");
-    setNotice(t("create.video.common.generationCancelled"));
-    setGenerationError(null);
-  };
-
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
 
   useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
@@ -602,7 +585,7 @@ export function TextToVideoWorkspace() {
             </div>
             <div className={styles.videoModeHeading}>
                <h2 id="text-video-title">{t("create.video.text.title")}</h2>
-              <Info size={11} />
+              <InfoTooltip content={t("create.video.text.description")} size={11} />
             </div>
              <p className={styles.textVideoDescription}>{t("create.video.text.description")}</p>
           </section>
@@ -679,7 +662,7 @@ export function TextToVideoWorkspace() {
       </div>
       <aside className={styles.settings}>
          <div className={styles.sectionTitle}><h2>3. {t("create.video.common.settings")}</h2></div>
-         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <Info size={11} /></label>
+         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} /></label>
         <VideoModelDropdown
           models={models}
           value={selectedModel}
@@ -711,11 +694,7 @@ export function TextToVideoWorkspace() {
          <VideoCreditEstimate featureLabel={t("create.video.tabs.textToVideo")} duration={durationValue} estimate={videoCreditEstimate}>
           {!isGenerating && validationMessage ? <p className={styles.settingsError} role="status">{validationMessage}</p> : null}
           {generationError ? <p className={styles.settingsError} role="alert">{generationError}</p> : null}
-          {isGenerating ? (
-             <button type="button" className={styles.textVideoCancel} onClick={() => void cancelGeneration()}><X size={14} /> {t("create.video.common.cancelGeneration")}</button>
-          ) : (
-             <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!canGenerate}><WandSparkles size={18} /> {t("create.video.common.generateVideo")}</button>
-          )}
+          <button type="button" className={styles.generate} onClick={() => void handleGenerate()} disabled={!canGenerate}><WandSparkles size={18} /> {isGenerating ? t("create.video.common.generating") : t("create.video.common.generateVideo")}</button>
         </VideoCreditEstimate>
          {generationStatus === "failed" || generationStatus === "cancelled" ? <button type="button" className={styles.textVideoRetry} onClick={() => void handleGenerate()}><RotateCcw size={13} /> {t("create.video.common.retry")}</button> : null}
       </aside>

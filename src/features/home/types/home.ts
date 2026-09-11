@@ -33,6 +33,7 @@ export interface TemplateItem {
   readonly format: string;
   readonly art: "social" | "product" | "presenter" | "podcast" | "training";
   readonly imageSrc?: string;
+  readonly href?: string;
 }
 
 export interface ActiveJob {
