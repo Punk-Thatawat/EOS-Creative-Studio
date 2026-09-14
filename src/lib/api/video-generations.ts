@@ -129,6 +129,9 @@ export type VideoStoryboardStatus = {
   audioMode?: "none" | "sfx" | "music" | "both" | string;
   audioModel?: string;
   audioProvider?: string;
+  audio?: {
+    mode?: "none" | "sfx" | "music" | "both" | string;
+  };
   finalVideoUrl?: string;
   errorSource?: "system" | "provider";
   errorCode?: string;

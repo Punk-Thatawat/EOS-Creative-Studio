@@ -4,6 +4,7 @@ import { useTemplateSettings } from "@/features/templates/use-template-settings"
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelGeneration, createBackgroundGeneration, createExtendImage, createImageToImage, createStyleTransfer, createTextToImage, createUpscale, listGenerationHistory, resumeGeneration, resumeTextToImage, type GenerationHistoryItem, type GenerationProgress, type GenerationStatus, type ImageCreditQuoteInput, type PendingGeneration, type TextToImageOutput } from "@/lib/api/generations";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { useModelCatalogRefresh } from "@/lib/use-model-catalog-refresh";
 import { listStylePresets, type GenerationStylePreset, type StylePresetFeature } from "@/lib/api/style-presets";
 import { uploadImageAsset, uploadMaskAsset } from "@/lib/api/storage";
 import type { PendingImageSlot, PendingImageUpload } from "@/lib/media/deferred-upload";
@@ -303,6 +304,7 @@ function writeImageGenerationDraft(draft: ImageGenerationDraft): void {
 }
 
 export function useImageGenerationState() {
+  const modelCatalogVersion = useModelCatalogRefresh();
   // Keep the first render deterministic for SSR. Browser storage is restored
   // after hydration in the effect below.
   const [pendingGeneration, setPendingGeneration] = useState<PendingGeneration | null>(null);
@@ -761,35 +763,35 @@ export function useImageGenerationState() {
     void listGenerationModels("text-to-image").then((models) => {
       setModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
-    if (defaultModel) setSelectedModel((current) => current || defaultModel.model);
+      setSelectedModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The backend still resolves its configured default if the catalog is unavailable.
     }).finally(finishModelLoad);
     void listGenerationModels("image-to-image").then((models) => {
       setImageToImageModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
-      if (defaultModel) setSelectedImageToImageModel((current) => current || defaultModel.model);
+      setSelectedImageToImageModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The backend still resolves its configured default if the catalog is unavailable.
     }).finally(finishModelLoad);
     void listGenerationModels("style-transfer").then((models) => {
       setStyleTransferModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
-      if (defaultModel) setSelectedStyleTransferModel((current) => current || defaultModel.model);
+      setSelectedStyleTransferModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The backend still resolves its configured default if the catalog is unavailable.
     }).finally(finishModelLoad);
     void listGenerationModels("upscale").then((models) => {
       setUpscaleModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
-      if (defaultModel) setSelectedUpscaleModel((current) => current || defaultModel.model);
+      setSelectedUpscaleModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The UI remains available while the backend route is being configured.
     }).finally(finishModelLoad);
     void listGenerationModels("extend-image").then((models) => {
       setExtendModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
-      if (defaultModel) setSelectedExtendModel((current) => current || defaultModel.model);
+      setSelectedExtendModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The UI remains available while the backend route is being configured.
     }).finally(finishModelLoad);
@@ -814,7 +816,7 @@ export function useImageGenerationState() {
       extendAbortRef.current?.abort();
       upscaleAbortRef.current?.abort();
     };
-  }, []);
+  }, [modelCatalogVersion]);
 
   useEffect(() => {
     let isMounted = true;
@@ -827,7 +829,7 @@ export function useImageGenerationState() {
       // The backend still resolves the configured background model on generation.
     });
     return () => { isMounted = false; };
-  }, [backgroundMode]);
+  }, [backgroundMode, modelCatalogVersion]);
 
   const modeBackgroundModelOptions = backgroundModelOptions.filter((model) => supportsBackgroundMode(model, backgroundMode, Boolean(backgroundMask)));
 
@@ -1293,6 +1295,118 @@ export function useImageGenerationState() {
       storeImageUrl(upscaleSourceImageStorageKey, null);
     }
   }, [clearPendingImageUploads]);
+
+  const clearAllValues = useCallback(() => {
+    const defaultModel = (models: GenerationModelOption[]) => models.find((model) => model.isDefault)?.model ?? models[0]?.model ?? "";
+    const clearPendingStorage = (feature: string) => {
+      if (typeof window !== "undefined") window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature(feature));
+    };
+
+    clearRecentSelection();
+    setRecentError(null);
+    setStyle(null);
+    setRatio("16:9");
+    setQuality("medium");
+    setResolution(imageResolutionOptions["16:9"][0] ?? "720p");
+    setSelectedModel(defaultModel(modelOptions));
+    setSelectedImageToImageModel(defaultModel(imageToImageModelOptions));
+    setSelectedStyleTransferModel(defaultModel(styleTransferModelOptions));
+    setSelectedBackgroundModel(defaultModel(backgroundModelOptions));
+    setSelectedUpscaleModel(defaultModel(upscaleModelOptions));
+    setSelectedExtendModel(defaultModel(extendModelOptions));
+    setOutputFormat(null);
+    setModelParams({});
+    setCount(imageCountOptions[0]);
+    setPrompt("");
+    setImageToImagePrompt("");
+    setStyleTransferPrompt("");
+    setBackgroundPrompt("");
+    setExtendPrompt("");
+    setPromptOptimizerEnabled(false);
+    setNegativePrompt("");
+    setImageToImageSourceImage(null);
+    setImageToImageSourceImages([]);
+    setStyleTransferSourceImage(null);
+    setBackgroundSourceImage(null);
+    setUpscaleSourceImage(null);
+    setExtendSourceImage(null);
+    setStyleReferenceImageAndPersist(null);
+    setBackgroundReferenceImage(null);
+    setBackgroundMode("remove");
+    setBackgroundColor("#ffffff");
+    setMaskTool("brush");
+    setBrushSize(42);
+    setBackgroundMask(null);
+    setPreserveSubject(true);
+    setEdgeCleanup(true);
+    setAddShadow(false);
+    setMatchLighting(true);
+    setImageStrength(65);
+    setContentPreservation(75);
+    setFacePreservation(true);
+    setExtendDirection("right");
+    setExtendAmount("50%");
+    setStyleSourceMode("preset");
+    setStyleTransferPreset("Anime");
+    setSeed("");
+    clearSourceImageForTab("Image to Image");
+    clearSourceImageForTab("AI Style Transfer");
+    clearSourceImageForTab("AI Background");
+    clearSourceImageForTab("Extend Image");
+    clearSourceImageForTab("Upscale");
+    ["text-to-image", "image-to-image", "style-transfer", "background-removal", "extend-image", "upscale"].forEach(clearPendingStorage);
+
+    setGenerated(false);
+    setGeneratedImageUrls([]);
+    setGenerationError(null);
+    setGenerationId(null);
+    setGenerationStatus("idle");
+    setGenerationTotalCount(0);
+    setGenerationCompletedCount(0);
+    setIsGenerating(false);
+    setPendingGeneration(null);
+    setImageToImageGenerated(false);
+    setImageToImageUrls([]);
+    setImageToImageError(null);
+    setImageToImageIsGenerating(false);
+    setImageToImageStatus("idle");
+    setImageToImageTotalCount(0);
+    setImageToImageCompletedCount(0);
+    setImageToImagePendingGeneration(null);
+    setStyleTransferGenerated(false);
+    setStyleTransferUrls([]);
+    setStyleTransferError(null);
+    setStyleTransferIsGenerating(false);
+    setStyleTransferStatus("idle");
+    setStyleTransferTotalCount(0);
+    setStyleTransferCompletedCount(0);
+    setStyleTransferPendingGeneration(null);
+    setBackgroundGenerated(false);
+    setBackgroundUrls([]);
+    setBackgroundError(null);
+    setBackgroundIsGenerating(false);
+    setBackgroundStatus("idle");
+    setBackgroundTotalCount(0);
+    setBackgroundCompletedCount(0);
+    setBackgroundPendingGeneration(null);
+    setExtendGenerated(false);
+    setExtendUrls([]);
+    setExtendError(null);
+    setExtendIsGenerating(false);
+    setExtendStatus("idle");
+    setExtendTotalCount(0);
+    setExtendCompletedCount(0);
+    setExtendPendingGeneration(null);
+    setUpscaleGenerated(false);
+    setUpscaleUrls([]);
+    setUpscaleError(null);
+    setUpscaleIsGenerating(false);
+    setUpscaleStatus("idle");
+    setUpscaleTotalCount(0);
+    setUpscaleCompletedCount(0);
+    setUpscalePendingGeneration(null);
+    setImageMimeTypes({});
+  }, [backgroundModelOptions, clearRecentSelection, clearSourceImageForTab, extendModelOptions, imageToImageModelOptions, modelOptions, setStyleReferenceImageAndPersist, styleTransferModelOptions, upscaleModelOptions]);
 
   const applyGenerationProgress = useCallback((progress: GenerationProgress) => {
     setIsGenerating(progress.status === "queued" || progress.status === "processing");
@@ -1937,6 +2051,7 @@ export function useImageGenerationState() {
     facePreservation,
     seed,
     style,
+    clearAllValues,
     setActiveTab: (nextTab: ImageGenerationTab) => {
       const previousTab = activeTabRef.current;
       if (previousTab !== nextTab) {

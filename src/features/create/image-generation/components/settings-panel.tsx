@@ -169,7 +169,7 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
   };
 
   return <aside className={cx("gen-panel", "gen-settings-panel")} data-background-remove={isBackgroundRemove ? "true" : "false"}>
-    <div className={cx("gen-panel-title")}><h2>{t("create.settings.title")}</h2><span className={cx("gen-dial")}>{t("create.settings.dialItIn")}</span></div>
+    <div className={cx("gen-panel-title")}><div className={cx("flex", "min-w-0", "items-center", "gap-2")}><h2>{t("create.settings.title")}</h2><span className={cx("gen-dial")}>{t("create.settings.dialItIn")}</span></div></div>
     <div className={cx("gen-setting-block")}><h3>{t("create.model").toUpperCase()} <InfoTooltip content={t("create.settings.info.model")} size={12} /></h3>{modelControl}</div>
     {!isBackgroundRemove && !isBackgroundSolid && <DynamicModelParameters capabilities={modelCapabilities} values={modelParams} onChange={onModelParamChange} />}
     {!isUpscale && aspectRatioOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{t("create.settings.aspectRatio")} <InfoTooltip content={t("create.settings.info.aspectRatio")} size={12} /></h3><AspectRatioPicker options={aspectRatioOptions} value={aspectRatioOptions.includes(selectedAspectRatio) ? selectedAspectRatio : aspectRatioOptions[0]} onChange={handleRatioChange} />{optionsFollowModel && <p className={cx("gen-model-options-note")} role="status">{t("create.settings.optionsFollowModel")}</p>}</div>}

@@ -5,7 +5,7 @@ import { legalDocuments, type LegalDocument } from "./legal-documents";
 import styles from "./legal-page.module.css";
 
 export function LegalShell({ children, title = "Legal Center" }: { children: React.ReactNode; title?: string }) {
-  return <div className={styles.page}>
+  return <div className={styles.page} data-page="legal">
     <header className={styles.header}>
       <Link href="/" className={styles.brand}><span className={styles.brandMark}><ShieldCheck size={17} /></span>EOS<span style={{ color: "#f51591" }}>.</span>studio</Link>
       <Link href="/" className={styles.backLink}><ArrowLeft size={14} /> กลับหน้าแรก</Link>

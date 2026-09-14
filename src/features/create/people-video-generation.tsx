@@ -34,6 +34,7 @@ import { InfoTooltip } from "./components/info-tooltip";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { ClearValuesButton } from "./components/clear-values-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
@@ -307,6 +308,8 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
+  const [isSourcePersonDragging, setIsSourcePersonDragging] = useState(false);
+  const [isAudioDragging, setIsAudioDragging] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const sourceInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
@@ -470,6 +473,18 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       if (sourceUploadAbortRef.current === controller) sourceUploadAbortRef.current = null;
     }
   };
+  const handleSourcePersonDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsSourcePersonDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void handleSourcePerson(file);
+  };
+  const handleAudioDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsAudioDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void handleAudioFile(file);
+  };
 
   const handleAudioFile = async (file: File) => {
     const validationError = await validateMediaFile(file, "audio", capabilities?.uploadConstraints);
@@ -574,6 +589,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     modelParams,
   } : null);
   const pricingBusy = mediaUploadInProgress || videoCreditEstimate.loading;
+  const isGenerating = generationStatus === "uploading" || generationStatus === "processing";
 
   const handleGenerate = async () => {
     if (!isComplete || !sourcePerson) return;
@@ -668,6 +684,32 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   };
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
+  const clearValues = () => {
+    sourceUploadAbortRef.current?.abort();
+    audioUploadAbortRef.current?.abort();
+    if (sourcePerson?.url.startsWith("blob:")) URL.revokeObjectURL(sourcePerson.url);
+    setSourcePerson(null);
+    setScript("");
+    setActingDirection("");
+    setPromptOptimizerEnabled(false);
+    setNegativePrompt("");
+    setAudioFile(null);
+    setAudioUrl(null);
+    setAudioDuration(null);
+    setAudioUploadStatus("idle");
+    setDurationValue(5);
+    setResolutionValue(undefined);
+    setAspectRatioValue(undefined);
+    setVoiceValue(undefined);
+    setModelParams({});
+    setNotice(null);
+    setGenerationStatus("idle");
+    setGenerationProgress(0);
+    setGenerationError(null);
+    setFinalVideoUrl(null);
+    setPreviewVideoUrl(null);
+    setGenerationId(null);
+  };
   useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
     setActingDirection(p);
     if(s.duration!==undefined)setDurationValue(s.duration);if(s.resolution!==undefined)setResolutionValue(s.resolution);if(s.aspectRatio!==undefined)setAspectRatioValue(s.aspectRatio);
@@ -684,9 +726,6 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       <div className={styles.leftColumn}>
         <section className={styles.panel}>
           <section className={styles.videoModePanel} aria-labelledby={`${workspaceFeature}-title`}>
-            <div className={styles.videoModeTutorial}>
-               <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")} />
-            </div>
             <div className={styles.videoModeHeading}><h2 id={`${workspaceFeature}-title`}>{isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")}</h2><InfoTooltip content={isLipsync ? t("create.video.lipsync.description") : t("create.video.people.description")} size={11} /></div>
             <div className={styles.featureIdentity}>
               <span className={styles.featureIdentityEyebrow}>{featureGuide.eyebrow}</span>
@@ -705,7 +744,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
                 <button type="button" onClick={removeSourcePerson} aria-label={t("create.video.common.removeSourcePerson")}><X size={14} /></button>
               </div>
             ) : (
-              <button type="button" className={styles.upload} onClick={() => sourceInputRef.current?.click()}>
+              <button type="button" className={`${styles.upload} ${isSourcePersonDragging ? styles.uploadDragging : ""}`} onClick={() => sourceInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSourcePersonDragging(true); }} onDragLeave={() => setIsSourcePersonDragging(false)} onDrop={handleSourcePersonDrop}>
                 <CloudUpload size={23} />
                  <strong>{sourceImageSupported && sourceVideoSupported ? t("create.video.common.uploadImageOrVideo") : sourceImageSupported ? t("create.video.common.uploadImage") : t("create.video.common.uploadVideo")}</strong>
                  <small>{sourceImageSupported ? t("create.video.common.pngFormats") : ""}{sourceImageSupported && sourceVideoSupported ? " / " : ""}{sourceVideoSupported ? t("create.video.common.videoFormats") : ""}</small>
@@ -717,6 +756,10 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         </section>
         {textSectionVisible ? (
           <section className={`${styles.panel} ${driverTextSupported ? styles.videoPromptPanel : ""}`}>
+            <div className={styles.videoPromptTopActions}>
+              <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")} />
+              <ClearValuesButton onClick={clearValues} disabled={isGenerating || mediaUploadInProgress} />
+            </div>
             {driverTextSupported ? (
               <>
                 <div className={styles.videoPromptHeading}>
@@ -755,7 +798,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
             {voiceProperty ? <PeopleSchemaField name={voiceProperty[0]} property={voiceProperty[1]} value={voiceValue} required={requiredProperties.has(voiceProperty[0])} labelOverride={t("create.video.common.voice")} onChange={setVoiceValue} /> : null}
             {audioSupported ? (
               <>
-                <button type="button" className={styles.peopleAudioUpload} onClick={() => audioInputRef.current?.click()}>
+                <button type="button" className={`${styles.peopleAudioUpload} ${isAudioDragging ? styles.uploadDragging : ""}`} onClick={() => audioInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsAudioDragging(true); }} onDragLeave={() => setIsAudioDragging(false)} onDrop={handleAudioDrop}>
                   <Mic2 size={20} />
                    <strong>{audioFile ? t("create.video.common.replaceAudioFile") : t("create.video.common.uploadAudioFile")}</strong>
                    <small>{requiredAudioInput ? t("create.video.common.requiredForModel") : t("create.video.common.optional")} · {t("create.video.common.audioFormats")}</small>

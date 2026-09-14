@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
@@ -9,6 +9,7 @@ import {
   AudioWaveform,
   FileText,
   GripVertical,
+  ImagePlus,
   LoaderCircle,
   Search,
   ServerCog,
@@ -39,6 +40,7 @@ import { generateAdminAudioVoicePreview, getAdminAudioSettings, testAdminElevenL
 import { defaultVideoStoryboardModeLabels, getAdminVideoStoryboardSettings, updateAdminVideoStoryboardSettings, type VideoStoryboardModeKey, type AdminVideoStoryboardSettings } from "@/lib/api/video-settings";
 import { FeatureTutorialPanel } from "@/components/admin/feature-tutorial-panel";
 import { useSearchParams } from "next/navigation";
+import { emitModelCatalogChanged } from "@/lib/model-catalog-events";
 
 const imageFunctions = [
   { id: "text-to-image", label: "Text to Image", description: "Create images from a prompt" },
@@ -696,6 +698,7 @@ function VideoStoryboardSettingsPanel({ catalog, routeOverview, onRoutesChanged,
           await updateGenerationModelRoute(selectedRouteKey, item.model, item.provider, { enabled: shouldBeEnabled, isDefault: shouldBeDefault });
         }
       }
+      emitModelCatalogChanged();
       setSettings(next);
       setDraft(String(next.maxScenes));
       const nextLabels = { ...defaultVideoStoryboardModeLabels, ...(next.modeLabels ?? {}) };
@@ -785,6 +788,10 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
   const [selectedFeature, setSelectedFeature] = useState<AdminAudioFeature>(initialFeature);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [voiceImageUploadingKey, setVoiceImageUploadingKey] = useState("");
+  const [voiceImageUploadIndex, setVoiceImageUploadIndex] = useState<number | null>(null);
+  const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number | null>(null);
+  const voiceImageInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -915,6 +922,27 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
     const voices = baseVoices.filter((_, voiceIndex) => voiceIndex !== index);
     return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...profile, voices, models: { ...(profile.models ?? {}), [modelId]: { voices } } } } };
   });
+  const selectedVoice = selectedVoiceIndex === null ? null : activeVoices[selectedVoiceIndex] ?? null;
+  const uploadVoiceImage = async (index: number, file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
+      return;
+    }
+    const uploadKey = `${selectedFeature}:${selectedFeatureModelId}:${index}`;
+    setVoiceImageUploadingKey(uploadKey);
+    setMessage("");
+    setError("");
+    try {
+      const uploaded = await uploadAdminModelPreview(file);
+      if (uploaded.mediaType !== "image") throw new Error("ไฟล์ที่อัปโหลดต้องเป็นรูปภาพ");
+      updateActiveVoice(index, { imageUrl: uploaded.previewUrl ?? "" });
+      setMessage("อัปโหลดรูปเสียงแล้ว — กด Save provider settings เพื่อบันทึก");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to upload voice image");
+    } finally {
+      setVoiceImageUploadingKey("");
+    }
+  };
 
   return <section aria-labelledby="audio-provider-settings-heading" className="mb-7 rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
@@ -940,7 +968,9 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
         <label className="mt-4 block max-w-xl"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{audioFeatureProfileRows.find((row) => row.key === selectedFeature)?.label} model</span><select value={selectedFeatureModelId} onChange={(event) => selectFeatureModel(event.target.value)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${selectedFeature} model`}>{modelOptions.map((option) => <option key={option.id} value={option.id}>{option.label} ({option.id})</option>)}</select><span className="mt-1 block text-[10px] text-muted-foreground">ตั้ง model แยกเฉพาะ tab นี้</span></label>
         <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Default format</span><select value={selectedProviderSettings?.defaultFormat ?? "mp3"} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, [selectedFeatureProvider]: { ...current.providerSettings[selectedFeatureProvider], defaultFormat: event.target.value as "mp3" | "wav" | "ogg" } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioProviderLabel(selectedFeatureProvider)} default format`}><option value="mp3">MP3</option><option value="wav">WAV</option><option value="ogg">OGG</option></select></label>{selectedFeatureProvider === "internal" ? null : <label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Request timeout (ms)</span><input type="number" min="1000" max="180000" step="1000" value={selectedProviderTimeoutMs ?? 60000} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, [selectedFeatureProvider]: { ...current.providerSettings[selectedFeatureProvider], timeoutMs: Number(event.target.value) } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioProviderLabel(selectedFeatureProvider)} request timeout`} /></label>}</div>
         <div className="mt-4 space-y-3">
-            {selectedFeature === "soundEffects" || selectedFeature === "audioCleanup" ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">This tab does not use voice IDs. Configure its model above.</div> : <><div className="space-y-3">{activeVoices.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">No voice IDs configured for this model. Add one below.</div> : activeVoices.map((voice, index) => { const previewKey = `${selectedFeature}:${selectedFeatureModelId}:${index}`; return <div key={`${selectedFeature}-${selectedFeatureModelId}-${index}`} className="rounded-xl border border-border bg-white p-3"><div className="mb-2 flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice {index + 1}</span><button type="button" className="inline-flex items-center gap-1 text-[10px] font-bold text-[#9f3b3b] hover:underline" onClick={() => removeActiveVoice(index)}><X size={13} /> Remove</button></div><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice ID</span><input value={voice.id} onChange={(event) => updateActiveVoice(index, { id: event.target.value })} placeholder="JBFqnCBsd6RMkjVDRZzb" className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} ID for ${selectedFeatureModelId}`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Display name</span><input value={voice.name} onChange={(event) => updateActiveVoice(index, { name: event.target.value })} placeholder="Narrator" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} name`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Description</span><input value={voice.description} onChange={(event) => updateActiveVoice(index, { description: event.target.value })} placeholder="Warm and natural" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} description`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Image URL</span><input type="text" value={voice.imageUrl ?? ""} onChange={(event) => updateActiveVoice(index, { imageUrl: event.target.value })} placeholder="https://.../voice.png or /generated-assets/..." className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} image URL for ${selectedFeatureModelId}`} /></label><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Preview audio URL</span><div className="mt-1.5 flex gap-2"><input type="url" value={voice.previewUrl ?? ""} onChange={(event) => updateActiveVoice(index, { previewUrl: event.target.value })} placeholder="https://.../voice-preview.mp3" className="h-10 min-w-0 flex-1 rounded-xl border border-border bg-white px-3 text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`Voice ${index + 1} preview audio URL for ${selectedFeatureModelId}`} /><button type="button" className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl border border-primary/50 bg-[#fff0e9] px-2.5 text-[10px] font-bold text-primary transition hover:bg-[#ffe5d9] disabled:cursor-not-allowed disabled:opacity-60" onClick={() => void generateVoicePreview(index, voice)} disabled={Boolean(generatingPreviewKey)} aria-busy={generatingPreviewKey === previewKey} title="สร้าง Preview ภาษาไทยผ่าน WaveSpeed">{generatingPreviewKey === previewKey ? <LoaderCircle size={13} className="animate-spin" /> : <AudioWaveform size={13} />} {generatingPreviewKey === previewKey ? "Generating..." : voice.previewUrl ? "Regenerate" : "Generate"}</button></div><span className="mt-1 block text-[10px] text-muted-foreground">สร้างตัวอย่างภาษาไทยผ่าน WaveSpeed และมีค่าใช้จ่ายตามจำนวนตัวอักษร</span></label></div></div>; })}</div><button type="button" className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-dashed border-primary/50 bg-white px-4 text-xs font-bold text-primary transition hover:bg-[#fff0e9]" onClick={addActiveVoice}><span className="text-base leading-none">+</span> Add voice ID</button></>}
+          <input ref={voiceImageInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file && voiceImageUploadIndex !== null) void uploadVoiceImage(voiceImageUploadIndex, file); event.currentTarget.value = ""; }} />
+          {selectedVoice ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#201d1b]/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="voice-detail-dialog-title"><div className="w-full max-w-2xl rounded-2xl border border-[#eaded6] bg-[#faf8f6] p-5 shadow-[0_24px_80px_rgba(68,49,36,0.25)]"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Voice {selectedVoiceIndex! + 1}</p><h3 id="voice-detail-dialog-title" className="mt-1 text-lg font-bold">Voice details</h3></div><button type="button" className="rounded-lg p-2 text-muted-foreground hover:bg-white" onClick={() => setSelectedVoiceIndex(null)} aria-label="Close voice details"><X size={17} /></button></div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Voice ID<input value={selectedVoice.id} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { id: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary" /></label><label className="text-xs font-semibold">Display name<input value={selectedVoice.name} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { name: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary" /></label><label className="text-xs font-semibold sm:col-span-2">Description<input value={selectedVoice.description} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { description: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary" /></label><label className="text-xs font-semibold sm:col-span-2">Image URL<input type="url" value={selectedVoice.imageUrl ?? ""} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { imageUrl: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary" placeholder="https://.../voice.png" /><button type="button" className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/50 bg-[#fff0e9] px-3 text-[10px] font-bold text-primary hover:bg-[#ffe5d9] disabled:opacity-60" onClick={() => { setVoiceImageUploadIndex(selectedVoiceIndex); voiceImageInputRef.current?.click(); }} disabled={Boolean(voiceImageUploadingKey)}>{voiceImageUploadingKey ? <LoaderCircle size={13} className="animate-spin" /> : <ImagePlus size={13} />} {voiceImageUploadingKey ? "Uploading…" : "Upload image"}</button></label><label className="text-xs font-semibold sm:col-span-2">Preview audio URL<input type="url" value={selectedVoice.previewUrl ?? ""} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { previewUrl: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary" /></label></div><div className="mt-5 flex justify-between gap-2"><div className="flex gap-2"><button type="button" className="rounded-lg border border-[#9f3b3b]/40 px-3 py-2 text-xs font-semibold text-[#9f3b3b]" onClick={() => { removeActiveVoice(selectedVoiceIndex!); setSelectedVoiceIndex(null); }}>Remove</button><button type="button" className="rounded-lg border border-primary/50 px-3 py-2 text-xs font-semibold text-primary" onClick={() => void generateVoicePreview(selectedVoiceIndex!, selectedVoice)} disabled={Boolean(generatingPreviewKey)}>{generatingPreviewKey ? "Generating…" : "Regenerate preview"}</button></div><button type="button" className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white hover:opacity-90" onClick={() => setSelectedVoiceIndex(null)}>Done</button></div></div></div> : null}
+            {selectedFeature === "soundEffects" || selectedFeature === "audioCleanup" ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">This tab does not use voice IDs. Configure its model above.</div> : <><div className="space-y-2">{activeVoices.length === 0 ? <div className="rounded-xl border border-dashed border-border bg-white p-4 text-xs text-muted-foreground">No voice IDs configured for this model. Add one below.</div> : activeVoices.map((voice, index) => <button key={`${selectedFeature}-${selectedFeatureModelId}-${index}`} type="button" className="flex w-full items-center justify-between rounded-xl border border-border bg-white px-4 py-3 text-left transition hover:border-primary hover:bg-[#fffaf7]" onClick={() => setSelectedVoiceIndex(index)}><span><span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Voice {index + 1}</span><span className="mt-1 block font-mono text-xs font-semibold">{voice.id || "ยังไม่มี Voice ID"}</span></span><span className="text-[10px] font-bold text-primary">ดูข้อมูล</span></button>)}</div><button type="button" className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl border border-dashed border-primary/50 bg-white px-4 text-xs font-bold text-primary transition hover:bg-[#fff0e9]" onClick={addActiveVoice}><span className="text-base leading-none">+</span> Add voice ID</button></>}
         </div>
       </section>
 
@@ -1048,6 +1078,7 @@ function AdminModelRoutesContent() {
       if (!changed.some((item) => item.model === selectedModel) && selectedModel !== savedModel) {
         await updateGenerationModelRoute(feature, selectedModel, selected.provider, { ...modeOptions, enabled: true, isDefault: true });
       }
+      emitModelCatalogChanged();
       setSavedModel(selectedModel);
       setSavedEnabledModels(enabledModels);
       setMessage(`${activeFeature.label} default updated.`);
@@ -1128,6 +1159,7 @@ function AdminModelRoutesContent() {
       setSavedAssignmentDrafts(assignmentDrafts);
       setAssignmentOpen(false);
       setMessage("Model assignments saved.");
+      emitModelCatalogChanged();
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save model assignments");
@@ -1162,6 +1194,7 @@ function AdminModelRoutesContent() {
     setMessage("");
     try {
       const result = await syncGenerationModels();
+      emitModelCatalogChanged();
       setMessage(`${result.synced} provider models synced${result.skipped ? `, ${result.skipped} unsupported skipped` : ""}.`);
       await load();
     } catch (reason) {
@@ -1176,6 +1209,7 @@ function AdminModelRoutesContent() {
     setError("");
     try {
       const overview = await updateModelInputLimits(model, provider, limits);
+      emitModelCatalogChanged();
       setCatalog(overview.catalog);
       setCatalogCount(overview.catalog.length);
       setRouteOverview(overview.routes);
@@ -1196,6 +1230,7 @@ function AdminModelRoutesContent() {
     setError("");
     try {
       const overview = await updateModelDisplayName(model, provider, displayName);
+      emitModelCatalogChanged();
       setCatalog(overview.catalog);
       setCatalogCount(overview.catalog.length);
       setRouteOverview(overview.routes);
@@ -1216,6 +1251,7 @@ function AdminModelRoutesContent() {
     setError("");
     try {
       const overview = await updateAdminModelPreview(model, provider, feature, feature === "background-removal" ? previewBackgroundMode ?? backgroundMode : undefined, preview);
+      emitModelCatalogChanged();
       setCatalog(overview.catalog);
       setCatalogCount(overview.catalog.length);
       setRouteOverview(overview.routes);

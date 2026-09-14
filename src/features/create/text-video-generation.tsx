@@ -28,6 +28,7 @@ import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { ClearValuesButton } from "./components/clear-values-button";
 import { InfoTooltip } from "./components/info-tooltip";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -85,6 +86,14 @@ const textCoreParameterNames = new Set([
   "reference_image",
   "referenceImages",
   "reference_images",
+  "referenceAudio",
+  "reference_audio",
+  "referenceAudios",
+  "reference_audios",
+  "referenceVideo",
+  "reference_video",
+  "referenceVideos",
+  "reference_videos",
 ]);
 
 function schemaProperties(model: GenerationModelOption | undefined): Record<string, SchemaProperty> {
@@ -294,12 +303,16 @@ export function TextToVideoWorkspace() {
   const [cameraMotionValue, setCameraMotionValue] = useState<unknown>(undefined);
   const [audioValue, setAudioValue] = useState<unknown>(true);
   const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [postAudioSfxEnabled, setPostAudioSfxEnabled] = useState(false);
+  const [postAudioMusicEnabled, setPostAudioMusicEnabled] = useState(false);
   const [modelParams, setModelParams] = useState<Record<string, unknown>>({});
   const [generationStatus, setGenerationStatus] = useState<TextVideoStatus>("idle");
   const [generationProgress, setGenerationProgress] = useState(0);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
+  const [isReferenceImageDragging, setIsReferenceImageDragging] = useState(false);
+  const [isAudioDragging, setIsAudioDragging] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -319,6 +332,17 @@ export function TextToVideoWorkspace() {
   const cameraMotionProperty = findSchemaProperty(properties, ["cameraMotion", "camera_motion", "cameraMovement", "camera_movement"]);
   const audioProperty = findSchemaProperty(properties, ["generateAudio", "generate_audio", "audio", "audio_enabled"]);
   const audioInputMode = Boolean(audioProperty && audioProperty[1].type !== "boolean");
+  const hasNativeAudio = Boolean(capabilities?.nativeAudio || audioProperty || capabilities?.audioParameter);
+  const showPostAudioOptions = Boolean(selectedModelOption) && !hasNativeAudio;
+  const postAudioMode = showPostAudioOptions
+    ? postAudioSfxEnabled && postAudioMusicEnabled
+      ? "both"
+      : postAudioSfxEnabled
+        ? "sfx"
+        : postAudioMusicEnabled
+          ? "music"
+          : "none"
+    : "none";
   const negativePromptProperty = findSchemaProperty(properties, ["negativePrompt", "negative_prompt"]);
   const promptParameter = capabilities?.promptParameter;
   const negativePromptSupported = Boolean(negativePromptProperty || capabilities?.negativePromptParameter);
@@ -410,6 +434,8 @@ export function TextToVideoWorkspace() {
       setCameraMotionValue(schemaDefault(nextCameraMotion?.[1]));
       setAudioValue(schemaDefault(nextAudio?.[1]) ?? true);
       setAudioFile(null);
+      setPostAudioSfxEnabled(false);
+      setPostAudioMusicEnabled(false);
       setModelParams(modelParameterDefaults(models.find((model) => model.model === selectedModel)));
       setReferenceImage((current) => {
         if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
@@ -438,6 +464,20 @@ export function TextToVideoWorkspace() {
     setReferenceImageFile(file);
     setGenerationError(null);
   };
+  const handleReferenceImageDragOver = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsReferenceImageDragging(true);
+  };
+  const handleReferenceImageDragLeave = (event: React.DragEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsReferenceImageDragging(false);
+  };
+  const handleReferenceImageDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsReferenceImageDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void handleReferenceImage(file);
+  };
 
   const handleAudioFile = async (file: File) => {
     const validationError = await validateMediaFile(file, "audio", capabilities?.uploadConstraints);
@@ -447,6 +487,12 @@ export function TextToVideoWorkspace() {
     }
     setAudioFile(file);
     setGenerationError(null);
+  };
+  const handleAudioDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsAudioDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void handleAudioFile(file);
   };
 
   const handleGenerate = async () => {
@@ -501,6 +547,7 @@ export function TextToVideoWorkspace() {
         setNotice(t("create.video.common.uploadingAudioReference"));
         request.audioUrl = await uploadPeopleMedia(audioFile, controller.signal, capabilities?.uploadConstraints);
       }
+      if (postAudioMode !== "none") request.audioMode = postAudioMode;
       if (!selectedModelOption) {
         request.duration = durationValue;
         request.resolution = resolutionValue;
@@ -561,6 +608,33 @@ export function TextToVideoWorkspace() {
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
 
+  const clearValues = () => {
+    if (referenceImage?.startsWith("blob:")) URL.revokeObjectURL(referenceImage);
+    setPrompt("");
+    setPromptOptimizerEnabled(false);
+    setNegativePrompt("");
+    setReferenceImage(null);
+    setReferenceImageFile(null);
+    setDurationValue(5);
+    setResolutionValue("720p");
+    setAspectRatioValue("16:9");
+    setFpsValue(undefined);
+    setSeedValue(-1);
+    setCameraMotionValue(undefined);
+    setAudioValue(true);
+    setAudioFile(null);
+    setPostAudioSfxEnabled(false);
+    setPostAudioMusicEnabled(false);
+    setModelParams({});
+    setGenerationStatus("idle");
+    setGenerationProgress(0);
+    setFinalVideoUrl(null);
+    setPreviewVideoUrl(null);
+    setGenerationId(null);
+    setGenerationError(null);
+    setNotice(null);
+  };
+
   useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
     setPrompt(p); setNegativePrompt(typeof s.negativePrompt==='string'?s.negativePrompt:'');
     if(s.duration!==undefined)setDurationValue(s.duration);
@@ -580,9 +654,6 @@ export function TextToVideoWorkspace() {
       <div className={styles.leftColumn}>
         <section className={styles.panel}>
           <section className={styles.videoModePanel} aria-labelledby="text-video-title">
-            <div className={styles.videoModeTutorial}>
-              <ImageTutorialButton feature="text-to-video" featureName={t("create.video.tabs.textToVideo")} />
-            </div>
             <div className={styles.videoModeHeading}>
                <h2 id="text-video-title">{t("create.video.text.title")}</h2>
               <InfoTooltip content={t("create.video.text.description")} size={11} />
@@ -591,6 +662,10 @@ export function TextToVideoWorkspace() {
           </section>
         </section>
         <section className={`${styles.panel} ${styles.videoPromptPanel}`}>
+          <div className={styles.videoPromptTopActions}>
+            <ImageTutorialButton feature="text-to-video" featureName={t("create.video.tabs.textToVideo")} />
+            <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
+          </div>
           <div className={styles.videoPromptHeading}>
              <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
           <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
@@ -618,7 +693,7 @@ export function TextToVideoWorkspace() {
                    <button type="button" onClick={clearReferenceImage} aria-label={t("create.video.common.removeReferenceImage")}><X size={14} /></button>
                 </div>
               ) : (
-                <button type="button" className={styles.upload} onClick={() => referenceImageInputRef.current?.click()}>
+                <button type="button" className={`${styles.upload} ${isReferenceImageDragging ? styles.uploadDragging : ""}`} onClick={() => referenceImageInputRef.current?.click()} onDragEnter={handleReferenceImageDragOver} onDragOver={handleReferenceImageDragOver} onDragLeave={handleReferenceImageDragLeave} onDrop={handleReferenceImageDrop}>
                   <CloudUpload size={22} />
                    <strong>{t("create.video.common.uploadImage")}</strong>
                    <small>{t("create.video.common.pngFormats")}</small>
@@ -681,9 +756,19 @@ export function TextToVideoWorkspace() {
         {audioInputMode ? (
           <section className={styles.audioReferenceField}>
              <div className={styles.settingLabel}><span>{t("create.video.common.audioReference")}</span><small>{t("create.video.common.optional")}</small></div>
-             {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label={t("create.video.common.removeAudio")}><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={18} /><strong>{t("create.video.common.uploadAudioReference")}</strong><small>{t("create.video.common.audioFormats")}</small></button>}
+             {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label={t("create.video.common.removeAudio")}><X size={13} /></button></div> : <button type="button" className={`${styles.upload} ${isAudioDragging ? styles.uploadDragging : ""}`} onClick={() => audioInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsAudioDragging(true); }} onDragLeave={() => setIsAudioDragging(false)} onDrop={handleAudioDrop}><CloudUpload size={18} /><strong>{t("create.video.common.uploadAudioReference")}</strong><small>{t("create.video.common.audioFormats")}</small></button>}
             <input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAudioFile(file); event.currentTarget.value = ""; }} />
           </section>
+        ) : null}
+        {showPostAudioOptions ? (
+          <div className={styles.postAudioCard}>
+            <div className={styles.settingLabel}><span>{t("create.video.common.addAudioAfterVideo")}</span><small>{t("create.video.common.optional")}</small></div>
+            <div className={styles.postAudioOptions} role="group" aria-label={t("create.video.common.addAudioAfterVideo")}>
+              <div className={styles.toggleRow}><span>{t("create.video.common.videoToSfx")}</span><button type="button" className={`${styles.toggle} ${postAudioSfxEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioSfxEnabled((value) => !value)} aria-pressed={postAudioSfxEnabled} aria-label={t("create.video.common.enableVideoToSfx")}><i /></button></div>
+              <div className={styles.toggleRow}><span>{t("create.video.common.videoToMusic")}</span><button type="button" className={`${styles.toggle} ${postAudioMusicEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioMusicEnabled((value) => !value)} aria-pressed={postAudioMusicEnabled} aria-label={t("create.video.common.enableVideoToMusic")}><i /></button></div>
+            </div>
+            {postAudioMode !== "none" ? <small className={styles.postAudioHint}>{t("create.video.common.postAudioHint")}</small> : null}
+          </div>
         ) : null}
         {modelParameterEntries.length ? (
           <div className={styles.sceneModelParams}>

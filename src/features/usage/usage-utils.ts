@@ -1,6 +1,11 @@
 import type { UsageDashboard } from "@/lib/api/usage";
 export type Activity = UsageDashboard["recentActivity"]["items"][number];
 export const number = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+export function calculateVat(amountThb: number, vatPercent: number) {
+  const subtotalThb = Math.round((amountThb + Number.EPSILON) * 100) / 100;
+  const vatAmountThb = Math.round((subtotalThb * vatPercent / 100 + Number.EPSILON) * 100) / 100;
+  return { subtotalThb, vatAmountThb, totalThb: Math.round((subtotalThb + vatAmountThb + Number.EPSILON) * 100) / 100 };
+}
 export const signed = (value: number) => `${value > 0 ? "+" : ""}${number(value)}`;
 export const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH-u-ca-gregory", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
 export const monthLabel = (value: string) => new Intl.DateTimeFormat("th-TH-u-ca-gregory", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(value));

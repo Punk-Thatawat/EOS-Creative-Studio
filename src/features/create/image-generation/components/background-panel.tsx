@@ -15,6 +15,7 @@ import { InfoTooltip } from "@/features/create/components/info-tooltip";
 
 type BackgroundPanelProps = {
   tutorialButton?: ReactNode;
+  clearButton?: ReactNode;
   backgroundMode: BackgroundMode;
   sourceImage: string | null;
   backgroundReferenceImage: string | null;
@@ -66,10 +67,10 @@ function presetThumbStyle(imageUrl: string | null): { backgroundImage: string; b
   return { backgroundImage: `url("${imageUrl.replaceAll('"', "\\\"")}")`, backgroundSize: "cover", backgroundPosition: "center" };
 }
 
-export function BackgroundPanel({ tutorialButton, backgroundMode, sourceImage, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, style, stylePresetOptions, workspaceId, imageUploadConstraints, backgroundSupportsInput, backgroundSupportsPrompt, onBackgroundModeChange, onSourceImageChange, onSourceImageClear, onPendingSourceImageChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onPendingReferenceImageChange, onBackgroundPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onStyleChange }: BackgroundPanelProps) {
+export function BackgroundPanel({ tutorialButton, clearButton, backgroundMode, sourceImage, backgroundReferenceImage, backgroundPrompt, backgroundColor, preserveSubject, edgeCleanup, addShadow, matchLighting, style, stylePresetOptions, workspaceId, imageUploadConstraints, backgroundSupportsInput, backgroundSupportsPrompt, onBackgroundModeChange, onSourceImageChange, onSourceImageClear, onPendingSourceImageChange, onBackgroundReferenceImageChange, onBackgroundReferenceImageClear, onPendingReferenceImageChange, onBackgroundPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onBackgroundColorChange, onPreserveSubjectChange, onEdgeCleanupChange, onAddShadowChange, onMatchLightingChange, onStyleChange }: BackgroundPanelProps) {
   const { t } = useLocale();
   return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-background-panel")}>
-    <div className={cx("gen-prompt-top-action")}>{tutorialButton}</div><div className={cx("gen-section-heading")}><h3>{t("create.mode")}</h3><InfoTooltip content={t("create.settings.info.backgroundMode")} size={12} /></div>
+    <div className={cx("gen-prompt-top-action")}><span>{tutorialButton}</span><span>{clearButton}</span></div><div className={cx("gen-section-heading")}><h3>{t("create.mode")}</h3><InfoTooltip content={t("create.settings.info.backgroundMode")} size={12} /></div>
     <BackgroundModeSelector value={backgroundMode} onChange={onBackgroundModeChange} />
 
     {(backgroundMode === "replace" || backgroundMode === "generate") && backgroundSupportsPrompt && <section className={cx("gen-background-section")}><div className={cx("gen-panel-title")}><h2>{t("create.prompt")} <em>({t("create.required")})</em></h2><Image src="/generated-assets/be-descriptive.png" alt={t("create.prompt")} width={2051} height={509} className={cx("gen-prompt-annotation")} /></div><PromptField id="gen-background-prompt" value={backgroundPrompt} onChange={onBackgroundPromptChange} ariaLabel={`${backgroundMode === "replace" ? t("create.image.background.reference") : t("create.image.background.stylePresets")} ${t("create.prompt")}`} required wrapperClassName={cx("gen-textarea-wrap", "gen-background-prompt")} metaClassName={cx("gen-prompt-meta")} /><PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} /></section>}

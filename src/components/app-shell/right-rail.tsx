@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowUpRight, CircleHelp, CreditCard, Sparkles } from "lucide-react";
+import { ArrowUpRight, CreditCard, Sparkles } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { fetchHomeDashboard, type HomeCredits } from "@/lib/api/home";
@@ -29,7 +29,6 @@ export function RightRail() {
         <Link href="/usage" className="flex items-center justify-between border-t border-white/10 px-5 py-3 text-xs font-bold text-[#ffb18e] hover:bg-white/5">{text.rail.viewUsage} <ArrowUpRight size={14} /></Link>
       </Card>
       <Card className="p-5"><div className="flex items-center gap-2 text-sm font-bold"><Sparkles size={16} className="text-primary" /> {text.rail.quickTip}</div><p className="mt-3 text-xs leading-5 text-muted-foreground">{text.rail.tip}</p><Link href="/templates" className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-primary">{text.rail.browseTemplates} <ArrowUpRight size={13} /></Link></Card>
-      <div className="flex items-center gap-2 px-2 text-xs text-muted-foreground"><CircleHelp size={14} /><span>{text.rail.needHelp}</span><Link href="/settings" className="font-bold text-foreground">{text.rail.helpCenter}</Link></div>
     </aside>
   );
 }

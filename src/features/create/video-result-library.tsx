@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Play } from "lucide-react";
 import { listGenerationHistory, type GenerationHistoryItem } from "@/lib/api/generations";
+import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
+import { GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
 import styles from "./video-generation-page.module.css";
 import { EosCutButton } from "./eos-cut-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -67,8 +69,28 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"latest" | "library">("latest");
+  const [externalRefreshKey, setExternalRefreshKey] = useState(0);
   const recentRowRef = useRef<HTMLDivElement | null>(null);
   const autoSelectedLatestRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const refresh = () => setExternalRefreshKey((value) => value + 1);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    window.addEventListener(AUTH_SESSION_UPDATED_EVENT, refresh);
+    window.addEventListener(GENERATION_COMPLETED_EVENT, refresh);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      window.removeEventListener(AUTH_SESSION_UPDATED_EVENT, refresh);
+      window.removeEventListener(GENERATION_COMPLETED_EVENT, refresh);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -95,7 +117,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
       active = false;
       window.clearTimeout(timeoutId);
     };
-  }, [feature, refreshKey, t]);
+  }, [externalRefreshKey, feature, refreshKey, t]);
 
   useEffect(() => {
     const latest = items[0];

@@ -14,6 +14,7 @@ export function InfoTooltip({ content, size = 12, side = "top" }: InfoTooltipPro
   return (
     <Tooltip>
       <TooltipTrigger
+        delay={150}
         render={
           <button type="button" className={styles.trigger} aria-label={content}>
             <Info size={size} aria-hidden="true" />

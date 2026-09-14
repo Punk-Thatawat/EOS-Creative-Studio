@@ -598,13 +598,15 @@ export default function AssetsPage() {
 
   return (
     <div className="assets-page" data-active-tab={activeTab} data-no-translate>
-      <section className="assets-universe-hero" aria-labelledby="assets-heading">
-        <div className="assets-universe-copy">
-          <h1 id="assets-heading" translate="no">YOUR CREATIVE<br />UNIVERSE.</h1>
-          <p>ทุกผลงาน <strong>พร้อมต่อยอด</strong></p>
-          <Image src="/generated-assets/cta-brush-only-transparent-v2-cropped.webp" alt="" width={280} height={24} className="assets-universe-underline" />
-        </div>
-        <Image src="/generated-assets/assets-universe-hero-v1.webp" alt="" width={1774} height={887} priority className="assets-universe-art" />
+      <section className="assets-universe-hero" aria-label="EOS Creative Studio Assets">
+        <Image
+          src="/generated-assets/assets-universe-hero-full-v1.png"
+          alt="YOUR CREATIVE UNIVERSE. ทุกผลงาน พร้อมต่อยอด"
+          width={2172}
+          height={724}
+          priority
+          className="assets-universe-full-art"
+        />
       </section>
 
       <section className="assets-library" aria-label={`${activeTab} asset library`}>

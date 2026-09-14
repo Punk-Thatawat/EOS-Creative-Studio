@@ -103,11 +103,18 @@ export async function listAdminCreditPricingRules(): Promise<CreditPricingSettin
 }
 
 export type TopupPackage = { id: string; label: string; amountThb: number; credits: number; featured?: boolean };
+export type AdminBillingSettings = { vatPercent: number };
 export async function getAdminTopups(): Promise<TopupPackage[]> {
   return await adminRequest('/admin/billing/topups') as TopupPackage[];
 }
 export async function saveAdminTopups(packages: TopupPackage[]): Promise<TopupPackage[]> {
   return await adminRequest('/admin/billing/topups', { method: 'PUT', body: JSON.stringify({ packages }) }) as TopupPackage[];
+}
+export async function getAdminBillingSettings(): Promise<AdminBillingSettings> {
+  return await adminRequest('/admin/billing/settings') as AdminBillingSettings;
+}
+export async function saveAdminBillingSettings(input: AdminBillingSettings): Promise<AdminBillingSettings> {
+  return await adminRequest('/admin/billing/settings', { method: 'PUT', body: JSON.stringify(input) }) as AdminBillingSettings;
 }
 
 export async function upsertAdminCreditPricingRule(input: UpsertCreditPricingRuleInput): Promise<CreditPricingRule> {

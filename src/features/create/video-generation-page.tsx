@@ -4,7 +4,7 @@ import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import {
   CloudUpload,
   AlertTriangle,
@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { useModelCatalogRefresh } from "@/lib/use-model-catalog-refresh";
 import { Dropdown } from "@/components/ui/dropdown";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
@@ -52,7 +53,8 @@ import { MobileModeDropdown } from "./components/mobile-mode-dropdown";
 import { VideoPreviewLiveBadge, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
-import { emitGenerationStarted } from "@/lib/generation-progress-events";
+import { emitGenerationStarted, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
+import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 import { getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
@@ -61,6 +63,7 @@ import { PromptOptimizerToggle } from "./image-generation/components/prompt-opti
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
+import { ClearValuesButton } from "@/features/create/components/clear-values-button";
 
 const videoModes = [
   "Image to Video",
@@ -154,6 +157,8 @@ function videoModeRouteFeature(mode: GenerationMode): string {
   return mode === "image-to-video" ? "image-to-video" : `image-to-video:${mode}`;
 }
 
+const imageToVideoModel = "bytedance/seedance-v1-pro-fast/image-to-video";
+
 function isSingleSceneGenerationMode(mode: GenerationMode): boolean {
   return mode === "image-to-video" || mode === "reference-to-video";
 }
@@ -177,9 +182,11 @@ const HARD_MAX_STORYBOARD_SCENES = 100;
 function SectionTitle({
   number,
   children,
+  action,
 }: {
   number?: string;
   children: ReactNode;
+  action?: ReactNode;
 }) {
   return (
     <div className={styles.sectionTitle}>
@@ -187,6 +194,7 @@ function SectionTitle({
         {number ? `${number}. ` : ""}
         {children}
       </h2>
+      {action}
     </div>
   );
 }
@@ -897,6 +905,7 @@ function formatHistoryDate(value?: string): string {
 
 export function VideoGenerationPage() {
   const { locale, t } = useLocale();
+  const modelCatalogVersion = useModelCatalogRefresh();
   const localizedParameterLabel = (name: string, title?: string) => translateVideoSchemaLabel(name, title, t);
   const searchParams = useSearchParams();
   const [activeVideoTab, setActiveVideoTab] = useState<"image-to-video" | "text-to-video" | "people-video" | "motion-transfer" | "lipsync" | "extend-video">("image-to-video");
@@ -931,6 +940,7 @@ export function VideoGenerationPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<VideoGenerationStatus>("idle");
   const [generationProgress, setGenerationProgress] = useState({ completed: 0, total: 0 });
+  const [isFinalizingVideo, setIsFinalizingVideo] = useState(false);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewMediaAspectRatioState, setPreviewMediaAspectRatioState] = useState<{
     mediaKey: string | null;
@@ -987,6 +997,10 @@ export function VideoGenerationPage() {
   const [sceneDuration, setSceneDuration] = useState(5);
   const [sceneModelParams, setSceneModelParams] = useState<Record<string, unknown>>({});
   const [sceneError, setSceneError] = useState<string | null>(null);
+  const [isSourceImageDragging, setIsSourceImageDragging] = useState(false);
+  const [isFrameDragging, setIsFrameDragging] = useState(false);
+  const [isSceneImageDragging, setIsSceneImageDragging] = useState(false);
+  const [isAudioDragging, setIsAudioDragging] = useState(false);
   const [sceneScrollState, setSceneScrollState] = useState({
     canScrollLeft: false,
     canScrollRight: false,
@@ -1058,7 +1072,7 @@ export function VideoGenerationPage() {
   // themselves. The post-processing audio tools are only relevant for silent
   // video models.
   const hasNativeAudio = Boolean(capabilities?.nativeAudio || audioProperty || capabilities?.audioParameter);
-  const showPostAudioOptions = activeVideoTab === "image-to-video"
+  const showPostAudioOptions = (activeVideoTab === "image-to-video" || activeVideoTab === "text-to-video")
     && Boolean(selectedModelOption)
     && !hasNativeAudio;
   const postAudioMode = showPostAudioOptions
@@ -1129,6 +1143,26 @@ export function VideoGenerationPage() {
     return () => window.clearTimeout(timeoutId);
   }, [loadVideoHistory]);
   useEffect(() => {
+    const refreshHistory = () => {
+      void loadVideoHistory(window.sessionStorage.getItem("eos.generation.workspace-id"));
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshHistory();
+    };
+    window.addEventListener("focus", refreshHistory);
+    window.addEventListener("pageshow", refreshHistory);
+    window.addEventListener(AUTH_SESSION_UPDATED_EVENT, refreshHistory);
+    window.addEventListener(GENERATION_COMPLETED_EVENT, refreshHistory);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", refreshHistory);
+      window.removeEventListener("pageshow", refreshHistory);
+      window.removeEventListener(AUTH_SESSION_UPDATED_EVENT, refreshHistory);
+      window.removeEventListener(GENERATION_COMPLETED_EVENT, refreshHistory);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadVideoHistory]);
+  useEffect(() => {
     if (searchParams.get("tab") !== "image-to-video") return;
 
     let disposed = false;
@@ -1193,13 +1227,21 @@ export function VideoGenerationPage() {
 
     const applyProcessingStatus = (status: Awaited<ReturnType<typeof getVideoStoryboardStatus>>, generationId: string, fallback: { completed: number; total: number }) => {
       if (disposed) return;
+      const total = status.totalScenes ?? fallback.total;
+      const completed = status.completedScenes ?? fallback.completed;
+      const audioMode = status.audioMode ?? status.audio?.mode ?? "none";
+      const finalizing = status.status === "processing"
+        && audioMode !== "none"
+        && total > 0
+        && completed >= total;
       setGenerationStatus("processing");
       setGenerationError(null);
       setGenerationProgress({
-        completed: status.completedScenes ?? fallback.completed,
-        total: status.totalScenes ?? fallback.total,
+        completed,
+        total,
       });
-      setNotice(t("create.video.common.generatingVideo"));
+      setIsFinalizingVideo(finalizing);
+      setNotice(t(finalizing ? "create.video.common.finalizingVideoDetail" : "create.video.common.generatingVideo"));
     };
 
     const restoreProcessingStoryboard = async () => {
@@ -1211,12 +1253,14 @@ export function VideoGenerationPage() {
         setLatestCompletedStoryboardId(persisted.generationId);
         setGenerationProgress({ completed: persisted.completed || persisted.total, total: persisted.total });
         setGenerationStatus("completed");
+        setIsFinalizingVideo(false);
         setNotice(t("create.video.common.videoReady"));
         void loadVideoHistory();
         return;
       }
 
       setGenerationStatus("processing");
+      setIsFinalizingVideo(false);
       setGenerationError(null);
       setGenerationProgress({ completed: persisted.completed, total: persisted.total });
       setNotice(t("create.video.common.generatingVideo"));
@@ -1254,10 +1298,12 @@ export function VideoGenerationPage() {
         setFinalVideoUrl(status.finalVideoUrl);
         setLatestCompletedStoryboardId(persisted.generationId);
         setGenerationStatus("completed");
+        setIsFinalizingVideo(false);
         setNotice(t("create.video.common.videoReady"));
         void loadVideoHistory(status.workspaceId ?? undefined);
         return;
       }
+      setIsFinalizingVideo(false);
       setGenerationStatus(status.status === "cancelled" ? "cancelled" : "failed");
       setNotice(status.status === "cancelled" ? t("create.video.common.videoGenerationCancelled") : null);
     };
@@ -1302,7 +1348,7 @@ export function VideoGenerationPage() {
         listGenerationModels("extend-video").catch(() => [] as GenerationModelOption[]),
       ])
         .then(([items, extendItems]) => {
-          const eligible = items.filter((item) => item.enabled && item.capabilities.promptParameter && (
+          const eligible = items.filter((item) => item.model === imageToVideoModel && item.enabled && item.capabilities.promptParameter && (
             item.capabilities.imageParameter || item.capabilities.referenceImagesParameter
           ));
           if (!active) return;
@@ -1324,7 +1370,7 @@ export function VideoGenerationPage() {
       active = false;
       window.clearTimeout(loadTimer);
     };
-  }, [generationMode]);
+  }, [generationMode, modelCatalogVersion]);
   useEffect(() => {
     if (!selectedModel) return;
     const selected = models.find((model) => model.model === selectedModel);
@@ -1545,6 +1591,22 @@ export function VideoGenerationPage() {
     if (generationMode === "single-image") void prepareStoryboardSlices(file);
     else void updateAspectRatioFromImage(file);
   };
+  const handleSourceImageDragOver = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsSourceImageDragging(true);
+  };
+  const handleSourceImageDragLeave = (event: DragEvent<HTMLElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsSourceImageDragging(false);
+    }
+  };
+  const handleSourceImageDrop = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsSourceImageDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void uploadSource(file);
+  };
   const clearSource = () => {
     storyboardSplitRequestRef.current += 1;
     storyboardPreparedFileRef.current = null;
@@ -1593,6 +1655,12 @@ export function VideoGenerationPage() {
     setFrameReferences((current) => [...current, nextUrl]);
     setGenerationError(null);
   };
+  const handleFrameDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsFrameDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void addFrame(file);
+  };
 
   const addReferenceImage = async (role: ReferenceImageRole, file: File) => {
     const validationError = await validateMediaFile(file, "image", capabilities?.uploadConstraints);
@@ -1619,6 +1687,12 @@ export function VideoGenerationPage() {
     setAudioFile(file);
     setGenerationError(null);
   };
+  const handleAudioDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsAudioDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void handleAudioFile(file);
+  };
 
   const handleSceneImageFile = async (file: File) => {
     const validationError = await validateMediaFile(file, "image", capabilities?.uploadConstraints);
@@ -1633,6 +1707,12 @@ export function VideoGenerationPage() {
     if (generationMode !== "reference-to-video" && (editingSceneIndex === null || editingSceneIndex === 0)) {
       void updateAspectRatioFromImage(file);
     }
+  };
+  const handleSceneImageDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsSceneImageDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void handleSceneImageFile(file);
   };
   const clearFrameReferences = () => {
     frameReferences.forEach((source) => {
@@ -2033,6 +2113,62 @@ export function VideoGenerationPage() {
     scenePrompt.trim().length > 0 &&
     (sceneStartFrameSource === "previous_last_frame" || Boolean(sceneImage));
   const isGeneratingVideo = generationStatus === "uploading" || generationStatus === "processing";
+  const clearValues = () => {
+    if (isGeneratingVideo) return;
+    clearSource();
+    clearFrameReferences();
+    clearReferenceImageSlots();
+    if (sceneImage?.startsWith("blob:")) URL.revokeObjectURL(sceneImage);
+    setSceneImage(null);
+    setSceneImageFile(null);
+    setIsSceneModalOpen(false);
+    setDeleteSceneIndex(null);
+    setEditingSceneIndex(null);
+    setActiveSceneIndex(0);
+    setSceneStartFrameSource("manual");
+    setScenePrompt("");
+    setSceneDuration(5);
+    setSceneModelParams({});
+    setSceneError(null);
+    setPrompt("");
+    setPromptOptimizerEnabled(false);
+    setNegativePrompt("");
+    setDuration(5);
+    setResolution("");
+    setAspectRatio("");
+    setAutoSound(false);
+    setAudioFile(null);
+    setPostAudioSfxEnabled(false);
+    setPostAudioMusicEnabled(false);
+    setGenerationMode("image-to-video");
+    setVideoMode("storyboard");
+    setSelectedModel(models.find((model) => model.isDefault)?.model ?? models[0]?.model ?? "");
+    setModelParams({});
+    setNotice(null);
+    setIsFinalizingVideo(false);
+    setGenerationStatus("idle");
+    setGenerationProgress({ completed: 0, total: 0 });
+    setFinalVideoUrl(null);
+    setPreviewMediaAspectRatioState({ mediaKey: null, ratio: null });
+    setLatestCompletedStoryboardId(null);
+    setPreviewView("latest");
+    setVideoLibraryIndex(0);
+    setIsVideoFavorite(false);
+    setGenerationError(null);
+    setCreditEstimate(null);
+    setCreditEstimateError(null);
+    setStoryboardScenes([{
+      id: "scene-1",
+      image: null,
+      imageFile: null,
+      endImage: null,
+      endImageFile: null,
+      prompt: "",
+      duration: 5,
+      startFrameSource: "manual",
+      modelParams: {},
+    }]);
+  };
   const allGenerationScenesHavePrompts = generationScenes.length > 0
     && generationScenes.every((scene) => scene.prompt.trim().length > 0);
   const allManualScenesHaveImages = generationMode === "reference-to-video"
@@ -2275,9 +2411,17 @@ export function VideoGenerationPage() {
       }
       setContinuationInfo(status.continuation ?? created.continuation ?? null);
       while (status.status !== "completed" && status.status !== "failed" && status.status !== "cancelled") {
+        const audioMode = status.audioMode ?? status.audio?.mode ?? postAudioMode;
+        const finalizing = status.status === "processing"
+          && audioMode !== "none"
+          && (status.totalScenes ?? scenes.length) > 0
+          && (status.completedScenes ?? 0) >= (status.totalScenes ?? scenes.length);
+        setIsFinalizingVideo(finalizing);
         setGenerationProgress({ completed: status.completedScenes ?? 0, total: status.totalScenes ?? scenes.length });
         setContinuationInfo(status.continuation ?? null);
-        setNotice(generationMode === "single-image"
+        setNotice(finalizing
+          ? t("create.video.common.finalizingVideoDetail")
+          : generationMode === "single-image"
           ? t("create.video.common.generatingFromStoryboardImage")
           : t("create.video.common.generatingScenesProgress", { completed: status.completedScenes ?? 0, total: status.totalScenes ?? scenes.length }));
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
@@ -2285,6 +2429,7 @@ export function VideoGenerationPage() {
       }
       setGenerationProgress({ completed: status.completedScenes ?? scenes.length, total: status.totalScenes ?? scenes.length });
       setContinuationInfo(status.continuation ?? null);
+      setIsFinalizingVideo(false);
       if (status.status !== "completed") {
         requestCreditBalanceSync(acceptedCreditCost);
         throw generationErrorFromStatus(status, status.status === "cancelled" ? "Video generation was cancelled" : "Video generation failed");
@@ -2419,13 +2564,6 @@ export function VideoGenerationPage() {
                 className={styles.videoModePanel}
                 aria-labelledby="video-mode-title"
               >
-                <div className={styles.videoModeTutorial}>
-                  <ImageTutorialButton
-                    feature="image-to-video"
-                    featureName="Image to Video"
-                    mode={generationMode}
-                  />
-                </div>
                 <div className={styles.videoModeHeading}>
                   <h2 id="video-mode-title">{t("create.video.common.generationMode")}</h2>
                   <InfoTooltip content={t("create.video.common.info.generationMode")} size={11} />
@@ -2475,8 +2613,16 @@ export function VideoGenerationPage() {
               </section>
             </section>
             <section className={`${styles.panel} ${styles.promptPanel} ${styles.videoPromptPanel}`}>
+              <div className={styles.videoPromptTopActions}>
+                <ImageTutorialButton
+                  feature="image-to-video"
+                  featureName="Image to Video"
+                  mode={generationMode}
+                />
+                <ClearValuesButton onClick={clearValues} disabled={isGeneratingVideo} />
+              </div>
               <div className={styles.videoPromptHeading}>
-                 <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
+                <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
                 <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
               </div>
               <label className={styles.videoPromptInputLabel}>
@@ -2605,7 +2751,13 @@ export function VideoGenerationPage() {
                   </div>
                 </div>
               ) : (
-                <label className={styles.upload}>
+                <label
+                  className={`${styles.upload} ${isSourceImageDragging ? styles.uploadDragging : ""}`}
+                  onDragEnter={handleSourceImageDragOver}
+                  onDragOver={handleSourceImageDragOver}
+                  onDragLeave={handleSourceImageDragLeave}
+                  onDrop={handleSourceImageDrop}
+                >
                   <CloudUpload size={22} />
                   <span className={styles.uploadCopy}>
                      <strong>{t("create.video.common.uploadImage")}</strong>
@@ -2672,14 +2824,20 @@ export function VideoGenerationPage() {
                   <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: "16 / 9" }}>
                     <div className={styles.videoGeneratingPreview} aria-busy="true">
                       <WandSparkles size={26} />
-                      <strong>{generationStatus === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong>
-                      <span>{generationStatus === "uploading"
+                      <strong>{isFinalizingVideo
+                        ? t("create.video.common.finalizingVideo")
+                        : generationStatus === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong>
+                      <span>{isFinalizingVideo
+                        ? t("create.video.common.finalizingVideoDetail")
+                        : generationStatus === "uploading"
                          ? generationMode === "single-image" ? t("create.video.common.splittingScenes") : t("create.video.common.uploadingSceneAssets")
                          : generationMode === "single-image" ? t("create.video.common.generatingStoryboardScenes") : t("create.video.common.generatingScenesInOrder")}</span>
                       <div className={styles.videoGenerationProgress}>
-                        <i style={{ width: `${generationProgress.total ? Math.round((generationProgress.completed / generationProgress.total) * 100) : 12}%` }} />
+                        <i style={{ width: `${isFinalizingVideo ? 96 : generationProgress.total ? Math.round((generationProgress.completed / generationProgress.total) * 100) : 12}%` }} />
                       </div>
-                       <small>{t("create.video.common.scenesComplete", { completed: generationProgress.completed, total: generationProgress.total || generationScenes.length })}</small>
+                        <small>{isFinalizingVideo
+                          ? t("create.video.common.finalizingVideoDetail")
+                          : t("create.video.common.scenesComplete", { completed: generationProgress.completed, total: generationProgress.total || generationScenes.length })}</small>
                     </div>
                   </div>
                 ) : displayedVideoUrl ? (
@@ -2861,8 +3019,11 @@ export function VideoGenerationPage() {
                   <div className={styles.thumbRow}>
                     <button
                       type="button"
-                      className={styles.addFrame}
+                      className={`${styles.addFrame} ${isFrameDragging ? styles.uploadDragging : ""}`}
                       onClick={() => frameInputRef.current?.click()}
+                      onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsFrameDragging(true); }}
+                      onDragLeave={() => setIsFrameDragging(false)}
+                      onDrop={handleFrameDrop}
                     >
                        <Plus size={16} /> {t("create.video.common.addFrame")}
                     </button>
@@ -3039,8 +3200,8 @@ export function VideoGenerationPage() {
             </section>
             ) : null}
           </div>
-          <aside className={styles.settings}>
-             <SectionTitle number="3">{t("create.video.common.settings")}</SectionTitle>
+           <aside className={styles.settings}>
+              <SectionTitle number="3">{t("create.video.common.settings")}</SectionTitle>
             <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">
                {t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} />
             </label>
@@ -3142,7 +3303,7 @@ export function VideoGenerationPage() {
             {audioInputMode && generationMode !== "reference-to-video" ? (
               <div className={styles.audioReferenceField}>
                  <div className={styles.settingLabel}><span>{t("create.video.common.audioReference")}</span><small>{t("create.video.common.optional")}</small></div>
-                 {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label={t("create.video.common.removeAudio")}><X size={13} /></button></div> : <button type="button" className={styles.upload} onClick={() => audioInputRef.current?.click()}><CloudUpload size={18} /><strong>{t("create.video.common.uploadAudioReference")}</strong><small>{t("create.video.common.audioFormats")}</small></button>}
+                 {audioFile ? <div className={styles.peopleNotice}><Mic2 size={13} /> {audioFile.name}<button type="button" onClick={() => setAudioFile(null)} aria-label={t("create.video.common.removeAudio")}><X size={13} /></button></div> : <button type="button" className={`${styles.upload} ${isAudioDragging ? styles.uploadDragging : ""}`} onClick={() => audioInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsAudioDragging(true); }} onDragLeave={() => setIsAudioDragging(false)} onDrop={handleAudioDrop}><CloudUpload size={18} /><strong>{t("create.video.common.uploadAudioReference")}</strong><small>{t("create.video.common.audioFormats")}</small></button>}
                 <input ref={audioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleAudioFile(file); event.currentTarget.value = ""; }} />
               </div>
             ) : null}
@@ -3384,8 +3545,11 @@ export function VideoGenerationPage() {
               ) : (
                 <button
                   type="button"
-                  className={styles.sceneModalUploadButton}
+                  className={`${styles.sceneModalUploadButton} ${isSceneImageDragging ? styles.uploadDragging : ""}`}
                   onClick={() => sceneInputRef.current?.click()}
+                  onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSceneImageDragging(true); }}
+                  onDragLeave={() => setIsSceneImageDragging(false)}
+                  onDrop={handleSceneImageDrop}
                 >
                   <CloudUpload size={24} />
                   <strong>{t("create.video.common.uploadSceneImage")}</strong>

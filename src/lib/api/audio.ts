@@ -10,7 +10,7 @@ export type TextToSpeechInput = {
   modelId?: string;
   outputFormat: "mp3" | "wav" | "ogg";
   languageCode: string;
-  tone: "Energetic" | "Friendly" | "Premium" | "Dramatic";
+  tone?: "Energetic" | "Friendly" | "Premium" | "Dramatic";
   speed: number;
   pronunciationHint?: string;
   backgroundMusicEnabled?: boolean;
@@ -24,7 +24,7 @@ export type TextToSpeechScenesInput = {
   modelId?: string;
   outputFormat: "mp3" | "wav" | "ogg";
   languageCode: string;
-  tone: "Energetic" | "Friendly" | "Premium" | "Dramatic";
+  tone?: "Energetic" | "Friendly" | "Premium" | "Dramatic";
   speed: number;
   pronunciationHint?: string;
   pauseSeconds?: number;

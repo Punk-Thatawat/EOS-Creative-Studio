@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronDown, ChevronUp, Clock3, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { listGenerationHistory, resumeGeneration, type GenerationHistoryItem, type GenerationProgress, type PendingGeneration } from "@/lib/api/generations";
 import { emitGenerationCompleted } from "@/lib/generation-progress-events";
+import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 import { getDismissedProgressStorageKey, getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import { useHydrated } from "@/components/app-shell/use-hydrated";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
@@ -389,10 +390,20 @@ export function GenerationProgressFloating() {
 
     void refreshFromBackend();
     const handleFocus = () => void refreshFromBackend();
+    const handlePageShow = () => void refreshFromBackend();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshFromBackend();
+    };
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener(AUTH_SESSION_UPDATED_EVENT, handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       disposed = true;
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener(AUTH_SESSION_UPDATED_EVENT, handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 

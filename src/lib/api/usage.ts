@@ -98,8 +98,26 @@ export type CustomTopupConfig = {
 export type CheckoutCatalog = {
   provider: "stripe";
   promptPay: boolean;
+  vatPercent: number;
   topups: CreditTopupPackage[];
   customTopup?: CustomTopupConfig;
+};
+
+export type TopupReceipt = {
+  receiptNumber: string;
+  transactionId: string;
+  referenceId: string | null;
+  issuedAt: string;
+  customer: { name: string | null; email: string | null };
+  credits: number;
+  subtotalThb: number | null;
+  vatPercent: number;
+  vatAmountThb: number | null;
+  totalThb: number | null;
+  currency: "THB";
+  paymentMethod: "PromptPay";
+  paymentStatus: "paid";
+  provider: "Stripe";
 };
 
 async function backendRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -144,4 +162,8 @@ export function createCreditCheckoutSession(packageId?: string, customAmountThb?
     method: "POST",
     body: JSON.stringify({ ...(packageId ? { packageId } : {}), ...(customAmountThb !== undefined ? { customAmountThb } : {}), mode: "payment" }),
   });
+}
+
+export function fetchTopupReceipt(transactionId: string): Promise<TopupReceipt> {
+  return backendRequest<TopupReceipt>(`/users/me/billing/topup-receipts/${encodeURIComponent(transactionId)}`);
 }

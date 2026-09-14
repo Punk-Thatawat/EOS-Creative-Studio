@@ -12,6 +12,7 @@ import { ImageTutorialButton } from "./image-tutorial-button";
 import { PreviewPanel } from "./preview-panel";
 import { PromptPanel } from "./prompt-panel";
 import { SettingsPanel } from "./settings-panel";
+import { ClearValuesButton } from "@/features/create/components/clear-values-button";
 import { getKnownImageUploadConstraints } from "@/lib/media/upload-validation";
 import { textToImagePromptMaxLength } from "../config";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -67,6 +68,7 @@ export function ImageGenerationPage() {
   const activeStylePresetOptions = state.stylePresetOptions.filter((preset) => preset.features.includes(stylePresetFeature));
   const styleTransferPresetOptions = state.styleTransferPresetOptions;
   const activeTabIsGenerating = isTextToImageTab ? state.isGenerating : isImageToImageTab ? state.imageToImageIsGenerating : isStyleTransferTab ? state.styleTransferIsGenerating : isBackgroundTab ? state.backgroundIsGenerating : isUpscaleTab ? state.upscaleIsGenerating : isExtendTab ? state.extendIsGenerating : false;
+  const anyTabIsGenerating = state.isGenerating || state.imageToImageIsGenerating || state.styleTransferIsGenerating || state.backgroundIsGenerating || state.upscaleIsGenerating || state.extendIsGenerating;
   const hasStyleInstruction = (state.styleSourceMode === "preset" && Boolean(state.styleTransferPreset)) || (state.styleSourceMode === "reference" && Boolean(state.styleReferenceImage)) || Boolean(state.styleTransferPrompt.trim());
   const hasBackgroundInstruction = state.backgroundMode === "remove" || state.backgroundMode === "solid" || (state.backgroundSupportsPrompt && Boolean(state.backgroundPrompt.trim())) || Boolean(state.backgroundReferenceImage);
   const selectedModel = isImageToImageTab ? state.selectedImageToImageModel : isStyleTransferTab ? state.selectedStyleTransferModel : isBackgroundTab ? state.selectedBackgroundModel : isUpscaleTab ? state.selectedUpscaleModel : isExtendTab ? state.selectedExtendModel : state.selectedModel;
@@ -159,6 +161,7 @@ export function ImageGenerationPage() {
       <PromptPanel
         activeTab={state.activeTab}
         tutorialButton={<ImageTutorialButton feature={activeTutorialFeature} featureName={state.activeTab} mode={activeTutorialMode} />}
+        clearButton={<ClearValuesButton onClick={() => { state.clearAllValues(); setPreviewDisplayMode("current"); }} disabled={anyTabIsGenerating} />}
         prompt={isStyleTransferTab ? state.styleTransferPrompt : isImageToImageTab ? state.imageToImagePrompt : state.prompt}
         negativePrompt={state.negativePrompt}
         style={state.style}
@@ -341,9 +344,9 @@ export function ImageGenerationPage() {
         onQualityChange={state.setQuality}
         onOutputFormatChange={state.setOutputFormat}
         onResolutionChange={state.setResolution}
-        onRatioChange={state.selectRatio}
-        onModelParamChange={state.setModelParam}
-      />
+         onRatioChange={state.selectRatio}
+         onModelParamChange={state.setModelParam}
+       />
     </div>
   </div>;
 }

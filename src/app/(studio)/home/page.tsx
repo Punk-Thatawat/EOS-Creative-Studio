@@ -5,5 +5,5 @@ import { RecentAssets } from "@/features/home/components/recent-assets";
 export const metadata = { title: "Home" };
 
 export default function HomePage() {
-  return <div className="space-y-7"><HomeHero /><CreativeToolGrid /><RecentAssets /></div>;
+  return <div className="space-y-7" data-page="home"><HomeHero /><CreativeToolGrid /><RecentAssets /></div>;
 }

@@ -17,6 +17,8 @@ export type GenerationCompletedEventDetail = {
   generationId: string;
 };
 
+export const GENERATION_COMPLETED_EVENT = "eos:generation-completed";
+
 export function emitGenerationStarted(detail: GenerationProgressEventDetail): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<GenerationProgressEventDetail>("eos:generation-started", { detail }));
@@ -24,5 +26,5 @@ export function emitGenerationStarted(detail: GenerationProgressEventDetail): vo
 
 export function emitGenerationCompleted(detail: GenerationCompletedEventDetail): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent<GenerationCompletedEventDetail>("eos:generation-completed", { detail }));
+  window.dispatchEvent(new CustomEvent<GenerationCompletedEventDetail>(GENERATION_COMPLETED_EVENT, { detail }));
 }

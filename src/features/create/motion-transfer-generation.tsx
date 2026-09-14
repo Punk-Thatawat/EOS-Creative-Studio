@@ -27,6 +27,7 @@ import { VideoModelDropdown } from "./video-model-dropdown";
 import { InfoTooltip } from "./components/info-tooltip";
 import { PromptOptimizerToggle } from "./image-generation/components/prompt-optimizer-toggle";
 import { ImageTutorialButton } from "./image-generation/components/image-tutorial-button";
+import { ClearValuesButton } from "./components/clear-values-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
@@ -206,6 +207,8 @@ export function MotionTransferWorkspace() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
+  const [isSourceImageDragging, setIsSourceImageDragging] = useState(false);
+  const [isMotionVideoDragging, setIsMotionVideoDragging] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const sourceImageInputRef = useRef<HTMLInputElement | null>(null);
   const motionVideoInputRef = useRef<HTMLInputElement | null>(null);
@@ -296,6 +299,18 @@ export function MotionTransferWorkspace() {
     }
     const asset = { url: URL.createObjectURL(file), file, kind: type, name: file.name } satisfies MotionAsset;
     if (type === "image") setSourceImage(asset); else setMotionVideo(asset);
+  };
+  const handleSourceImageDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsSourceImageDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void setMotionAsset(file, "image");
+  };
+  const handleMotionVideoDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    setIsMotionVideoDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void setMotionAsset(file, "video");
   };
 
   const isComplete = Boolean(
@@ -406,23 +421,47 @@ export function MotionTransferWorkspace() {
   const isGenerating = generationStatus === "uploading" || generationStatus === "processing";
   const guidanceVisible = promptSupported || negativePromptSupported;
   const settingsStep = guidanceVisible ? "4" : "3";
+  const clearValues = () => {
+    if (sourceImage?.url.startsWith("blob:")) URL.revokeObjectURL(sourceImage.url);
+    if (motionVideo?.url.startsWith("blob:")) URL.revokeObjectURL(motionVideo.url);
+    setSourceImage(null);
+    setMotionVideo(null);
+    setPrompt("");
+    setPromptOptimizerEnabled(false);
+    setNegativePrompt("");
+    setQualityValue(undefined);
+    setOrientationValue(undefined);
+    setKeepOriginalSound(false);
+    setModelParams({});
+    setGenerationStatus("idle");
+    setGenerationProgress(0);
+    setGenerationError(null);
+    setNotice(null);
+    setFinalVideoUrl(null);
+    setPreviewVideoUrl(null);
+    setGenerationId(null);
+  };
 
   return (
     <div className={styles.columns}>
       <div className={styles.leftColumn}>
-         <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeTutorial}><ImageTutorialButton feature="motion-transfer" featureName={t("create.video.tabs.motionTransfer")} /></div><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">{t("create.video.motion.title")}</h2><InfoTooltip content={t("create.video.motion.description")} size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{t("create.video.motion.eyebrow")}</span><p className={styles.textVideoDescription}>{t("create.video.motion.description")}</p><div className={styles.featurePills}>{[t("create.video.motion.chipCopyMovement"), t("create.video.motion.chipCharacterImage"), t("create.video.motion.chipDrivingVideo")].map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{t("create.video.motion.note")}</small></div></section></section>
+         <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">{t("create.video.motion.title")}</h2><InfoTooltip content={t("create.video.motion.description")} size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{t("create.video.motion.eyebrow")}</span><p className={styles.textVideoDescription}>{t("create.video.motion.description")}</p><div className={styles.featurePills}>{[t("create.video.motion.chipCopyMovement"), t("create.video.motion.chipCharacterImage"), t("create.video.motion.chipDrivingVideo")].map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{t("create.video.motion.note")}</small></div></section></section>
         <section className={styles.panel}>
            <MotionSectionTitle number="1">{t("create.video.common.characterImage")}</MotionSectionTitle>
-           <div className={`${styles.peopleSourcePreview} ${!sourceImage ? styles.peopleSourceUploadEmpty : ""}`}>{sourceImage ? <div className={styles.peopleSourceMedia}><Image src={sourceImage.url} alt={t("create.video.common.characterImage")} fill unoptimized className="object-cover" /><button type="button" onClick={() => setSourceImage(null)} aria-label={t("create.video.common.removeSourceImage")}><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => document.getElementById("motion-source-image")?.click()}><CloudUpload size={23} /><strong>{t("create.video.common.uploadImage")}</strong><small>{t("create.video.common.pngFormats")}</small></button>}</div>
+           <div className={`${styles.peopleSourcePreview} ${!sourceImage ? styles.peopleSourceUploadEmpty : ""}`}>{sourceImage ? <div className={styles.peopleSourceMedia}><Image src={sourceImage.url} alt={t("create.video.common.characterImage")} fill unoptimized className="object-cover" /><button type="button" onClick={() => setSourceImage(null)} aria-label={t("create.video.common.removeSourceImage")}><X size={14} /></button></div> : <button type="button" className={`${styles.upload} ${isSourceImageDragging ? styles.uploadDragging : ""}`} onClick={() => document.getElementById("motion-source-image")?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSourceImageDragging(true); }} onDragLeave={() => setIsSourceImageDragging(false)} onDrop={handleSourceImageDrop}><CloudUpload size={23} /><strong>{t("create.video.common.uploadImage")}</strong><small>{t("create.video.common.pngFormats")}</small></button>}</div>
           <input id="motion-source-image" ref={sourceImageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setMotionAsset(file, "image"); event.currentTarget.value = ""; }} />
         </section>
         <section className={styles.panel}>
            <MotionSectionTitle number="2">{t("create.video.common.drivingVideo")}</MotionSectionTitle>
-           <div className={`${styles.peopleSourcePreview} ${!motionVideo ? styles.peopleSourceUploadEmpty : ""}`}>{motionVideo ? <div className={styles.peopleSourceMedia}><video src={motionVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setMotionVideo(null)} aria-label={t("create.video.common.removeMotionVideo")}><X size={14} /></button></div> : <button type="button" className={styles.upload} onClick={() => motionVideoInputRef.current?.click()}><CloudUpload size={23} /><strong>{t("create.video.common.uploadVideo")}</strong><small>{t("create.video.common.videoFormats")}</small></button>}</div>
+          <div className={`${styles.peopleSourcePreview} ${!motionVideo ? styles.peopleSourceUploadEmpty : ""}`}>{motionVideo ? <div className={styles.peopleSourceMedia}><video src={motionVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setMotionVideo(null)} aria-label={t("create.video.common.removeMotionVideo")}><X size={14} /></button></div> : <button type="button" className={`${styles.upload} ${isMotionVideoDragging ? styles.uploadDragging : ""}`} onClick={() => motionVideoInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsMotionVideoDragging(true); }} onDragLeave={() => setIsMotionVideoDragging(false)} onDrop={handleMotionVideoDrop}><CloudUpload size={23} /><strong>{t("create.video.common.uploadVideo")}</strong><small>{t("create.video.common.videoFormats")}</small></button>}</div>
           <input ref={motionVideoInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setMotionAsset(file, "video"); event.currentTarget.value = ""; }} />
         </section>
         {guidanceVisible ? (
           <section className={`${styles.panel} ${promptSupported ? styles.videoPromptPanel : ""}`}>
+            <div className={styles.videoPromptTopActions}>
+              <ImageTutorialButton feature="motion-transfer" featureName={t("create.video.tabs.motionTransfer")} />
+              <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
+            </div>
             {promptSupported ? <>
               <div className={styles.videoPromptHeading}>
                  <h2>{t("create.video.common.prompt")} <small>({promptRequired ? t("create.video.common.required") : t("create.video.common.optional")})</small></h2>

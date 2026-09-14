@@ -16,12 +16,13 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { changePasswordWithBackend, getStoredBackendSession } from "@/lib/auth/backend-auth";
 import { getApiAccessToken } from "@/lib/auth/access-token";
-import { fetchBackendAuthProvider } from "@/lib/auth/backend-session";
+import { fetchBackendAuthProvider, fetchBackendAuthSessions, type BackendSessionSummary } from "@/lib/auth/backend-session";
 import { useLocale, type Locale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import styles from "./settings-page.module.css";
 
@@ -50,6 +51,17 @@ const settingsKeys = {
   activeSessions: "settings.activeSessions",
   activeSessionsValue: "settings.activeSessionsValue",
   reviewSessions: "settings.reviewSessions",
+  sessionsTitle: "settings.sessionsTitle",
+  sessionsDescription: "settings.sessionsDescription",
+  sessionsLoading: "settings.sessionsLoading",
+  sessionsError: "settings.sessionsError",
+  sessionsRetry: "settings.sessionsRetry",
+  sessionsEmpty: "settings.sessionsEmpty",
+  sessionLastUsed: "settings.sessionLastUsed",
+  sessionSignedIn: "settings.sessionSignedIn",
+  sessionSecurityNote: "settings.sessionSecurityNote",
+  closeSessions: "settings.closeSessions",
+  unknownDevice: "settings.unknownDevice",
   password: "settings.password",
   passwordDescription: "settings.passwordDescription",
   currentPassword: "settings.currentPassword",
@@ -145,6 +157,20 @@ function SettingRow({ icon: Icon, title, description, value, children }: { icon:
   );
 }
 
+function sessionDeviceLabel(userAgent: string | null, locale: Locale, unknownDevice: string) {
+  if (!userAgent) return unknownDevice;
+  const browser = /Edg\//i.test(userAgent) ? "Microsoft Edge" : /Chrome\//i.test(userAgent) ? "Google Chrome" : /Firefox\//i.test(userAgent) ? "Firefox" : /Safari\//i.test(userAgent) ? "Safari" : locale === "th" ? "เบราว์เซอร์อื่น" : "Other browser";
+  const platform = /Windows/i.test(userAgent) ? "Windows" : /Mac OS X/i.test(userAgent) ? "macOS" : /Android/i.test(userAgent) ? "Android" : /iPhone|iPad/i.test(userAgent) ? "iOS" : /Linux/i.test(userAgent) ? "Linux" : "";
+  return platform ? `${browser} · ${platform}` : browser;
+}
+
+function formatSessionDate(value: string | null, locale: Locale) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat(locale === "th" ? "th-TH" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
 export function SettingsPageClient() {
   const { locale, setLocale, persistLocale, t: translateKey } = useLocale();
   const [saved, setSaved] = useState(false);
@@ -155,6 +181,10 @@ export function SettingsPageClient() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [authProvider, setAuthProvider] = useState<"loading" | "email" | "google" | "unknown">("loading");
+  const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [sessions, setSessions] = useState<BackendSessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState(false);
 
   const t: Copy = useMemo(
     () => Object.fromEntries(Object.entries(settingsKeys).map(([name, key]) => [name, translateKey(key as TranslationKey)])) as Copy,
@@ -175,6 +205,15 @@ export function SettingsPageClient() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!sessionsOpen) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSessionsOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [sessionsOpen]);
 
   function changeLocale(nextLocale: Locale) {
     setLocale(nextLocale);
@@ -217,6 +256,21 @@ export function SettingsPageClient() {
     }
   }
 
+  async function handleReviewSessions() {
+    setSessionsOpen(true);
+    setSessionsLoading(true);
+    setSessionsError(false);
+    try {
+      const accessToken = await getApiAccessToken({ forceRefresh: true });
+      if (!accessToken) throw new Error("Session expired");
+      setSessions(await fetchBackendAuthSessions(accessToken));
+    } catch {
+      setSessionsError(true);
+    } finally {
+      setSessionsLoading(false);
+    }
+  }
+
   function scrollToSection(id: (typeof sectionIds)[number]) {
     setActiveSection(id);
     document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -231,7 +285,7 @@ export function SettingsPageClient() {
         : t.authenticationValue;
 
   return (
-    <div className={`${styles.settingsPage} font-sans`}>
+    <div className={`${styles.settingsPage} font-sans`} data-page="settings">
       <div className={styles.pageIntro}>
         <div>
           <p className={styles.eyebrow}>{t.eyebrow}</p>
@@ -310,7 +364,7 @@ export function SettingsPageClient() {
                 )}
               </div>
               <SettingRow icon={Monitor} title={t.activeSessions} description={t.activeSessionsValue}>
-                <Button variant="outline" size="sm" className={styles.rowButton}>{t.reviewSessions}</Button>
+                <Button variant="outline" size="sm" className={styles.rowButton} onClick={() => { void handleReviewSessions(); }} aria-haspopup="dialog" aria-expanded={sessionsOpen}>{t.reviewSessions}</Button>
               </SettingRow>
             </div>
           </Card>
@@ -330,9 +384,23 @@ export function SettingsPageClient() {
             </div>
           </Card>}
 
-          <div className={styles.helpRow}><span>{t.help}</span><a href="mailto:support@eoslabs.tech">{t.helpLink}<ChevronRight size={14} /></a></div>
         </div>
       </div>
+      {sessionsOpen ? <div className={styles.sessionOverlay} role="presentation" onMouseDown={() => setSessionsOpen(false)}>
+        <div className={styles.sessionDialog} role="dialog" aria-modal="true" aria-labelledby="active-sessions-title" onMouseDown={(event) => event.stopPropagation()}>
+          <div className={styles.sessionDialogHeader}>
+            <div>
+              <h2 id="active-sessions-title">{t.sessionsTitle}</h2>
+              <p>{t.sessionsDescription}</p>
+            </div>
+            <button type="button" className={styles.sessionClose} onClick={() => setSessionsOpen(false)} aria-label={t.closeSessions}><X size={18} /></button>
+          </div>
+          <div className={styles.sessionDialogBody}>
+            {sessionsLoading ? <p className={styles.sessionState} role="status">{t.sessionsLoading}</p> : sessionsError ? <div className={styles.sessionState} role="alert"><p>{t.sessionsError}</p><Button type="button" variant="outline" size="sm" onClick={() => { void handleReviewSessions(); }}>{t.sessionsRetry}</Button></div> : sessions.length === 0 ? <p className={styles.sessionState}>{t.sessionsEmpty}</p> : <div className={styles.sessionList}>{sessions.map((session) => <div className={styles.sessionItem} key={session.id}><span className={styles.sessionDeviceIcon}><Monitor size={17} /></span><div className={styles.sessionItemCopy}><strong>{sessionDeviceLabel(session.userAgent, locale, t.unknownDevice)}</strong><span>{t.sessionLastUsed}: {formatSessionDate(session.lastUsedAt ?? session.createdAt, locale)}</span><span>{t.sessionSignedIn}: {formatSessionDate(session.createdAt, locale)}</span></div></div>)}</div>}
+          </div>
+          <p className={styles.sessionSecurityNote}><ShieldCheck size={15} />{t.sessionSecurityNote}</p>
+        </div>
+      </div> : null}
     </div>
   );
 }

@@ -15,7 +15,10 @@ export async function signOutFromEOS() {
       credentials: "include",
     }).catch(() => undefined);
   }
-  clearGenerationProgressStorage();
+  // Keep this account's scoped generation cards so the next login can resume
+  // polling jobs that were started before logout. Other accounts cannot read
+  // them because the progress key is scoped by the access-token user id.
+  clearGenerationProgressStorage({ preserveAccountProgress: true });
   clearBackendSession();
 
   window.sessionStorage.removeItem("eos.backend.user-profile");

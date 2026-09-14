@@ -21,6 +21,12 @@ input[type="file"].hidden { display: none !important; }
   --sidebar-width: 248px;
   --rail-width: 276px;
   --page-gutter: 16px;
+  /* Shared typography scale for comfortable reading on desktop and mobile. */
+  --eos-font-body: 1rem;
+  --eos-font-ui: 1rem;
+  --eos-font-meta: 0.875rem;
+  --eos-font-section: 1.25rem;
+  --eos-font-page: 2rem;
   --card-radius: 18px;
   --shadow-sm: 0 2px 10px rgba(68, 49, 36, 0.05);
   --shadow-md: 0 12px 30px rgba(68, 49, 36, 0.09);
@@ -398,10 +404,33 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
   body {
     @apply bg-background text-foreground;
+    font-size: var(--eos-font-body);
   }
   html {
     @apply font-sans;
   }
+}
+
+/* Readable typography guardrails for user-facing application pages. */
+body :where([data-studio-main], [data-page], .audio-studio-page, .landing-page, .auth-reset-page, .auth-confirm-page) {
+  font-size: var(--eos-font-ui);
+}
+
+body :where([data-studio-main], [data-page], .audio-studio-page, .landing-page, .auth-reset-page, .auth-confirm-page) :where(p, li, dt, dd, label, legend, input, select, textarea, option, summary, button, a) {
+  font-size: max(var(--eos-font-ui), 1em) !important;
+}
+
+body :where([data-studio-main], [data-page], .audio-studio-page, .landing-page, .auth-reset-page, .auth-confirm-page) :where(small, time, figcaption) {
+  font-size: max(var(--eos-font-meta), 0.875em) !important;
+}
+
+/* Raise utility text and arbitrary sizes that were authored below the readable floor. */
+body :where([data-studio-main], [data-page], .audio-studio-page, .landing-page, .auth-reset-page, .auth-confirm-page) :where(.text-xs, [class*="text-xs"], [class*="text-[8px]"], [class*="text-[9px]"], [class*="text-[10px]"], [class*="text-[11px]"], [class*="text-[12px]"], [class*="text-[13px]"]) {
+  font-size: var(--eos-font-meta) !important;
+}
+
+body :where([data-studio-main], [data-page], .audio-studio-page, .landing-page, .auth-reset-page, .auth-confirm-page) :where(.text-sm, [class*="text-sm"]) {
+  font-size: var(--eos-font-ui) !important;
 }
 
 .landing-page { min-height: 100vh; overflow: hidden; background: #ffffff; color: #0c0c0e; font-family: var(--font-noto-sans-thai), Arial, Helvetica, sans-serif; }

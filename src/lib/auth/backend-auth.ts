@@ -1,5 +1,7 @@
 "use client";
 
+import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
+
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
 const sessionStorageKey = "eos.backend.session";
 
@@ -134,6 +136,7 @@ export async function persistBackendSession(session: BackendAuthSession, remembe
   const storage = remember ? window.localStorage : window.sessionStorage;
   storage.setItem(sessionStorageKey, JSON.stringify(session));
   if (!remember) window.localStorage.removeItem(sessionStorageKey);
+  window.dispatchEvent(new Event(AUTH_SESSION_UPDATED_EVENT));
   return session.accessToken;
 }
 

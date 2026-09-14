@@ -90,7 +90,7 @@ export function getDismissedProgressStorageKey(): string {
  * Remove browser-only generation state when a different account signs in.
  * Server-side generation history remains untouched and is loaded for the new user.
  */
-export function clearGenerationProgressStorage(): void {
+export function clearGenerationProgressStorage(options: { preserveAccountProgress?: boolean } = {}): void {
   if (typeof window === "undefined") return;
 
   try {
@@ -99,8 +99,10 @@ export function clearGenerationProgressStorage(): void {
 
     window.localStorage.removeItem(generationProgressStorageBaseKey);
     window.localStorage.removeItem(dismissedProgressStorageBaseKey);
-    window.localStorage.removeItem(scopedKey(generationProgressStorageBaseKey));
-    window.localStorage.removeItem(scopedKey(dismissedProgressStorageBaseKey));
+    if (!options.preserveAccountProgress) {
+      window.localStorage.removeItem(scopedKey(generationProgressStorageBaseKey));
+      window.localStorage.removeItem(scopedKey(dismissedProgressStorageBaseKey));
+    }
     window.sessionStorage.removeItem(generationWorkspaceStorageKey);
     accountScopedCreateStorageKeys.forEach((key) => {
       window.sessionStorage.removeItem(key);

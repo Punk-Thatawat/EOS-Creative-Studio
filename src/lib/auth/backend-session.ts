@@ -4,6 +4,13 @@ const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:400
 
 export type BackendUserProfile = Record<string, unknown>;
 export type BackendAuthProvider = "email" | "google";
+export type BackendSessionSummary = {
+  id: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string;
+  userAgent: string | null;
+};
 
 export async function fetchBackendSession(accessToken: string): Promise<BackendUserProfile> {
   const response = await fetch(`${backendUrl}/api/v1/auth/session`, {
@@ -32,4 +39,20 @@ export async function fetchBackendAuthProvider(accessToken: string): Promise<Bac
   };
   const provider = session.data?.auth?.provider;
   return provider === "email" || provider === "google" ? provider : null;
+}
+
+export async function fetchBackendAuthSessions(accessToken: string): Promise<BackendSessionSummary[]> {
+  const response = await fetch(`${backendUrl}/api/v1/auth/sessions`, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    credentials: "include",
+    cache: "no-store",
+  });
+
+  const payload = await response.json().catch(() => null) as { data?: { sessions?: BackendSessionSummary[] }; message?: string } | null;
+  if (!response.ok) throw new Error(payload?.message ?? "Active sessions request failed");
+  return payload?.data?.sessions ?? [];
 }

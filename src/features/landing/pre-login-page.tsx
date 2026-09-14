@@ -215,7 +215,7 @@ export function PreLoginPage() {
 
       if (authMode === "forgot") {
         await requestPasswordResetWithBackend(authEmail);
-        setAuthMessage(t("auth.reset.sent"));
+        setAuthMessage(t("auth.reset.sent", { email: authEmail.trim() }));
         return;
       }
 

@@ -345,7 +345,7 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
               return <button type="button" key={src} onClick={() => { selectCurrentImage(variationSources, index, "variation"); onVariationSelect(originalIndex); }} className={selectedVariation === originalIndex ? cx("is-selected") : undefined} aria-label={`Variation ${index + 1}`} aria-pressed={selectedVariation === originalIndex}>
                 <img src={src} alt={`Generated variation ${index + 1}`} className={cx("gen-generated-thumbnail-image")} onError={() => markImageUnavailable(src)} />
               </button>;
-            }) : <div className={cx("gen-gallery-status")}>{isGenerating ? "Generating variations..." : "Generated variations will appear here."}</div>}
+            }) : <div className={cx("gen-gallery-status", "gen-variation-status")}>{isGenerating ? "Generating variations..." : "Generated variations will appear here."}</div>}
           </div>
           {variationScrollState.canGoBack && <button type="button" className={cx("gen-gallery-prev")} onClick={() => scrollVariations(-1)} aria-label="Previous variations"><ChevronLeft size={18} /></button>}
           {variationScrollState.canGoForward && <button type="button" className={cx("gen-gallery-next")} onClick={() => scrollVariations(1)} aria-label="Next variations"><ChevronRight size={18} /></button>}
