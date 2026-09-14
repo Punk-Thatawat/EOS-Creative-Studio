@@ -108,7 +108,7 @@ function ExtendPreview({ sourceImage, resultImage, modelPreviewUrl, aspectRatio,
   </PreviewSurface>;
 }
 
-export function PreviewPanel({ activeTab, generated, generatedImageUrls, generationCompletedCount, generationStatus, generationTotalCount, isGenerating, isLoadingRecent, recentError, recentGenerationUrls, imageMimeTypes, selectedRecentImageUrl, selectedVariation, previewDisplayMode, onPreviewDisplayModeChange, sourceImage, previewRatio, modelPreviewUrl = null, modelPreviewType = null, backgroundMask = null, backgroundMode = "remove", backgroundColor = "#ffffff", backgroundTransparent = true, maskTool, brushSize, extendDirection = "right", extendAmount = "50%", onBackgroundMaskChange, onMaskToolChange, onBrushSizeChange, onRecentSelect, onVariationSelect, onRefreshRecent }: { activeTab: ImageGenerationTab; generated: boolean; generatedImageUrls: string[]; generationCompletedCount: number; generationStatus: GenerationStatus; generationTotalCount: number; isGenerating: boolean; isLoadingRecent: boolean; recentError: string | null; recentGenerationUrls: string[]; imageMimeTypes: Record<string, string>; selectedRecentImageUrl: string | null; selectedVariation: number; previewDisplayMode: "current" | "gallery"; onPreviewDisplayModeChange: (mode: "current" | "gallery") => void; sourceImage: string | null; previewRatio: string; modelPreviewUrl?: string | null; modelPreviewType?: "image" | "video" | null; backgroundMask?: string | null; backgroundMode?: BackgroundMode; backgroundColor?: string; backgroundTransparent?: boolean; maskTool: MaskTool; brushSize: number; extendDirection?: ExtendDirection; extendAmount?: ExtendAmount; onBackgroundMaskChange: (mask: string | null) => void; onMaskToolChange: (tool: MaskTool) => void; onBrushSizeChange: (size: number) => void; onRecentSelect: (url: string) => void; onVariationSelect: (index: number) => void; onRefreshRecent: () => void }) {
+export function PreviewPanel({ activeTab, generated, generatedImageUrls, generationCompletedCount, generationStatus, generationTotalCount, isGenerating, isLoadingRecent, recentError, recentGenerationUrls, imageMimeTypes, selectedRecentImageUrl, selectedVariation, previewDisplayMode, onPreviewDisplayModeChange, sourceImage, previewRatio, modelPreviewUrl = null, modelPreviewType = null, backgroundMask = null, backgroundMode = "remove", backgroundColor = "#ffffff", backgroundTransparent = true, maskTool, brushSize, extendDirection = "right", extendAmount = "50%", onBackgroundMaskChange, onMaskToolChange, onBrushSizeChange, onRecentSelect, onVariationSelect, onRefreshRecent }: { activeTab: ImageGenerationTab; generated: boolean; generatedImageUrls: string[]; generationCompletedCount: number; generationStatus: GenerationStatus; generationTotalCount: number; isGenerating: boolean; isLoadingRecent: boolean; recentError: string | null; recentGenerationUrls: string[]; imageMimeTypes: Record<string, string>; selectedRecentImageUrl: string | null; selectedVariation: number; previewDisplayMode: "current" | "gallery" | "model"; onPreviewDisplayModeChange: (mode: "current" | "gallery" | "model") => void; sourceImage: string | null; previewRatio: string; modelPreviewUrl?: string | null; modelPreviewType?: "image" | "video" | null; backgroundMask?: string | null; backgroundMode?: BackgroundMode; backgroundColor?: string; backgroundTransparent?: boolean; maskTool: MaskTool; brushSize: number; extendDirection?: ExtendDirection; extendAmount?: ExtendAmount; onBackgroundMaskChange: (mask: string | null) => void; onMaskToolChange: (tool: MaskTool) => void; onBrushSizeChange: (size: number) => void; onRecentSelect: (url: string) => void; onVariationSelect: (index: number) => void; onRefreshRecent: () => void }) {
   const variationRowRef = useRef<HTMLDivElement>(null);
   const recentRowRef = useRef<HTMLDivElement>(null);
   const [variationScrollState, setVariationScrollState] = useState({ canGoBack: false, canGoForward: false });
@@ -170,6 +170,8 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
   const galleryImageUrl = selectedGalleryImageUrl && !unavailableImageUrls.has(selectedGalleryImageUrl)
     ? selectedGalleryImageUrl : galleryImages.find((url) => !unavailableImageUrls.has(url)) ?? null;
   const isGalleryView = previewDisplayMode === "gallery" && Boolean(galleryImageUrl);
+  const isModelPreviewView = previewDisplayMode === "model";
+  const configuredModelPreview = modelPreviewType === "image" ? modelPreviewUrl : null;
   // A restored draft can have generated URLs before the `generated` flag is
   // hydrated. The selected variation is the source of truth for Preview.
   const canShowBackgroundAfter = isBackgroundPreview && Boolean(selectedImageUrl);
@@ -178,12 +180,12 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
   const effectiveBackgroundPreviewMode: BackgroundPreviewMode = isBackgroundPreview
     ? canShowBackgroundAfter ? "after" : "before"
     : canShowBackgroundAfter || backgroundPreviewMode !== "after" ? backgroundPreviewMode : "before";
-  const displayedImageUrl = isGalleryView ? galleryImageUrl : selectedImageUrl;
+  const displayedImageUrl = isModelPreviewView ? configuredModelPreview : isGalleryView ? galleryImageUrl : selectedImageUrl;
   const resetMask = () => {
     onBackgroundMaskChange(null);
     setMaskResetKey((key) => key + 1);
   };
-  const isPreviewLoading = !isGalleryView && isGenerating && !selectedImageUrl;
+  const isPreviewLoading = !isGalleryView && !isModelPreviewView && isGenerating && !selectedImageUrl;
   const variationSources = availableVariationSources;
   const recentPreviewUrls = recentGenerationUrls.filter((url) => !unavailableImageUrls.has(url)).slice(0, 12);
   const hasGallery = variationSources.length > 0 || recentPreviewUrls.length > 0;
@@ -259,18 +261,17 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
 
   const scrollVariations = (direction: 1 | -1) => scrollGallery(variationRowRef, direction);
   const previewStatus = generationStatus === "queued" || generationStatus === "processing" ? `${generationStatus.toUpperCase()} · ${generationCompletedCount}/${generationTotalCount}` : null;
-  const configuredModelPreview = modelPreviewType === "image" ? modelPreviewUrl : null;
   const sourcePreviewImage = (activeTab === "Image to Image" || activeTab === "AI Style Transfer" || activeTab === "Upscale" || activeTab === "Extend Image") && sourceImage && !generated ? sourceImage : null;
   const genericPreviewImage = selectedImageUrl ?? configuredModelPreview ?? sourcePreviewImage;
-  const showingModelPreview = !isGalleryView && !selectedImageUrl && Boolean(configuredModelPreview) && effectiveBackgroundPreviewMode !== "mask";
+  const showingModelPreview = isModelPreviewView || (!isGalleryView && !selectedImageUrl && Boolean(configuredModelPreview) && effectiveBackgroundPreviewMode !== "mask");
   const genericPreviewLabel = previewStatus ?? (generated ? "GENERATION PREVIEW" : showingModelPreview ? "MODEL PREVIEW" : activeTab === "Image to Image" || activeTab === "AI Style Transfer" || activeTab === "Upscale" || activeTab === "Extend Image" ? "UPLOAD SOURCE IMAGE" : "PREVIEW IMAGE");
   const backgroundPreviewImage = effectiveBackgroundPreviewMode === "before" ? configuredModelPreview ?? sourceImage : effectiveBackgroundPreviewMode === "mask" ? backgroundMask ?? sourceImage ?? configuredModelPreview : selectedImageUrl ?? configuredModelPreview ?? sourceImage;
   const backgroundPreviewLabel = effectiveBackgroundPreviewMode === "before" ? configuredModelPreview ? "Model preview" : "Before background edit" : effectiveBackgroundPreviewMode === "mask" ? "Black and white subject removal mask" : selectedImageUrl ? "After background edit" : configuredModelPreview ? "Model preview" : "Uploaded source image preview";
-  const isBackgroundMaskEditing = !isGalleryView && isBackgroundPreview && backgroundMode === "remove" && effectiveBackgroundPreviewMode === "mask";
-  const previewImage = isGalleryView ? galleryImageUrl : isBackgroundPreview ? (isBackgroundMaskEditing ? null : backgroundPreviewImage) : genericPreviewImage;
-  const previewImageLabel = isGalleryView ? `${galleryKind === "variation" ? "Variation" : "Recent generation"} preview` : isBackgroundPreview ? backgroundPreviewLabel : selectedImageUrl ? "Generated image" : showingModelPreview ? "Model preview" : "Source image preview";
-  const previewPlaceholderLabel = isGalleryView ? "GALLERY VIEW" : isBackgroundPreview ? (effectiveBackgroundPreviewMode === "after" ? "GENERATE A BACKGROUND" : effectiveBackgroundPreviewMode === "mask" ? "MASK VIEW" : "UPLOAD SOURCE IMAGE") : isPreviewLoading ? (previewStatus ?? "CREATING PREVIEW") : genericPreviewLabel;
-  const previewIsGenerated = isGalleryView ? true : isBackgroundPreview ? Boolean(selectedImageUrl) && effectiveBackgroundPreviewMode === "after" : generated;
+  const isBackgroundMaskEditing = !isGalleryView && !isModelPreviewView && isBackgroundPreview && backgroundMode === "remove" && effectiveBackgroundPreviewMode === "mask";
+  const previewImage = isModelPreviewView ? configuredModelPreview : isGalleryView ? galleryImageUrl : isBackgroundPreview ? (isBackgroundMaskEditing ? null : backgroundPreviewImage) : genericPreviewImage;
+  const previewImageLabel = isModelPreviewView ? "Model preview" : isGalleryView ? `${galleryKind === "variation" ? "Variation" : "Recent generation"} preview` : isBackgroundPreview ? backgroundPreviewLabel : selectedImageUrl ? "Generated image" : showingModelPreview ? "Model preview" : "Source image preview";
+  const previewPlaceholderLabel = isModelPreviewView ? (configuredModelPreview ? "MODEL PREVIEW" : "NO MODEL PREVIEW CONFIGURED") : isGalleryView ? "GALLERY VIEW" : isBackgroundPreview ? (effectiveBackgroundPreviewMode === "after" ? "GENERATE A BACKGROUND" : effectiveBackgroundPreviewMode === "mask" ? "MASK VIEW" : "UPLOAD SOURCE IMAGE") : isPreviewLoading ? (previewStatus ?? "CREATING PREVIEW") : genericPreviewLabel;
+  const previewIsGenerated = isGalleryView ? true : isModelPreviewView ? false : isBackgroundPreview ? Boolean(selectedImageUrl) && effectiveBackgroundPreviewMode === "after" : generated;
   const openDisplayedImage = () => {
     if (!displayedImageUrl) return;
     const candidates = isGalleryView ? galleryImages : selectedRecentUrl ? recentPreviewUrls : variationSources;
@@ -305,36 +306,36 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
     if (variationSources.length > 0) selectGalleryImage(variationSources, 0, "variation");
     else if (recentPreviewUrls.length > 0) selectGalleryImage(recentPreviewUrls, 0, "recent");
   };
-  const downloadImage = async () => {
-    if (!displayedImageUrl) return;
+  const downloadImage = async (imageUrl = displayedImageUrl) => {
+    if (!imageUrl) return;
 
     try {
-      const response = await fetch(displayedImageUrl);
+      const response = await fetch(imageUrl);
       if (!response.ok) throw new Error("Image download failed");
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = `eos-generated-image.${getImageExtension(blob, displayedImageUrl, imageMimeTypes[displayedImageUrl])}`;
+      link.download = `eos-generated-image.${getImageExtension(blob, imageUrl, imageMimeTypes[imageUrl])}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch {
-      openDisplayedImage();
+      window.open(imageUrl, "_blank", "noopener,noreferrer");
     }
   };
   return <section className={cx("gen-panel", "gen-preview-panel")}>
     {unavailableImageUrls.size > 0 && <div className={cx("gen-gallery-status")} role="status">Some images could not load. <button type="button" className={cx("gen-inline-action")} onClick={retryFailedImages}>Retry images</button></div>}
     <div className={cx("gen-panel-title")}><h2>PREVIEW</h2>{previewStatus ? <span className={cx("gen-generation-status", "gen-preview-status")} role="status" aria-live="polite"><span key={generationStatus}>{previewStatus}</span></span> : null}</div>
     {isBackgroundPreview && isBackgroundMaskEditing && <div className={cx("gen-mask-edit-heading")}><div><h3>REFINE MASK</h3><p>Paint or lasso the area to remove. White removes; black keeps.</p></div><button type="button" className={cx("gen-inline-action")} onClick={resetMask} disabled={!backgroundMask}><Trash2 size={12} /> Reset mask</button></div>}
-    {isExtendPreview ? <ExtendPreview key={imageRetryKey} sourceImage={sourceImage} resultImage={displayedImageUrl} modelPreviewUrl={configuredModelPreview} aspectRatio={previewRatio} direction={extendDirection} amount={extendAmount} isFavorite={isFavorite} isLoading={isPreviewLoading} placeholderLabel={isPreviewLoading ? (previewStatus ?? "CREATING PREVIEW") : genericPreviewLabel} onDownload={() => void downloadImage()} onToggleFavorite={() => setIsFavorite((favorite) => !favorite)} onOpenImage={openDisplayedImage} onImageError={() => displayedImageUrl && markImageUnavailable(displayedImageUrl)} /> : <PreviewSurface key={imageRetryKey} image={previewImage} alt={previewImageLabel} placeholderLabel={previewPlaceholderLabel} isLoading={isPreviewLoading} generated={previewIsGenerated} actionAvailable={Boolean(displayedImageUrl) && !isBackgroundMaskEditing && !showingModelPreview} isFavorite={isFavorite} onDownload={() => void downloadImage()} onToggleFavorite={() => setIsFavorite((favorite) => !favorite)} onOpenImage={openDisplayedImage} onImageError={() => previewImage && markImageUnavailable(previewImage)} showActions={!isBackgroundMaskEditing && !showingModelPreview} className={cx(isBackgroundPreview && "is-background-preview", isBackgroundMaskEditing && "is-background-mask-editing")} backgroundColor={isBackgroundPreview && backgroundMode === "solid" && effectiveBackgroundPreviewMode === "after" && !isGalleryView ? backgroundColor : undefined}>
+    {isExtendPreview ? <ExtendPreview key={imageRetryKey} sourceImage={sourceImage} resultImage={isModelPreviewView ? null : displayedImageUrl} modelPreviewUrl={configuredModelPreview} aspectRatio={previewRatio} direction={extendDirection} amount={extendAmount} isFavorite={isFavorite} isLoading={isPreviewLoading} placeholderLabel={isPreviewLoading ? (previewStatus ?? "CREATING PREVIEW") : genericPreviewLabel} onDownload={() => void downloadImage()} onToggleFavorite={() => setIsFavorite((favorite) => !favorite)} onOpenImage={openDisplayedImage} onImageError={() => displayedImageUrl && markImageUnavailable(displayedImageUrl)} /> : <PreviewSurface key={imageRetryKey} image={previewImage} alt={previewImageLabel} placeholderLabel={previewPlaceholderLabel} isLoading={isPreviewLoading} generated={previewIsGenerated} actionAvailable={Boolean(displayedImageUrl) && !isBackgroundMaskEditing && !showingModelPreview} isFavorite={isFavorite} onDownload={() => void downloadImage()} onToggleFavorite={() => setIsFavorite((favorite) => !favorite)} onOpenImage={openDisplayedImage} onImageError={() => previewImage && markImageUnavailable(previewImage)} showActions={!isBackgroundMaskEditing && !showingModelPreview} className={cx(isBackgroundPreview && "is-background-preview", isBackgroundMaskEditing && "is-background-mask-editing")} backgroundColor={isBackgroundPreview && backgroundMode === "solid" && effectiveBackgroundPreviewMode === "after" && !isGalleryView && !isModelPreviewView ? backgroundColor : undefined}>
       {isBackgroundPreview && <div className={cx("gen-mask-editor-preview", !isBackgroundMaskEditing && "is-hidden")}><MaskEditor imageUrl={sourceImage} tool={maskTool} brushSize={brushSize} resetKey={maskResetKey} onMaskChange={onBackgroundMaskChange} /></div>}
       {isBackgroundPreview && !isBackgroundMaskEditing && effectiveBackgroundPreviewMode === "mask" && sourceImage && !backgroundMask && <div className={cx("gen-mask-preview-overlay")} aria-hidden="true"><span>MASK VIEW</span></div>}
       {isBackgroundPreview && effectiveBackgroundPreviewMode === "after" && backgroundTransparent && selectedImageUrl && <span className={cx("gen-transparency-badge")}>PNG TRANSPARENT</span>}
     </PreviewSurface>}
     {isBackgroundPreview && isBackgroundMaskEditing && <div className={cx("gen-mask-tools", "gen-preview-mask-tools")}><div className={cx("gen-mask-tool-tabs")} role="tablist" aria-label="Mask refinement tool"><button type="button" role="tab" aria-selected={maskTool === "brush"} className={cx(maskTool === "brush" && "is-selected")} onClick={() => onMaskToolChange("brush")}><Paintbrush size={13} /> Brush</button><button type="button" role="tab" aria-selected={maskTool === "lasso"} className={cx(maskTool === "lasso" && "is-selected")} onClick={() => onMaskToolChange("lasso")}><MousePointer2 size={13} /> Lasso</button><button type="button" role="tab" aria-selected={maskTool === "eraser"} className={cx(maskTool === "eraser" && "is-selected")} onClick={() => onMaskToolChange("eraser")}><Eraser size={13} /> Eraser</button></div><label className={cx("gen-brush-size")}><span>Size <b>{brushSize}px</b></span><input type="range" min="8" max="120" step="1" value={brushSize} onChange={(event) => onBrushSizeChange(Number(event.target.value))} aria-label="Brush size" disabled={maskTool === "lasso"} /></label></div>}
-    {hasGallery && <div className={cx("gen-preview-view-switch")} role="tablist" aria-label="Preview screen"><button type="button" role="tab" aria-selected={!isGalleryView} className={cx(!isGalleryView && "is-selected")} onClick={() => onPreviewDisplayModeChange("current")}>Current preview</button><button type="button" role="tab" aria-selected={isGalleryView} className={cx(isGalleryView && "is-selected")} onClick={showGalleryView}>Gallery view</button></div>}
+    <div className={cx("gen-preview-view-switch")} role="tablist" aria-label="Preview screen"><button type="button" role="tab" aria-selected={!isGalleryView && !isModelPreviewView} className={cx(!isGalleryView && !isModelPreviewView && "is-selected")} onClick={() => onPreviewDisplayModeChange("current")}>Current preview</button><button type="button" role="tab" aria-selected={isModelPreviewView} className={cx(isModelPreviewView && "is-selected")} onClick={() => onPreviewDisplayModeChange("model")}>Model preview</button><button type="button" role="tab" aria-selected={isGalleryView} className={cx(isGalleryView && "is-selected")} onClick={showGalleryView} disabled={!hasGallery}>Gallery view</button></div>
     <div className={cx("gen-gallery-grid")}>
       <div className={cx("gen-gallery-column")}>
         <div className={cx("gen-gallery-heading")}><h3>VARIATIONS</h3></div>
@@ -364,7 +365,7 @@ export function PreviewPanel({ activeTab, generated, generatedImageUrls, generat
         </div>
       </div>
     </div>
-    {isImagePopupOpen && popupImages[popupIndex] && <div className={cx("gen-image-popup")} role="dialog" aria-modal="true" aria-label="Generated image preview" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsImagePopupOpen(false); }}>{popupIndex > 0 && <button type="button" className={cx("gen-image-popup-nav", "gen-image-popup-prev")} onClick={() => setPopupIndex((index) => Math.max(0, index - 1))} aria-label="Previous image"><ChevronLeft size={28} /></button>}<div className={cx("gen-image-popup-content")}><button type="button" className={cx("gen-image-popup-close")} onClick={() => setIsImagePopupOpen(false)} aria-label="Close image preview"><X size={20} /></button><img src={popupImages[popupIndex]} alt="Expanded generated image" /></div>{popupIndex < popupImages.length - 1 && <button type="button" className={cx("gen-image-popup-nav", "gen-image-popup-next")} onClick={() => setPopupIndex((index) => Math.min(popupImages.length - 1, index + 1))} aria-label="Next image"><ChevronRight size={28} /></button>}</div>}
+    {isImagePopupOpen && popupImages[popupIndex] && <div className={cx("gen-image-popup")} role="dialog" aria-modal="true" aria-label="Generated image preview" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsImagePopupOpen(false); }}>{popupIndex > 0 && <button type="button" className={cx("gen-image-popup-nav", "gen-image-popup-prev")} onClick={() => setPopupIndex((index) => Math.max(0, index - 1))} aria-label="Previous image"><ChevronLeft size={28} /></button>}<div className={cx("gen-image-popup-content")}><button type="button" className={cx("gen-image-popup-close")} onClick={() => setIsImagePopupOpen(false)} aria-label="Close image preview"><X size={20} /></button><img src={popupImages[popupIndex]} alt="Expanded generated image" /><button type="button" className={cx("gen-image-popup-download")} onClick={() => void downloadImage(popupImages[popupIndex])} aria-label="Download image"><Download size={17} /> Download</button></div>{popupIndex < popupImages.length - 1 && <button type="button" className={cx("gen-image-popup-nav", "gen-image-popup-next")} onClick={() => setPopupIndex((index) => Math.min(popupImages.length - 1, index + 1))} aria-label="Next image"><ChevronRight size={28} /></button>}</div>}
     {isCompareOpen && selectedImageUrl && sourceImage && <div className={cx("gen-compare-popup")} role="dialog" aria-modal="true" aria-label="Compare original and generated image" onMouseDown={(event) => { if (event.target === event.currentTarget) setIsCompareOpen(false); }}><div className={cx("gen-compare-content")}><button type="button" className={cx("gen-image-popup-close")} onClick={() => setIsCompareOpen(false)} aria-label="Close comparison"><X size={20} /></button><div><span>ORIGINAL</span><img src={sourceImage} alt="Original source image" /></div><div><span>RESULT</span><img src={selectedImageUrl} alt="Generated result" /></div></div></div>}
   </section>;
 }

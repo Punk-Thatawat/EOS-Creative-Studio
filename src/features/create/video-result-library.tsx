@@ -15,8 +15,12 @@ type VideoResultLibraryProps = {
   currentSourceGenerationId?: string | null;
   selectedVideoUrl: string | null;
   refreshKey?: number;
+  view?: VideoPreviewView;
+  onViewChange?: (view: VideoPreviewView) => void;
   onVideoSelect: (url: string, view: "latest" | "library") => void;
 };
+
+export type VideoPreviewView = "latest" | "library" | "model";
 
 function historyVideoUrl(item: GenerationHistoryItem): string | null {
   const url = item.output?.find((output) => typeof output.url === "string" && output.url)?.url;
@@ -63,15 +67,20 @@ function VideoGalleryThumbnail({ url, playSize = 14 }: { url: string; playSize?:
   );
 }
 
-export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGenerationId, selectedVideoUrl, refreshKey = 0, onVideoSelect }: VideoResultLibraryProps) {
+export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGenerationId, selectedVideoUrl, refreshKey = 0, view: controlledView, onViewChange, onVideoSelect }: VideoResultLibraryProps) {
   const { t } = useLocale();
   const [items, setItems] = useState<Array<{ id: string; url: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"latest" | "library">("latest");
+  const [internalView, setInternalView] = useState<VideoPreviewView>("latest");
   const [externalRefreshKey, setExternalRefreshKey] = useState(0);
   const recentRowRef = useRef<HTMLDivElement | null>(null);
   const autoSelectedLatestRef = useRef<string | null>(null);
+  const view = controlledView ?? internalView;
+  const setView = (nextView: VideoPreviewView) => {
+    if (controlledView === undefined) setInternalView(nextView);
+    onViewChange?.(nextView);
+  };
 
   useEffect(() => {
     const refresh = () => setExternalRefreshKey((value) => value + 1);
@@ -145,6 +154,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
       <EosCutButton sourceGenerationId={selectedSourceGenerationId} />
       <div className={styles.previewViewTabs} role="tablist" aria-label={t("create.video.common.videoPreviewViews")}>
         <button type="button" role="tab" aria-selected={view === "latest"} className={view === "latest" ? styles.previewViewTabActive : undefined} onClick={selectLatest}>{t("create.video.common.latestResult")}</button>
+        <button type="button" role="tab" aria-selected={view === "model"} className={view === "model" ? styles.previewViewTabActive : undefined} onClick={() => setView("model")}>{t("create.video.common.modelPreview")}</button>
         <button type="button" role="tab" aria-selected={view === "library"} className={view === "library" ? styles.previewViewTabActive : undefined} onClick={() => setView("library")}>{t("create.video.common.videoLibrary")}</button>
       </div>
       <div className={styles.videoGalleryGrid}>

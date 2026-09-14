@@ -18,7 +18,7 @@ import {
   type TextVideoGenerationResponse,
   type TextVideoGenerationStatus,
 } from "@/lib/api/text-video-generations";
-import { VideoResultLibrary } from "./video-result-library";
+import { VideoResultLibrary, type VideoPreviewView } from "./video-result-library";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
@@ -310,6 +310,7 @@ export function TextToVideoWorkspace() {
   const [generationProgress, setGenerationProgress] = useState(0);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
+  const [previewView, setPreviewView] = useState<VideoPreviewView>("latest");
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
   const [isReferenceImageDragging, setIsReferenceImageDragging] = useState(false);
   const [isAudioDragging, setIsAudioDragging] = useState(false);
@@ -321,6 +322,13 @@ export function TextToVideoWorkspace() {
   const abortRef = useRef<AbortController | null>(null);
 
   const selectedModelOption = models.find((model) => model.model === selectedModel);
+  useEffect(() => {
+    if (!selectedModel) return;
+    const timeoutId = window.setTimeout(() => {
+      setPreviewView(selectedModelOption?.previewUrl ? "model" : "latest");
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedModel, selectedModelOption?.previewUrl]);
   const properties = schemaProperties(selectedModelOption);
   const requiredProperties = new Set(requiredSchemaParameters(selectedModelOption));
   const capabilities = selectedModelOption?.capabilities;
@@ -516,6 +524,7 @@ export function TextToVideoWorkspace() {
     setNotice(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setPreviewView("latest");
     setGenerationId(null);
     setGenerationProgress(0);
     setGenerationStatus("uploading");
@@ -607,6 +616,7 @@ export function TextToVideoWorkspace() {
   };
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
+  const previewVideoUrlForView = previewView === "model" ? null : displayedVideoUrl;
 
   const clearValues = () => {
     if (referenceImage?.startsWith("blob:")) URL.revokeObjectURL(referenceImage);
@@ -630,6 +640,7 @@ export function TextToVideoWorkspace() {
     setGenerationProgress(0);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setPreviewView("latest");
     setGenerationId(null);
     setGenerationError(null);
     setNotice(null);
@@ -716,23 +727,25 @@ export function TextToVideoWorkspace() {
                 <div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div>
                  <small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small>
               </div>
-            ) : displayedVideoUrl ? (
-               <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={styles.generatedVideoPlayer} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={t("create.video.common.generatedVideo")} />
-            ) : selectedModelOption?.previewUrl ? (
+            ) : previewView === "model" && selectedModelOption?.previewUrl ? (
               <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={styles.generatedVideoPlayer} frameClassName={styles.videoPreviewMediaFrame} />
+            ) : previewVideoUrlForView ? (
+               <EosVideoPlayer key={previewVideoUrlForView} src={previewVideoUrlForView} className={styles.generatedVideoPlayer} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={t("create.video.common.generatedVideo")} />
             ) : (
-              <VideoPreviewPlaceholder />
+              <VideoPreviewPlaceholder showActions={false} />
             )}
-            {displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}
+            {previewVideoUrlForView ? <VideoPreviewOverlayActions videoUrl={previewVideoUrlForView} /> : null}
           </div>
         </section>
         <VideoResultLibrary
           feature="text-to-video"
           currentVideoUrl={finalVideoUrl}
           currentSourceGenerationId={generationId}
-          selectedVideoUrl={displayedVideoUrl}
+          selectedVideoUrl={previewVideoUrlForView}
           refreshKey={libraryRefreshKey}
-          onVideoSelect={(url) => setPreviewVideoUrl(url)}
+          view={previewView}
+          onViewChange={setPreviewView}
+          onVideoSelect={(url, view) => { setPreviewVideoUrl(url); setPreviewView(view); }}
         />
       </div>
       <aside className={styles.settings}>

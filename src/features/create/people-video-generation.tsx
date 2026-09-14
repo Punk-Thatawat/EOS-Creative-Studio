@@ -23,7 +23,7 @@ import {
   type LipsyncGenerationResponse,
   type LipsyncGenerationStatus,
 } from "@/lib/api/lipsync-generations";
-import { VideoResultLibrary } from "./video-result-library";
+import { VideoResultLibrary, type VideoPreviewView } from "./video-result-library";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
@@ -307,6 +307,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
+  const [previewView, setPreviewView] = useState<VideoPreviewView>("latest");
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
   const [isSourcePersonDragging, setIsSourcePersonDragging] = useState(false);
   const [isAudioDragging, setIsAudioDragging] = useState(false);
@@ -318,6 +319,13 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const audioUploadAbortRef = useRef<AbortController | null>(null);
 
   const selectedModelOption = models.find((model) => model.model === selectedModel);
+  useEffect(() => {
+    if (!selectedModel) return;
+    const timeoutId = window.setTimeout(() => {
+      setPreviewView(selectedModelOption?.previewUrl ? "model" : "latest");
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedModel, selectedModelOption?.previewUrl]);
   const properties = peopleSchemaProperties(selectedModelOption);
   const requiredProperties = new Set(peopleRequiredProperties(selectedModelOption));
   const durationProperty = peopleFindProperty(properties, ["duration", "duration_seconds", "durationSeconds"]);
@@ -598,6 +606,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     setGenerationError(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setPreviewView("latest");
     setGenerationId(null);
     setGenerationProgress(0);
     setGenerationStatus("uploading");
@@ -684,6 +693,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   };
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
+  const previewVideoUrlForView = previewView === "model" ? null : displayedVideoUrl;
   const clearValues = () => {
     sourceUploadAbortRef.current?.abort();
     audioUploadAbortRef.current?.abort();
@@ -708,6 +718,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     setGenerationError(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setPreviewView("latest");
     setGenerationId(null);
   };
   useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
@@ -822,23 +833,25 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
                 <div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div>
                 <small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small>
               </div>
-            ) : displayedVideoUrl ? (
-              <EosVideoPlayer key={displayedVideoUrl} src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={`${t("create.video.common.generatedVideo")} ${workspaceLabel}`} />
-            ) : selectedModelOption?.previewUrl ? (
+            ) : previewView === "model" && selectedModelOption?.previewUrl ? (
               <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} />
+            ) : previewVideoUrlForView ? (
+              <EosVideoPlayer key={previewVideoUrlForView} src={previewVideoUrlForView} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={`${t("create.video.common.generatedVideo")} ${workspaceLabel}`} />
             ) : (
-              <VideoPreviewPlaceholder />
+              <VideoPreviewPlaceholder showActions={false} />
             )}
-            {displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}
+            {previewVideoUrlForView ? <VideoPreviewOverlayActions videoUrl={previewVideoUrlForView} /> : null}
           </div>
         </section>
         <VideoResultLibrary
           feature={workspaceFeature}
           currentVideoUrl={finalVideoUrl}
           currentSourceGenerationId={generationId}
-          selectedVideoUrl={displayedVideoUrl}
+          selectedVideoUrl={previewVideoUrlForView}
           refreshKey={libraryRefreshKey}
-          onVideoSelect={(url) => setPreviewVideoUrl(url)}
+          view={previewView}
+          onViewChange={setPreviewView}
+          onVideoSelect={(url, view) => { setPreviewVideoUrl(url); setPreviewView(view); }}
         />
       </div>
       <aside className={styles.settings}>

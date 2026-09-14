@@ -483,6 +483,52 @@ function findStoryboardGridGaps(
   return gaps;
 }
 
+function findStoryboardGridPeaks(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  axis: "x" | "y",
+  parts: number,
+): AxisGap[] {
+  const length = axis === "x" ? width : height;
+  const otherLength = axis === "x" ? height : width;
+  const sampleStep = Math.max(1, Math.floor(otherLength / 64));
+  const scores = Array.from({ length }, (_, coordinate) => {
+    let lightPixels = 0;
+    let samples = 0;
+    for (let other = 0; other < otherLength; other += sampleStep) {
+      const x = axis === "x" ? coordinate : other;
+      const y = axis === "x" ? other : coordinate;
+      const offset = (y * width + x) * 4;
+      const alpha = pixels[offset + 3];
+      const isWhite = pixels[offset] > 245 && pixels[offset + 1] > 245 && pixels[offset + 2] > 245;
+      if (alpha < 16 || isWhite) lightPixels += 1;
+      samples += 1;
+    }
+    return samples > 0 ? lightPixels / samples : 0;
+  });
+  const searchRadius = Math.max(12, Math.round(length * 0.12));
+  const minimumSeparatorScore = 0.72;
+  const gaps: AxisGap[] = [];
+  for (let part = 1; part < parts; part += 1) {
+    const expected = Math.round((length * part) / parts);
+    const searchStart = Math.max(1, expected - searchRadius);
+    const searchEnd = Math.min(length - 1, expected + searchRadius);
+    let bestIndex = -1;
+    let bestScore = 0;
+    for (let coordinate = searchStart; coordinate <= searchEnd; coordinate += 1) {
+      if (scores[coordinate] > bestScore) {
+        bestIndex = coordinate;
+        bestScore = scores[coordinate];
+      }
+    }
+    if (bestIndex >= 0 && bestScore >= minimumSeparatorScore) {
+      gaps.push({ start: bestIndex, end: bestIndex + 1 });
+    }
+  }
+  return gaps;
+}
+
 function axisCells(length: number, gaps: AxisGap[]): Array<{ start: number; end: number }> {
   if (gaps.length === 0) return [{ start: 0, end: length }];
   const cells: Array<{ start: number; end: number }> = [];
@@ -588,6 +634,20 @@ async function splitStoryboardSheet(file: File, maxScenes = HARD_MAX_STORYBOARD_
       const gridGapsY = findStoryboardGridGaps(pixels, canvas.width, canvas.height, "y", rows);
       if (gridGapsX.length === columns - 1) detectedColumns = axisCells(canvas.width, gridGapsX);
       if (gridGapsY.length === rows - 1) detectedRows = axisCells(canvas.height, gridGapsY);
+    }
+    // Some generated 3x3 sheets use one-pixel white gutters. They are too
+    // narrow for the regular run detector, so recover them from bright peaks
+    // at the expected thirds only when both axes clearly contain separators.
+    if (cellCount === 1 && canvas.width / canvas.height >= 1.4 && canvas.width / canvas.height <= 2.6) {
+      const gridPeaksX = findStoryboardGridPeaks(pixels, canvas.width, canvas.height, "x", 3);
+      const gridPeaksY = findStoryboardGridPeaks(pixels, canvas.width, canvas.height, "y", 3);
+      if (gridPeaksX.length === 2 && gridPeaksY.length === 2) {
+        detectedColumns = axisCells(canvas.width, gridPeaksX);
+        detectedRows = axisCells(canvas.height, gridPeaksY);
+        columns = 3;
+        rows = 3;
+        cellCount = 9;
+      }
     }
     // A single full-frame image is also a valid one-scene storyboard. Keep
     // the same crop/zoom pipeline while allowing a one-panel test or upload.
@@ -947,7 +1007,7 @@ export function VideoGenerationPage() {
     ratio: string | null;
   }>({ mediaKey: null, ratio: null });
   const [latestCompletedStoryboardId, setLatestCompletedStoryboardId] = useState<string | null>(null);
-  const [previewView, setPreviewView] = useState<"latest" | "library">("latest");
+  const [previewView, setPreviewView] = useState<"latest" | "library" | "model">("latest");
   const [videoLibraryIndex, setVideoLibraryIndex] = useState(0);
   const [isVideoFavorite, setIsVideoFavorite] = useState(false);
   const videoRecentRowRef = useRef<HTMLDivElement>(null);
@@ -1027,6 +1087,13 @@ export function VideoGenerationPage() {
     ? `${value}\n\n${referenceRolePrompt}`
     : value;
   const selectedModelOption = models.find((model) => model.model === selectedModel);
+  useEffect(() => {
+    if (!selectedModel) return;
+    const timeoutId = window.setTimeout(() => {
+      setPreviewView(selectedModelOption?.previewUrl ? "model" : "latest");
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedModel, selectedModelOption?.previewUrl]);
   useEffect(() => {
     selectedModelOptionRef.current = selectedModelOption;
   }, [selectedModelOption]);
@@ -2217,7 +2284,11 @@ export function VideoGenerationPage() {
   const safeVideoLibraryIndex = Math.min(videoLibraryIndex, Math.max(videoHistory.length - 1, 0));
   const galleryVideoUrl = videoHistory[safeVideoLibraryIndex]?.finalVideoUrl ?? null;
   const latestVideoUrl = finalVideoUrl ?? videoHistory[0]?.finalVideoUrl ?? null;
-  const displayedVideoUrl = previewView === "library" ? galleryVideoUrl ?? latestVideoUrl : latestVideoUrl;
+  const displayedVideoUrl = previewView === "library"
+    ? galleryVideoUrl ?? latestVideoUrl
+    : previewView === "model"
+      ? null
+      : latestVideoUrl;
   const previewMediaKey = displayedVideoUrl ?? selectedModelOption?.previewUrl ?? null;
   const detectedPreviewMediaAspectRatio = previewMediaAspectRatioState.mediaKey === previewMediaKey
     ? previewMediaAspectRatioState.ratio
@@ -2840,6 +2911,16 @@ export function VideoGenerationPage() {
                           : t("create.video.common.scenesComplete", { completed: generationProgress.completed, total: generationProgress.total || generationScenes.length })}</small>
                     </div>
                   </div>
+                ) : previewView === "model" && selectedModelOption?.previewUrl ? (
+                  <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
+                    <ModelPreviewMedia
+                      url={selectedModelOption.previewUrl}
+                      type={selectedModelOption.previewType}
+                      alt={`${selectedModelOption.displayName} model preview`}
+                      className={styles.generatedVideoPlayer}
+                      onAspectRatioChange={handlePreviewAspectRatioChange}
+                    />
+                  </div>
                 ) : displayedVideoUrl ? (
                   <EosVideoPlayer
                     key={displayedVideoUrl}
@@ -2850,16 +2931,6 @@ export function VideoGenerationPage() {
                     onAspectRatioChange={handlePreviewAspectRatioChange}
                     ariaLabel={t("create.video.common.generatedVideo")}
                   />
-                ) : selectedModelOption?.previewUrl ? (
-                  <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
-                    <ModelPreviewMedia
-                      url={selectedModelOption.previewUrl}
-                      type={selectedModelOption.previewType}
-                      alt={`${selectedModelOption.displayName} model preview`}
-                      className={styles.generatedVideoPlayer}
-                      onAspectRatioChange={handlePreviewAspectRatioChange}
-                    />
-                  </div>
                 ) : (
                   <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
                     <VideoPreviewPlaceholder showActions={false} />
@@ -2897,6 +2968,15 @@ export function VideoGenerationPage() {
                       onClick={() => setPreviewView("latest")}
                     >
                       {t("create.video.common.latestResult")}
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={previewView === "model"}
+                      className={previewView === "model" ? styles.previewViewTabActive : undefined}
+                      onClick={() => setPreviewView("model")}
+                    >
+                      {t("create.video.common.modelPreview")}
                     </button>
                     <button
                       type="button"

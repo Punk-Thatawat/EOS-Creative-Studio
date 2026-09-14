@@ -117,7 +117,7 @@ export function ImageGenerationPage() {
   const activeGenerated = isTextToImageTab ? state.generated : isImageToImageTab ? state.imageToImageGenerated : isStyleTransferTab ? state.styleTransferGenerated : isBackgroundTab ? state.backgroundGenerated : isUpscaleTab ? state.upscaleGenerated : isExtendTab ? state.extendGenerated : false;
   const activeGeneratedUrls = isTextToImageTab ? state.generatedImageUrls : isImageToImageTab ? state.imageToImageUrls : isStyleTransferTab ? state.styleTransferUrls : isBackgroundTab ? state.backgroundUrls : isUpscaleTab ? state.upscaleUrls : isExtendTab ? state.extendUrls : [];
     const optionsFollowModel = Boolean(selectedModel);
-  const [previewDisplayMode, setPreviewDisplayMode] = useState<"current" | "gallery">("current");
+  const [previewDisplayMode, setPreviewDisplayMode] = useState<"current" | "gallery" | "model">("current");
   const activeOutputKey = JSON.stringify([state.activeTab, activeGeneratedUrls]);
   const [observedOutput, setObservedOutput] = useState({ key: activeOutputKey, status: activeGenerationStatus });
   if (observedOutput.key !== activeOutputKey || observedOutput.status !== activeGenerationStatus) {
@@ -286,7 +286,7 @@ export function ImageGenerationPage() {
         selectedRecentImageUrl={state.selectedRecentImageUrl}
         selectedVariation={state.selectedVariation}
         previewDisplayMode={previewDisplayMode}
-        onPreviewDisplayModeChange={(mode) => { if (mode === "current") state.clearRecentSelection(); setPreviewDisplayMode(mode); }}
+        onPreviewDisplayModeChange={(mode) => { if (mode !== "gallery") state.clearRecentSelection(); setPreviewDisplayMode(mode); }}
         sourceImage={state.sourceImage}
         previewRatio={state.ratio}
         modelPreviewUrl={selectedModelOption?.previewUrl ?? null}
@@ -340,7 +340,7 @@ export function ImageGenerationPage() {
         onCountChange={state.setCount}
         onGenerate={generateCurrentTab}
         onImageSizeToggle={state.toggleImageSize}
-        onModelChange={(model) => { state.clearRecentSelection(); setPreviewDisplayMode("current"); state.setOutputFormat(null); if (isImageToImageTab) state.setSelectedImageToImageModel(model); else if (isStyleTransferTab) state.setSelectedStyleTransferModel(model); else if (isBackgroundTab) state.setSelectedBackgroundModel(model); else if (isUpscaleTab) state.setSelectedUpscaleModel(model); else if (isExtendTab) state.setSelectedExtendModel(model); else state.setSelectedModel(model); }}
+        onModelChange={(model) => { state.clearRecentSelection(); const nextModel = state.activeModelOptions.find((item) => item.model === model); setPreviewDisplayMode(nextModel?.previewType === "image" && Boolean(nextModel.previewUrl) ? "model" : "current"); state.setOutputFormat(null); if (isImageToImageTab) state.setSelectedImageToImageModel(model); else if (isStyleTransferTab) state.setSelectedStyleTransferModel(model); else if (isBackgroundTab) state.setSelectedBackgroundModel(model); else if (isUpscaleTab) state.setSelectedUpscaleModel(model); else if (isExtendTab) state.setSelectedExtendModel(model); else state.setSelectedModel(model); }}
         onQualityChange={state.setQuality}
         onOutputFormatChange={state.setOutputFormat}
         onResolutionChange={state.setResolution}

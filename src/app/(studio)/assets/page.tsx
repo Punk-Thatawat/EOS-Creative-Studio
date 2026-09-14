@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   Download,
   FileText,
   Folder,
@@ -608,6 +609,7 @@ export default function AssetsPage() {
           className="assets-universe-full-art"
         />
       </section>
+      <div className="assets-retention-notice" role="note"><Clock3 size={16} aria-hidden="true" /><span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span></div>
 
       <section className="assets-library" aria-label={`${activeTab} asset library`}>
         <div className="assets-toolbar">

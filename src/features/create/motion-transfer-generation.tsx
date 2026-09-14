@@ -17,7 +17,7 @@ import {
   type MotionTransferGenerationResponse,
   type MotionTransferGenerationStatus,
 } from "@/lib/api/motion-transfer-generations";
-import { VideoResultLibrary } from "./video-result-library";
+import { VideoResultLibrary, type VideoPreviewView } from "./video-result-library";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { emitGenerationStarted } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
@@ -206,6 +206,7 @@ export function MotionTransferWorkspace() {
   const [notice, setNotice] = useState<string | null>(null);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
+  const [previewView, setPreviewView] = useState<VideoPreviewView>("latest");
   const [libraryRefreshKey, setLibraryRefreshKey] = useState(0);
   const [isSourceImageDragging, setIsSourceImageDragging] = useState(false);
   const [isMotionVideoDragging, setIsMotionVideoDragging] = useState(false);
@@ -215,6 +216,13 @@ export function MotionTransferWorkspace() {
   const abortRef = useRef<AbortController | null>(null);
 
   const selectedModelOption = models.find((model) => model.model === selectedModel);
+  useEffect(() => {
+    if (!selectedModel) return;
+    const timeoutId = window.setTimeout(() => {
+      setPreviewView(selectedModelOption?.previewUrl ? "model" : "latest");
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedModel, selectedModelOption?.previewUrl]);
   const properties = motionSchemaProperties(selectedModelOption);
   const requiredProperties = new Set(motionRequiredProperties(selectedModelOption));
   const qualityProperty = motionFindProperty(properties, ["quality", "outputQuality", "output_quality"]);
@@ -341,6 +349,7 @@ export function MotionTransferWorkspace() {
     setNotice(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setPreviewView("latest");
     setGenerationId(null);
     setGenerationProgress(0);
     setGenerationStatus("uploading");
@@ -401,6 +410,7 @@ export function MotionTransferWorkspace() {
   };
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
+  const previewVideoUrlForView = previewView === "model" ? null : displayedVideoUrl;
   useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
     setPrompt(p);if(s.quality!==undefined)setQualityValue(s.quality);
     if(s.characterOrientation!==undefined)setOrientationValue(s.characterOrientation);
@@ -439,6 +449,7 @@ export function MotionTransferWorkspace() {
     setNotice(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
+    setPreviewView("latest");
     setGenerationId(null);
   };
 
@@ -482,9 +493,9 @@ export function MotionTransferWorkspace() {
       </div>
       <div className={styles.centerColumn}>
         <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
-           <div className={styles.videoPreview}><VideoPreviewLiveBadge />{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><WandSparkles size={26} /><strong>{generationStatus === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong><span>{notice ?? t("create.video.motion.generatingNotice")}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div><small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small></div> : displayedVideoUrl ? <EosVideoPlayer src={displayedVideoUrl} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={t("create.video.common.generatedVideo")} /> : selectedModelOption?.previewUrl ? <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} /> : <VideoPreviewPlaceholder />}{displayedVideoUrl ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}</div>
+           <div className={styles.videoPreview}><VideoPreviewLiveBadge />{isGenerating ? <div className={styles.videoGeneratingPreview} aria-busy="true"><WandSparkles size={26} /><strong>{generationStatus === "uploading" ? t("create.video.common.preparingVideo") : t("create.video.common.generatingVideo")}</strong><span>{notice ?? t("create.video.motion.generatingNotice")}</span><div className={styles.videoGenerationProgress}><i style={{ width: `${generationProgress || 12}%` }} /></div><small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small></div> : previewView === "model" && selectedModelOption?.previewUrl ? <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} /> : previewVideoUrlForView ? <EosVideoPlayer src={previewVideoUrlForView} className={`${styles.generatedVideoPlayer} ${styles.motionGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={t("create.video.common.generatedVideo")} /> : <VideoPreviewPlaceholder showActions={false} />}{previewVideoUrlForView ? <VideoPreviewOverlayActions videoUrl={previewVideoUrlForView} /> : null}</div>
         </section>
-        <VideoResultLibrary feature="motion-transfer" currentVideoUrl={finalVideoUrl} currentSourceGenerationId={generationId} selectedVideoUrl={displayedVideoUrl} refreshKey={libraryRefreshKey} onVideoSelect={(url) => setPreviewVideoUrl(url)} />
+        <VideoResultLibrary feature="motion-transfer" currentVideoUrl={finalVideoUrl} currentSourceGenerationId={generationId} selectedVideoUrl={previewVideoUrlForView} refreshKey={libraryRefreshKey} view={previewView} onViewChange={setPreviewView} onVideoSelect={(url, view) => { setPreviewVideoUrl(url); setPreviewView(view); }} />
       </div>
       <aside className={styles.settings}>
          <MotionSectionTitle number={settingsStep}>{t("create.video.common.settings")}</MotionSectionTitle>
