@@ -157,8 +157,6 @@ function videoModeRouteFeature(mode: GenerationMode): string {
   return mode === "image-to-video" ? "image-to-video" : `image-to-video:${mode}`;
 }
 
-const imageToVideoModel = "bytedance/seedance-v1-pro-fast/image-to-video";
-
 function isSingleSceneGenerationMode(mode: GenerationMode): boolean {
   return mode === "image-to-video" || mode === "reference-to-video";
 }
@@ -1415,7 +1413,7 @@ export function VideoGenerationPage() {
         listGenerationModels("extend-video").catch(() => [] as GenerationModelOption[]),
       ])
         .then(([items, extendItems]) => {
-          const eligible = items.filter((item) => item.model === imageToVideoModel && item.enabled && item.capabilities.promptParameter && (
+          const eligible = items.filter((item) => item.enabled && item.capabilities.promptParameter && (
             item.capabilities.imageParameter || item.capabilities.referenceImagesParameter
           ));
           if (!active) return;
@@ -1942,7 +1940,10 @@ export function VideoGenerationPage() {
     : isSingleSceneGenerationMode(generationMode)
       ? storyboardScenes.slice(0, 1)
       : storyboardScenes;
-  const shouldAutoUpscaleStoryboard = generationMode === "single-image" && Boolean(storyboardQualityNote) && generationScenes.length > 0;
+  // Single-storyboard uploads always go through the 2K upscale stage before
+  // video generation. This is intentional even when the source image is
+  // already large enough, so every panel gets the same quality treatment.
+  const shouldAutoUpscaleStoryboard = generationMode === "single-image" && generationScenes.length > 0;
   const requestModelParams = modelParamsForGeneration(modelParams, { omitSeed: true });
   const creditQuoteInput: Omit<VideoGenerationInput, "idempotencyKey"> | null = (() => {
     if (activeVideoTab !== "image-to-video" || !selectedModelOption || generationScenes.length === 0) return null;
