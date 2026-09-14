@@ -9,6 +9,7 @@ import { CloudUpload, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { promptMaxLength } from "@/lib/prompt-limits";
 import { uploadImageAsset } from "@/lib/api/storage";
 import {
   createMotionTransferGeneration,
@@ -479,11 +480,11 @@ export function MotionTransferWorkspace() {
                 <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
               </div>
               <label className={styles.videoPromptInputLabel}>
-                 <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.motion.promptPlaceholder")} maxLength={2000} />
+                 <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.motion.promptPlaceholder")} maxLength={promptMaxLength} />
               </label>
               <div className={styles.videoPromptMeta}>
-                 <span>{t("create.video.common.maximumCharacters", { count: 2000 })}</span>
-                <span>{prompt.length.toLocaleString()} / 2,000</span>
+                 <span>{t("create.video.common.maximumCharacters", { count: promptMaxLength })}</span>
+                <span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span>
               </div>
              </> : <MotionSectionTitle number="3">{t("create.video.common.motionGuidance")}</MotionSectionTitle>}
             {promptSupported ? <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /> : null}

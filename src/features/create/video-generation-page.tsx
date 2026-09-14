@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { useModelCatalogRefresh } from "@/lib/use-model-catalog-refresh";
+import { promptMaxLength } from "@/lib/prompt-limits";
 import { Dropdown } from "@/components/ui/dropdown";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
@@ -159,6 +160,10 @@ function videoModeRouteFeature(mode: GenerationMode): string {
 
 function isSingleSceneGenerationMode(mode: GenerationMode): boolean {
   return mode === "image-to-video" || mode === "reference-to-video";
+}
+
+function isStorylinePromptMode(mode: GenerationMode): boolean {
+  return mode === "single-image" || mode === "multi-scene";
 }
 
 const sceneSourceOptions = [
@@ -1084,6 +1089,11 @@ export function VideoGenerationPage() {
   const promptWithReferenceRoles = (value: string) => (generationMode === "reference-to-video" || generationMode === "single-image") && referenceRolePrompt
     ? `${value}\n\n${referenceRolePrompt}`
     : value;
+  const promptForSceneGeneration = (value: string) => {
+    const scenePromptValue = value.trim();
+    if (!isStorylinePromptMode(generationMode) || !prompt.trim()) return promptWithReferenceRoles(scenePromptValue);
+    return promptWithReferenceRoles(`Main storyline:\n${prompt.trim()}\n\nScene direction:\n${scenePromptValue}`);
+  };
   const selectedModelOption = models.find((model) => model.model === selectedModel);
   useEffect(() => {
     if (!selectedModel) return;
@@ -1563,7 +1573,6 @@ export function VideoGenerationPage() {
         : null);
       setStoryboardScenes((current) => {
         const firstScene = current[0];
-        const sharedPrompt = prompt.trim() || firstScene?.prompt || "";
         const sharedDuration = firstScene?.duration || duration;
         const sharedModelParams = firstScene?.modelParams ?? modelParams;
         return slices.map((slice, index) => ({
@@ -1572,7 +1581,7 @@ export function VideoGenerationPage() {
           imageFile: slice.file,
           endImage: null,
           endImageFile: null,
-          prompt: sharedPrompt,
+          prompt: "",
           duration: sharedDuration,
           ...(sceneAspectRatios[index] ? { aspectRatio: sceneAspectRatios[index] } : {}),
           startFrameSource: "manual" as const,
@@ -1591,7 +1600,7 @@ export function VideoGenerationPage() {
     } finally {
       if (storyboardSplitRequestRef.current === requestId) setStoryboardSplitting(false);
     }
-  }, [duration, maxStoryboardScenes, modelParams, prompt, t]);
+  }, [duration, maxStoryboardScenes, modelParams, t]);
   useEffect(() => {
     if (generationMode !== "single-image") {
       storyboardSplitRequestRef.current += 1;
@@ -1868,7 +1877,18 @@ export function VideoGenerationPage() {
     setModelsError(null);
     setModelsLoading(true);
     setActiveSceneIndex(0);
-    if (nextMode !== "single-image" && storyboardSheetFile) {
+    if (nextMode === "multi-scene") {
+      if (sourceImage?.startsWith("blob:")) URL.revokeObjectURL(sourceImage);
+      setSourceImage(null);
+      setStoryboardScenes([]);
+      setStoryboardSheetFile(null);
+      setStoryboardSlices([]);
+      setStoryboardSlicesSourceFile(null);
+      setStoryboardGridLabel(null);
+      setStoryboardQualityNote(null);
+      setStoryboardSplitting(false);
+      clearDetectedAspectRatio();
+    } else if (nextMode !== "single-image" && storyboardSheetFile) {
       const originalSheet = storyboardSheetFile;
       setStoryboardScenes((current) => [{
         ...(current[0] ?? {
@@ -1893,7 +1913,19 @@ export function VideoGenerationPage() {
       setStoryboardSlicesSourceFile(null);
       setStoryboardGridLabel(null);
     }
-    if (isSingleSceneGenerationMode(nextMode)) {
+    if (nextMode !== "multi-scene" && storyboardScenes.length === 0) {
+      setStoryboardScenes([{
+        id: "scene-1",
+        image: null,
+        imageFile: null,
+        endImage: null,
+        endImageFile: null,
+        prompt: nextMode === "single-image" || isSingleSceneGenerationMode(nextMode) ? prompt : "",
+        duration,
+        startFrameSource: "manual",
+        modelParams,
+      }]);
+    } else if (isSingleSceneGenerationMode(nextMode)) {
       setStoryboardScenes((current) => current.slice(0, 1));
     }
     const nextVideoMode = nextMode === "continuous" ? "continuous" : "storyboard";
@@ -1955,7 +1987,7 @@ export function VideoGenerationPage() {
           : scene.startFrameSource;
       const sceneInput: VideoGenerationInput["scenes"][number] = {
         startFrameSource,
-        prompt: promptWithReferenceRoles(scene.prompt.trim() || prompt.trim() || "Video generation"),
+        prompt: promptForSceneGeneration(scene.prompt.trim() || prompt.trim() || "Video generation"),
       };
       if (startFrameSource === "manual" && scene.image && !scene.image.startsWith("blob:")) sceneInput.storyboardImage = scene.image;
       if ((generationMode === "reference-to-video" || generationMode === "single-image") && referenceImageUrls.length > 0) {
@@ -2045,9 +2077,13 @@ export function VideoGenerationPage() {
       ? t("create.video.common.pricingUnavailable")
       : `${totalCreditEstimate.toLocaleString("th-TH", { maximumFractionDigits: 2 })} ${t("create.video.common.creditsWord")}`;
   const firstScene = storyboardScenes[0];
-  const firstSceneHasPrompt = Boolean(firstScene?.prompt.trim() || prompt.trim());
+  const firstSceneHasPrompt = isStorylinePromptMode(generationMode)
+    ? Boolean(firstScene?.prompt.trim())
+    : Boolean(firstScene?.prompt.trim() || prompt.trim());
   const sceneLimitReached = storyboardScenes.length >= maxStoryboardScenes;
-  const canAddScene = generationMode !== "single-image"
+  const canAddScene = generationMode === "multi-scene" && storyboardScenes.length === 0
+    ? true
+    : generationMode !== "single-image"
     && !isSingleSceneGenerationMode(generationMode)
     && !sceneLimitReached
     && Boolean(firstScene?.image && firstSceneHasPrompt);
@@ -2166,7 +2202,7 @@ export function VideoGenerationPage() {
     } else {
       setStoryboardScenes((current) => current.map((scene, index) => index === editingSceneIndex ? nextScene : scene));
       setActiveSceneIndex(editingSceneIndex);
-      if (editingSceneIndex === 0) setPrompt(nextScene.prompt);
+      if (editingSceneIndex === 0 && !isStorylinePromptMode(generationMode)) setPrompt(nextScene.prompt);
     }
     setIsSceneModalOpen(false);
     setEditingSceneIndex(null);
@@ -2266,8 +2302,10 @@ export function VideoGenerationPage() {
             ? t("create.video.common.uploadStoryboardImage")
             : generationMode === "single-image" && storyboardSplitting
               ? t("create.video.common.preparingStoryboard")
-              : generationMode === "single-image" && !hasCurrentStoryboardSlices
-                ? t("create.video.common.preparingStoryboardFromImage")
+                : generationMode === "single-image" && !hasCurrentStoryboardSlices
+                  ? t("create.video.common.preparingStoryboardFromImage")
+                : generationMode === "multi-scene" && generationScenes.length === 0
+                  ? t("create.video.common.addFirstScene")
                 : !prompt.trim()
                   ? t("create.video.common.addPrompt")
                   : !storyboardReady
@@ -2350,6 +2388,10 @@ export function VideoGenerationPage() {
       setGenerationError(t("create.video.common.preparingStoryboardFromImage"));
       return;
     }
+    if (generationMode === "multi-scene" && generationScenes.length === 0) {
+      setGenerationError(t("create.video.common.addFirstScene"));
+      return;
+    }
     const missingRequiredParam = settingsModelParameterEntries.find(([name]) => {
       if (!requiredProperties.has(name)) return false;
       const value = modelParams[name];
@@ -2418,7 +2460,7 @@ export function VideoGenerationPage() {
       const scenes = generationScenes.map((scene, index) => {
         const sceneInput: VideoGenerationInput["scenes"][number] = {
           startFrameSource: sceneSources[index],
-          prompt: promptWithReferenceRoles(scene.prompt.trim()),
+          prompt: promptForSceneGeneration(scene.prompt.trim()),
         };
         if (sceneSources[index] === "manual" && uploadedImages[index]) sceneInput.storyboardImage = uploadedImages[index];
         if (generationMode === "reference-to-video") {
@@ -2554,7 +2596,7 @@ export function VideoGenerationPage() {
     if(typeof s.aspectRatio==='string')setAspectRatio(s.aspectRatio);
     const image=typeof s.sourceImage==='string'?s.sourceImage:null;
     if(image)setSourceImage(image);
-    setStoryboardScenes(current=>current.map((scene,i)=>i===0?{...scene,image,prompt:p,duration:typeof s.duration==='number'?s.duration:scene.duration,modelParams:s.modelParams&&typeof s.modelParams==='object'?s.modelParams as Record<string,unknown>:{}}:scene));
+    setStoryboardScenes(current=>current.map((scene,i)=>i===0&&!isStorylinePromptMode(generationMode)?{...scene,image,prompt:p,duration:typeof s.duration==='number'?s.duration:scene.duration,modelParams:s.modelParams&&typeof s.modelParams==='object'?s.modelParams as Record<string,unknown>:{}}:scene));
     if(Array.isArray(s.scenes)&&s.scenes.length) setStoryboardScenes(s.scenes.map((raw,i)=>{
       const scene=raw as Record<string,unknown>;
       return {id:`template-scene-${i+1}`,image:typeof scene.sourceImage==='string'?scene.sourceImage:null,imageFile:null,endImage:null,endImageFile:null,prompt:typeof scene.prompt==='string'?scene.prompt:'',duration:typeof scene.duration==='number'?scene.duration:5,startFrameSource:scene.startFrameSource==='previous_last_frame'?'previous_last_frame':'manual',modelParams:scene.modelParams&&typeof scene.modelParams==='object'?scene.modelParams as Record<string,unknown>:{}};
@@ -2694,9 +2736,10 @@ export function VideoGenerationPage() {
                 <ClearValuesButton onClick={clearValues} disabled={isGeneratingVideo} />
               </div>
               <div className={styles.videoPromptHeading}>
-                <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
+                <h2>{isStorylinePromptMode(generationMode) ? t("create.video.common.mainStoryline") : t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
                 <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
               </div>
+              {isStorylinePromptMode(generationMode) ? <p className={styles.sourceModeNote}>{t("create.video.common.mainStorylineHint")}</p> : null}
               <label className={styles.videoPromptInputLabel}>
                 <textarea
                   className={styles.videoPromptTextarea}
@@ -2705,18 +2748,18 @@ export function VideoGenerationPage() {
                     const value = event.target.value;
                     setPrompt(value);
                     setStoryboardScenes((current) => current.map((scene, index) => (
-                      generationMode === "single-image" || index === 0 ? { ...scene, prompt: value } : scene
+                      !isStorylinePromptMode(generationMode) && index === 0 ? { ...scene, prompt: value } : scene
                     )));
                   }}
                    placeholder={t("create.video.common.describeVideo")}
-                  maxLength={2000}
+                  maxLength={promptMaxLength}
                   required
                   aria-required="true"
                 />
               </label>
               <div className={styles.videoPromptMeta}>
-                 <span>{t("create.video.common.maximumCharacters", { count: 2000 })}</span>
-                <span>{prompt.length.toLocaleString()} / 2,000</span>
+                 <span>{t("create.video.common.maximumCharacters", { count: promptMaxLength })}</span>
+                <span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span>
               </div>
               <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
               <label className="block text-[10px] font-bold">
@@ -2803,7 +2846,7 @@ export function VideoGenerationPage() {
                 </div>
               ) : null}
             </section>
-            {generationMode !== "reference-to-video" ? <section className={`${styles.panel} ${generationMode === "single-image" ? styles.storyboardImagePanel : ""}`}>
+            {generationMode !== "reference-to-video" && generationMode !== "multi-scene" ? <section className={`${styles.panel} ${generationMode === "single-image" ? styles.storyboardImagePanel : ""}`}>
                <SectionTitle number="2">{t("create.video.common.source")}</SectionTitle>
               <label className="mb-2 block text-[10px] font-bold">
                  {t("create.video.common.startFrame")} <small>({t("create.video.common.required")})</small>
@@ -3139,10 +3182,10 @@ export function VideoGenerationPage() {
                 )}
               </section>
             ) : null}
-            {!isSingleSceneGenerationMode(generationMode) ? (
+            {!isSingleSceneGenerationMode(generationMode) && (generationMode !== "single-image" || (hasCurrentStoryboardSlices && storyboardSlices.length > 0)) ? (
             <section className={styles.stripSection}>
               <div className={styles.subheading}>
-                {t("create.video.common.storyboard")} {generationMode === "single-image" ? <small>({t("create.video.common.autoCreatedFromSheet")})</small> : <small>({t("create.video.common.optional")})</small>}
+                {generationMode === "multi-scene" ? `2. ${t("create.video.common.scenes")}` : t("create.video.common.storyboard")} {generationMode === "single-image" ? <small>({t("create.video.common.autoCreatedFromSheet")})</small> : generationMode === "multi-scene" ? <small>({t("create.video.common.addScenesManually")})</small> : <small>({t("create.video.common.optional")})</small>}
               </div>
               <div className={styles.sceneScroller}>
                 <div ref={sceneRowRef} className={styles.sceneRow}>
@@ -3698,13 +3741,13 @@ export function VideoGenerationPage() {
             <label className={styles.sceneModalField}>
               <span className={styles.sceneModalFieldHeader}>
                 <span>{t("create.video.common.prompt")} <b>*</b></span>
-                <small>{scenePrompt.length} / 2000</small>
+                <small>{scenePrompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</small>
               </span>
               <textarea
                 value={scenePrompt}
                 onChange={(event) => setScenePrompt(event.target.value)}
                 placeholder={t("create.video.common.scenePromptPlaceholder")}
-                maxLength={2000}
+                maxLength={promptMaxLength}
               />
             </label>
             {generationMode === "single-image" ? <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} /> : null}

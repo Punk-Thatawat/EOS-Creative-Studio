@@ -9,6 +9,7 @@ import { CloudUpload, Mic2, RotateCcw, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { promptMaxLength } from "@/lib/prompt-limits";
 import { uploadImageAsset } from "@/lib/api/storage";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
 import {
@@ -390,7 +391,7 @@ export function TextToVideoWorkspace() {
      ? t("create.video.common.loadingModels", { feature: t("create.video.tabs.textToVideo") })
      : !selectedModel
        ? t("create.video.common.selectFeatureModel", { feature: t("create.video.tabs.textToVideo") })
-       : prompt.length > 2000
+       : prompt.length > promptMaxLength
          ? t("create.video.common.promptTooLong")
          : !prompt.trim()
            ? t("create.video.common.addPrompt")
@@ -682,11 +683,11 @@ export function TextToVideoWorkspace() {
           <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
           </div>
           <label className={styles.videoPromptInputLabel}>
-             <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.text.promptPlaceholder")} maxLength={2000} required aria-required="true" />
+             <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.text.promptPlaceholder")} maxLength={promptMaxLength} required aria-required="true" />
           </label>
           <div className={styles.videoPromptMeta}>
-             <span>{t("create.video.common.maximumCharacters", { count: 2000 })}</span>
-            <span>{prompt.length.toLocaleString()} / 2,000</span>
+             <span>{t("create.video.common.maximumCharacters", { count: promptMaxLength })}</span>
+             <span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span>
           </div>
           <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
           <label className="block text-[10px] font-bold">

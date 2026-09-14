@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { ChangeEvent, ReactNode } from "react";
+import { promptMaxLength } from "@/lib/prompt-limits";
 
 export type PromptFieldProps = {
   value: string;
@@ -24,7 +25,7 @@ export function PromptField({
   ariaLabel,
   required = false,
   multiline = true,
-  maxLength = 2000,
+  maxLength = promptMaxLength,
   wrapperClassName,
   fieldClassName,
   afterField,

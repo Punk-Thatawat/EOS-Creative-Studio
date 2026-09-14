@@ -1,8 +1,10 @@
+import { promptMaxLength } from "@/lib/prompt-limits";
+
 export const imageGenerationTabs = ["Text to Image", "Image to Image", "AI Background", "Upscale", "Extend Image"] as const;
 // Keep the hidden workflow in the state type so existing in-progress jobs and
 // server data can still be handled without exposing it in the tab navigation.
 export type ImageGenerationTab = typeof imageGenerationTabs[number] | "AI Style Transfer";
-export const textToImagePromptMaxLength = 2000;
+export const textToImagePromptMaxLength = promptMaxLength;
 
 export const backgroundModes = [
   { id: "remove", label: "Remove Background", shortLabel: "Remove", description: "Cut out the subject cleanly" },

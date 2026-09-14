@@ -1,6 +1,7 @@
 "use client";
 import { useTemplateSettings } from "@/features/templates/use-template-settings";
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
+import { promptMaxLength } from "@/lib/prompt-limits";
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
@@ -1184,8 +1185,8 @@ export function AudioGenerationPage() {
         </div>
         <div className={styles.panelHeading}><h2><span>1</span> SCRIPT / PROMPT</h2><InfoTooltip content={t("create.audio.info.script")} size={14} /></div>
         <div className={styles.promptBox}>
-          <textarea aria-label="Script or prompt" value={prompt} onChange={(event) => { const value = event.target.value; setPrompt(value); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: value } : scene)); }} maxLength={2000} />
-          <div className={styles.promptMeta}><span>{prompt.length} / 2000</span><button type="button" onClick={() => { setPrompt(""); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: "" } : scene)); }}>Clear <Trash2 size={13} /></button></div>
+          <textarea aria-label="Script or prompt" value={prompt} onChange={(event) => { const value = event.target.value; setPrompt(value); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: value } : scene)); }} maxLength={promptMaxLength} />
+          <div className={styles.promptMeta}><span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span><button type="button" onClick={() => { setPrompt(""); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: "" } : scene)); }}>Clear <Trash2 size={13} /></button></div>
         </div>
 
         <div className={styles.inputSection}>

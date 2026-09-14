@@ -8,6 +8,7 @@ import { CloudUpload, Plus, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { promptMaxLength } from "@/lib/prompt-limits";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
 import {
   createExtendVideoGeneration,
@@ -317,11 +318,11 @@ export function ExtendVideoWorkspace() {
           <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
         </div>
         <label className={styles.videoPromptInputLabel}>
-          <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.extend.promptPlaceholder")} maxLength={4000} required aria-required="true" />
+          <textarea className={styles.videoPromptTextarea} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t("create.video.extend.promptPlaceholder")} maxLength={promptMaxLength} required aria-required="true" />
         </label>
         <div className={styles.videoPromptMeta}>
-          <span>{t("create.video.common.maximumCharacters", { count: 4000 })}</span>
-          <span>{prompt.length.toLocaleString()} / 4,000</span>
+          <span>{t("create.video.common.maximumCharacters", { count: promptMaxLength })}</span>
+          <span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span>
         </div>
         <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={setPromptOptimizerEnabled} />
         <label className={styles.peopleFieldLabel}>{t("create.video.common.negativePrompt")} <small>({t("create.video.common.optional")})</small><input value={negativePrompt} onChange={(event) => setNegativePrompt(event.target.value)} placeholder={t("create.video.extend.negativePlaceholder")} /></label>

@@ -9,6 +9,7 @@ import { CloudUpload, LoaderCircle, Mic2, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { ModelPreviewMedia } from "./model-preview-media";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { promptMaxLength } from "@/lib/prompt-limits";
 import {
   createPeopleVideoGeneration,
   getPeopleVideoGenerationStatus,
@@ -778,11 +779,11 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
                   <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
                 </div>
                 <label className={styles.videoPromptInputLabel}>
-                  <textarea className={styles.videoPromptTextarea} value={script} onChange={(event) => setScript(event.target.value)} placeholder={scriptSupported ? t("create.video.people.scriptPlaceholder") : t("create.video.people.performancePlaceholder")} maxLength={2000} />
+                  <textarea className={styles.videoPromptTextarea} value={script} onChange={(event) => setScript(event.target.value)} placeholder={scriptSupported ? t("create.video.people.scriptPlaceholder") : t("create.video.people.performancePlaceholder")} maxLength={promptMaxLength} />
                 </label>
                 <div className={styles.videoPromptMeta}>
-                  <span>{t("create.video.common.maximumCharacters", { count: 2000 })}</span>
-                  <span>{script.length.toLocaleString()} / 2,000</span>
+                  <span>{t("create.video.common.maximumCharacters", { count: promptMaxLength })}</span>
+                  <span>{script.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span>
                 </div>
               </>
             ) : (

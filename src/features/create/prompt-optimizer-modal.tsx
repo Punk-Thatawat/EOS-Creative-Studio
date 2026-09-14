@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { WandSparkles, X } from "lucide-react";
 import { optimizePrompt, promptOptimizerStyles, type PromptOptimizerStyle } from "@/lib/api/prompt-optimizer";
+import { promptMaxLength } from "@/lib/prompt-limits";
 import styles from "./prompt-optimizer-modal.module.css";
 
 type PromptOptimizerModalProps = {
@@ -76,8 +77,8 @@ export function PromptOptimizerModal({ image, initialText, targetLabel, mode, on
         </div>
 
         <label className={styles.field}>
-          <span className={styles.fieldHeading}><span>TEXT</span><small>{text.length} / 4000</small></span>
-          <textarea value={text} onChange={(event) => { setText(event.target.value); setOptimizedText(null); }} maxLength={4000} placeholder="Describe the scene and the movement you want" />
+          <span className={styles.fieldHeading}><span>TEXT</span><small>{text.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</small></span>
+          <textarea value={text} onChange={(event) => { setText(event.target.value); setOptimizedText(null); }} maxLength={promptMaxLength} placeholder="Describe the scene and the movement you want" />
         </label>
 
         <label className={styles.field}>
