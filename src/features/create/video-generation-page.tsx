@@ -57,6 +57,7 @@ import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVi
 import { emitGenerationStarted, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
 import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 import { getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
+import { listGenerationHistory } from "@/lib/api/generations";
 import styles from "./video-generation-page.module.css";
 import { VideoModelDropdown } from "./video-model-dropdown";
 import { InfoTooltip } from "./components/info-tooltip";
@@ -98,6 +99,12 @@ const mobileVideoModeOptions = [
   { value: "lipsync", label: "Lipsync", icon: videoModeIcons.Lipsync },
   { value: "extend-video", label: "Extend Video", icon: videoModeIcons["Extend Video"] },
 ] as const;
+type ActiveVideoTab = (typeof mobileVideoModeOptions)[number]["value"];
+
+function isActiveVideoTab(value: string | null): value is ActiveVideoTab {
+  return mobileVideoModeOptions.some((option) => option.value === value);
+}
+
 const videoModeOptions = [
   {
     value: "storyboard",
@@ -971,7 +978,10 @@ export function VideoGenerationPage() {
   const modelCatalogVersion = useModelCatalogRefresh();
   const localizedParameterLabel = (name: string, title?: string) => translateVideoSchemaLabel(name, title, t);
   const searchParams = useSearchParams();
-  const [activeVideoTab, setActiveVideoTab] = useState<"image-to-video" | "text-to-video" | "people-video" | "motion-transfer" | "lipsync" | "extend-video">("image-to-video");
+  const requestedInitialTab = searchParams.get("tab");
+  const initialVideoTab: ActiveVideoTab = isActiveVideoTab(requestedInitialTab) ? requestedInitialTab : "image-to-video";
+  const [activeVideoTab, setActiveVideoTab] = useState<ActiveVideoTab>(() => initialVideoTab);
+  const [visitedVideoTabs, setVisitedVideoTabs] = useState<Set<ActiveVideoTab>>(() => new Set([initialVideoTab]));
   const [sourceImage, setSourceImage] = useState<string | null>(null);
   const [storyboardSlices, setStoryboardSlices] = useState<StoryboardSlice[]>([]);
   const [storyboardSlicesSourceFile, setStoryboardSlicesSourceFile] = useState<File | null>(null);
@@ -998,10 +1008,12 @@ export function VideoGenerationPage() {
   const [selectedModel, setSelectedModel] = useState("");
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [modelLoadRetry, setModelLoadRetry] = useState(0);
   const [maxStoryboardScenes, setMaxStoryboardScenes] = useState(DEFAULT_MAX_STORYBOARD_SCENES);
   const [modelParams, setModelParams] = useState<Record<string, unknown>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<VideoGenerationStatus>("idle");
+  const generationStatusRef = useRef(generationStatus);
   const [generationProgress, setGenerationProgress] = useState({ completed: 0, total: 0 });
   const [isFinalizingVideo, setIsFinalizingVideo] = useState(false);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
@@ -1078,6 +1090,14 @@ export function VideoGenerationPage() {
   const sceneRowRef = useRef<HTMLDivElement | null>(null);
   const storyboardSplitRequestRef = useRef(0);
   const storyboardPreparedFileRef = useRef<File | null>(null);
+  const activateVideoTab = useCallback((tab: ActiveVideoTab) => {
+    setPromptOptimizerEnabled(false);
+    setActiveVideoTab(tab);
+    setVisitedVideoTabs((current) => current.has(tab) ? current : new Set(current).add(tab));
+  }, []);
+  useEffect(() => {
+    generationStatusRef.current = generationStatus;
+  }, [generationStatus]);
   const referenceImageEntries = referenceImageRoles.flatMap((role) => {
     const slot = referenceImageSlots[role.key];
     return slot ? [{ ...role, ...slot }] : [];
@@ -1147,15 +1167,16 @@ export function VideoGenerationPage() {
   // themselves. The post-processing audio tools are only relevant for silent
   // video models.
   const hasNativeAudio = Boolean(capabilities?.nativeAudio || audioProperty || capabilities?.audioParameter);
+  const supportsPostAudioSfx = Boolean(selectedModelOption) && !hasNativeAudio && (selectedModelOption?.postAudio?.sfx ?? true);
+  const supportsPostAudioMusic = Boolean(selectedModelOption) && !hasNativeAudio && (selectedModelOption?.postAudio?.music ?? true);
   const showPostAudioOptions = (activeVideoTab === "image-to-video" || activeVideoTab === "text-to-video")
-    && Boolean(selectedModelOption)
-    && !hasNativeAudio;
+    && (supportsPostAudioSfx || supportsPostAudioMusic);
   const postAudioMode = showPostAudioOptions
-    ? postAudioSfxEnabled && postAudioMusicEnabled
+    ? supportsPostAudioSfx && postAudioSfxEnabled && supportsPostAudioMusic && postAudioMusicEnabled
       ? "both"
-      : postAudioSfxEnabled
+      : supportsPostAudioSfx && postAudioSfxEnabled
         ? "sfx"
-        : postAudioMusicEnabled
+        : supportsPostAudioMusic && postAudioMusicEnabled
           ? "music"
           : "none"
     : "none";
@@ -1189,13 +1210,12 @@ export function VideoGenerationPage() {
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
-    if (requestedTab !== "image-to-video" && requestedTab !== "text-to-video" && requestedTab !== "people-video" && requestedTab !== "motion-transfer" && requestedTab !== "lipsync" && requestedTab !== "extend-video") return;
+    if (!isActiveVideoTab(requestedTab)) return;
     const timeoutId = window.setTimeout(() => {
-      setPromptOptimizerEnabled(false);
-      setActiveVideoTab(requestedTab);
+      activateVideoTab(requestedTab);
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [searchParams]);
+  }, [activateVideoTab, searchParams]);
 
   const loadVideoHistory = useCallback(async (workspace?: string | null) => {
     setVideoHistoryLoading(true);
@@ -1238,7 +1258,8 @@ export function VideoGenerationPage() {
     };
   }, [loadVideoHistory]);
   useEffect(() => {
-    if (searchParams.get("tab") !== "image-to-video") return;
+    if (activeVideoTab !== "image-to-video") return;
+    if (generationStatusRef.current === "uploading" || generationStatusRef.current === "processing" || generationStatusRef.current === "completed") return;
 
     let disposed = false;
 
@@ -1300,6 +1321,30 @@ export function VideoGenerationPage() {
       return candidates[candidates.length - 1] ?? null;
     };
 
+    const readServerStoryboard = async (): Promise<{ generationId: string; completed: number; total: number; videoUrl?: string } | null> => {
+      try {
+        const history = await listGenerationHistory(undefined, "image-to-video");
+        const generation = history.find((item) => {
+          if (item.status !== "queued" && item.status !== "processing" && item.status !== "completed") return false;
+          const storyboardId = item.input?.storyboard_id ?? item.input?.storyboardId;
+          return typeof storyboardId !== "string" || !storyboardId.trim();
+        });
+        if (!generation) return null;
+
+        const videoOutput = generation.output?.find((output) => output.type === "video" && typeof output.url === "string");
+        return {
+          generationId: generation.id,
+          completed: generation.completedCount ?? (videoOutput ? generation.totalCount ?? 1 : 0),
+          total: Math.max(1, generation.totalCount ?? generation.output?.length ?? 1),
+          ...(generation.finalVideoUrl ? { videoUrl: generation.finalVideoUrl } : videoOutput?.url ? { videoUrl: videoOutput.url } : {}),
+        };
+      } catch {
+        // The local progress card remains the fast path; history can be
+        // unavailable briefly while auth/session state is being restored.
+        return null;
+      }
+    };
+
     const applyProcessingStatus = (status: Awaited<ReturnType<typeof getVideoStoryboardStatus>>, generationId: string, fallback: { completed: number; total: number }) => {
       if (disposed) return;
       const total = status.totalScenes ?? fallback.total;
@@ -1320,7 +1365,7 @@ export function VideoGenerationPage() {
     };
 
     const restoreProcessingStoryboard = async () => {
-      const persisted = readPersistedStoryboard();
+      const persisted = readPersistedStoryboard() ?? await readServerStoryboard();
       if (!persisted) return;
 
       if (persisted.videoUrl) {
@@ -1389,7 +1434,7 @@ export function VideoGenerationPage() {
     return () => {
       disposed = true;
     };
-  }, [loadVideoHistory, searchParams, t]);
+  }, [activeVideoTab, loadVideoHistory, t]);
   useEffect(() => {
     let active = true;
     void getVideoStoryboardSettings()
@@ -1411,24 +1456,22 @@ export function VideoGenerationPage() {
   }, []);
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     const modelFeature = videoModeRouteFeature(generationMode);
     const loadTimer = window.setTimeout(() => {
       if (!active) return;
       setModelsLoading(true);
       setModelsError(null);
       setModels([]);
+      setExtendModels([]);
       setSelectedModel("");
-      void Promise.all([
-        listGenerationModels(modelFeature),
-        listGenerationModels("extend-video").catch(() => [] as GenerationModelOption[]),
-      ])
-        .then(([items, extendItems]) => {
+      void listGenerationModels(modelFeature, undefined, { signal: controller.signal })
+        .then((items) => {
           const eligible = items.filter((item) => item.enabled && item.capabilities.promptParameter && (
             item.capabilities.imageParameter || item.capabilities.referenceImagesParameter
           ));
           if (!active) return;
           setModels(eligible);
-          setExtendModels(extendItems.filter((item) => item.enabled));
           setSelectedModel((current) => eligible.some((item) => item.model === current)
             ? current
             : eligible.find((item) => item.isDefault)?.model ?? eligible[0]?.model ?? "");
@@ -1440,12 +1483,22 @@ export function VideoGenerationPage() {
         .finally(() => {
           if (active) setModelsLoading(false);
         });
+
+      // Extend support is optional and must not block the primary model list.
+      void listGenerationModels("extend-video", undefined, { signal: controller.signal })
+        .then((items) => {
+          if (active) setExtendModels(items.filter((item) => item.enabled));
+        })
+        .catch(() => {
+          // The main model list can still be used when extend discovery fails.
+        });
     }, 0);
     return () => {
       active = false;
+      controller.abort();
       window.clearTimeout(loadTimer);
     };
-  }, [generationMode, modelCatalogVersion]);
+  }, [generationMode, modelCatalogVersion, modelLoadRetry]);
   useEffect(() => {
     if (!selectedModel) return;
     const selected = models.find((model) => model.model === selectedModel);
@@ -2646,8 +2699,7 @@ export function VideoGenerationPage() {
                 aria-current={isActive ? "page" : undefined}
                 onClick={() => {
                   if (tab && tab !== activeVideoTab) {
-                    setPromptOptimizerEnabled(false);
-                    setActiveVideoTab(tab);
+                    activateVideoTab(tab);
                   }
                 }}
               >
@@ -2666,12 +2718,16 @@ export function VideoGenerationPage() {
           otherModesLabel={t("create.mode.other")}
           onChange={(tab) => {
             if (tab !== activeVideoTab) {
-              setPromptOptimizerEnabled(false);
-              setActiveVideoTab(tab);
+              activateVideoTab(tab);
             }
           }}
         />
-        {activeVideoTab === "text-to-video" ? <TextToVideoWorkspace /> : activeVideoTab === "people-video" ? <PeopleVideoWorkspace /> : activeVideoTab === "motion-transfer" ? <MotionTransferWorkspace /> : activeVideoTab === "lipsync" ? <LipsyncWorkspace /> : activeVideoTab === "extend-video" ? <ExtendVideoWorkspace /> : <div className={styles.columns}>
+        {visitedVideoTabs.has("text-to-video") ? <div hidden={activeVideoTab !== "text-to-video"}><TextToVideoWorkspace /></div> : null}
+        {visitedVideoTabs.has("people-video") ? <div hidden={activeVideoTab !== "people-video"}><PeopleVideoWorkspace /></div> : null}
+        {visitedVideoTabs.has("motion-transfer") ? <div hidden={activeVideoTab !== "motion-transfer"}><MotionTransferWorkspace /></div> : null}
+        {visitedVideoTabs.has("lipsync") ? <div hidden={activeVideoTab !== "lipsync"}><LipsyncWorkspace /></div> : null}
+        {visitedVideoTabs.has("extend-video") ? <div hidden={activeVideoTab !== "extend-video"}><ExtendVideoWorkspace /></div> : null}
+        {activeVideoTab === "image-to-video" ? <div className={styles.columns}>
           <div className={styles.leftColumn}>
             <section className={styles.panel}>
               <section
@@ -3350,7 +3406,18 @@ export function VideoGenerationPage() {
                 setSelectedModel(nextModel);
               }}
             />
-            {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
+            {modelsError ? (
+              <p className={styles.settingsError} role="alert">
+                {modelsError}
+                <button type="button" className={styles.modelRetryButton} onClick={() => {
+                  setModelsError(null);
+                  setModelsLoading(true);
+                  setModelLoadRetry((current) => current + 1);
+                }}>
+                  {t("create.video.common.retry")}
+                </button>
+              </p>
+            ) : null}
             {generationMode !== "single-image" && durationProperty ? (
               <DurationControl
                 property={durationProperty[1]}
@@ -3435,7 +3502,7 @@ export function VideoGenerationPage() {
               <div className={styles.postAudioCard}>
                  <div className={styles.settingLabel}><span>{t("create.video.common.addAudioAfterVideo")}</span><small>{t("create.video.common.optional")}</small></div>
                  <div className={styles.postAudioOptions} role="group" aria-label={t("create.video.common.addAudioAfterVideo")}>
-                  <div className={styles.toggleRow}>
+                  {supportsPostAudioSfx ? <div className={styles.toggleRow}>
                      <span>{t("create.video.common.videoToSfx")}</span>
                     <button
                       type="button"
@@ -3446,8 +3513,8 @@ export function VideoGenerationPage() {
                     >
                       <i />
                     </button>
-                  </div>
-                  <div className={styles.toggleRow}>
+                  </div> : null}
+                  {supportsPostAudioMusic ? <div className={styles.toggleRow}>
                      <span>{t("create.video.common.videoToMusic")}</span>
                     <button
                       type="button"
@@ -3458,7 +3525,7 @@ export function VideoGenerationPage() {
                     >
                       <i />
                     </button>
-                  </div>
+                  </div> : null}
                 </div>
                 {postAudioMode !== "none" ? (
                    <small className={styles.postAudioHint}>{t("create.video.common.postAudioHint")}</small>
@@ -3581,7 +3648,7 @@ export function VideoGenerationPage() {
                <p className={styles.generationProgress}>{t("create.video.common.scenesComplete", { completed: generationProgress.completed, total: generationProgress.total })}</p>
             ) : null}
           </aside>
-        </div>}
+        </div> : null}
       </div>
       {isSceneModalOpen ? (
         <div

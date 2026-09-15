@@ -6,6 +6,7 @@ import { clearGenerationProgressStorage } from "@/lib/generation-progress-storag
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
 
 export async function signOutFromEOS() {
+  const returnTarget = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   const session = getStoredBackendSession();
   if (session) {
     await fetch(`${backendUrl}/api/v1/auth/logout`, {
@@ -22,5 +23,8 @@ export async function signOutFromEOS() {
   clearBackendSession();
 
   window.sessionStorage.removeItem("eos.backend.user-profile");
-  window.location.replace("/?login=1");
+  const loginUrl = new URL("/", window.location.origin);
+  loginUrl.searchParams.set("login", "1");
+  loginUrl.searchParams.set("redirect", returnTarget || "/home");
+  window.location.replace(loginUrl.toString());
 }

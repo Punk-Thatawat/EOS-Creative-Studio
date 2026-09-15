@@ -457,6 +457,7 @@ export function useImageGenerationState() {
   const upscaleAbortRef = useRef<AbortController | null>(null);
   const upscaleCancelRequestedRef = useRef(false);
   const recentRequestRef = useRef(0);
+  const recentAbortRef = useRef<AbortController | null>(null);
   const activeTabRef = useRef(activeTab);
   const draftRestoreCompleteRef = useRef(false);
 
@@ -755,40 +756,41 @@ export function useImageGenerationState() {
   useEffect(() => {
     let remainingModelLoads = 5;
     let isMounted = true;
+    const modelLoadController = new AbortController();
     const finishModelLoad = () => {
       remainingModelLoads -= 1;
       if (isMounted && remainingModelLoads === 0) setIsLoadingModels(false);
     };
 
-    void listGenerationModels("text-to-image").then((models) => {
+    void listGenerationModels("text-to-image", undefined, { signal: modelLoadController.signal }).then((models) => {
       setModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
       setSelectedModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The backend still resolves its configured default if the catalog is unavailable.
     }).finally(finishModelLoad);
-    void listGenerationModels("image-to-image").then((models) => {
+    void listGenerationModels("image-to-image", undefined, { signal: modelLoadController.signal }).then((models) => {
       setImageToImageModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
       setSelectedImageToImageModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The backend still resolves its configured default if the catalog is unavailable.
     }).finally(finishModelLoad);
-    void listGenerationModels("style-transfer").then((models) => {
+    void listGenerationModels("style-transfer", undefined, { signal: modelLoadController.signal }).then((models) => {
       setStyleTransferModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
       setSelectedStyleTransferModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The backend still resolves its configured default if the catalog is unavailable.
     }).finally(finishModelLoad);
-    void listGenerationModels("upscale").then((models) => {
+    void listGenerationModels("upscale", undefined, { signal: modelLoadController.signal }).then((models) => {
       setUpscaleModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
       setSelectedUpscaleModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
     }).catch(() => {
       // The UI remains available while the backend route is being configured.
     }).finally(finishModelLoad);
-    void listGenerationModels("extend-image").then((models) => {
+    void listGenerationModels("extend-image", undefined, { signal: modelLoadController.signal }).then((models) => {
       setExtendModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
       setSelectedExtendModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
@@ -796,7 +798,8 @@ export function useImageGenerationState() {
       // The UI remains available while the backend route is being configured.
     }).finally(finishModelLoad);
     const stylePresetFeatures: StylePresetFeature[] = ["text-to-image", "image-to-image", "style-transfer", "background-removal"];
-    void Promise.all(stylePresetFeatures.map((feature) => listStylePresets(feature).catch(() => []))).then((presetGroups) => {
+    void Promise.all(stylePresetFeatures.map((feature) => listStylePresets(feature, { signal: modelLoadController.signal }).catch(() => []))).then((presetGroups) => {
+      if (!isMounted) return;
       const styleTransferPresetsFromApi = presetGroups[2].filter((preset) => preset.enabled).sort((left, right) => left.sortOrder - right.sortOrder);
       setStyleTransferPresetOptions(styleTransferPresetsFromApi);
       const presetsById = new Map<string, GenerationStylePreset>();
@@ -815,12 +818,15 @@ export function useImageGenerationState() {
       backgroundAbortRef.current?.abort();
       extendAbortRef.current?.abort();
       upscaleAbortRef.current?.abort();
+      recentAbortRef.current?.abort();
+      modelLoadController.abort();
     };
   }, [modelCatalogVersion]);
 
   useEffect(() => {
     let isMounted = true;
-    void listGenerationModels("background-removal", backgroundMode).then((models) => {
+    const controller = new AbortController();
+    void listGenerationModels("background-removal", backgroundMode, { signal: controller.signal }).then((models) => {
       if (!isMounted) return;
       setBackgroundModelOptions(models);
       const defaultModel = models.find((item) => item.isDefault);
@@ -828,7 +834,7 @@ export function useImageGenerationState() {
     }).catch(() => {
       // The backend still resolves the configured background model on generation.
     });
-    return () => { isMounted = false; };
+    return () => { isMounted = false; controller.abort(); };
   }, [backgroundMode, modelCatalogVersion]);
 
   const modeBackgroundModelOptions = backgroundModelOptions.filter((model) => supportsBackgroundMode(model, backgroundMode, Boolean(backgroundMask)));
@@ -985,6 +991,9 @@ export function useImageGenerationState() {
   const loadRecentGenerations = useCallback(async (requestedWorkspaceId: string | null | undefined, requestedFeature = featureKeyForTab(activeTab)) => {
     const requestId = recentRequestRef.current + 1;
     recentRequestRef.current = requestId;
+    recentAbortRef.current?.abort();
+    const controller = new AbortController();
+    recentAbortRef.current = controller;
     setIsLoadingRecent(true);
     setRecentError(null);
     try {
@@ -992,7 +1001,7 @@ export function useImageGenerationState() {
       // feature so results from other tabs cannot leak into this panel. The
       // backend resolves the workspace from the token when the client has not
       // restored workspaceId yet.
-      const generations = (await listGenerationHistory(requestedWorkspaceId, requestedFeature))
+      const generations = (await listGenerationHistory(requestedWorkspaceId, requestedFeature, { signal: controller.signal }))
         .sort((left, right) => (Date.parse(right.createdAt ?? "") || 0) - (Date.parse(left.createdAt ?? "") || 0));
       if (requestId !== recentRequestRef.current || featureKeyForTab(activeTabRef.current) !== requestedFeature) return;
       const completedOutputs = generations
@@ -1059,9 +1068,11 @@ export function useImageGenerationState() {
         window.sessionStorage.setItem(pendingGenerationStorageKeyForFeature(requestedFeature), JSON.stringify(nextPendingGeneration));
       }
     } catch (error) {
+      if (controller.signal.aborted) return;
       if (requestId !== recentRequestRef.current || featureKeyForTab(activeTabRef.current) !== requestedFeature) return;
       setRecentError(error instanceof Error ? error.message : "Unable to load recent generations");
     } finally {
+      if (recentAbortRef.current === controller) recentAbortRef.current = null;
       if (requestId === recentRequestRef.current) setIsLoadingRecent(false);
     }
   }, [activeTab, rememberImageMimeTypes]);
