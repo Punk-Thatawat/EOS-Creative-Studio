@@ -102,6 +102,11 @@ function getPasswordStrength(password: string): { labelKey: PasswordStrengthLabe
   return { score, labelKey: score <= 1 ? "auth.passwordStrength.needsMore" : score <= 2 ? "auth.passwordStrength.goodStart" : "auth.passwordStrength.strong" };
 }
 
+function isInvalidCredentialsError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /invalid (email or password|credentials)|incorrect (email|password)|อีเมลหรือรหัสผ่านไม่ถูกต้อง/i.test(message);
+}
+
 export function PreLoginPage() {
   const { t } = useLocale();
   const [examples, setExamples] = useState<ShowcaseExample[]>(fallbackExamples);
@@ -194,6 +199,8 @@ export function PreLoginPage() {
 
     try {
       if (!authEmail.trim()) throw new Error(t("auth.validation.emailRequired"));
+      if (authEmailError) throw new Error(t("auth.validation.emailInvalid"));
+      if (authMode === "login" && !authPassword.trim()) throw new Error(t("auth.validation.passwordRequired"));
       if (authMode === "register") {
         if (authPassword.length < 8) throw new Error(t("auth.validation.passwordMinFull"));
         if (authPassword !== authPasswordConfirmation) throw new Error(t("auth.validation.passwordMismatch"));
@@ -233,7 +240,7 @@ export function PreLoginPage() {
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
       window.location.replace(authRedirect);
     } catch (error: unknown) {
-      setAuthError(error instanceof Error ? error.message : t("auth.error.authenticationFailed"));
+      setAuthError(authMode === "login" && isInvalidCredentialsError(error) ? t("auth.error.invalidCredentials") : error instanceof Error ? error.message : t("auth.error.authenticationFailed"));
     } finally {
       setAuthSubmitting(false);
     }
@@ -474,7 +481,7 @@ export function PreLoginPage() {
             {authError && <p className="auth-error" role="alert">{authError}</p>}
             <button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button>
           </div> : authMode === "forgot" && authMessage ? <div className="auth-confirmation-state"><div className="auth-confirmation-icon"><MailCheck size={29} /></div><p>{authMessage}</p><p className="auth-provider-note">{t("auth.reset.googleNote")}</p><button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button></div> : <>
-            <form onSubmit={handleEmailAuth}>
+            <form onSubmit={handleEmailAuth} noValidate>
               {authMode === "register" && <AuthField id="modal-name" label={t("auth.form.name")} optional optionalLabel={t("auth.form.optional")} value={authName} onChange={setAuthName} type="text" placeholder={t("auth.form.namePlaceholder")} autoComplete="name" icon={UserRound} disabled={authSubmitting} />}
               <AuthField id="modal-email" label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete="email" icon={Mail} required disabled={authSubmitting} error={authEmailError} />
               {authMode !== "forgot" && <AuthField id="modal-password" label={t("auth.form.password")} value={authPassword} onChange={setAuthPassword} type="password" placeholder={t("auth.form.passwordPlaceholder")} autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? t("auth.form.passwordMinHint") : t("auth.form.privateHint")} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} passwordToggleLabel={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />}

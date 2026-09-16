@@ -35,9 +35,9 @@ async function request(path: string, init: RequestInit = {}): Promise<unknown> {
   return payload?.data;
 }
 
-export async function listStylePresets(feature?: StylePresetFeature): Promise<GenerationStylePreset[]> {
+export async function listStylePresets(feature?: StylePresetFeature, options: { signal?: AbortSignal } = {}): Promise<GenerationStylePreset[]> {
   const query = feature ? `?feature=${encodeURIComponent(feature)}` : "";
-  return (await request(`/generation-style-presets${query}`) as GenerationStylePreset[] | undefined) ?? [];
+  return (await request(`/generation-style-presets${query}`, { signal: options.signal }) as GenerationStylePreset[] | undefined) ?? [];
 }
 
 export async function listAdminStylePresets(feature?: StylePresetFeature): Promise<GenerationStylePreset[]> {

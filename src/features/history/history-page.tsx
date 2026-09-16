@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowRight, AudioLines, Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileClock, Image as ImageIcon, LoaderCircle, RefreshCw, Search, SlidersHorizontal, Sparkles, Video, X } from "lucide-react";
+import { AlertCircle, ArrowRight, AudioLines, Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileClock, Image as ImageIcon, LoaderCircle, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from "lucide-react";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
-import { fetchHistory, type HistoryItem, type HistoryResponse, type HistoryStatus, type HistoryType } from "@/lib/api/history";
+import { deleteHistoryItem, fetchHistory, type HistoryItem, type HistoryResponse, type HistoryStatus, type HistoryType } from "@/lib/api/history";
 import { templateCopy } from "@/features/templates/template-copy";
 import s from "./history-page.module.css";
 
@@ -53,8 +53,11 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
     </div></div>
   </dialog>;
 }
-function WorkCard({ item, open }: { item: HistoryItem; open: () => void }) {
-  return <article className={s.card}><div className={s.cardMedia}><Media key={item.outputUrl ?? item.id} item={item} /><div className={s.cardBadge}><Status item={item} /></div>{item.outputCount > 1 && <span className={s.outputCount}>{item.outputCount} ไฟล์</span>}</div><div className={s.cardBody}><div className={s.feature}><span>{featureLabel(item)}</span>{item.creditCost != null && <span>{item.creditCost.toLocaleString()} เครดิต</span>}</div><button className={s.cardTitle} onClick={open}>{title(item)}</button><p className={s.model} title={item.model}>{modelLabel(item) || "—"}</p><div className={s.cardFooter}><time dateTime={item.createdAt}>{dateLabel(item.createdAt)}</time><button onClick={open} aria-label={`ดูรายละเอียด ${title(item)}`}>ดูงาน <ArrowRight size={15} /></button></div></div></article>;
+function WorkCard({ item, open, remove, deleting }: { item: HistoryItem; open: () => void; remove: (item: HistoryItem) => void; deleting: boolean }) {
+  const providerAudio = item.source === "audio" && item.id.startsWith("wavespeed:");
+  const canDelete = !providerAudio && item.status !== "queued" && item.status !== "processing";
+  const deleteHint = providerAudio ? "ประวัติเสียงจากผู้ให้บริการลบไม่ได้" : item.status === "queued" || item.status === "processing" ? "ลบไม่ได้ขณะกำลังสร้าง" : "ลบรายการนี้";
+  return <article className={s.card}><div className={s.cardMedia}><Media key={item.outputUrl ?? item.id} item={item} /><div className={s.cardBadge}><Status item={item} /></div>{item.outputCount > 1 && <span className={s.outputCount}>{item.outputCount} ไฟล์</span>}</div><div className={s.cardBody}><div className={s.feature}><span>{featureLabel(item)}</span>{item.creditCost != null && <span>{item.creditCost.toLocaleString()} เครดิต</span>}</div><button className={s.cardTitle} onClick={open}>{title(item)}</button><p className={s.model} title={item.model}>{modelLabel(item) || "—"}</p><div className={s.cardFooter}><time dateTime={item.createdAt}>{dateLabel(item.createdAt)}</time><div className={s.cardActions}><button onClick={open} aria-label={`ดูรายละเอียด ${title(item)}`}>ดูงาน <ArrowRight size={15} /></button><button type="button" className={s.deleteButton} onClick={() => remove(item)} disabled={!canDelete || deleting} aria-label={canDelete ? `ลบ ${title(item)}` : `ลบไม่ได้ ${title(item)}`} title={deleteHint}>{deleting ? <LoaderCircle size={15} className={s.spin} /> : <Trash2 size={15} />}</button></div></div></div></article>;
 }
 type Query = { type: HistoryType; status: HistoryStatus; search: string; offset: number };
 export function HistoryPageClient() {
@@ -64,8 +67,10 @@ export function HistoryPageClient() {
   const [busy, setLoading] = useState(true);
   const loading = busy && (!data || loadedQuery !== query);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [selected, setSelected] = useState<HistoryItem | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const results = useRef<HTMLElement>(null);
   const fetching = useRef(false);
   useEffect(() => {
@@ -95,6 +100,22 @@ export function HistoryPageClient() {
   const page = Math.floor(query.offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil((data?.pagination.total ?? 0) / PAGE_SIZE));
   const goPage = (offset: number) => { change({ offset }); results.current?.focus(); results.current?.scrollIntoView({ block: "start" }); };
+  const remove = async (item: HistoryItem) => {
+    if (item.source === "audio" && item.id.startsWith("wavespeed:")) return;
+    if (item.status === "queued" || item.status === "processing") return;
+    if (!window.confirm(`ต้องการลบ “${title(item)}” ออกจากประวัติหรือไม่?`)) return;
+    const key = `${item.source}:${item.id}`;
+    setDeletingKey(key); setActionError(null);
+    try {
+      await deleteHistoryItem(item);
+      setSelected(current => current?.id === item.id && current.source === item.source ? null : current);
+      setRefresh(value => value + 1);
+    } catch (reason: unknown) {
+      setActionError(reason instanceof Error ? reason.message : "ลบรายการไม่สำเร็จ");
+    } finally {
+      setDeletingKey(current => current === key ? null : current);
+    }
+  };
   return <div className={s.page} data-no-translate data-page="history">
     <header className={s.hero}><div><span className={s.eyebrow}>EOS / YOUR CREATIVE ARCHIVE</span><h1>ทุกไอเดีย<span>มีเรื่องราว.</span></h1><p>ประวัติการสร้าง · รวมภาพ วิดีโอ และเสียงของคุณไว้ในที่เดียว</p></div></header>
      <section className={s.stats} aria-label="สรุปงานทั้งหมดในเวิร์กสเปซ"><div><FileClock size={18} /><span>งานทั้งหมด</span><strong>{count(summary?.total)}</strong></div><div><Check size={18} /><span>สำเร็จ</span><strong>{count(summary?.completed)}</strong></div><div><Clock3 size={18} /><span>กำลังดำเนินการ</span><strong>{count(summary?.inProgress)}</strong></div><div><AlertCircle size={18} /><span>ไม่สำเร็จ / ยกเลิก</span><strong>{count(summary?.failed)}</strong></div></section>
@@ -103,8 +124,9 @@ export function HistoryPageClient() {
       <div className={s.toolbar}><div className={s.typeFilters} role="group" aria-label="ประเภทผลงาน">{types.map(({ value, label, icon: Icon }) => <button key={value} aria-pressed={query.type === value} onClick={() => change({ type: value })}><Icon size={16} />{label}</button>)}</div><label className={s.search}><Search size={17} /><input value={query.search} onChange={event => change({ search: event.target.value })} placeholder="ค้นหาชื่อผลงานหรือโมเดล…" aria-label="ค้นหาประวัติผลงาน" />{query.search && <button onClick={() => change({ search: "" })} aria-label="ล้างคำค้นหา"><X size={16} /></button>}</label></div>
       <div className={s.resultBar}><div><h2>รายการของคุณ</h2><span role="status">{loading ? "กำลังอัปเดต…" : error ? "โหลดไม่สำเร็จ" : `${data?.pagination.total.toLocaleString() ?? 0} รายการ`}</span></div><div className={s.controls}><label><SlidersHorizontal size={15} /><span className={s.srOnly}>กรองตามสถานะ</span><select value={query.status} onChange={event => change({ status: event.target.value as HistoryStatus })}>{Object.entries(statuses).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><button onClick={() => setRefresh(v => v + 1)} disabled={busy} aria-label="รีเฟรชประวัติ"><RefreshCw size={16} className={busy ? s.spin : undefined} /></button></div></div>
       {hasFilters && <div className={s.filterNotice}><span>กำลังกรอง{query.type !== "all" ? ` · ${types.find(t => t.value === query.type)?.label}` : ""}{query.status !== "all" ? ` · ${statuses[query.status]}` : ""}{query.search.trim() ? ` · “${query.search.trim()}”` : ""}</span><button onClick={reset}>ล้างตัวกรอง <X size={13} /></button></div>}
+      {actionError && <div className={s.actionError} role="alert"><AlertCircle size={15} /><span>{actionError}</span><button type="button" onClick={() => setActionError(null)} aria-label="ปิดข้อความผิดพลาด"><X size={14} /></button></div>}
       <div aria-busy={busy}>
-        {loading ? <div className={s.list} aria-label="กำลังโหลดประวัติ">{[0, 1, 2].map(i => <div className={s.skeleton} key={i}><div /><span /><span /></div>)}</div> : error ? <div className={s.empty} role="alert"><AlertCircle size={34} /><h3>โหลดประวัติไม่สำเร็จ</h3><p>{error}</p><button className={s.secondary} onClick={() => setRefresh(v => v + 1)}><RefreshCw size={16} />ลองอีกครั้ง</button></div> : data?.items.length ? <><div className={s.list}>{data.items.map(item => <WorkCard key={`${item.source}-${item.id}`} item={item} open={() => setSelected(item)} />)}</div><nav className={s.pagination} aria-label="แบ่งหน้าประวัติ"><span>แสดง {query.offset + 1}–{query.offset + data.items.length} จาก {data.pagination.total.toLocaleString()} รายการ</span><div><button disabled={query.offset === 0} onClick={() => goPage(Math.max(0, query.offset - PAGE_SIZE))} aria-label="หน้าก่อนหน้า"><ChevronLeft size={17} /></button><span>หน้า {page} / {pageCount}</span><button disabled={!data.pagination.hasMore} onClick={() => goPage(query.offset + PAGE_SIZE)} aria-label="หน้าถัดไป"><ChevronRight size={17} /></button></div></nav></> : <div className={s.empty}><FileClock size={36} /><h3>{hasFilters ? "ยังไม่พบงานที่ตรงกับตัวกรอง" : "ไอเดียแรกของคุณ เริ่มได้ที่นี่"}</h3><p>{hasFilters ? "ลองเปลี่ยนคำค้นหา หรือแสดงผลงานทั้งหมด" : "เมื่อสร้างงานแล้ว ผลงานและสถานะจะปรากฏในหน้านี้"}</p>{hasFilters ? <button className={s.secondary} onClick={reset}>แสดงผลงานทั้งหมด</button> : <Link href="/create/image" className={s.primary}>สร้างภาพแรก <ArrowRight size={16} /></Link>}</div>}
+        {loading ? <div className={s.list} aria-label="กำลังโหลดประวัติ">{[0, 1, 2].map(i => <div className={s.skeleton} key={i}><div /><span /><span /></div>)}</div> : error ? <div className={s.empty} role="alert"><AlertCircle size={34} /><h3>โหลดประวัติไม่สำเร็จ</h3><p>{error}</p><button className={s.secondary} onClick={() => setRefresh(v => v + 1)}><RefreshCw size={16} />ลองอีกครั้ง</button></div> : data?.items.length ? <><div className={s.list}>{data.items.map(item => <WorkCard key={`${item.source}-${item.id}`} item={item} open={() => setSelected(item)} remove={remove} deleting={deletingKey === `${item.source}:${item.id}`} />)}</div><nav className={s.pagination} aria-label="แบ่งหน้าประวัติ"><span>แสดง {query.offset + 1}–{query.offset + data.items.length} จาก {data.pagination.total.toLocaleString()} รายการ</span><div><button disabled={query.offset === 0} onClick={() => goPage(Math.max(0, query.offset - PAGE_SIZE))} aria-label="หน้าก่อนหน้า"><ChevronLeft size={17} /></button><span>หน้า {page} / {pageCount}</span><button disabled={!data.pagination.hasMore} onClick={() => goPage(query.offset + PAGE_SIZE)} aria-label="หน้าถัดไป"><ChevronRight size={17} /></button></div></nav></> : <div className={s.empty}><FileClock size={36} /><h3>{hasFilters ? "ยังไม่พบงานที่ตรงกับตัวกรอง" : "ไอเดียแรกของคุณ เริ่มได้ที่นี่"}</h3><p>{hasFilters ? "ลองเปลี่ยนคำค้นหา หรือแสดงผลงานทั้งหมด" : "เมื่อสร้างงานแล้ว ผลงานและสถานะจะปรากฏในหน้านี้"}</p>{hasFilters ? <button className={s.secondary} onClick={reset}>แสดงผลงานทั้งหมด</button> : <Link href="/create/image" className={s.primary}>สร้างภาพแรก <ArrowRight size={16} /></Link>}</div>}
       </div>
     </section>{selected && <WorkDialog item={data?.items.find(item => item.id === selected.id && item.source === selected.source) ?? selected} close={() => setSelected(null)} />}
   </div>;

@@ -2,7 +2,7 @@
 import { useTemplateSettings } from "@/features/templates/use-template-settings";
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Dropdown } from "@/components/ui/dropdown";
 import { CloudUpload, Plus, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
@@ -30,6 +30,7 @@ import { ClearValuesButton } from "./components/clear-values-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
+import { useVideoGenerationResume, type ResumableVideoStatus } from "./use-video-generation-resume";
 
 type SchemaProperty = {
   type?: string;
@@ -154,15 +155,56 @@ export function ExtendVideoWorkspace() {
   const audioParameter = selected?.capabilities.audioParameter;
   const isGenerating = state === "uploading" || state === "processing";
 
+  const applyResumedStatus = useCallback((resumedStatus: ResumableVideoStatus) => {
+    const status = resumedStatus as ExtendVideoGenerationStatus;
+    const resumedGenerationId = status.id ?? status.generationId;
+    if (resumedGenerationId) setGenerationId(resumedGenerationId);
+
+    if (status.status === "completed") {
+      const videoUrl = outputUrl(status);
+      if (videoUrl) {
+        setFinalVideoUrl(videoUrl);
+        setPreviewVideoUrl(videoUrl);
+      }
+      setProgress(100);
+      setState("completed");
+      setError(null);
+      setNotice(t("create.video.common.videoReady"));
+      setLibraryRefreshKey((value) => value + 1);
+      return;
+    }
+
+    if (status.status === "failed" || status.status === "cancelled") {
+      setState(status.status === "cancelled" ? "cancelled" : "failed");
+      setError(formatGenerationError(generationErrorFromStatus(status, `Extend Video generation ${status.status}`), t("create.video.common.unableToGenerateFeature", { feature: t("create.video.tabs.extendVideo") })));
+      setNotice(null);
+      return;
+    }
+
+    const nextProgress = progressOf(status, 0);
+    setState("processing");
+    setProgress(nextProgress);
+    setError(null);
+    setNotice(t("create.video.common.generatingFeatureProgress", { feature: t("create.video.tabs.extendVideo"), percent: nextProgress }));
+  }, [t]);
+
+  useVideoGenerationResume({
+    feature: "extend-video",
+    isGenerating,
+    loadStatus: (pollUrl, signal) => getExtendVideoGenerationStatus(pollUrl, signal),
+    onStatus: applyResumedStatus,
+  });
+
   useEffect(() => {
     let active = true;
-    listGenerationModels("extend-video").then((items) => {
+    const controller = new AbortController();
+    listGenerationModels("extend-video", undefined, { signal: controller.signal }).then((items) => {
       if (!active) return;
       const enabled = items.filter((item) => item.enabled);
       setModels(enabled);
       setSelectedModel((current) => enabled.some((item) => item.model === current) ? current : enabled.find((item) => item.isDefault)?.model ?? enabled[0]?.model ?? "");
     }).catch((reason: unknown) => { if (active) setModelsError(reason instanceof Error ? reason.message : t("create.video.common.loadingFeatureModels", { feature: t("create.video.tabs.extendVideo") })); }).finally(() => { if (active) setModelsLoading(false); });
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [t]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
