@@ -18,6 +18,7 @@ export type HistoryItem = {
   prompt?: string;
   status: Exclude<HistoryStatus, "all">;
   model?: string;
+  modelLabel?: string;
   provider?: string;
   outputUrl?: string;
   outputMimeType?: string;
