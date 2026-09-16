@@ -443,8 +443,10 @@ body :where([data-studio-main], [data-page], .audio-studio-page, .landing-page, 
 .eos-mark { font-size: 42px; font-weight: 300; letter-spacing: 6px; line-height: .82; position: relative; }
 .eos-mark::after { content: ""; position: absolute; width: 36px; height: 36px; border: 4px solid #ff560c; border-radius: 50%; left: 39px; top: -6px; z-index: -1; }
 .eos-caption { display: block; width: 100%; color: #0c0c0e; font-size: 8px; letter-spacing: 1.2px; line-height: 1; font-weight: 700; text-align: center; margin-top: 1px; white-space: nowrap; }
-.login-button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 250px; height: 100px; padding: 0; color: white; text-decoration: none; background: url('/generated-assets/login-signup-brush-only.webp') center / 100% 100% no-repeat; font-size: 13px; font-weight: 800; }
-.login-button svg { transition: transform .25s ease; }
+.login-button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 250px; height: 100px; padding: 0 8% 0 11%; color: white; text-decoration: none; background: url('/generated-assets/login-signup-brush-only.webp') center / 100% 100% no-repeat; font-size: 13px; font-weight: 800; }
+/* flex:none keeps the arrow from being the flex item that absorbs any squeeze;
+   an SVG's automatic minimum size is zero, so it silently collapses instead. */
+.login-button svg { flex: none; transition: transform .25s ease; }
 .login-button:hover svg { transform: translateX(7px); }
 .landing-menu { position: absolute; z-index: 5; top: 75px; left: 3.5vw; display: grid; gap: 14px; padding: 20px 26px; background: #050505; color: white; box-shadow: 10px 10px 0 #ff1493; }
 .landing-menu a { color: white; text-decoration: none; font-weight: 800; font-size: 14px; }
@@ -590,7 +592,9 @@ body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0
 @media (max-width: 700px) { body:has([data-page="gen-image"]) .page-gutter { padding-inline: 10px; } }
 @media (max-width: 767px) { body:has([data-mobile-bottom-navigation]) .page-gutter { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); } }
 .login-button { flex:0 0 250px; min-width:250px; white-space:nowrap; }
-@media (max-width: 800px) { .login-button { flex:0 0 190px; min-width:190px; width:190px; height:60px; } }
+/* !important clears the page-wide 16px readability floor, which inflated this
+   label past the brush stroke on phones. */
+@media (max-width: 800px) { .login-button { flex:0 0 190px; min-width:190px; width:190px; height:60px; font-size:clamp(11px, 3.2vw, 12px) !important; } }
 @media (max-width: 800px) { .tool-strip { grid-template-columns:repeat(2,1fr); grid-template-rows:repeat(3,1fr); }.tool-item:nth-child(3) { border-right:1px solid #ddd; }.tool-item:nth-child(2n) { border-right:0; } }
 @media (max-width: 800px) { .tool-strip { padding:12px 4px; gap:8px 0; }.tool-item { min-height:72px; padding:48px 6px 0; gap:4px; }.tool-image { width:44px; height:44px; }.tool-item strong { font-size:10px; }.tool-item small { max-width:105px; font-size:8px; line-height:1.25; } }
 @media (max-width: 800px) { .tool-strip { margin-top:-12px; position:relative; z-index:2; } }
