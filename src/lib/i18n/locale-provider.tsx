@@ -35,9 +35,6 @@ function createShellCopy(locale: Locale): ShellCopy {
 
 export const shellCopy: Record<Locale, ShellCopy> = { th: createShellCopy("th"), en: createShellCopy("en") };
 
-// Legacy feature screens still contain copy authored before the shared locale layer.
-// Keep this as an exact whole-phrase compatibility map while those screens migrate
-// to typed copy objects. Never translate individual words or substrings here.
 const featurePhraseTranslations: Record<string, string> = {
   "OR CONTINUE WITH": "หรือเข้าสู่ระบบด้วย",
   "Don't have an account?": "ยังไม่มีบัญชี?",
@@ -477,9 +474,6 @@ function translateFeatureText(value: string, locale: Locale) {
   return `${leading}${featurePhraseTranslations[core] ?? core}${trailing}`;
 }
 
-/* For strings assembled in code rather than written into the markup. The DOM
-   observer below only matches a whole text node, so anything concatenated at
-   runtime has to look its parts up itself. */
 export function translateFeaturePhrase(value: string): string {
   if (typeof window === "undefined") return value;
   return translateFeatureText(value, readStoredLocale());
@@ -548,11 +542,6 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
-  // Legacy feature screens are still translated by a compatibility observer.
-  // Never mutate React-owned DOM during hydration: doing so changes attributes
-  // such as `alt` before a nested client component has hydrated and triggers a
-  // React hydration mismatch. The short post-hydration delay is intentional;
-  // migrated screens use `t(key)` directly and do not need this fallback.
   useEffect(() => {
     const timer = window.setTimeout(() => setLegacyTranslationReady(true), 250);
     return () => window.clearTimeout(timer);
