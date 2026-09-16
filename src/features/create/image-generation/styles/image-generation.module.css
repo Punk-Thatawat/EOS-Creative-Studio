@@ -225,21 +225,24 @@
 /* Keep the credits, validation state, primary action, and privacy note together while the form scrolls. */
 @media (max-width: 700px) {
   .gen-settings-panel {
-    padding-bottom: calc(14rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(10rem + env(safe-area-inset-bottom, 0px));
   }
 
   .gen-mobile-action-dock {
+    box-sizing: border-box;
     position: fixed;
     right: 12px;
-    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
     left: 12px;
     /* Stay below the sticky header's stacking context so the mobile drawer can cover the dock. */
     z-index: 20;
     display: grid;
-    gap: 7px;
+    gap: 5px;
     width: auto;
+    min-width: 0;
+    max-width: calc(100vw - 24px);
     margin-top: 0;
-    padding: 10px 12px 9px;
+    padding: 7px 10px;
     border: 1px solid rgba(229, 225, 222, .95);
     border-radius: 16px;
     background: rgba(255, 255, 255, .96);
@@ -249,20 +252,22 @@
 
   .gen-mobile-action-dock .gen-estimate {
     margin: 0;
-    padding: 0 2px 1px;
+    padding: 0;
     border-top: 0;
   }
 
-  .gen-mobile-action-dock .gen-estimate h3 { font-size: 10px; }
-  .gen-mobile-action-dock .gen-estimate p { margin-top: 3px; font-size: 9px; }
+  .gen-mobile-action-dock .gen-estimate h3 { font-size: 9px; }
+  .gen-mobile-action-dock .gen-estimate p { margin-top: 2px; font-size: 8px !important; line-height: 1.2; }
   .gen-mobile-action-dock .gen-estimate strong { font-weight: 800; }
 
   .gen-mobile-action-dock .gen-generation-status,
   .gen-mobile-action-dock .gen-generation-error,
   .gen-mobile-action-dock .gen-generation-validation {
+    grid-column: 1 / -1;
     margin: 0;
     padding: 6px 8px;
     border-radius: 8px;
+    font-size: 9px;
     line-height: 1.3;
   }
 
@@ -272,15 +277,26 @@
 
   .gen-mobile-action-dock .gen-generate-button {
     width: 100%;
-    min-height: 52px;
+    min-height: 46px;
     margin-top: 0;
+    padding: 8px 6px;
     border: 1px solid rgba(255, 255, 255, .22);
     box-shadow: 0 8px 18px rgba(242, 107, 56, .26);
+    font-size: 14px;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
+  .gen-mobile-action-dock .gen-generate-button svg {
+    width: 16px;
+    height: 16px;
   }
 
   .gen-mobile-action-dock .gen-private {
+    display: flex;
     margin: 0;
-    font-size: 8px;
+    font-size: 7px;
+    line-height: 1.2;
   }
 
   .gen-mobile-action-dock .gen-generate-button:focus-visible {
@@ -522,7 +538,8 @@
 .gen-background-preview-tabs button:disabled { color: #c4c8cd; cursor: not-allowed; }
 .gen-background-preview-tabs > span { padding: 0 5px; color: #858b93; font-size: 7px; white-space: nowrap; }
 .gen-preview-view-switch { display: flex; gap: 4px; margin-top: 7px; padding: 3px; background: #f5f4f3; border-radius: 8px; }
-.gen-preview-view-switch button { flex: 1; min-height: 27px; color: #747b84; background: transparent; border: 0; border-radius: 5px; font-size: 8px; cursor: pointer; }
+.gen-preview-view-switch button { flex: 1; min-height: 27px; padding: 7px 10px; color: #747b84; background: transparent; border: 0; border-radius: 5px; font-size: 8px; font-weight: 700; cursor: pointer; }
+.gen-preview-view-switch button:hover { color: #ed5c2d; }
 .gen-preview-view-switch button.is-selected { color: #202124; background: #fff; box-shadow: 0 1px 4px rgba(43, 35, 28, .12); }
 .gen-preview-mask-tools { margin-top: 7px; border: 1px solid #e5e5e5; border-radius: 8px; }
 @media (max-width: 700px) {
@@ -624,3 +641,34 @@
 
 /* Keep the main image prompt readable and aligned with video prompts. */
 .gen-textarea-wrap textarea { font-size: 16px !important; }
+/* Prompt copy should stay visually light while headings retain their emphasis. */
+.gen-textarea-wrap textarea { font-weight: 400; }
+
+/* Final mobile action-card sizing: keep the original stacked layout, only tighter. */
+@media (max-width: 700px) {
+  .gen-settings-panel { padding-bottom: calc(10rem + env(safe-area-inset-bottom, 0px)); }
+  .gen-mobile-action-dock {
+    box-sizing: border-box;
+    right: 12px;
+    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    width: auto;
+    min-width: 0;
+    max-width: calc(100vw - 24px);
+    margin: 0;
+    padding: 7px 10px;
+    border-radius: 14px;
+  }
+  .gen-mobile-action-dock .gen-estimate { margin: 0; padding: 0; border-top: 0; }
+  .gen-mobile-action-dock .gen-estimate h3 { font-size: 9px; }
+  .gen-mobile-action-dock .gen-estimate p { margin-top: 2px; font-size: 8px; }
+  .gen-mobile-action-dock .gen-generation-status,
+  .gen-mobile-action-dock .gen-generation-error,
+  .gen-mobile-action-dock .gen-generation-validation { margin: 0; padding: 5px 8px; font-size: 12px !important; line-height: 1.25; }
+  .gen-mobile-action-dock .gen-generate-button { width: 100%; min-height: 42px; margin-top: 0; padding: 6px; font-size: 14px !important; line-height: 1.1; white-space: nowrap; }
+  .gen-mobile-action-dock .gen-generate-button svg { width: 16px; height: 16px; }
+  .gen-mobile-action-dock .gen-private { display: flex; margin: 0; font-size: 8px !important; line-height: 1.2; }
+}

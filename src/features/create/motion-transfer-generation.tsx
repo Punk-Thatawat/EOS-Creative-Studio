@@ -476,6 +476,7 @@ export function MotionTransferWorkspace() {
   const guidanceVisible = promptSupported || negativePromptSupported;
   const settingsStep = guidanceVisible ? "4" : "3";
   const clearValues = () => {
+    if (isGenerating) return;
     if (sourceImage?.url.startsWith("blob:")) URL.revokeObjectURL(sourceImage.url);
     if (motionVideo?.url.startsWith("blob:")) URL.revokeObjectURL(motionVideo.url);
     setSourceImage(null);
@@ -496,10 +497,15 @@ export function MotionTransferWorkspace() {
     setPreviewView("latest");
     setGenerationId(null);
   };
-
   return (
     <div className={styles.columns}>
       <div className={styles.leftColumn}>
+        <div className={styles.videoTopActionsPanel}>
+          <div className={styles.videoPromptTopActions}>
+            <ImageTutorialButton feature="motion-transfer" featureName={t("create.video.tabs.motionTransfer")} />
+            <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
+          </div>
+        </div>
          <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">{t("create.video.motion.title")}</h2><InfoTooltip content={t("create.video.motion.description")} size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{t("create.video.motion.eyebrow")}</span><p className={styles.textVideoDescription}>{t("create.video.motion.description")}</p><div className={styles.featurePills}>{[t("create.video.motion.chipCopyMovement"), t("create.video.motion.chipCharacterImage"), t("create.video.motion.chipDrivingVideo")].map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{t("create.video.motion.note")}</small></div></section></section>
         <section className={styles.panel}>
            <MotionSectionTitle number="1">{t("create.video.common.characterImage")}</MotionSectionTitle>
@@ -513,10 +519,6 @@ export function MotionTransferWorkspace() {
         </section>
         {guidanceVisible ? (
           <section className={`${styles.panel} ${promptSupported ? styles.videoPromptPanel : ""}`}>
-            <div className={styles.videoPromptTopActions}>
-              <ImageTutorialButton feature="motion-transfer" featureName={t("create.video.tabs.motionTransfer")} />
-              <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
-            </div>
             {promptSupported ? <>
               <div className={styles.videoPromptHeading}>
                  <h2>{t("create.video.common.prompt")} <small>({promptRequired ? t("create.video.common.required") : t("create.video.common.optional")})</small></h2>

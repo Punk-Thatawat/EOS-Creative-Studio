@@ -3,7 +3,7 @@ import { useTemplateSettings } from "@/features/templates/use-template-settings"
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import {
   CloudUpload,
@@ -977,6 +977,7 @@ export function VideoGenerationPage() {
   const { locale, t } = useLocale();
   const modelCatalogVersion = useModelCatalogRefresh();
   const localizedParameterLabel = (name: string, title?: string) => translateVideoSchemaLabel(name, title, t);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedInitialTab = searchParams.get("tab");
   const initialVideoTab: ActiveVideoTab = isActiveVideoTab(requestedInitialTab) ? requestedInitialTab : "image-to-video";
@@ -2729,6 +2730,16 @@ export function VideoGenerationPage() {
         {visitedVideoTabs.has("extend-video") ? <div hidden={activeVideoTab !== "extend-video"}><ExtendVideoWorkspace /></div> : null}
         {activeVideoTab === "image-to-video" ? <div className={styles.columns}>
           <div className={styles.leftColumn}>
+            <div className={styles.videoTopActionsPanel}>
+              <div className={styles.videoPromptTopActions}>
+                <ImageTutorialButton
+                  feature="image-to-video"
+                  featureName="Image to Video"
+                  mode={generationMode}
+                />
+                <ClearValuesButton onClick={clearValues} disabled={isGeneratingVideo} />
+              </div>
+            </div>
             <section className={styles.panel}>
               <section
                 className={styles.videoModePanel}
@@ -2783,14 +2794,6 @@ export function VideoGenerationPage() {
               </section>
             </section>
             <section className={`${styles.panel} ${styles.promptPanel} ${styles.videoPromptPanel}`}>
-              <div className={styles.videoPromptTopActions}>
-                <ImageTutorialButton
-                  feature="image-to-video"
-                  featureName="Image to Video"
-                  mode={generationMode}
-                />
-                <ClearValuesButton onClick={clearValues} disabled={isGeneratingVideo} />
-              </div>
               <div className={styles.videoPromptHeading}>
                 <h2>{isStorylinePromptMode(generationMode) ? t("create.video.common.mainStoryline") : t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
                 <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
@@ -3118,10 +3121,7 @@ export function VideoGenerationPage() {
                          <h3>{t("create.video.common.recentVideos")}</h3>
                       <button
                         type="button"
-                        onClick={() => {
-                          setPreviewView("library");
-                          void loadVideoHistory(workspaceId);
-                        }}
+                        onClick={() => router.push("/history?type=video")}
                       >
                          {t("create.video.common.viewHistory")}
                       </button>

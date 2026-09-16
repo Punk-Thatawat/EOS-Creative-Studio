@@ -12,6 +12,7 @@ const PAGE_SIZE = 24;
 const types = [{ value: "all", label: "ทั้งหมด", icon: Sparkles }, { value: "image", label: "ภาพ", icon: ImageIcon }, { value: "video", label: "วิดีโอ", icon: Video }, { value: "audio", label: "เสียง", icon: AudioLines }] as const;
 const statuses = { all: "ทุกสถานะ", queued: "รอคิว", processing: "กำลังสร้าง", completed: "สำเร็จ", failed: "ไม่สำเร็จ", cancelled: "ยกเลิกแล้ว" };
 const features: Record<string, string> = { "text-to-image": "สร้างภาพจากข้อความ", "image-to-image": "ปรับแต่งภาพ", "style-transfer": "เปลี่ยนสไตล์", "background-removal": "พื้นหลัง AI", "extend-image": "ขยายภาพ", upscale: "เพิ่มความละเอียด", "image-to-video": "ภาพเป็นวิดีโอ", "text-to-video": "ข้อความเป็นวิดีโอ", "reference-to-video": "วิดีโอจากภาพอ้างอิง", "people-video": "พรีเซนเตอร์ AI", lipsync: "ลิปซิงก์", "motion-transfer": "ถ่ายทอดการเคลื่อนไหว", tts: "เสียงบรรยาย", dialogue: "พอดแคสต์", "voice-clone": "โคลนเสียง", "sound-effects": "เอฟเฟกต์เสียง", "audio-cleanup": "ปรับคุณภาพเสียง" };
+const historyTypeValues = new Set<HistoryType>(["all", "image", "video", "audio"]);
 const featureLabel = (item: HistoryItem) => features[item.feature] ?? item.feature;
 const title = (item: HistoryItem) => templateCopy(item.title, "", item.feature, item.mediaKind).title || featureLabel(item);
 const dateLabel = (value: string) => Number.isNaN(Date.parse(value)) ? "ไม่ระบุวันที่" : new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
@@ -72,6 +73,11 @@ export function HistoryPageClient() {
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const results = useRef<HTMLElement>(null);
   const fetching = useRef(false);
+  useEffect(() => {
+    const requestedType = new URLSearchParams(window.location.search).get("type");
+    if (!requestedType || !historyTypeValues.has(requestedType as HistoryType)) return;
+    setQuery(current => current.type === requestedType ? current : { ...current, type: requestedType as HistoryType, offset: 0 });
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     fetching.current = true;

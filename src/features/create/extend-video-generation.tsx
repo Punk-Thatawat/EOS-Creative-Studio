@@ -310,6 +310,7 @@ export function ExtendVideoWorkspace() {
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
   const previewVideoUrlForView = previewView === "model" ? null : displayedVideoUrl;
   const clearValues = () => {
+    if (isGenerating) return;
     if (sourceVideo?.url.startsWith("blob:")) URL.revokeObjectURL(sourceVideo.url);
     if (audio?.url.startsWith("blob:")) URL.revokeObjectURL(audio.url);
     setSourceVideo(null);
@@ -348,13 +349,15 @@ export function ExtendVideoWorkspace() {
   }});
   return <div className={styles.columns}>
     <div className={styles.leftColumn}>
-      <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="extend-video-title"><div className={styles.videoModeHeading}><h2 id="extend-video-title">{t("create.video.extend.title")}</h2><InfoTooltip content={t("create.video.extend.description")} size={11} /></div><p className={styles.textVideoDescription}>{t("create.video.extend.description")}</p></section></section>
-      <section className={styles.panel}><div className={styles.sectionTitle}><h2>1. {t("create.video.common.sourceVideo")}</h2></div><div className={`${styles.peopleSourcePreview} ${!sourceVideo ? styles.peopleSourceUploadEmpty : ""}`}>{sourceVideo ? <div className={styles.peopleSourceMedia}><video src={sourceVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setSourceVideo(null)} aria-label={t("create.video.common.removeSourceVideo")}><X size={14} /></button></div> : <button type="button" className={`${styles.upload} ${isSourceVideoDragging ? styles.uploadDragging : ""}`} onClick={() => sourceInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSourceVideoDragging(true); }} onDragLeave={() => setIsSourceVideoDragging(false)} onDrop={handleSourceVideoDrop}><CloudUpload size={23} /><strong>{t("create.video.common.uploadVideo")}</strong><small>{t("create.video.common.videoFormats")}</small></button>}</div><input ref={sourceInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "video"); event.currentTarget.value = ""; }} /></section>
-      <section className={`${styles.panel} ${styles.videoPromptPanel}`}>
+      <div className={styles.videoTopActionsPanel}>
         <div className={styles.videoPromptTopActions}>
           <ImageTutorialButton feature="extend-video" featureName={t("create.video.tabs.extendVideo")} />
           <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
         </div>
+      </div>
+      <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="extend-video-title"><div className={styles.videoModeHeading}><h2 id="extend-video-title">{t("create.video.extend.title")}</h2><InfoTooltip content={t("create.video.extend.description")} size={11} /></div><p className={styles.textVideoDescription}>{t("create.video.extend.description")}</p></section></section>
+      <section className={styles.panel}><div className={styles.sectionTitle}><h2>1. {t("create.video.common.sourceVideo")}</h2></div><div className={`${styles.peopleSourcePreview} ${!sourceVideo ? styles.peopleSourceUploadEmpty : ""}`}>{sourceVideo ? <div className={styles.peopleSourceMedia}><video src={sourceVideo.url} muted playsInline controls={false} /><button type="button" onClick={() => setSourceVideo(null)} aria-label={t("create.video.common.removeSourceVideo")}><X size={14} /></button></div> : <button type="button" className={`${styles.upload} ${isSourceVideoDragging ? styles.uploadDragging : ""}`} onClick={() => sourceInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSourceVideoDragging(true); }} onDragLeave={() => setIsSourceVideoDragging(false)} onDrop={handleSourceVideoDrop}><CloudUpload size={23} /><strong>{t("create.video.common.uploadVideo")}</strong><small>{t("create.video.common.videoFormats")}</small></button>}</div><input ref={sourceInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setAsset(file, "video"); event.currentTarget.value = ""; }} /></section>
+      <section className={`${styles.panel} ${styles.videoPromptPanel}`}>
         <div className={styles.videoPromptHeading}>
           <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
           <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />
