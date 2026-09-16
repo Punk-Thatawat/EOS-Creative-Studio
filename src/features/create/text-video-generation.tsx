@@ -668,6 +668,7 @@ export function TextToVideoWorkspace() {
   const previewVideoUrlForView = previewView === "model" ? null : displayedVideoUrl;
 
   const clearValues = () => {
+    if (isGenerating) return;
     if (referenceImage?.startsWith("blob:")) URL.revokeObjectURL(referenceImage);
     setPrompt("");
     setPromptOptimizerEnabled(false);
@@ -694,7 +695,6 @@ export function TextToVideoWorkspace() {
     setGenerationError(null);
     setNotice(null);
   };
-
   useTemplateSettings('video',{ready:!modelsLoading,model:selectedModel,models:models.map(m=>m.model),setModel:setSelectedModel,apply:(s,p)=>{
     setPrompt(p); setNegativePrompt(typeof s.negativePrompt==='string'?s.negativePrompt:'');
     if(s.duration!==undefined)setDurationValue(s.duration);
@@ -712,6 +712,12 @@ export function TextToVideoWorkspace() {
   return (
     <div className={styles.columns}>
       <div className={styles.leftColumn}>
+        <div className={styles.videoTopActionsPanel}>
+          <div className={styles.videoPromptTopActions}>
+            <ImageTutorialButton feature="text-to-video" featureName={t("create.video.tabs.textToVideo")} />
+            <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
+          </div>
+        </div>
         <section className={styles.panel}>
           <section className={styles.videoModePanel} aria-labelledby="text-video-title">
             <div className={styles.videoModeHeading}>
@@ -722,10 +728,6 @@ export function TextToVideoWorkspace() {
           </section>
         </section>
         <section className={`${styles.panel} ${styles.videoPromptPanel}`}>
-          <div className={styles.videoPromptTopActions}>
-            <ImageTutorialButton feature="text-to-video" featureName={t("create.video.tabs.textToVideo")} />
-            <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
-          </div>
           <div className={styles.videoPromptHeading}>
              <h2>{t("create.video.common.prompt")} <small>({t("create.video.common.required")})</small></h2>
           <span className={`${styles.videoPromptAnnotation} ${locale === "th" ? styles.videoPromptAnnotationThai : ""}`} aria-hidden="true" />

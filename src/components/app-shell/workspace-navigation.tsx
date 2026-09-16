@@ -2,6 +2,7 @@
 
 import Link, { useLinkStatus } from "next/link";
 import { AudioLines, BarChart3, ChevronDown, Clock3, Home, ImageIcon, Settings, Video, WandSparkles } from "lucide-react";
+import { type MouseEvent, useEffect, useRef } from "react";
 import { shellCopy, useLocale } from "@/lib/i18n/locale-provider";
 
 const workspaceItems = [
@@ -29,18 +30,53 @@ function NavigationLinkStatus() {
 export function WorkspaceNavigation({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const { locale } = useLocale();
   const text = shellCopy[locale];
+  const navigationLockRef = useRef<string | null>(null);
+  const navigationUnlockTimeoutRef = useRef<number | null>(null);
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const isCreateRoute = pathname.startsWith("/create/");
+
+  useEffect(() => {
+    navigationLockRef.current = null;
+    if (navigationUnlockTimeoutRef.current !== null) {
+      window.clearTimeout(navigationUnlockTimeoutRef.current);
+      navigationUnlockTimeoutRef.current = null;
+    }
+  }, [pathname]);
+
+  useEffect(() => () => {
+    if (navigationUnlockTimeoutRef.current !== null) window.clearTimeout(navigationUnlockTimeoutRef.current);
+  }, []);
+
+  const handleNavigationClick = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    // Modified/auxiliary clicks intentionally keep the browser's native
+    // new-tab behavior and should not lock the current navigation.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (href === pathname) {
+      onNavigate?.();
+      return;
+    }
+    if (navigationLockRef.current) {
+      event.preventDefault();
+      return;
+    }
+    navigationLockRef.current = href;
+    navigationUnlockTimeoutRef.current = window.setTimeout(() => {
+      navigationLockRef.current = null;
+      navigationUnlockTimeoutRef.current = null;
+    }, 8000);
+    onNavigate?.();
+  };
+
   const renderItem = (item: typeof workspaceItems[number]) => {
     const active = isActive(item.href);
-    return <Link key={item.href} href={item.href} onClick={onNavigate} aria-current={active ? "page" : undefined} className={`${mainClass} ${active ? activeClass : idleClass}`}><item.icon size={18} strokeWidth={active ? 2.5 : 2} /><span>{text.nav[item.href] ?? item.label}</span><NavigationLinkStatus /></Link>;
+    return <Link key={item.href} href={item.href} onClick={(event) => handleNavigationClick(event, item.href)} aria-current={active ? "page" : undefined} className={`${mainClass} ${active ? activeClass : idleClass}`}><item.icon size={18} strokeWidth={active ? 2.5 : 2} /><span>{text.nav[item.href] ?? item.label}</span><NavigationLinkStatus /></Link>;
   };
   return <div className="space-y-1" data-workspace-navigation>
     {renderItem(workspaceItems[0])}
     <details key={`create-group:${pathname}`} open={isCreateRoute} className="group">
       <summary className={`${mainClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden ${isCreateRoute ? activeClass : idleClass}`}><WandSparkles size={18} strokeWidth={isCreateRoute ? 2.5 : 2} /><span>{text.nav.create}</span><ChevronDown size={15} className="ml-auto transition-transform group-open:rotate-180" /></summary>
       <div className="ml-5 mt-1 space-y-1 border-l border-[#f1d7cc] pl-2">
-        {createItems.map((item) => { const active = isActive(item.href); return <Link key={item.href} href={item.href} onClick={onNavigate} aria-current={active ? "page" : undefined} className={`flex min-h-10 select-none items-center gap-2 rounded-[9px] px-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary ${active ? "bg-[#fff0e9] text-primary" : idleClass}`}><item.icon size={16} strokeWidth={active ? 2.4 : 2} /><span>{text.nav[item.href] ?? item.label}</span><NavigationLinkStatus /></Link>; })}
+        {createItems.map((item) => { const active = isActive(item.href); return <Link key={item.href} href={item.href} onClick={(event) => handleNavigationClick(event, item.href)} aria-current={active ? "page" : undefined} className={`flex min-h-10 select-none items-center gap-2 rounded-[9px] px-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary ${active ? "bg-[#fff0e9] text-primary" : idleClass}`}><item.icon size={16} strokeWidth={active ? 2.4 : 2} /><span>{text.nav[item.href] ?? item.label}</span><NavigationLinkStatus /></Link>; })}
       </div>
     </details>
     {workspaceItems.slice(1).map(renderItem)}
