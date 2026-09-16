@@ -7,6 +7,7 @@ import { StudioHeader } from "@/components/app-shell/studio-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { grantAdminMemberCredits, listAdminMembers, updateAdminMember, type AdminMember, type AdminMemberRole, type AdminMemberStatus } from "@/lib/api/admin-members";
 
@@ -44,15 +45,15 @@ function CreditDialog({ member, busy, onClose, onSubmit }: { member: AdminMember
   const amount = Number(credits);
   const valid = Number.isFinite(amount) && amount > 0 && amount <= 1000000;
 
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#201d1b]/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="credit-dialog-title">
-    <div className="w-full max-w-md overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]">
-      <header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Credit adjustment</p><h2 id="credit-dialog-title" className="mt-1 text-xl font-bold tracking-tight">Add credits</h2><p className="mt-1 text-xs text-muted-foreground">{member.displayName || member.email} · current balance {formatCredits(member.creditBalance)}</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-muted-foreground hover:bg-surface-muted" aria-label="Close add credits dialog"><X size={19} /></button></header>
+  return <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
+    <DialogContent className="max-w-md overflow-hidden rounded-3xl border-[#eaded6] bg-[#faf8f6]" showCloseButton={false}>
+      <header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Credit adjustment</p><DialogTitle className="mt-1 text-xl tracking-tight">Add credits</DialogTitle><DialogDescription className="mt-1 text-xs">{member.displayName || member.email} · current balance {formatCredits(member.creditBalance)}</DialogDescription></div><DialogClose render={<button type="button" className="rounded-xl p-2 text-muted-foreground hover:bg-surface-muted" aria-label="Close add credits dialog" />}><X size={19} /></DialogClose></header>
       <form onSubmit={(event) => { event.preventDefault(); if (valid) onSubmit(amount, reason.trim()); }}>
         <div className="space-y-4 p-5"><label className="block text-xs font-semibold">Credits to add<input autoFocus type="number" min="0.0001" max="1000000" step="0.0001" value={credits} onChange={(event) => setCredits(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="100" required /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">This is a grant and will be recorded in the member’s credit transactions.</span></label><label className="block text-xs font-semibold">Reason <span className="font-normal text-muted-foreground">(optional)</span><input maxLength={240} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="Customer support compensation" /></label></div>
         <footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="sm" disabled={!valid || busy}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Plus size={15} />} {busy ? "Adding…" : "Add credits"}</Button></footer>
       </form>
-    </div>
-  </div>;
+    </DialogContent>
+  </Dialog>;
 }
 
 function MemberRow({ member, busy, onChange, onCredit }: { member: AdminMember; busy: boolean; onChange: (input: { role?: AdminMemberRole; status?: AdminMemberStatus }) => void; onCredit: () => void }) {
