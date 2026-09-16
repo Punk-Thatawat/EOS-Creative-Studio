@@ -3,7 +3,7 @@ import { useTemplateSettings } from "@/features/templates/use-template-settings"
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Dropdown } from "@/components/ui/dropdown";
 import { CloudUpload, LoaderCircle, Mic2, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
@@ -39,6 +39,7 @@ import { ClearValuesButton } from "./components/clear-values-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
+import { useVideoGenerationResume, type ResumableVideoStatus } from "./use-video-generation-resume";
 
 type PeopleSchemaProperty = {
   type?: string;
@@ -319,6 +320,48 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const sourceUploadAbortRef = useRef<AbortController | null>(null);
   const audioUploadAbortRef = useRef<AbortController | null>(null);
 
+  const applyResumedStatus = useCallback((resumedStatus: ResumableVideoStatus) => {
+    const status = resumedStatus as PeopleVideoGenerationStatus | LipsyncGenerationStatus;
+    const resumedGenerationId = status.id ?? status.generationId;
+    if (resumedGenerationId) setGenerationId(resumedGenerationId);
+
+    if (status.status === "completed") {
+      const videoUrl = peopleOutputVideoUrl(status);
+      if (videoUrl) {
+        setFinalVideoUrl(videoUrl);
+        setPreviewVideoUrl(videoUrl);
+      }
+      setGenerationProgress(100);
+      setGenerationStatus("completed");
+      setGenerationError(null);
+      setNotice(t("create.video.common.videoReady"));
+      setLibraryRefreshKey((value) => value + 1);
+      return;
+    }
+
+    if (status.status === "failed" || status.status === "cancelled") {
+      setGenerationStatus("failed");
+      setGenerationError(formatGenerationError(generationErrorFromStatus(status, `${workspaceLabel} generation ${status.status}`), t("create.video.common.unableToGenerateFeature", { feature: workspaceLabel })));
+      setNotice(null);
+      return;
+    }
+
+    const progress = peopleProgress(status, 0);
+    setGenerationStatus("processing");
+    setGenerationProgress(progress);
+    setGenerationError(null);
+    setNotice(t("create.video.common.generatingFeatureProgress", { feature: workspaceLabel, percent: progress }));
+  }, [t, workspaceLabel]);
+
+  useVideoGenerationResume({
+    feature: workspaceFeature,
+    isGenerating: generationStatus === "uploading" || generationStatus === "processing",
+    loadStatus: (pollUrl, signal) => isLipsync
+      ? getLipsyncGenerationStatus(pollUrl, signal)
+      : getPeopleVideoGenerationStatus(pollUrl, signal),
+    onStatus: applyResumedStatus,
+  });
+
   const selectedModelOption = models.find((model) => model.model === selectedModel);
   useEffect(() => {
     if (!selectedModel) return;
@@ -392,7 +435,8 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
 
   useEffect(() => {
     let active = true;
-    listGenerationModels(workspaceFeature)
+    const controller = new AbortController();
+    listGenerationModels(workspaceFeature, undefined, { signal: controller.signal })
       .then((items) => {
         if (!active) return;
         const eligible = items.filter((item) => item.enabled);
@@ -409,6 +453,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [workspaceFeature, workspaceLabel]);
 

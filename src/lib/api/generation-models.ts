@@ -11,6 +11,10 @@ export type ModelUploadConstraints = {
 
 export type AiBackgroundMode = "remove" | "replace" | "generate" | "solid";
 export type ModelPreviewType = "image" | "video";
+export type ModelPostAudioOptions = {
+  sfx: boolean;
+  music: boolean;
+};
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
@@ -26,6 +30,7 @@ export type GenerationModelOption = {
   previewUrl?: string | null;
   previewStorageKey?: string | null;
   previewType?: ModelPreviewType | null;
+  postAudio?: ModelPostAudioOptions;
   capabilities: {
     model: string;
     provider: string;
@@ -103,17 +108,65 @@ export type AdminModelRoutesOverview = {
   routes: Record<string, GenerationModelOption[]>;
 };
 
-export async function listGenerationModels(feature = "text-to-image", backgroundMode?: AiBackgroundMode): Promise<GenerationModelOption[]> {
-  const accessToken = await getApiAccessToken();
-  if (!accessToken) return [];
-  const modeQuery = backgroundMode ? `&backgroundMode=${encodeURIComponent(backgroundMode)}` : "";
-  const response = await fetch(`/api/generation-models?feature=${encodeURIComponent(feature)}${modeQuery}`, {
-    headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-  });
-  const payload = await response.json().catch(() => null) as { data?: GenerationModelOption[]; message?: string } | null;
-  if (!response.ok) throw new Error(payload?.message ?? "Unable to load generation models");
-  return payload?.data ?? [];
+export type GenerationModelRequestOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
+const defaultGenerationModelRequestTimeoutMs = 15000;
+const generationModelCacheTtlMs = 30_000;
+const generationModelCache = new Map<string, { expiresAt: number; data: GenerationModelOption[] }>();
+
+export function clearGenerationModelCache(): void {
+  generationModelCache.clear();
+}
+
+export async function listGenerationModels(
+  feature = "text-to-image",
+  backgroundMode?: AiBackgroundMode,
+  options: GenerationModelRequestOptions = {},
+): Promise<GenerationModelOption[]> {
+  const cacheKey = `${feature}:${backgroundMode ?? ""}`;
+  const cached = generationModelCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    options.signal?.throwIfAborted();
+    return cached.data;
+  }
+  if (cached) generationModelCache.delete(cacheKey);
+  const controller = new AbortController();
+  const timeoutMs = Math.max(1000, options.timeoutMs ?? defaultGenerationModelRequestTimeoutMs);
+  let timedOut = false;
+  const timeoutId = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const abortFromCaller = () => controller.abort();
+  if (options.signal) {
+    if (options.signal.aborted) controller.abort();
+    else options.signal.addEventListener("abort", abortFromCaller, { once: true });
+  }
+
+  try {
+    const accessToken = await getApiAccessToken();
+    if (!accessToken) return [];
+    const modeQuery = backgroundMode ? `&backgroundMode=${encodeURIComponent(backgroundMode)}` : "";
+    const response = await fetch(`/api/generation-models?feature=${encodeURIComponent(feature)}${modeQuery}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null) as { data?: GenerationModelOption[]; message?: string } | null;
+    if (!response.ok) throw new Error(payload?.message ?? "Unable to load generation models");
+    const data = payload?.data ?? [];
+    generationModelCache.set(cacheKey, { expiresAt: Date.now() + generationModelCacheTtlMs, data });
+    return data;
+  } catch (error) {
+    if (timedOut) throw new Error("Loading generation models timed out");
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+    options.signal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
 async function adminRequest(path: string, init: RequestInit = {}): Promise<unknown> {
@@ -183,7 +236,7 @@ export async function listAdminModelRoutesOverview(): Promise<AdminModelRoutesOv
   return payload.data ?? { catalog: [], routes: {} };
 }
 
-export async function updateGenerationModelRoute(feature: string, model: string, provider: string, options: { backgroundMode?: AiBackgroundMode; enabled?: boolean; isDefault?: boolean } = { enabled: true, isDefault: true }): Promise<GenerationModelOption[]> {
+export async function updateGenerationModelRoute(feature: string, model: string, provider: string, options: { backgroundMode?: AiBackgroundMode; enabled?: boolean; isDefault?: boolean; postAudio?: ModelPostAudioOptions } = { enabled: true, isDefault: true }): Promise<GenerationModelOption[]> {
   const payload = await adminRequest(`/api/v1/admin/model-routes/${encodeURIComponent(feature)}`, { method: "PATCH", body: JSON.stringify({ model, provider, ...options }) }) as { data?: GenerationModelOption[] };
   return payload.data ?? [];
 }

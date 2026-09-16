@@ -4,6 +4,7 @@ import { clearBackendSession, getStoredBackendSession, persistBackendSession, ty
 
 const DEV_AUTH_BYPASS_TOKEN = "eos-dev-bypass";
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
+const authRefreshTimeoutMs = 15000;
 let refreshRequest: Promise<string | null> | null = null;
 
 export const AUTH_SESSION_EXPIRED_EVENT = "eos.auth.session-expired";
@@ -30,12 +31,15 @@ async function refreshStoredSession(stored: BackendAuthSession): Promise<string 
     return session.accessToken;
   }
 
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), authRefreshTimeoutMs);
   try {
     const response = await fetch(`${backendUrl}/api/v1/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ refresh_token: session.refreshToken }),
       credentials: "include",
+      signal: controller.signal,
     });
     const payload = await response.json().catch(() => null) as { data?: { session?: BackendAuthSession | null } } | null;
     const refreshed = payload?.data?.session;
@@ -49,6 +53,8 @@ async function refreshStoredSession(stored: BackendAuthSession): Promise<string 
       notifySessionExpired();
     }
     return null;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 

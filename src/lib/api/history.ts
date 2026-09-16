@@ -98,3 +98,20 @@ export async function fetchHistory(input: { search?: string; type?: HistoryType;
   if (!isHistoryResponse(payload.data)) throw new Error("History response was invalid");
   return payload.data;
 }
+
+export async function deleteHistoryItem(item: Pick<HistoryItem, "id" | "source">): Promise<void> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in to manage your history");
+  const response = await fetch(`${backendApiUrl}/history/${encodeURIComponent(item.source)}/${encodeURIComponent(item.id)}`, {
+    method: "DELETE",
+    headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    const message = isRecord(payload) && typeof payload.message === "string" && payload.message.trim()
+      ? payload.message : "Unable to delete history item";
+    throw new Error(message);
+  }
+}
