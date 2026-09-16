@@ -569,7 +569,12 @@ export type GenerationHistoryItem = {
   updatedAt?: string;
 };
 
-export async function listGenerationHistory(workspaceId?: string | null, feature?: string): Promise<GenerationHistoryItem[]> {
+export type GenerationHistoryRequestOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+};
+
+export async function listGenerationHistory(workspaceId?: string | null, feature?: string, options: GenerationHistoryRequestOptions = {}): Promise<GenerationHistoryItem[]> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in to view your video history");
   const params = new URLSearchParams();
@@ -580,6 +585,7 @@ export async function listGenerationHistory(workspaceId?: string | null, feature
     method: "GET",
     headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
     cache: "no-store",
+    signal: options.signal ?? AbortSignal.timeout(Math.max(1000, options.timeoutMs ?? 15000)),
   });
 
   const payload = await response.json().catch(() => null) as { data?: GenerationHistoryItem[] } | null;

@@ -3,7 +3,7 @@ import { useTemplateSettings } from "@/features/templates/use-template-settings"
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Dropdown } from "@/components/ui/dropdown";
 import { CloudUpload, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
@@ -32,6 +32,7 @@ import { ClearValuesButton } from "./components/clear-values-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
+import { useVideoGenerationResume, type ResumableVideoStatus } from "./use-video-generation-resume";
 
 type MotionSchemaProperty = {
   type?: string;
@@ -216,6 +217,46 @@ export function MotionTransferWorkspace() {
   const motionVideoInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const applyResumedStatus = useCallback((resumedStatus: ResumableVideoStatus) => {
+    const status = resumedStatus as MotionTransferGenerationStatus;
+    const resumedGenerationId = status.id ?? status.generationId;
+    if (resumedGenerationId) setGenerationId(resumedGenerationId);
+
+    if (status.status === "completed") {
+      const videoUrl = motionOutputUrl(status);
+      if (videoUrl) {
+        setFinalVideoUrl(videoUrl);
+        setPreviewVideoUrl(videoUrl);
+      }
+      setGenerationProgress(100);
+      setGenerationStatus("completed");
+      setGenerationError(null);
+      setNotice(t("create.video.common.videoReady"));
+      setLibraryRefreshKey((value) => value + 1);
+      return;
+    }
+
+    if (status.status === "failed" || status.status === "cancelled") {
+      setGenerationStatus("failed");
+      setGenerationError(formatGenerationError(generationErrorFromStatus(status, `Motion transfer generation ${status.status}`), t("create.video.common.unableToGenerateFeature", { feature: t("create.video.tabs.motionTransfer") })));
+      setNotice(null);
+      return;
+    }
+
+    const progress = motionProgress(status, 0);
+    setGenerationStatus("processing");
+    setGenerationProgress(progress);
+    setGenerationError(null);
+    setNotice(t("create.video.common.generatingFeatureProgress", { feature: t("create.video.tabs.motionTransfer"), percent: progress }));
+  }, [t]);
+
+  useVideoGenerationResume({
+    feature: "motion-transfer",
+    isGenerating: generationStatus === "uploading" || generationStatus === "processing",
+    loadStatus: (pollUrl, signal) => getMotionTransferGenerationStatus(pollUrl, signal),
+    onStatus: applyResumedStatus,
+  });
+
   const selectedModelOption = models.find((model) => model.model === selectedModel);
   useEffect(() => {
     if (!selectedModel) return;
@@ -248,7 +289,8 @@ export function MotionTransferWorkspace() {
 
   useEffect(() => {
     let active = true;
-    listGenerationModels("motion-transfer")
+    const controller = new AbortController();
+    listGenerationModels("motion-transfer", undefined, { signal: controller.signal })
       .then((items) => {
         if (!active) return;
         const eligible = items.filter((item) => item.enabled);
@@ -263,6 +305,7 @@ export function MotionTransferWorkspace() {
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [t]);
 

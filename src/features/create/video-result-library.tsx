@@ -48,7 +48,7 @@ function VideoGalleryThumbnail({ url, playSize = 14 }: { url: string; playSize?:
         src={url}
         muted
         playsInline
-        preload="auto"
+        preload="metadata"
         controls={false}
         disablePictureInPicture
         disableRemotePlayback
@@ -103,6 +103,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     const timeoutId = window.setTimeout(() => {
       if (!active) return;
       setLoading(true);
@@ -110,20 +111,22 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
       // History belongs to the signed-in account. Do not scope it to the last
       // workspace stored by another generation tab, otherwise switching tabs
       // can hide previously completed videos.
-      void listGenerationHistory(undefined, feature)
+      void listGenerationHistory(undefined, feature, { signal: controller.signal })
         .then((history) => {
           if (active) setItems(completedHistory(history));
         })
         .catch((reason: unknown) => {
+          if (controller.signal.aborted) return;
           const message = reason instanceof Error ? reason.message : "";
           if (active) setError(/please sign in/i.test(message) ? t("create.video.common.historySignIn") : message || t("create.video.common.loadingHistory"));
         })
         .finally(() => {
-          if (active) setLoading(false);
+      if (active) setLoading(false);
         });
     }, 0);
     return () => {
       active = false;
+      controller.abort();
       window.clearTimeout(timeoutId);
     };
   }, [externalRefreshKey, feature, refreshKey, t]);

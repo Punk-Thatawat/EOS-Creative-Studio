@@ -3,7 +3,7 @@ import { useTemplateSettings } from "@/features/templates/use-template-settings"
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Dropdown } from "@/components/ui/dropdown";
 import { CloudUpload, Mic2, RotateCcw, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
@@ -34,6 +34,7 @@ import { InfoTooltip } from "./components/info-tooltip";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
+import { useVideoGenerationResume, type ResumableVideoStatus } from "./use-video-generation-resume";
 
 type SchemaProperty = {
   type?: string;
@@ -321,6 +322,49 @@ export function TextToVideoWorkspace() {
   const referenceImageInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const applyResumedStatus = useCallback((resumedStatus: ResumableVideoStatus) => {
+    const status = resumedStatus as TextVideoGenerationStatus;
+    const resumedGenerationId = status.id ?? status.generationId;
+    if (resumedGenerationId) setGenerationId(resumedGenerationId);
+
+    if (status.status === "completed") {
+      const videoUrl = outputVideoUrl(status);
+      if (videoUrl) {
+        setFinalVideoUrl(videoUrl);
+        setPreviewVideoUrl(videoUrl);
+      }
+      setGenerationProgress(100);
+      setGenerationStatus("completed");
+      setGenerationError(null);
+      setNotice(t("create.video.common.videoReady"));
+      setLibraryRefreshKey((value) => value + 1);
+      return;
+    }
+
+    if (status.status === "failed" || status.status === "cancelled") {
+      setGenerationStatus(status.status === "cancelled" ? "cancelled" : "failed");
+      setGenerationError(formatGenerationError(generationErrorFromStatus(status, `Text-to-video generation ${status.status}`), t("create.video.common.unableToGenerateFeature", { feature: t("create.video.tabs.textToVideo") })));
+      setNotice(null);
+      return;
+    }
+
+    setGenerationStatus("processing");
+    setGenerationProgress(textVideoProgress(status, 0));
+    setGenerationError(null);
+    setNotice(t("create.video.common.generatingFeatureProgress", {
+      feature: t("create.video.tabs.textToVideo"),
+      percent: textVideoProgress(status, 0),
+    }));
+  }, [t]);
+
+  useVideoGenerationResume({
+    feature: "text-to-video",
+    isGenerating: generationStatus === "uploading" || generationStatus === "processing",
+    loadStatus: (pollUrl, signal) => getTextVideoGenerationStatus(pollUrl, signal),
+    onStatus: applyResumedStatus,
+  });
 
   const selectedModelOption = models.find((model) => model.model === selectedModel);
   useEffect(() => {
@@ -342,13 +386,15 @@ export function TextToVideoWorkspace() {
   const audioProperty = findSchemaProperty(properties, ["generateAudio", "generate_audio", "audio", "audio_enabled"]);
   const audioInputMode = Boolean(audioProperty && audioProperty[1].type !== "boolean");
   const hasNativeAudio = Boolean(capabilities?.nativeAudio || audioProperty || capabilities?.audioParameter);
-  const showPostAudioOptions = Boolean(selectedModelOption) && !hasNativeAudio;
+  const supportsPostAudioSfx = Boolean(selectedModelOption) && !hasNativeAudio && (selectedModelOption?.postAudio?.sfx ?? true);
+  const supportsPostAudioMusic = Boolean(selectedModelOption) && !hasNativeAudio && (selectedModelOption?.postAudio?.music ?? true);
+  const showPostAudioOptions = supportsPostAudioSfx || supportsPostAudioMusic;
   const postAudioMode = showPostAudioOptions
-    ? postAudioSfxEnabled && postAudioMusicEnabled
+    ? supportsPostAudioSfx && postAudioSfxEnabled && supportsPostAudioMusic && postAudioMusicEnabled
       ? "both"
-      : postAudioSfxEnabled
+      : supportsPostAudioSfx && postAudioSfxEnabled
         ? "sfx"
-        : postAudioMusicEnabled
+        : supportsPostAudioMusic && postAudioMusicEnabled
           ? "music"
           : "none"
     : "none";
@@ -404,7 +450,8 @@ export function TextToVideoWorkspace() {
 
   useEffect(() => {
     let active = true;
-    listGenerationModels("text-to-video")
+    const controller = new AbortController();
+    listGenerationModels("text-to-video", undefined, { signal: controller.signal })
       .then((items) => {
         if (!active) return;
         const eligible = items.filter((item) => item.enabled && item.capabilities.promptParameter);
@@ -421,6 +468,7 @@ export function TextToVideoWorkspace() {
       });
     return () => {
       active = false;
+      controller.abort();
     };
   }, [t]);
 
@@ -778,8 +826,8 @@ export function TextToVideoWorkspace() {
           <div className={styles.postAudioCard}>
             <div className={styles.settingLabel}><span>{t("create.video.common.addAudioAfterVideo")}</span><small>{t("create.video.common.optional")}</small></div>
             <div className={styles.postAudioOptions} role="group" aria-label={t("create.video.common.addAudioAfterVideo")}>
-              <div className={styles.toggleRow}><span>{t("create.video.common.videoToSfx")}</span><button type="button" className={`${styles.toggle} ${postAudioSfxEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioSfxEnabled((value) => !value)} aria-pressed={postAudioSfxEnabled} aria-label={t("create.video.common.enableVideoToSfx")}><i /></button></div>
-              <div className={styles.toggleRow}><span>{t("create.video.common.videoToMusic")}</span><button type="button" className={`${styles.toggle} ${postAudioMusicEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioMusicEnabled((value) => !value)} aria-pressed={postAudioMusicEnabled} aria-label={t("create.video.common.enableVideoToMusic")}><i /></button></div>
+              {supportsPostAudioSfx ? <div className={styles.toggleRow}><span>{t("create.video.common.videoToSfx")}</span><button type="button" className={`${styles.toggle} ${postAudioSfxEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioSfxEnabled((value) => !value)} aria-pressed={postAudioSfxEnabled} aria-label={t("create.video.common.enableVideoToSfx")}><i /></button></div> : null}
+              {supportsPostAudioMusic ? <div className={styles.toggleRow}><span>{t("create.video.common.videoToMusic")}</span><button type="button" className={`${styles.toggle} ${postAudioMusicEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioMusicEnabled((value) => !value)} aria-pressed={postAudioMusicEnabled} aria-label={t("create.video.common.enableVideoToMusic")}><i /></button></div> : null}
             </div>
             {postAudioMode !== "none" ? <small className={styles.postAudioHint}>{t("create.video.common.postAudioHint")}</small> : null}
           </div>
