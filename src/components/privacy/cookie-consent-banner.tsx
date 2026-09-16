@@ -36,6 +36,18 @@ function getServerConsent() {
   return null;
 }
 
+function subscribeToHydration() {
+  return () => {};
+}
+
+function getClientHydration() {
+  return true;
+}
+
+function getServerHydration() {
+  return false;
+}
+
 function saveConsent(value: Consent) {
   document.cookie = `${COOKIE_NAME}=${encodeURIComponent(JSON.stringify(value))}; path=/; max-age=${MAX_AGE}; SameSite=Lax`;
   window.dispatchEvent(new Event(CONSENT_EVENT));
@@ -44,6 +56,7 @@ function saveConsent(value: Consent) {
 export function CookieConsentBanner() {
   const rawConsent = useSyncExternalStore(subscribeToConsent, readConsentCookieValue, getServerConsent);
   const consent = parseConsent(rawConsent);
+  const hydrated = useSyncExternalStore(subscribeToHydration, getClientHydration, getServerHydration);
   const [customize, setCustomize] = useState(false);
   const [analytics, setAnalytics] = useState(false);
   const [marketing, setMarketing] = useState(false);
@@ -59,7 +72,7 @@ export function CookieConsentBanner() {
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, openSettings);
   }, []);
 
-  if (consent && !customize) return null;
+  if (!hydrated || (consent && !customize)) return null;
 
   const acceptAll = () => { saveConsent({ necessary: true, analytics: true, marketing: true }); setCustomize(false); };
   const rejectAll = () => { saveConsent({ necessary: true, analytics: false, marketing: false }); setCustomize(false); };

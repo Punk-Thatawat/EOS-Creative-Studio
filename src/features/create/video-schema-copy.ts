@@ -49,9 +49,14 @@ export function translateVideoSchemaLabel(name: string, title: string | undefine
   return key ? t(key) : title ?? labelFromParameterName(name);
 }
 
+export function isSyncModeParameter(name: string, title?: string): boolean {
+  return normalize(name) === "syncmode" || (title ? normalize(title) === "syncmode" : false);
+}
+
 export function translateVideoSchemaDescription(description: string | undefined, t: Translate): string | undefined {
   if (!description) return undefined;
   const normalized = description.trim().toLowerCase();
+  if (normalized.startsWith("defines how to handle duration mismatches between video and audio inputs")) return undefined;
   const match = schemaDescriptionKeys.find(({ match }) => normalized.startsWith(match));
   return match ? t(match.key) : description;
 }
