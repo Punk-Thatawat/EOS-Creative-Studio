@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ArrowRight, Download, RefreshCw, Plus, Search, QrCode, Info, X, AlertCircle } from "lucide-react";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
-import { createBillingPortalSession, createCreditCheckoutSession, fetchCheckoutCatalog, fetchTopupReceipt, fetchUsageDashboard, type CheckoutCatalog, type TopupReceipt, type UsageDashboard, type UsagePeriodKey } from "@/lib/api/usage";
-import { activityCsv, activityLabel, calculateVat, creditLabel, csvCell, chartBounds, dateLabel, monthLabel, number, signed, visibleTrend, type Activity } from "./usage-utils";
+import { Dropdown } from "@/components/ui/dropdown";
+import { createBillingPortalSession, createCreditCheckoutSession, fetchCheckoutCatalog, fetchTopupReceipt, fetchUsageDashboard, type CheckoutCatalog, type TopupReceipt, type UsageDashboard } from "@/lib/api/usage";
+import { activityCsv, activityLabel, calculateVat, creditLabel, csvCell, chartBounds, dateLabel, monthLabel, number, recentMonths, signed, visibleTrend, type Activity } from "./usage-utils";
 import styles from "./usage-page.module.css";
 
+const monthOptions = recentMonths(12);
 const tabs = ["ภาพรวม", "รายละเอียดการใช้", "ประวัติการเติมเงิน", "เติมเครดิต"];
 const icons: Record<string, string> = { image: "1-image", video: "2-video", presenter: "3-profile", audio: "4-audio", document: "5-document", custom: "6-custom-v2" };
 function ToolIcon({ tool, large = false }: { tool: string; large?: boolean }) {
@@ -112,17 +114,17 @@ function TopupTransactions({ items }: { items: Activity[] }) {
   </table></div>;
 }
 
-function Ledger({ period, usageOnly, topupsOnly = false, refresh }: { period: UsagePeriodKey; usageOnly: boolean; topupsOnly?: boolean; refresh: number }) {
+function Ledger({ month, usageOnly, topupsOnly = false, refresh }: { month: string; usageOnly: boolean; topupsOnly?: boolean; refresh: number }) {
   const [items, setItems] = useState<Activity[]>([]), [hasMore, setHasMore] = useState(false), [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [retry, setRetry] = useState(0);
   const [query, setQuery] = useState(""), [kind, setKind] = useState("all");
   useEffect(() => {
     let cancelled = false;
-    Promise.all(Array.from({ length: offset / 50 + 1 }, (_, index) => fetchUsageDashboard(period, "daily", 50, index * 50))).then(pages => { if (cancelled) return; setItems([...new Map(pages.flatMap(page => page.recentActivity.items).map(item => [item.id, item])).values()]); setHasMore(pages[pages.length - 1].recentActivity.pagination.hasMore); setError(false); }).catch(() => { if (!cancelled) setError(true); }).finally(() => { if (!cancelled) setLoading(false); });
+    Promise.all(Array.from({ length: offset / 50 + 1 }, (_, index) => fetchUsageDashboard(month, "daily", 50, index * 50))).then(pages => { if (cancelled) return; setItems([...new Map(pages.flatMap(page => page.recentActivity.items).map(item => [item.id, item])).values()]); setHasMore(pages[pages.length - 1].recentActivity.pagination.hasMore); setError(false); }).catch(() => { if (!cancelled) setError(true); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [period, offset, retry, refresh]);
+  }, [month, offset, retry, refresh]);
   const filtered = items.filter(item => (!usageOnly || item.transactionType === "usage") && (!topupsOnly || (item.referenceType === "stripe_checkout" && item.amount > 0)) && (topupsOnly || kind === "all" || (kind === "added" ? item.amount > 0 : item.amount < 0)) && `${usageOnly ? activityLabel(item) : creditLabel(item)} ${item.title} ${item.id} ${item.referenceId ?? ""}`.toLowerCase().includes(query.toLowerCase()));
-  const download = () => { const csv = usageOnly ? activityCsv(filtered) : topupsOnly ? "\uFEFF" + [["วันที่", "รายการ", "เครดิต", "ราคาก่อน VAT", "VAT", "ยอดชำระรวม", "รหัสรายการ", "รหัสอ้างอิง"], ...filtered.map(item => [item.createdAt, "เติมเครดิตผ่าน Stripe", item.amount, metadataNumber(item, "subtotal_thb") ?? "", metadataNumber(item, "vat_amount_thb") ?? "", metadataNumber(item, "total_thb") ?? "", item.id, item.referenceId ?? ""])].map(row => row.map(csvCell).join(",")).join("\r\n") : "\uFEFF" + [["วันที่", "รายการ", "เครดิตเข้า–ออก", "คงเหลือหลังรายการ", "รหัสรายการ", "รหัสอ้างอิง"], ...filtered.map(item => [item.createdAt, creditLabel(item), item.amount, item.balanceAfter, item.id, item.referenceId ?? ""])].map(row => row.map(csvCell).join(",")).join("\r\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" })); const link = document.createElement("a"); link.href = url; link.download = `eos-${usageOnly ? "usage" : topupsOnly ? "topup-history" : "credit"}-${period}.csv`; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); };
+  const download = () => { const csv = usageOnly ? activityCsv(filtered) : topupsOnly ? "\uFEFF" + [["วันที่", "รายการ", "เครดิต", "ราคาก่อน VAT", "VAT", "ยอดชำระรวม", "รหัสรายการ", "รหัสอ้างอิง"], ...filtered.map(item => [item.createdAt, "เติมเครดิตผ่าน Stripe", item.amount, metadataNumber(item, "subtotal_thb") ?? "", metadataNumber(item, "vat_amount_thb") ?? "", metadataNumber(item, "total_thb") ?? "", item.id, item.referenceId ?? ""])].map(row => row.map(csvCell).join(",")).join("\r\n") : "\uFEFF" + [["วันที่", "รายการ", "เครดิตเข้า–ออก", "คงเหลือหลังรายการ", "รหัสรายการ", "รหัสอ้างอิง"], ...filtered.map(item => [item.createdAt, creditLabel(item), item.amount, item.balanceAfter, item.id, item.referenceId ?? ""])].map(row => row.map(csvCell).join(",")).join("\r\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" })); const link = document.createElement("a"); link.href = url; link.download = `eos-${usageOnly ? "usage" : topupsOnly ? "topup-history" : "credit"}-${month}.csv`; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); };
   return <section className={styles.ledger}><div className={styles.sectionHeading}><h2>{topupsOnly ? "ประวัติการเติมเงิน" : usageOnly ? "รายละเอียดการใช้เครดิต" : "ประวัติเครดิต"}</h2><button className={styles.secondary} onClick={download} disabled={!filtered.length}><Download size={16} /> CSV รายการที่แสดง</button></div>
     <p className={styles.muted}>{topupsOnly ? "ดูรายการเติมเครดิตที่ชำระเงินสำเร็จ พร้อมดาวน์โหลด invoice receipt แต่ละรายการ" : usageOnly ? "ดูผลงานที่สร้าง เครื่องมือที่ใช้ และเครดิตที่หักในแต่ละงาน" : "ตรวจสอบเครดิตเข้า–ออก ทั้งการเติม หัก คืน และปรับยอด พร้อมยอดคงเหลือหลังแต่ละรายการ"}</p>
     <div className={styles.filters}><label className={styles.search}><Search size={17} /><input aria-label="ค้นหารายการที่โหลดแล้ว" placeholder="ค้นหาชื่อหรือรหัสรายการ" value={query} onChange={e => setQuery(e.target.value)} /></label>{!usageOnly && !topupsOnly && <select aria-label="ประเภทรายการ" value={kind} onChange={e => setKind(e.target.value)}><option value="all">ทุกประเภท</option><option value="added">เครดิตเพิ่ม</option><option value="used">เครดิตลด</option></select>}</div>
@@ -162,7 +164,7 @@ function Topup({ catalog, catalogError, dashboard, onRetry, onBusyChange }: { ca
 }
 
 export function UsagePage() {
-  const [activeTab, setActiveTab] = useState(0), [period, setPeriod] = useState<UsagePeriodKey>("current");
+  const [activeTab, setActiveTab] = useState(0), [month, setMonth] = useState(monthOptions[0].value);
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentReset, setPaymentReset] = useState(0);
   const [dashboard, setDashboard] = useState<UsageDashboard | null>(null), [catalog, setCatalog] = useState<CheckoutCatalog | null>(null);
@@ -193,21 +195,21 @@ export function UsagePage() {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    void Promise.allSettled([fetchUsageDashboard(period, "daily"), fetchCheckoutCatalog()]).then(([usage, packs]) => {
+    void Promise.allSettled([fetchUsageDashboard(month, "daily"), fetchCheckoutCatalog()]).then(([usage, packs]) => {
       if (cancelled) return;
       if (usage.status === "fulfilled") { setDashboard(usage.value); setError(false); } else { setDashboard(null); setError(true); }
       if (packs.status === "fulfilled") { setCatalog(packs.value); setCatalogError(false); } else { setCatalog(null); setCatalogError(true); }
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [period, refresh]);
+  }, [month, refresh]);
   useEffect(() => {
     if (checkoutState !== "success" || pollCount >= 6) return;
     const timer = window.setTimeout(() => { setRefresh(value => value + 1); setPollCount(value => value + 1); }, 5000);
     return () => window.clearTimeout(timer);
   }, [checkoutState, pollCount]);
   const reload = () => { setLoading(true); setRefresh(value => value + 1); };
-  const changePeriod = (value: UsagePeriodKey) => { setPeriod(value); setDashboard(null); setLoading(true); };
+  const changeMonth = (value: string) => { setMonth(value); setDashboard(null); setLoading(true); };
   const selectTab = (value: number, focus = false) => { if (paymentBusy) return; setActiveTab(value); if (focus) tabRefs.current[value]?.focus(); };
   const summary = dashboard?.summary;
   return <div className={styles.usagePage} data-page="usage" data-no-translate>
@@ -217,8 +219,8 @@ export function UsagePage() {
     <div className={styles.tabBar} role="tablist" aria-label="ส่วนการใช้งานและเครดิต">{tabs.map((tab, index) => <button key={tab} id={`usage-tab-${index}`} ref={element => { tabRefs.current[index] = element; }} type="button" role="tab" disabled={paymentBusy} aria-selected={activeTab === index} aria-controls={`usage-panel-${index}`} tabIndex={activeTab === index ? 0 : -1} onClick={() => selectTab(index)} onKeyDown={event => { const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); selectTab(next, true); } }}>{tab}</button>)}</div>
     {error && <div className={styles.error} role="alert"><AlertCircle size={20} /><span>โหลดข้อมูลเครดิตไม่สำเร็จ กรุณาตรวจสอบการเข้าสู่ระบบแล้วลองอีกครั้ง</span><a href="/login">เข้าสู่ระบบ</a><button onClick={reload} disabled={loading}>ลองอีกครั้ง</button></div>}
     <div role="tabpanel" id={`usage-panel-${activeTab}`} aria-labelledby={`usage-tab-${activeTab}`} tabIndex={0}>
-      {activeTab !== 3 && <div className={styles.periodControl}><label htmlFor="usage-period" className={styles.srOnly}>ช่วงเวลารายงาน</label><select id="usage-period" value={period} onChange={e => changePeriod(e.target.value as UsagePeriodKey)}><option value="current">{period === "current" && dashboard ? monthLabel(dashboard.period.startAt) : "เดือนปัจจุบัน"}</option><option value="previous">{period === "previous" && dashboard ? monthLabel(dashboard.period.startAt) : "เดือนก่อนหน้า"}</option></select><button className={styles.refresh} aria-label="รีเฟรชข้อมูล" disabled={loading} onClick={reload}><RefreshCw size={16} /></button></div>}
-      {activeTab === 3 ? <Topup key={`topup-${paymentReset}`} catalog={catalog} catalogError={catalogError} dashboard={dashboard} onRetry={reload} onBusyChange={setPaymentBusy} /> : activeTab === 1 || activeTab === 2 ? <Ledger key={`${period}-${activeTab}`} period={period} usageOnly={activeTab === 1} topupsOnly={activeTab === 2} refresh={refresh} /> : loading ? <div className={styles.loading} role="status">กำลังโหลดข้อมูลเครดิต…</div> : dashboard && activeTab === 0 ? <><div className={styles.overview}><section aria-label="กราฟการใช้เครดิต"><UsageChart dashboard={dashboard} /></section><section className={styles.recent}><div className={styles.sectionHeading}><h2>กิจกรรมล่าสุด</h2><button className={styles.textButton} onClick={() => selectTab(2, true)}>ดูประวัติทั้งหมด <ArrowRight size={18} /></button></div><ActivityRows items={dashboard.recentActivity.items.slice(0, 4)} /></section></div><section className={styles.tools} aria-label="การใช้งานตามเครื่องมือ">{[...dashboard.usageByTool.items].sort((a, b) => ["image", "video", "audio", "presenter", "document", "custom"].indexOf(a.key) - ["image", "video", "audio", "presenter", "document", "custom"].indexOf(b.key)).map(item => <div key={item.key}><ToolIcon tool={item.key} large /><span><strong>{item.label}</strong><b>{number(item.credits)} <small>เครดิต</small></b></span></div>)}</section></> : null}
+      {activeTab !== 3 && <div className={styles.periodControl}><Dropdown className={styles.periodDropdown} triggerClassName="min-h-11 rounded-[12px] px-4 text-base font-bold" ariaLabel="เดือนที่ต้องการดูรายงาน" value={month} onChange={changeMonth} options={monthOptions} /><button className={styles.refresh} aria-label="รีเฟรชข้อมูล" disabled={loading} onClick={reload}><RefreshCw size={16} /></button></div>}
+      {activeTab === 3 ? <Topup key={`topup-${paymentReset}`} catalog={catalog} catalogError={catalogError} dashboard={dashboard} onRetry={reload} onBusyChange={setPaymentBusy} /> : activeTab === 1 || activeTab === 2 ? <Ledger key={`${month}-${activeTab}`} month={month} usageOnly={activeTab === 1} topupsOnly={activeTab === 2} refresh={refresh} /> : loading ? <div className={styles.loading} role="status">กำลังโหลดข้อมูลเครดิต…</div> : dashboard && activeTab === 0 ? <><div className={styles.overview}><section aria-label="กราฟการใช้เครดิต"><UsageChart dashboard={dashboard} /></section><section className={styles.recent}><div className={styles.sectionHeading}><h2>กิจกรรมล่าสุด</h2><button className={styles.textButton} onClick={() => selectTab(2, true)}>ดูประวัติทั้งหมด <ArrowRight size={18} /></button></div><ActivityRows items={dashboard.recentActivity.items.slice(0, 4)} /></section></div><section className={styles.tools} aria-label="การใช้งานตามเครื่องมือ">{[...dashboard.usageByTool.items].sort((a, b) => ["image", "video", "audio", "presenter", "document", "custom"].indexOf(a.key) - ["image", "video", "audio", "presenter", "document", "custom"].indexOf(b.key)).map(item => <div key={item.key}><ToolIcon tool={item.key} large /><span><strong>{item.label}</strong><b>{number(item.credits)} <small>เครดิต</small></b></span></div>)}</section></> : null}
     </div>
   </div>;
 }
