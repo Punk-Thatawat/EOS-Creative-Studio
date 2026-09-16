@@ -73,6 +73,7 @@ export function HistoryPageClient() {
   const [selected, setSelected] = useState<HistoryItem | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<HistoryItem | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const results = useRef<HTMLElement>(null);
   const fetching = useRef(false);
   useEffect(() => {
@@ -106,9 +107,10 @@ export function HistoryPageClient() {
     if (item.source === "audio" && item.id.startsWith("wavespeed:")) return;
     if (item.status === "queued" || item.status === "processing") return;
     setPendingDelete(item);
+    setConfirmOpen(true);
   };
   const confirmDelete = async (item: HistoryItem) => {
-    setPendingDelete(null);
+    setConfirmOpen(false);
     const key = `${item.source}:${item.id}`;
     setDeletingKey(key); setActionError(null);
     try {
@@ -134,14 +136,14 @@ export function HistoryPageClient() {
         {loading ? <div className={s.list} aria-label="กำลังโหลดประวัติ">{[0, 1, 2].map(i => <div className={s.skeleton} key={i}><div /><span /><span /></div>)}</div> : error ? <div className={s.empty} role="alert"><AlertCircle size={34} /><h3>โหลดประวัติไม่สำเร็จ</h3><p>{error}</p><button className={s.secondary} onClick={() => setRefresh(v => v + 1)}><RefreshCw size={16} />ลองอีกครั้ง</button></div> : data?.items.length ? <><div className={s.list}>{data.items.map(item => <WorkCard key={`${item.source}-${item.id}`} item={item} open={() => setSelected(item)} remove={remove} deleting={deletingKey === `${item.source}:${item.id}`} />)}</div><nav className={s.pagination} aria-label="แบ่งหน้าประวัติ"><span>แสดง {query.offset + 1}–{query.offset + data.items.length} จาก {data.pagination.total.toLocaleString()} รายการ</span><div><button disabled={query.offset === 0} onClick={() => goPage(Math.max(0, query.offset - PAGE_SIZE))} aria-label="หน้าก่อนหน้า"><ChevronLeft size={17} /></button><span>หน้า {page} / {pageCount}</span><button disabled={!data.pagination.hasMore} onClick={() => goPage(query.offset + PAGE_SIZE)} aria-label="หน้าถัดไป"><ChevronRight size={17} /></button></div></nav></> : <div className={s.empty}><FileClock size={36} /><h3>{hasFilters ? "ยังไม่พบงานที่ตรงกับตัวกรอง" : "ไอเดียแรกของคุณ เริ่มได้ที่นี่"}</h3><p>{hasFilters ? "ลองเปลี่ยนคำค้นหา หรือแสดงผลงานทั้งหมด" : "เมื่อสร้างงานแล้ว ผลงานและสถานะจะปรากฏในหน้านี้"}</p>{hasFilters ? <button className={s.secondary} onClick={reset}>แสดงผลงานทั้งหมด</button> : <Link href="/create/image" className={s.primary}>สร้างภาพแรก <ArrowRight size={16} /></Link>}</div>}
       </div>
     </section>{selected && <WorkDialog item={data?.items.find(item => item.id === selected.id && item.source === selected.source) ?? selected} close={() => setSelected(null)} />}
-    <Dialog open={pendingDelete !== null} onOpenChange={next => { if (!next) setPendingDelete(null); }}>
+    <Dialog open={confirmOpen} onOpenChange={next => { if (!next) setConfirmOpen(false); }} onOpenChangeComplete={next => { if (!next) setPendingDelete(null); }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>ลบรายการนี้?</DialogTitle>
           <DialogDescription>ต้องการลบ “{pendingDelete ? title(pendingDelete) : ""}” ออกจากประวัติหรือไม่ ไฟล์ผลงานจะถูกลบถาวรและกู้คืนไม่ได้</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setPendingDelete(null)}>ยกเลิก</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmOpen(false)}>ยกเลิก</Button>
           <Button type="button" variant="destructive" size="sm" onClick={() => { if (pendingDelete) void confirmDelete(pendingDelete); }}><Trash2 size={15} /> ลบรายการ</Button>
         </DialogFooter>
       </DialogContent>
