@@ -35,9 +35,6 @@ function createShellCopy(locale: Locale): ShellCopy {
 
 export const shellCopy: Record<Locale, ShellCopy> = { th: createShellCopy("th"), en: createShellCopy("en") };
 
-// Legacy feature screens still contain copy authored before the shared locale layer.
-// Keep this as an exact whole-phrase compatibility map while those screens migrate
-// to typed copy objects. Never translate individual words or substrings here.
 const featurePhraseTranslations: Record<string, string> = {
   "OR CONTINUE WITH": "หรือเข้าสู่ระบบด้วย",
   "Don't have an account?": "ยังไม่มีบัญชี?",
@@ -450,6 +447,17 @@ const featurePhraseTranslations: Record<string, string> = {
   "Cinematic": "ภาพยนตร์",
   "Anime": "อนิเมะ",
   "None": "ไม่มี",
+  "System error": "ข้อผิดพลาดของระบบ",
+  "Provider error": "ข้อผิดพลาดจากผู้ให้บริการ",
+  "Insufficient credits": "เครดิตไม่เพียงพอ",
+  "All storyboard scenes must complete before merging": "ทุกฉากในสตอรี่บอร์ดต้องสร้างเสร็จก่อนรวมวิดีโอ",
+  "Unable to split storyboard image": "ไม่สามารถแยกรูปภาพสตอรี่บอร์ดได้",
+  "Unable to resume image generation": "ไม่สามารถสร้างรูปภาพต่อได้",
+  "Unable to resume image transformation": "ไม่สามารถแปลงรูปภาพต่อได้",
+  "Unable to resume image extension": "ไม่สามารถขยายรูปภาพต่อได้",
+  "Unable to resume image upscaling": "ไม่สามารถเพิ่มความละเอียดรูปภาพต่อได้",
+  "Unable to resume style transfer": "ไม่สามารถถ่ายโอนสไตล์ต่อได้",
+  "Unable to resume background generation": "ไม่สามารถสร้างพื้นหลังต่อได้",
 };
 
 const translatableAttributes = ["aria-label", "placeholder", "title", "alt"] as const;
@@ -464,6 +472,11 @@ function translateFeatureText(value: string, locale: Locale) {
   const sceneEstimate = core.match(/^(\d+) scene x (\d+) sec$/i);
   if (sceneEstimate) return `${leading}${sceneEstimate[1]} ฉาก × ${sceneEstimate[2]} วินาที${trailing}`;
   return `${leading}${featurePhraseTranslations[core] ?? core}${trailing}`;
+}
+
+export function translateFeaturePhrase(value: string): string {
+  if (typeof window === "undefined") return value;
+  return translateFeatureText(value, readStoredLocale());
 }
 
 function translateDocument(locale: Locale) {
@@ -529,11 +542,6 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
-  // Legacy feature screens are still translated by a compatibility observer.
-  // Never mutate React-owned DOM during hydration: doing so changes attributes
-  // such as `alt` before a nested client component has hydrated and triggers a
-  // React hydration mismatch. The short post-hydration delay is intentional;
-  // migrated screens use `t(key)` directly and do not need this fallback.
   useEffect(() => {
     const timer = window.setTimeout(() => setLegacyTranslationReady(true), 250);
     return () => window.clearTimeout(timer);

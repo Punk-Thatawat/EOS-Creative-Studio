@@ -1,3 +1,5 @@
+import { translateFeaturePhrase } from "@/lib/i18n/locale-provider";
+
 export type GenerationErrorSource = "system" | "provider";
 
 export type GenerationErrorPayload = {
@@ -64,5 +66,8 @@ export function formatGenerationError(error: unknown, fallbackMessage: string): 
     ? error.source
     : errorSourceFromCode(error instanceof Error ? error.message : undefined);
   const message = error instanceof Error && error.message.trim() ? error.message : fallbackMessage;
-  return `${source === "provider" ? "Provider error" : "System error"}: ${message}`;
+  // Translated per part: the label and the message are separate phrases, and
+  // the joined sentence matches nothing in the phrase table.
+  const label = translateFeaturePhrase(source === "provider" ? "Provider error" : "System error");
+  return `${label}: ${translateFeaturePhrase(message)}`;
 }
