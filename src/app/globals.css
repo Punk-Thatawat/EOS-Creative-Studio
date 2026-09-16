@@ -642,10 +642,16 @@ body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0
 @media (max-width: 600px) { .auth-callback-page { padding:18px 14px; }.auth-callback-card { min-height:430px; padding:42px 20px 48px; border-radius:18px; }.auth-callback-loader { width:60px; height:60px; margin-bottom:24px; border-width:7px; }.auth-callback-title-row { gap:11px; }.auth-callback-title-row h1 { font-size:clamp(28px,9vw,42px); }.auth-callback-title-row svg { width:28px; height:28px; }.auth-callback-title-row h1 span::after { bottom:-8px; height:4px; }.auth-callback-subtitle { margin:20px 0 31px; font-size:13px; }.auth-callback-step { gap:10px; font-size:11px; }.auth-callback-step:not(:last-child)::after { top:11px; left:calc(50% + 20px); width:calc(100% - 40px); }.auth-callback-step-dot { width:24px; height:24px; border-width:3px; font-size:10px; }.auth-callback-step.is-active .auth-callback-step-dot { box-shadow:inset 0 0 0 5px #fff,0 0 0 1px #f51591; }.auth-callback-progress { margin-top:30px; } }
 
 /* Login artwork popup */
-.auth-modal-shell { position:relative; width:min(100%,1440px,calc((100vh - 40px) * 1672 / 941)); aspect-ratio:1672 / 941; overflow:hidden; border:0; border-radius:12px; background:#fff url('/generated-assets/login-background.webp') center / 100% 100% no-repeat; box-shadow:0 24px 90px rgba(0,0,0,.45); }
+/* min-height keeps the form panel usable on small laptops: the panel is sized
+   as a share of this shell, so letting the artwork's aspect ratio shrink it
+   below the form's own height clipped the Google button and signup link. */
+.auth-modal-shell { position:relative; width:min(100%,1440px,calc((100vh - 40px) * 1672 / 941)); aspect-ratio:1672 / 941; min-height:min(calc(100dvh - 40px),780px); overflow:hidden; border:0; border-radius:12px; background:#fff url('/generated-assets/login-background.webp') center / cover no-repeat; box-shadow:0 24px 90px rgba(0,0,0,.45); }
 .auth-modal-panel { position:absolute; top:9%; right:5.5%; width:min(31%,430px); max-height:90%; overflow:auto; padding:38px 34px 28px; color:#111; background:rgba(255,255,255,.97); border-radius:20px; box-shadow:0 18px 50px rgba(0,0,0,.16); }
 .auth-modal-panel::-webkit-scrollbar { width:5px; }.auth-modal-panel::-webkit-scrollbar-thumb { background:#d7d7dc; border-radius:99px; }
-.auth-modal-panel, .auth-modal-shell { scrollbar-width:none; -ms-overflow-style:none; }.auth-modal-panel::-webkit-scrollbar, .auth-modal-shell::-webkit-scrollbar { display:none; width:0; height:0; }
+/* The panel keeps its thin scrollbar: on window sizes too small for the form
+   a hidden one made the cut-off content look broken rather than scrollable. */
+.auth-modal-panel { scrollbar-width:thin; scrollbar-color:#d7d7dc transparent; }
+.auth-modal-shell { scrollbar-width:none; -ms-overflow-style:none; }.auth-modal-shell::-webkit-scrollbar { display:none; width:0; height:0; }
 .auth-modal-close { top:14px; right:14px; color:#111; background:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
 .auth-modal-heading { display:none; }
 .auth-modal-heading-art { position:relative; width:100%; height:62px; margin:-16px 0 4px; overflow:hidden; }
@@ -655,6 +661,16 @@ body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0
 .auth-submit { position:absolute; inset:0; z-index:1; width:100%; height:100%; background:transparent; border-radius:0; }
 .auth-socials { grid-template-columns:1fr; }.auth-socials button { display:flex; align-items:center; justify-content:center; gap:9px; }.auth-socials button img { width:20px; height:20px; object-fit:contain; }
 .auth-mobile-logo, .auth-heading-mobile, .auth-brush-mobile { display:none; }
+/* Short viewports keep the side-by-side layout, so tighten the form's vertical
+   rhythm instead: the shell cannot grow past the screen to make room. */
+@media (min-width: 801px) and (max-height: 760px) {
+  .auth-modal-panel { padding:26px 30px 20px; }
+  .auth-modal-panel input[type="email"], .auth-modal-panel input[type="password"] { height:40px; margin-bottom:12px; }
+  .auth-modal-heading-art { height:50px; margin:-12px 0 2px; }
+  .auth-modal-subtitle { margin:6px 0 16px; }
+  .auth-remember { margin-bottom:12px !important; }
+  .auth-submit-wrap { height:48px; }
+}
 @media (max-width: 800px) {
   .auth-modal { padding:12px; }
   .auth-modal-shell { width:100%; max-height:calc(100vh - 24px); aspect-ratio:941 / 1672; min-height:calc(100vh - 24px); background-image:url('/generated-assets/login-background-mobile.webp'); background-position:center; background-size:100% 100%; }
