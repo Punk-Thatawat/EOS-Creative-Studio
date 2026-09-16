@@ -5,9 +5,8 @@
 @media(max-width:767px) { .desktopAccount { display:none; } }
 .usagePage button { cursor:pointer; }
 .usagePage button:disabled { cursor:not-allowed; opacity:.5; }
-/* The shared dropdown draws its own focus ring, so exclude its trigger and
-   options here or they pick up a second, offset outline on top of it. */
-.usagePage :is(button,a,select,summary):focus-visible:not([aria-haspopup="listbox"],[role="option"]) { outline:3px solid #ae0062; outline-offset:4px; }
+/* Focus falls through to the app-wide orange ring: this page's magenta one
+   read as a stray line beside the tabs and matched nothing else in the UI. */
 .hero { position:relative; isolation:isolate; overflow:hidden; margin:0; width:100%; min-height:260px; display:flex; align-items:center; padding:20px 8px; }
 .heroCopy { position:relative; z-index:1; min-width:0; }
 .heroCopy h1 { margin:0; font-family:Impact,"Arial Narrow",var(--font-kanit),sans-serif; font-size:clamp(36px,4.7vw,72px); font-weight:900; line-height:.98; letter-spacing:-1.8px; }
