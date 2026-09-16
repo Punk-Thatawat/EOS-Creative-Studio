@@ -450,6 +450,17 @@ const featurePhraseTranslations: Record<string, string> = {
   "Cinematic": "ภาพยนตร์",
   "Anime": "อนิเมะ",
   "None": "ไม่มี",
+  "System error": "ข้อผิดพลาดของระบบ",
+  "Provider error": "ข้อผิดพลาดจากผู้ให้บริการ",
+  "Insufficient credits": "เครดิตไม่เพียงพอ",
+  "All storyboard scenes must complete before merging": "ทุกฉากในสตอรี่บอร์ดต้องสร้างเสร็จก่อนรวมวิดีโอ",
+  "Unable to split storyboard image": "ไม่สามารถแยกรูปภาพสตอรี่บอร์ดได้",
+  "Unable to resume image generation": "ไม่สามารถสร้างรูปภาพต่อได้",
+  "Unable to resume image transformation": "ไม่สามารถแปลงรูปภาพต่อได้",
+  "Unable to resume image extension": "ไม่สามารถขยายรูปภาพต่อได้",
+  "Unable to resume image upscaling": "ไม่สามารถเพิ่มความละเอียดรูปภาพต่อได้",
+  "Unable to resume style transfer": "ไม่สามารถถ่ายโอนสไตล์ต่อได้",
+  "Unable to resume background generation": "ไม่สามารถสร้างพื้นหลังต่อได้",
 };
 
 const translatableAttributes = ["aria-label", "placeholder", "title", "alt"] as const;
@@ -464,6 +475,14 @@ function translateFeatureText(value: string, locale: Locale) {
   const sceneEstimate = core.match(/^(\d+) scene x (\d+) sec$/i);
   if (sceneEstimate) return `${leading}${sceneEstimate[1]} ฉาก × ${sceneEstimate[2]} วินาที${trailing}`;
   return `${leading}${featurePhraseTranslations[core] ?? core}${trailing}`;
+}
+
+/* For strings assembled in code rather than written into the markup. The DOM
+   observer below only matches a whole text node, so anything concatenated at
+   runtime has to look its parts up itself. */
+export function translateFeaturePhrase(value: string): string {
+  if (typeof window === "undefined") return value;
+  return translateFeatureText(value, readStoredLocale());
 }
 
 function translateDocument(locale: Locale) {
