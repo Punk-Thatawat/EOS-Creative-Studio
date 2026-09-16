@@ -15,11 +15,13 @@ export function useVideoCreditEstimate(input: DirectVideoQuoteInput | null) {
 
   useEffect(() => {
     let active = true;
+    let retryTimeoutId: number | null = null;
+    let attempt = 0;
     const request = inputKey === "null" ? null : JSON.parse(inputKey) as DirectVideoQuoteInput;
     const loadingTimeoutId = window.setTimeout(() => {
       if (active && request?.model) setLoading(true);
     }, 0);
-    const quoteTimeoutId = window.setTimeout(() => {
+    const runQuote = async () => {
       if (!request?.model) {
         setCreditCost(null);
         setError(null);
@@ -27,26 +29,34 @@ export function useVideoCreditEstimate(input: DirectVideoQuoteInput | null) {
         return;
       }
       setError(null);
-      void quoteDirectVideoGeneration(request)
-        .then((quote) => {
-          if (!active) return;
-          const value = Number(quote.creditCost);
-          if (!Number.isFinite(value)) throw new Error("Pricing unavailable");
-          setCreditCost(value);
-        })
-        .catch((reason: unknown) => {
-          if (!active) return;
+      let retrying = false;
+      try {
+        const quote = await quoteDirectVideoGeneration(request);
+        if (!active) return;
+        const value = Number(quote.creditCost);
+        if (!Number.isFinite(value)) throw new Error("Pricing unavailable");
+        setCreditCost(value);
+      } catch (reason: unknown) {
+        if (!active) return;
+        if (attempt < 2) {
+          attempt += 1;
+          retrying = true;
+          setLoading(true);
+          retryTimeoutId = window.setTimeout(() => void runQuote(), 750 * attempt);
+        } else {
           setCreditCost(null);
           setError(reason instanceof Error ? reason.message : "Pricing unavailable");
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, 450);
+        }
+      } finally {
+        if (active && !retrying) setLoading(false);
+      }
+    };
+    const quoteTimeoutId = window.setTimeout(() => void runQuote(), 450);
     return () => {
       active = false;
       window.clearTimeout(loadingTimeoutId);
       window.clearTimeout(quoteTimeoutId);
+      if (retryTimeoutId !== null) window.clearTimeout(retryTimeoutId);
     };
   }, [inputKey]);
 

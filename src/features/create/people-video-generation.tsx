@@ -535,9 +535,24 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   };
   const handleAudioDrop = (event: React.DragEvent<HTMLElement>) => {
     event.preventDefault();
+    event.stopPropagation();
     setIsAudioDragging(false);
-    const file = event.dataTransfer.files?.[0];
+    const files = Array.from(event.dataTransfer.files ?? []);
+    const file = files.find((candidate) => candidate.type.startsWith("audio/")) ?? files[0];
     if (file) void handleAudioFile(file);
+  };
+  const handleAudioDragOver = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setIsAudioDragging(true);
+  };
+  const handleAudioDragLeave = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    const relatedTarget = event.relatedTarget;
+    if (!relatedTarget || !(relatedTarget instanceof Node) || !event.currentTarget.contains(relatedTarget)) {
+      setIsAudioDragging(false);
+    }
   };
 
   const handleAudioFile = async (file: File) => {
@@ -741,6 +756,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
   const previewVideoUrlForView = previewView === "model" ? null : displayedVideoUrl;
   const clearValues = () => {
+    if (isGenerating || mediaUploadInProgress) return;
     sourceUploadAbortRef.current?.abort();
     audioUploadAbortRef.current?.abort();
     if (sourcePerson?.url.startsWith("blob:")) URL.revokeObjectURL(sourcePerson.url);
@@ -781,6 +797,12 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
   return (
     <div className={styles.columns}>
       <div className={styles.leftColumn}>
+        <div className={styles.videoTopActionsPanel}>
+          <div className={styles.videoPromptTopActions}>
+            <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")} />
+            <ClearValuesButton onClick={clearValues} disabled={isGenerating || mediaUploadInProgress} />
+          </div>
+        </div>
         <section className={styles.panel}>
           <section className={styles.videoModePanel} aria-labelledby={`${workspaceFeature}-title`}>
             <div className={styles.videoModeHeading}><h2 id={`${workspaceFeature}-title`}>{isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")}</h2><InfoTooltip content={isLipsync ? t("create.video.lipsync.description") : t("create.video.people.description")} size={11} /></div>
@@ -813,10 +835,6 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
         </section>
         {textSectionVisible ? (
           <section className={`${styles.panel} ${driverTextSupported ? styles.videoPromptPanel : ""}`}>
-            <div className={styles.videoPromptTopActions}>
-              <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")} />
-              <ClearValuesButton onClick={clearValues} disabled={isGenerating || mediaUploadInProgress} />
-            </div>
             {driverTextSupported ? (
               <>
                 <div className={styles.videoPromptHeading}>
@@ -855,7 +873,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
             {voiceProperty ? <PeopleSchemaField name={voiceProperty[0]} property={voiceProperty[1]} value={voiceValue} required={requiredProperties.has(voiceProperty[0])} labelOverride={t("create.video.common.voice")} onChange={setVoiceValue} /> : null}
             {audioSupported ? (
               <>
-                <button type="button" className={`${styles.peopleAudioUpload} ${isAudioDragging ? styles.uploadDragging : ""}`} onClick={() => audioInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsAudioDragging(true); }} onDragLeave={() => setIsAudioDragging(false)} onDrop={handleAudioDrop}>
+                <button type="button" className={`${styles.peopleAudioUpload} ${isAudioDragging ? styles.uploadDragging : ""}`} onClick={() => audioInputRef.current?.click()} onDragEnter={handleAudioDragOver} onDragOver={handleAudioDragOver} onDragLeave={handleAudioDragLeave} onDrop={handleAudioDrop}>
                   <Mic2 size={20} />
                    <strong>{audioFile ? t("create.video.common.replaceAudioFile") : t("create.video.common.uploadAudioFile")}</strong>
                    <small>{requiredAudioInput ? t("create.video.common.requiredForModel") : t("create.video.common.optional")} · {t("create.video.common.audioFormats")}</small>

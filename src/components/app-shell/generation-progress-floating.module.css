@@ -407,9 +407,11 @@
 
 @media (max-width: 700px) {
   .wrapper {
-    left: 10px;
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-    width: calc(100vw - 20px);
+    top: calc(4.25rem + env(safe-area-inset-top, 0px));
+    right: 10px;
+    bottom: auto;
+    left: auto;
+    width: min(360px, calc(100vw - 20px));
   }
 
   .wrapper[data-expanded="true"] .launcher { display: none; }

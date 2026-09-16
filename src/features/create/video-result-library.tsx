@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronRight, Play } from "lucide-react";
 import { listGenerationHistory, type GenerationHistoryItem } from "@/lib/api/generations";
 import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
@@ -69,6 +70,7 @@ function VideoGalleryThumbnail({ url, playSize = 14 }: { url: string; playSize?:
 
 export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGenerationId, selectedVideoUrl, refreshKey = 0, view: controlledView, onViewChange, onVideoSelect }: VideoResultLibraryProps) {
   const { t } = useLocale();
+  const router = useRouter();
   const [items, setItems] = useState<Array<{ id: string; url: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -177,7 +179,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
         <div className={`${styles.videoGalleryColumn} ${styles.videoRecentColumn}`}>
           <div className={styles.videoGalleryHeading}>
             <h3>{t("create.video.common.recentVideos")}</h3>
-            <button type="button" onClick={() => setView("library")}>{t("create.video.common.viewHistory")}</button>
+            <button type="button" onClick={() => router.push("/history?type=video")}>{t("create.video.common.viewHistory")}</button>
           </div>
           <div className={styles.videoRecentGallery}>
             <div className={styles.videoRecentRow} ref={recentRowRef}>

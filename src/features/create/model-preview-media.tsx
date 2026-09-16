@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { EosVideoPlayer } from "@/components/media/eos-video-player";
 
 type ModelPreviewMediaProps = {
   url: string;
@@ -27,20 +28,14 @@ export function ModelPreviewMedia({ url, type = "image", alt, className, frameCl
     : media;
 
   if (type === "video") {
-    return frame(<video
+    return <EosVideoPlayer
       src={url}
-      muted
-      autoPlay
-      loop
-      playsInline
       className={className}
-      aria-label={alt}
-      onLoadedMetadata={(event) => {
-        if (event.currentTarget.videoWidth && event.currentTarget.videoHeight) {
-          handleAspectRatioChange(event.currentTarget.videoWidth, event.currentTarget.videoHeight);
-        }
-      }}
-    />);
+      mediaFrameClassName={frameClassName}
+      mediaFrameStyle={frameStyle}
+      ariaLabel={alt}
+      onAspectRatioChange={onAspectRatioChange}
+    />;
   }
 
   return frame(<img

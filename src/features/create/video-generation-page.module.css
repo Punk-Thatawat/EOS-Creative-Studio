@@ -58,7 +58,7 @@
 .promptPanel textarea{display:block;height:94px;min-height:94px;margin-top:7px;padding:10px 11px;border:1px solid #e1e4e8;border-radius:9px;background:#fff;color:#4d5665;font-size:12px;line-height:1.35}
 .promptPanel input{display:block;height:38px;margin-top:7px;padding:9px 11px;border:1px solid #e1e4e8;border-radius:9px;color:#6a7079;font-size:10px}
 .promptPanel .counter{margin:-18px 9px 14px 0;font-size:9px}
-.videoPromptTopActions{display:flex;min-height:48px;align-items:center;justify-content:space-between;gap:12px;margin:-3px 0 14px}.videoPromptTopActions>*{display:inline-flex;min-width:0;align-items:center}.videoPromptTopActions>*:last-child{margin-left:auto}.videoPromptHeading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.videoPromptTitle{display:flex;min-width:0;align-items:center;gap:8px}.videoPromptHeading h2{margin:0;font-size:13px;font-weight:900;letter-spacing:.02em;white-space:nowrap}.videoPromptHeading h2 small{color:#777;font-size:9px;font-weight:400}.videoPromptTitle button{flex:0 0 auto}.videoPromptAnnotation{display:block;flex:0 1 145px;width:145px;height:36px;background:url('/generated-assets/be-descriptive.png') center/contain no-repeat}.videoPromptInputLabel{display:block!important;align-items:initial!important;margin-bottom:0!important;font-size:0!important;line-height:1!important}.videoPromptTextarea{display:block!important;box-sizing:border-box;width:100%;height:233px!important;min-height:233px!important;resize:vertical;margin-top:0!important;padding:10px 32px 10px 10px!important;border:1px solid #e3e3e3!important;border-radius:8px!important;background:#fcfcfc!important;color:#39404c!important;font:inherit;font-size:11px!important;line-height:1.5!important;outline:none}.videoPromptTextarea:focus{border-color:#f26b38!important}.videoPromptMeta{display:flex;justify-content:space-between;gap:8px;margin-top:8px;color:#8c8d91;font-size:9px;line-height:1.3}.videoPromptPanel .gen-prompt-optimizer-toggle{margin-top:9px;margin-bottom:15px}
+.videoTopActionsPanel{padding:8px 16px 6px;border-bottom:1px solid var(--border);background:#fff}.videoPromptTopActions{display:flex;min-height:48px;align-items:center;justify-content:space-between;gap:12px;margin:0}.videoPromptTopActions>*{display:inline-flex;min-width:0;align-items:center}.videoPromptTopActions>*:last-child{margin-left:auto}.videoPromptHeading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.videoPromptTitle{display:flex;min-width:0;align-items:center;gap:8px}.videoPromptHeading h2{margin:0;font-size:13px;font-weight:900;letter-spacing:.02em;white-space:nowrap}.videoPromptHeading h2 small{color:#777;font-size:9px;font-weight:400}.videoPromptTitle button{flex:0 0 auto}.videoPromptAnnotation{display:block;flex:0 1 145px;width:145px;height:36px;background:url('/generated-assets/be-descriptive.png') center/contain no-repeat}.videoPromptInputLabel{display:block!important;align-items:initial!important;margin-bottom:0!important;font-size:0!important;line-height:1!important}.videoPromptTextarea{display:block!important;box-sizing:border-box;width:100%;height:233px!important;min-height:233px!important;resize:vertical;margin-top:0!important;padding:10px 32px 10px 10px!important;border:1px solid #e3e3e3!important;border-radius:8px!important;background:#fcfcfc!important;color:#39404c!important;font:inherit;font-size:11px!important;line-height:1.5!important;outline:none}.videoPromptTextarea:focus{border-color:#f26b38!important}.videoPromptMeta{display:flex;justify-content:space-between;gap:8px;margin-top:8px;color:#8c8d91;font-size:9px;line-height:1.3}.videoPromptPanel .gen-prompt-optimizer-toggle{margin-top:9px;margin-bottom:15px}
 .videoModeTutorial{display:flex;min-height:26px;align-items:center;justify-content:flex-start;margin-bottom:7px}
 .sceneModalBackdrop{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;background:rgba(20,20,24,.46);backdrop-filter:blur(6px)}
 .sceneModal{width:min(100%,460px);max-height:calc(100vh - 40px);box-sizing:border-box;margin:auto 0;overflow-y:auto;border:1px solid #e9e4df;border-radius:16px;background:#fff;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.2);overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#f28a5d transparent}
@@ -85,15 +85,17 @@
 @media(max-width:700px){.scenePrev{display:none}.sceneRow{padding-left:0}}
 /* Keep the credit estimate and primary video action reachable on every mobile video mode. */
 @media(max-width:700px){
-  .settings{padding-bottom:calc(10rem + env(safe-area-inset-bottom))}
-  .estimateBlock{position:fixed;z-index:50;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));left:12px;display:grid;gap:7px;width:auto;margin:0;padding:10px 12px 9px;border:1px solid rgba(229,225,222,.95);border-radius:16px;background:rgba(255,255,255,.96);box-shadow:0 14px 32px rgba(34,25,18,.18),0 3px 10px rgba(242,107,56,.14);backdrop-filter:blur(12px)}
-  .estimateBlock .estimate{margin:0;padding:0;border-top:0}
-  .estimateBlock .estimate>div{font-size:10px}
-  .estimateBlock .estimate>span{margin-top:3px;font-size:9px}
+  .page{min-width:0;overflow-x:clip}
+  .settings{min-width:0;overflow-x:clip;padding-bottom:calc(10rem + env(safe-area-inset-bottom, 0px))}
+  .estimateBlock{box-sizing:border-box;position:fixed;z-index:20;right:12px;bottom:calc(4.5rem + env(safe-area-inset-bottom, 0px));left:12px;display:grid;gap:5px;width:auto;min-width:0;max-width:calc(100vw - 24px);margin:0;padding:7px 10px;border:1px solid rgba(229,225,222,.95);border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 14px 32px rgba(34,25,18,.18),0 3px 10px rgba(242,107,56,.14);backdrop-filter:blur(12px)}
+  .estimateBlock .estimate{min-width:0;margin:0;padding:0;border-top:0}
+  .estimateBlock .estimate>div{min-width:0;font-size:9px}
+  .estimateBlock .estimate>span{min-width:0;margin-top:2px;flex-wrap:wrap;font-size:8px;white-space:normal}
   .estimateBlock .estimate>span strong{font-size:9px}
-  .estimateBlock .settingsError{margin:0;padding:6px 8px;border-radius:8px;background:#fff4f2;line-height:1.3}
-  .estimateBlock .generate{width:100%;min-height:52px;margin-top:0;border:1px solid rgba(255,255,255,.22);box-shadow:0 8px 18px rgba(242,107,56,.26)}
-  .estimateBlock .privateNote{margin:0;font-size:8px}
+  .estimateBlock .settingsError{grid-column:1/-1;margin:0;padding:6px 8px;border-radius:8px;background:#fff4f2;font-size:9px;line-height:1.3}
+  .estimateBlock .generate{width:100%;min-width:0;min-height:46px;margin-top:0;padding:8px 6px;border:1px solid rgba(255,255,255,.22);box-shadow:0 8px 18px rgba(242,107,56,.26);font-size:14px;line-height:1.1;white-space:nowrap}
+  .estimateBlock .generate svg{width:16px;height:16px}
+  .estimateBlock .privateNote{display:flex;min-width:0;margin:0;font-size:7px;line-height:1.2;white-space:normal;overflow-wrap:anywhere}
 }
 .sceneFlowItem .scene{width:140px;height:128px;padding-bottom:0;display:grid;grid-template-rows:22px 74px 32px;flex:0 0 140px}.sceneCardHeader{height:22px}.scene .previousFrame,.scene .missingFrame,.scene>img{height:74px;min-height:74px}.sceneCardFooter{display:flex;min-height:0;align-items:flex-start;padding-top:5px}.sceneCardFooter .sceneSourceSelect{width:calc(100% - 10px);height:22px;margin:0 5px;padding:3px 6px}.sceneCardFooter .sceneAutoNote{display:flex;width:calc(100% - 10px);height:22px;min-height:22px;align-items:center;margin:0 5px;padding:0 6px;border:1px solid #eaded6;border-radius:5px;background:#fffaf7;color:#ad6038;font-size:7px;font-style:normal}.missingFrame{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:#f6f4f2;color:#b36a3e;text-align:center;font-size:7px}
 .sceneRow .addScene{width:140px;height:128px;min-height:128px;flex:0 0 140px;box-sizing:border-box;border-radius:8px;font-size:9px}
@@ -122,7 +124,7 @@
 .peopleUploadButton{display:flex;width:100%;height:100%;min-height:170px;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:2px dashed #eaa6c9;background:#fffafd;color:#ee5d25;font:inherit}.peopleUploadButton strong{color:#3f4651;font-size:11px}.peopleUploadButton small{color:#858990;font-size:9px}.peopleUploadButton:hover{background:#fff5fa}
 .peopleFileName{overflow:hidden;margin:7px 2px 0;color:#858990;font-size:9px;text-overflow:ellipsis;white-space:nowrap}
 .peopleFieldLabel{display:block!important;align-items:initial!important;margin-bottom:10px!important;font-size:10px!important;line-height:1.3}.peopleFieldLabel small{color:#777;font-size:9px;font-weight:400}.peopleFieldLabel textarea{display:block;height:82px;min-height:82px;margin-top:7px;padding:10px 11px;font-size:10px;line-height:1.35}.peopleFieldLabel input{display:block;margin-top:7px}
-.peopleAudioUpload{display:flex;width:100%;min-height:95px;flex-direction:column;align-items:center;justify-content:center;gap:5px;margin-top:10px;border:2px dashed #eaa6c9;border-radius:10px;background:#fffafd;color:#ee5d25;font:inherit}.peopleAudioUpload strong{color:#3f4651;font-size:11px}.peopleAudioUpload small{color:#858990;font-size:9px}.peopleAudioUpload:hover{background:#fff5fa}
+.peopleAudioUpload{display:flex;width:100%;min-height:95px;flex-direction:column;align-items:center;justify-content:center;gap:5px;margin-top:10px;border:2px dashed #eaa6c9;border-radius:10px;background:#fffafd;color:#ee5d25;font:inherit;cursor:pointer;transition:border-color .18s ease,background-color .18s ease,box-shadow .18s ease}.peopleAudioUpload strong{color:#3f4651;font-size:11px}.peopleAudioUpload small{color:#858990;font-size:9px}.peopleAudioUpload:hover{border-color:#f26b38;background:#fff5fa}.peopleAudioUpload:focus-visible{outline:3px solid #f26b38;outline-offset:2px}
 .peopleAudioFile{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:7px 9px;border:1px solid #eaded6;border-radius:7px;background:#fffaf7;color:#8f5c42;font-size:9px}.peopleAudioFile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.peopleAudioFile button{display:grid;width:22px;height:22px;flex:none;place-items:center;border:0;border-radius:5px;background:#fff;color:#8f5c42}.peopleAudioFile button:hover{background:#ffe9df;color:#d94b27}
 .peopleNotice{margin:10px 0 0;padding:8px 9px;border:1px solid #cdebd7;border-radius:8px;background:#f5fcf7;color:#267149;font-size:9px;line-height:1.35}
 .videoResultLibrary{box-sizing:border-box;margin-top:-10px;padding:0 16px 16px}
@@ -224,7 +226,7 @@
 .hero { height: min(220px, 18vw); min-height: 0; aspect-ratio: auto; }
 .hero picture { display: block; width: 100%; height: 100%; }
 .hero img { width: 100%; height: 100%; object-fit: cover; object-position: center 55%; }
-@media(max-width:700px){.hero{height:115px;aspect-ratio:auto}.hero img{object-position:center}}
+@media(max-width:700px){.hero{height:96px;aspect-ratio:auto}.hero img{object-position:center}}
 
 /* Keep every video tab aligned to the same responsive grid tracks. */
 .columns { grid-template-columns: minmax(0, .9fr) minmax(0, 1.55fr) minmax(0, .8fr); }
@@ -234,3 +236,29 @@
 
 /* Keep prompt text consistent with the Image creation prompt. */
 .promptPanel textarea, .videoPromptTextarea, .sceneModalField textarea { font-size: 16px !important; }
+
+/* Give the recent-video history action a full-width mobile layout and a reliable touch target. */
+@media(max-width:700px){
+  .videoGalleryGrid{grid-template-columns:1fr;gap:16px}
+  .videoGalleryColumn,.videoRecentColumn{padding-right:0;padding-left:0}
+  .videoRecentColumn{padding-top:12px;border-top:1px solid #e5e5e5;border-left:0}
+  .videoGalleryHeading{min-height:44px}
+  .videoGalleryHeading button{position:relative;z-index:4;min-height:44px;padding:10px 6px}
+  .videoGalleryHeading button:focus-visible{outline:2px solid #f26b38;outline-offset:2px;border-radius:6px}
+  .videoRecentGallery{margin-top:4px}
+}
+/* Prompt copy should stay visually light while headings retain their emphasis. */
+.panel textarea, .promptPanel textarea, .videoPromptTextarea, .sceneModalField textarea, .peopleFieldLabel textarea { font-weight: 400 !important; }
+
+/* Final mobile action-card sizing: keep the original stacked layout, only tighter. */
+@media(max-width:700px){
+  .settings{padding-bottom:calc(10rem + env(safe-area-inset-bottom, 0px))}
+  .estimateBlock{box-sizing:border-box;right:12px;bottom:calc(4.5rem + env(safe-area-inset-bottom, 0px));left:12px;display:grid;grid-template-columns:1fr;gap:5px;width:auto;min-width:0;max-width:calc(100vw - 24px);margin:0;padding:7px 10px;border:1px solid rgba(229,225,222,.95);border-radius:14px}
+  .estimateBlock .estimate{margin:0;padding:0;border-top:0}
+  .estimateBlock .estimate>div{min-width:0;font-size:9px}
+  .estimateBlock .estimate>span{min-width:0;margin-top:2px;flex-wrap:wrap;font-size:8px;white-space:normal}
+  .estimateBlock .settingsError{margin:0;padding:5px 8px;border-radius:8px;font-size:12px!important;line-height:1.25}
+  .estimateBlock .generate{width:100%;min-width:0;min-height:42px;margin-top:0;padding:6px;font-size:14px!important;line-height:1.1;white-space:nowrap}
+  .estimateBlock .generate svg{width:16px;height:16px}
+  .estimateBlock .privateNote{display:flex;min-width:0;margin:0;font-size:8px!important;line-height:1.2;white-space:normal;overflow-wrap:anywhere}
+}

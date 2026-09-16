@@ -2,24 +2,25 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MailCheck, UserRound, X, type LucideIcon } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MailCheck, Pause, Play, UserRound, X, type LucideIcon } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { EosLogo } from "@/components/brand/eos-logo";
-import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { VideoSource } from "@/components/media/video-source";
+import { getVideoEmbedUrl } from "@/lib/media/video-embed";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
 import { completePendingEmailLoginWithBackend, loginWithBackend, persistBackendSession, registerWithBackend, requestPasswordResetWithBackend, resendConfirmationWithBackend } from "@/lib/auth/backend-auth";
 import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 import { signInWithGoogle } from "@/lib/auth/google-login";
-import { listPublicVideoShowcase } from "@/lib/api/video-showcase";
+import { listPublicLandingIntroVideo, listPublicVideoShowcase } from "@/lib/api/video-showcase";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 const tools = [
-  ["AI Image", "Generate stunning images", "/generated-icons-v2/icon-1-image.png"],
-  ["AI Video", "Create engaging videos in minutes", "/generated-icons-v2/icon-2-video.png"],
-  ["AI Presenter", "AI presenters that represent you", "/generated-icons-v2/icon-3-profile.png"],
-  ["AI Audio", "Generate voiceovers and music", "/generated-icons-v2/icon-4-audio.png"],
-  ["AI Document", "Smart docs with AI & OCR", "/generated-icons-v2/icon-5-document.png"],
-  ["More Tools", "Custom AI workflows", "/generated-icons-v2/icon-6-sparkles.png"],
+  ["AI Image", "/generated-icons-v2/icon-1-image.png"],
+  ["AI Video", "/generated-icons-v2/icon-2-video.png"],
+  ["AI Presenter", "/generated-icons-v2/icon-3-profile.png"],
+  ["AI Audio", "/generated-icons-v2/icon-4-audio.png"],
+  ["AI Document", "/generated-icons-v2/icon-5-document.png"],
+  ["More Tools", "/generated-icons-v2/icon-6-sparkles.png"],
 ] as const;
 
 const fallbackExamples = [
@@ -33,13 +34,8 @@ const fallbackExamples = [
 
 type ShowcaseExample = { id?: string; label: string; video: string; webm?: string; mimeType?: string };
 
-const formatVideoDuration = (duration: number) => {
-  if (!Number.isFinite(duration)) return "--:--";
-  const totalSeconds = Math.round(duration);
-  return `${Math.floor(totalSeconds / 60).toString().padStart(2, "0")}:${(totalSeconds % 60).toString().padStart(2, "0")}`;
-};
-
 const introVideoShownDateKey = "eos-intro-video-shown-date-v1";
+const fallbackIntroVideo = "/uploaded-videos/intro-ai-image-generator.mp4";
 const resendConfirmationCooldownSeconds = 30;
 
 const getLocalDateKey = () => {
@@ -111,8 +107,9 @@ export function PreLoginPage() {
   const { t } = useLocale();
   const [examples, setExamples] = useState<ShowcaseExample[]>(fallbackExamples);
   const [exampleOffset, setExampleOffset] = useState(0);
-  const [videoDurations, setVideoDurations] = useState<Record<number, string>>({});
+  const [playingExampleIndex, setPlayingExampleIndex] = useState<number | null>(null);
   const [showIntroVideo, setShowIntroVideo] = useState(false);
+  const [introVideoUrl, setIntroVideoUrl] = useState(fallbackIntroVideo);
   const [loginOpen, setLoginOpen] = useState(false);
   const [authRedirect, setAuthRedirect] = useState("/home");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
@@ -135,12 +132,30 @@ export function PreLoginPage() {
   const authEmailError = authEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(authEmail) ? t("auth.validation.emailInvalid") : null;
   const authPasswordError = authMode === "register" && authPassword.length > 0 && authPassword.length < 8 ? t("auth.validation.passwordMin") : null;
 
+  const toggleExamplePlayback = (index: number) => {
+    const video = videoRefs.current[index];
+    if (!video) return;
+
+    if (video.paused) {
+      videoRefs.current.forEach((current, currentIndex) => {
+        if (currentIndex !== index) current?.pause();
+      });
+      void video.play().then(() => setPlayingExampleIndex(index)).catch(() => setPlayingExampleIndex(null));
+      return;
+    }
+
+    video.pause();
+    setPlayingExampleIndex(null);
+  };
+
   useEffect(() => {
     let active = true;
     listPublicVideoShowcase().then((items) => {
       if (!active) return;
-      setVideoDurations({});
       setExamples(items.map((item) => ({ id: item.id, label: item.label, video: item.videoUrl ?? "", mimeType: item.mimeType })));
+    }).catch(() => undefined);
+    listPublicLandingIntroVideo().then((setting) => {
+      if (active && setting.enabled && setting.videoUrl) setIntroVideoUrl(setting.videoUrl);
     }).catch(() => undefined);
     return () => { active = false; };
   }, []);
@@ -388,25 +403,6 @@ export function PreLoginPage() {
     return () => window.clearTimeout(timer);
   }, [t]);
 
-  useEffect(() => {
-    const cleanups = videoRefs.current.map((video, index) => {
-      if (!video) return undefined;
-      const updateDuration = () => {
-        if (video.duration > 0) {
-          setVideoDurations((current) => ({ ...current, [index]: formatVideoDuration(video.duration) }));
-        }
-      };
-      updateDuration();
-      video.addEventListener("loadedmetadata", updateDuration);
-      video.addEventListener("durationchange", updateDuration);
-      return () => {
-        video.removeEventListener("loadedmetadata", updateDuration);
-        video.removeEventListener("durationchange", updateDuration);
-      };
-    });
-    return () => cleanups.forEach((cleanup) => cleanup?.());
-  }, [examples]);
-
   return (
     <main className="landing-page">
       <header className="landing-header">
@@ -417,6 +413,7 @@ export function PreLoginPage() {
       </header>
 
       <section className="landing-hero">
+        <h1 className="sr-only">Create without limits</h1>
         <div className="hero-visual placeholder-visual" aria-label="EOS creative studio hero artwork">
           <Image src="/generated-assets/creative-studio-hero-with-text-right-copy.webp" alt="Create without limits - EOS Creative Studio" fill priority sizes="100vw" className="hero-artwork hero-artwork-desktop" />
           <Image src="/generated-assets/hero-mobile-5x4.webp" alt="Create without limits - EOS Creative Studio" fill sizes="100vw" className="hero-artwork hero-artwork-mobile" />
@@ -424,25 +421,28 @@ export function PreLoginPage() {
       </section>
 
       <section id="tools" className="tool-strip" aria-label="Creative tools">
-        {tools.map(([title, description, imageSrc]) => (
+        {tools.map(([title, imageSrc]) => (
           <div className="tool-item" key={title}>
             <Image className="tool-image" src={imageSrc} alt="" width={72} height={72} />
-            <strong>{title}</strong>
-            <small>{description}</small>
+            <div className="tool-copy">
+              <strong>{title}</strong>
+            </div>
           </div>
         ))}
       </section>
 
       <section id="examples" className="examples-section">
         <div className="section-heading"><h2>SEE WHAT YOU CAN CREATE</h2><span>EXPLORE EXAMPLES</span><div className="carousel-actions"><button aria-label="Previous examples" onClick={() => setExampleOffset(Math.max(0, visibleExampleOffset - 1))} disabled={visibleExampleOffset === 0}><ChevronLeft size={18} /></button><button aria-label="Next examples" onClick={() => setExampleOffset(Math.min(maxExampleOffset, visibleExampleOffset + 1))} disabled={visibleExampleOffset >= maxExampleOffset}><ChevronRight size={18} /></button></div></div>
-        <div className="example-window"><div className="example-track" style={{ transform: `translateX(-${visibleExampleOffset * 20.5}%)` }}>{examples.map((example, index) => <article className={`example-card example-${index}${index === visibleExampleOffset + 2 ? " example-featured" : ""}`} key={example.id ?? `${example.label}-${index}`}>
-          <div className="example-placeholder">
-            <video ref={(video) => { videoRefs.current[index] = video; }} className="example-video" muted loop playsInline preload="none" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`} onLoadedMetadata={(event) => { const duration = event.currentTarget.duration; setVideoDurations((current) => ({ ...current, [index]: formatVideoDuration(duration) })); }}>
-              {example.webm ? <source src={example.webm} type="video/webm" /> : null}
-              {example.video ? <source src={example.video} type={example.mimeType ?? "video/mp4"} /> : null}
+        <div className="examples-swipe-hint" aria-hidden="true">SWIPE TO EXPLORE <ArrowRight size={14} /></div>
+        <div className="example-window" role="region" aria-label="Creative examples"><div className="example-track" style={{ transform: `translateX(-${visibleExampleOffset * 20.5}%)` }}>{examples.map((example, index) => <article className={`example-card example-${index}${index === visibleExampleOffset + 2 ? " example-featured" : ""}`} key={example.id ?? `${example.label}-${index}`}>
+          <div className="example-placeholder">{getVideoEmbedUrl(example.video) ? <iframe src={getVideoEmbedUrl(example.video) ?? undefined} title={`${example.label} preview`} className="example-video example-video-embed" allow="autoplay; encrypted-media; picture-in-picture" /> : <>
+            <video ref={(video) => { videoRefs.current[index] = video; }} className="example-video" muted loop playsInline preload="metadata" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`} onPlay={() => setPlayingExampleIndex(index)} onPause={() => setPlayingExampleIndex((current) => current === index ? null : current)} onEnded={() => setPlayingExampleIndex((current) => current === index ? null : current)}>
+            {example.webm ? <source src={example.webm} type="video/webm" /> : null}
+            {example.video ? <source src={example.video} type={example.mimeType ?? "video/mp4"} /> : null}
             </video>
-          </div>
-          <div className="example-label">{example.label}<time>{videoDurations[index] ?? "--:--"}</time></div>
+            <button type="button" className={`example-video-control${playingExampleIndex === index ? " is-playing" : ""}`} aria-label={`${playingExampleIndex === index ? "Pause" : "Play"} ${example.label}`} onClick={() => toggleExamplePlayback(index)}>{playingExampleIndex === index ? <Pause size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}</button>
+          </>}</div>
+          <div className="example-label">{example.label}</div>
         </article>)}</div></div>
       </section>
 
@@ -454,8 +454,9 @@ export function PreLoginPage() {
         </div>
         <div className="video-modal-shell" onClick={(event) => event.stopPropagation()}>
           <div className="video-modal-actions"><button type="button" className="video-modal-close" aria-label="Close intro video" onClick={() => setShowIntroVideo(false)}><X size={24} /></button></div>
-          <EosVideoPlayer
-            src="/uploaded-videos/intro-ai-image-generator.mp4"
+          <VideoSource
+            key={introVideoUrl}
+            src={introVideoUrl}
             autoPlay
             muted
             ariaLabel="AI Image Generator intro video"
