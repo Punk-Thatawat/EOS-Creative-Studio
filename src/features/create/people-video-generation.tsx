@@ -38,7 +38,7 @@ import { ImageTutorialButton } from "./image-generation/components/image-tutoria
 import { ClearValuesButton } from "./components/clear-values-button";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
-import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
+import { isSyncModeParameter, translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
 import { useVideoGenerationResume, type ResumableVideoStatus } from "./use-video-generation-resume";
 
 type PeopleSchemaProperty = {
@@ -178,6 +178,11 @@ function readAudioDuration(file: File): Promise<number | null> {
   });
 }
 
+function normalizePeopleVideoDuration(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value) || value <= 0) return null;
+  return Math.max(1, Math.ceil(value));
+}
+
 function PeopleSchemaField({
   name,
   property,
@@ -196,6 +201,7 @@ function PeopleSchemaField({
   const { t } = useLocale();
   const label = labelOverride ?? translateVideoSchemaLabel(name, property.title, t);
   const description = translateVideoSchemaDescription(property.description, t);
+  const info = isSyncModeParameter(name, property.title) ? t("create.video.common.info.syncMode") : undefined;
   const type = property.type ?? (property.enum ? "string" : typeof property.default === "boolean" ? "boolean" : typeof property.default === "number" ? "number" : "string");
   if (["duration", "duration_seconds", "durationSeconds"].includes(name)) {
     return <DurationControl property={property} value={value} required={required} onChange={(nextValue) => onChange(nextValue)} />;
@@ -203,7 +209,7 @@ function PeopleSchemaField({
   if (property.enum?.length) {
     return (
       <label className={styles.dynamicField}>
-        <span>{label}{required ? <b>*</b> : null}</span>
+        <span>{label}{info ? <InfoTooltip content={info} size={11} /> : null}{required ? <b>*</b> : null}</span>
         <Dropdown
           value={value === undefined ? "" : String(value)}
           options={[
@@ -256,7 +262,7 @@ function PeopleSchemaField({
   }
   return (
     <label className={styles.dynamicField}>
-      <span>{label}{required ? <b>*</b> : null}</span>
+      <span>{label}{info ? <InfoTooltip content={info} size={11} /> : null}{required ? <b>*</b> : null}</span>
       <input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : "any")} onChange={(event) => onChange(parsePeopleValue(event.target.value, property))} aria-required={required} />
       {description ? <small>{description}</small> : null}
     </label>
@@ -603,7 +609,12 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
     setNotice(null);
   };
   const mediaUploadInProgress = sourcePerson?.uploadStatus === "uploading" || audioUploadStatus === "uploading";
-  const effectiveDurationValue = audioDuration !== null ? Number(audioDuration.toFixed(2)) : durationValue;
+  // The video quote/generation APIs accept duration in whole seconds. Audio
+  // metadata is commonly fractional, so round up to avoid cutting off the
+  // final part of the uploaded audio while keeping the request valid.
+  const effectiveDurationValue = audioDuration !== null
+    ? normalizePeopleVideoDuration(audioDuration)
+    : durationValue;
   const displayDuration = audioDuration !== null
     ? effectiveDurationValue
     : (isLipsync || requiredAudioInput ? undefined : durationValue);
