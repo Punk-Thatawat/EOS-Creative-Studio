@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { AuthenticatedStudioGuard } from "@/components/auth/authenticated-studio-guard";
+import { AdminAccessGuard } from "@/components/auth/admin-access-guard";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  return <AuthenticatedStudioGuard>{children}</AuthenticatedStudioGuard>;
+  return <AdminAccessGuard>{children}</AdminAccessGuard>;
 }
