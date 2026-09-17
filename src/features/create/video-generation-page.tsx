@@ -3609,7 +3609,7 @@ export function VideoGenerationPage() {
                 </label>
               );
             })}
-            <div className={styles.estimateBlock}>
+            <div data-mobile-action-dock className={styles.estimateBlock}>
               <div className={styles.estimate} title={creditEstimateError ?? undefined}>
                 <div>
                    {t("create.video.common.estimatedCredits")} <InfoTooltip content={t("create.video.common.info.estimatedCredits")} size={11} />

@@ -25,3 +25,21 @@
   line-height: 1.5;
   white-space: normal;
 }
+
+/* Wherever a finger is the pointer -- phone or iPad -- the 16px icon stays
+   16px so it still sits inline with its heading, but a transparent
+   pseudo-element grows the TAP area to 40px (WCAG 2.2 / 2.5.8). Nothing in
+   the layout moves. See the two-query note in globals.css. */
+@media (max-width: 1023.98px), (pointer: coarse) {
+  .trigger { position: relative; }
+
+  .trigger::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    transform: translate(-50%, -50%);
+  }
+}

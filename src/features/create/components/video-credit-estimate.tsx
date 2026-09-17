@@ -76,7 +76,7 @@ export function VideoCreditEstimate({ featureLabel, duration, estimate, emptyMes
       ? t("create.video.common.pricingUnavailable")
       : t("create.video.common.creditsValue", { cost: estimate.creditCost.toLocaleString(locale === "th" ? "th-TH" : "en-US", { maximumFractionDigits: 2 }) });
   const quantityLabel = duration !== undefined && duration !== "" ? t("create.video.common.creditsDuration", { duration: String(duration) }) : compactLabel ? t("create.video.common.creditsVideo") : t("create.video.common.creditsFeature", { feature: featureLabel });
-  return <div className={styles.estimateBlock}>
+  return <div data-mobile-action-dock className={styles.estimateBlock}>
     <div className={styles.estimate} title={estimate.error ?? undefined}>
       <div>{t("create.video.common.estimatedCredits")} <InfoTooltip content={t("create.video.common.info.estimatedCredits")} size={11} /></div>
       <span>{quantityLabel}<strong>{value}</strong></span>

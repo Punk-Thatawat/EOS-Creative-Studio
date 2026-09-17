@@ -95,7 +95,7 @@ export function AccountMenu({
         )}
         <span className="hidden sm:block">
           <span className="block text-xs font-bold leading-4">{displayName}</span>
-          {localizedRole ? <span className="block text-[11px] leading-4 text-muted-foreground">{localizedRole}</span> : null}
+          {localizedRole ? <span className="block text-[13px] leading-4 text-muted-foreground">{localizedRole}</span> : null}
         </span>
         <ChevronDown className="hidden text-muted-foreground sm:block" size={14} />
       </button>
