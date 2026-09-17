@@ -50,7 +50,7 @@ function CreditsCard({ credits }: { credits: HomeCredits | null }) {
       <div
         className="absolute inset-0 bg-cover opacity-90"
         style={{
-          backgroundImage: "url('/generated-icons-v2/credits-overview-bg.png')",
+          backgroundImage: "url('/generated-icons-v2/credits-overview-bg.webp')",
           backgroundPosition: "right center",
         }}
         aria-hidden="true"

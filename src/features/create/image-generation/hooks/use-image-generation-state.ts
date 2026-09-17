@@ -754,62 +754,31 @@ export function useImageGenerationState() {
   ]);
 
   useEffect(() => {
-    let remainingModelLoads = 5;
     let isMounted = true;
     const modelLoadController = new AbortController();
-    const finishModelLoad = () => {
-      remainingModelLoads -= 1;
-      if (isMounted && remainingModelLoads === 0) setIsLoadingModels(false);
-    };
-
-    void listGenerationModels("text-to-image", undefined, { signal: modelLoadController.signal }).then((models) => {
-      setModelOptions(models);
-      const defaultModel = models.find((item) => item.isDefault);
-      setSelectedModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
-    }).catch(() => {
-      // The backend still resolves its configured default if the catalog is unavailable.
-    }).finally(finishModelLoad);
-    void listGenerationModels("image-to-image", undefined, { signal: modelLoadController.signal }).then((models) => {
-      setImageToImageModelOptions(models);
-      const defaultModel = models.find((item) => item.isDefault);
-      setSelectedImageToImageModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
-    }).catch(() => {
-      // The backend still resolves its configured default if the catalog is unavailable.
-    }).finally(finishModelLoad);
-    void listGenerationModels("style-transfer", undefined, { signal: modelLoadController.signal }).then((models) => {
-      setStyleTransferModelOptions(models);
-      const defaultModel = models.find((item) => item.isDefault);
-      setSelectedStyleTransferModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
-    }).catch(() => {
-      // The backend still resolves its configured default if the catalog is unavailable.
-    }).finally(finishModelLoad);
-    void listGenerationModels("upscale", undefined, { signal: modelLoadController.signal }).then((models) => {
-      setUpscaleModelOptions(models);
-      const defaultModel = models.find((item) => item.isDefault);
-      setSelectedUpscaleModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
-    }).catch(() => {
-      // The UI remains available while the backend route is being configured.
-    }).finally(finishModelLoad);
-    void listGenerationModels("extend-image", undefined, { signal: modelLoadController.signal }).then((models) => {
-      setExtendModelOptions(models);
-      const defaultModel = models.find((item) => item.isDefault);
-      setSelectedExtendModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
-    }).catch(() => {
-      // The UI remains available while the backend route is being configured.
-    }).finally(finishModelLoad);
-    const stylePresetFeatures: StylePresetFeature[] = ["text-to-image", "image-to-image", "style-transfer", "background-removal"];
-    void Promise.all(stylePresetFeatures.map((feature) => listStylePresets(feature, { signal: modelLoadController.signal }).catch(() => []))).then((presetGroups) => {
+    const loadingTimer = window.setTimeout(() => { if (isMounted) setIsLoadingModels(true); }, 0);
+    const feature = activeTab === "Image to Image" ? "image-to-image" : activeTab === "AI Style Transfer" ? "style-transfer" : activeTab === "AI Background" ? "background-removal" : activeTab === "Upscale" ? "upscale" : activeTab === "Extend Image" ? "extend-image" : "text-to-image";
+    const modelPromise = listGenerationModels(feature, activeTab === "AI Background" ? backgroundMode : undefined, { signal: modelLoadController.signal }).then((models) => {
       if (!isMounted) return;
-      const styleTransferPresetsFromApi = presetGroups[2].filter((preset) => preset.enabled).sort((left, right) => left.sortOrder - right.sortOrder);
-      setStyleTransferPresetOptions(styleTransferPresetsFromApi);
-      const presetsById = new Map<string, GenerationStylePreset>();
-      presetGroups.flat().forEach((preset) => {
-        const existing = presetsById.get(preset.id);
-        presetsById.set(preset.id, existing ? { ...existing, ...preset, features: Array.from(new Set([...existing.features, ...preset.features])) } : preset);
-      });
-      const presets = Array.from(presetsById.values()).sort((left, right) => left.sortOrder - right.sortOrder);
-      if (presets.length > 0) setStylePresetOptions(presets);
-    });
+      const defaultModel = models.find((item) => item.isDefault);
+      const selectDefault = (current: string) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "";
+      if (activeTab === "Image to Image") { setImageToImageModelOptions(models); setSelectedImageToImageModel(selectDefault); }
+      else if (activeTab === "AI Style Transfer") { setStyleTransferModelOptions(models); setSelectedStyleTransferModel(selectDefault); }
+      else if (activeTab === "AI Background") { setBackgroundModelOptions(models); setSelectedBackgroundModel(selectDefault); }
+      else if (activeTab === "Upscale") { setUpscaleModelOptions(models); setSelectedUpscaleModel(selectDefault); }
+      else if (activeTab === "Extend Image") { setExtendModelOptions(models); setSelectedExtendModel(selectDefault); }
+      else { setModelOptions(models); setSelectedModel(selectDefault); }
+    }).catch(() => undefined);
+    const presetFeature = ["text-to-image", "image-to-image", "style-transfer", "background-removal"].includes(feature) ? feature as StylePresetFeature : null;
+    const presetPromise = presetFeature
+      ? listStylePresets(presetFeature, { signal: modelLoadController.signal }).then((presets) => {
+        if (!isMounted) return;
+        const enabledPresets = presets.filter((preset) => preset.enabled).sort((left, right) => left.sortOrder - right.sortOrder);
+        if (presetFeature === "style-transfer") setStyleTransferPresetOptions(enabledPresets);
+        else setStylePresetOptions(enabledPresets);
+      }).catch(() => undefined)
+      : Promise.resolve();
+    void Promise.all([modelPromise, presetPromise]).finally(() => { if (isMounted) setIsLoadingModels(false); });
     return () => {
       isMounted = false;
       generationAbortRef.current?.abort();
@@ -820,22 +789,9 @@ export function useImageGenerationState() {
       upscaleAbortRef.current?.abort();
       recentAbortRef.current?.abort();
       modelLoadController.abort();
+      window.clearTimeout(loadingTimer);
     };
-  }, [modelCatalogVersion]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const controller = new AbortController();
-    void listGenerationModels("background-removal", backgroundMode, { signal: controller.signal }).then((models) => {
-      if (!isMounted) return;
-      setBackgroundModelOptions(models);
-      const defaultModel = models.find((item) => item.isDefault);
-      setSelectedBackgroundModel((current) => models.some((item) => item.model === current) ? current : defaultModel?.model ?? models[0]?.model ?? "");
-    }).catch(() => {
-      // The backend still resolves the configured background model on generation.
-    });
-    return () => { isMounted = false; controller.abort(); };
-  }, [backgroundMode, modelCatalogVersion]);
+  }, [activeTab, backgroundMode, modelCatalogVersion]);
 
   const modeBackgroundModelOptions = backgroundModelOptions.filter((model) => supportsBackgroundMode(model, backgroundMode, Boolean(backgroundMask)));
 

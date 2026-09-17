@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  AudioLines,
   Download,
   Heart,
   ImageIcon,
@@ -44,7 +43,7 @@ import {
   type VideoGenerationInput,
 } from "@/lib/api/video-generations";
 import { TextToVideoWorkspace } from "./text-video-generation";
-import { LipsyncWorkspace, PeopleVideoWorkspace } from "./people-video-generation";
+import { PeopleVideoWorkspace } from "./people-video-generation";
 import { EosCutButton } from "./eos-cut-button";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
 import { validateMediaFile } from "@/lib/media/upload-validation";
@@ -70,15 +69,21 @@ import { ClearValuesButton } from "@/features/create/components/clear-values-but
 const videoModes = [
   "Image to Video",
   "Text to Video",
-  "People Video",
   "Motion Transfer",
   "Lipsync",
   "Extend Video",
 ] as const;
+const videoTabValues = {
+  "Image to Video": "image-to-video",
+  "Text to Video": "text-to-video",
+  "Motion Transfer": "motion-transfer",
+  Lipsync: "people-video",
+  "Extend Video": "extend-video",
+} as const;
+type ActiveVideoTab = (typeof videoTabValues)[keyof typeof videoTabValues];
 const videoTabKeys = {
   "Image to Video": "create.video.tabs.imageToVideo",
   "Text to Video": "create.video.tabs.textToVideo",
-  "People Video": "create.video.tabs.peopleVideo",
   "Motion Transfer": "create.video.tabs.motionTransfer",
   Lipsync: "create.video.tabs.lipsync",
   "Extend Video": "create.video.tabs.extendVideo",
@@ -86,20 +91,17 @@ const videoTabKeys = {
 const videoModeIcons: Record<typeof videoModes[number], LucideIcon> = {
   "Image to Video": ImageIcon,
   "Text to Video": WandSparkles,
-  "People Video": Mic2,
   "Motion Transfer": WandSparkles,
-  Lipsync: AudioLines,
+  Lipsync: Mic2,
   "Extend Video": ImageIcon,
 };
 const mobileVideoModeOptions = [
   { value: "image-to-video", label: "Image to Video", icon: videoModeIcons["Image to Video"] },
   { value: "text-to-video", label: "Text to Video", icon: videoModeIcons["Text to Video"] },
-  { value: "people-video", label: "People Video", icon: videoModeIcons["People Video"] },
   { value: "motion-transfer", label: "Motion Transfer", icon: videoModeIcons["Motion Transfer"] },
-  { value: "lipsync", label: "Lipsync", icon: videoModeIcons.Lipsync },
+  { value: "people-video", label: "Lipsync", icon: videoModeIcons.Lipsync },
   { value: "extend-video", label: "Extend Video", icon: videoModeIcons["Extend Video"] },
 ] as const;
-type ActiveVideoTab = (typeof mobileVideoModeOptions)[number]["value"];
 
 function isActiveVideoTab(value: string | null): value is ActiveVideoTab {
   return mobileVideoModeOptions.some((option) => option.value === value);
@@ -980,7 +982,10 @@ export function VideoGenerationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedInitialTab = searchParams.get("tab");
-  const initialVideoTab: ActiveVideoTab = isActiveVideoTab(requestedInitialTab) ? requestedInitialTab : "image-to-video";
+  const initialVideoTab: ActiveVideoTab = requestedInitialTab === "lipsync"
+    ? "people-video"
+    : isActiveVideoTab(requestedInitialTab) ? requestedInitialTab : "image-to-video";
+  const initialPeopleVideoVariant = "lipsync" as const;
   const [activeVideoTab, setActiveVideoTab] = useState<ActiveVideoTab>(() => initialVideoTab);
   const [visitedVideoTabs, setVisitedVideoTabs] = useState<Set<ActiveVideoTab>>(() => new Set([initialVideoTab]));
   const [sourceImage, setSourceImage] = useState<string | null>(null);
@@ -1456,6 +1461,7 @@ export function VideoGenerationPage() {
     };
   }, []);
   useEffect(() => {
+    if (activeVideoTab !== "image-to-video") return undefined;
     let active = true;
     const controller = new AbortController();
     const modelFeature = videoModeRouteFeature(generationMode);
@@ -1499,7 +1505,7 @@ export function VideoGenerationPage() {
       controller.abort();
       window.clearTimeout(loadTimer);
     };
-  }, [generationMode, modelCatalogVersion, modelLoadRetry]);
+  }, [activeVideoTab, generationMode, modelCatalogVersion, modelLoadRetry]);
   useEffect(() => {
     if (!selectedModel) return;
     const selected = models.find((model) => model.model === selectedModel);
@@ -2661,9 +2667,9 @@ export function VideoGenerationPage() {
     <div className={styles.page} data-page="gen-video">
       <div className={styles.hero}>
         <picture>
-          <source media="(max-width: 700px)" srcSet="/generated-assets/create-video-hero-v3-transparent.png" />
+          <source media="(max-width: 700px)" srcSet="/generated-assets/create-video-hero-v3-transparent.webp" />
         <Image
-          src="/generated-assets/create-video-hero-v3-transparent.png"
+          src="/generated-assets/create-video-hero-v3-transparent.webp"
           alt={t("create.video.common.createVideoHeroAlt")}
           fill
           sizes="100vw"
@@ -2678,20 +2684,8 @@ export function VideoGenerationPage() {
         ) : null}
         <nav className={styles.tabs} aria-label={t("create.video.tools")}>
           {videoModes.map((label) => {
-            const tab = label === "Image to Video" ? "image-to-video" : label === "Text to Video" ? "text-to-video" : label === "People Video" ? "people-video" : label === "Motion Transfer" ? "motion-transfer" : label === "Lipsync" ? "lipsync" : label === "Extend Video" ? "extend-video" : null;
-            const isActive = tab === "image-to-video"
-              ? activeVideoTab === "image-to-video"
-              : tab === "text-to-video"
-                ? activeVideoTab === "text-to-video"
-                : tab === "people-video"
-                  ? activeVideoTab === "people-video"
-                  : tab === "motion-transfer"
-                  ? activeVideoTab === "motion-transfer"
-                  : tab === "lipsync"
-                    ? activeVideoTab === "lipsync"
-                    : tab === "extend-video"
-                      ? activeVideoTab === "extend-video"
-                      : false;
+            const tab = videoTabValues[label];
+            const isActive = activeVideoTab === tab;
             return (
               <button
                 key={label}
@@ -2724,9 +2718,8 @@ export function VideoGenerationPage() {
           }}
         />
         {visitedVideoTabs.has("text-to-video") ? <div hidden={activeVideoTab !== "text-to-video"}><TextToVideoWorkspace /></div> : null}
-        {visitedVideoTabs.has("people-video") ? <div hidden={activeVideoTab !== "people-video"}><PeopleVideoWorkspace /></div> : null}
+        {visitedVideoTabs.has("people-video") ? <div hidden={activeVideoTab !== "people-video"}><PeopleVideoWorkspace initialVariant={initialPeopleVideoVariant} /></div> : null}
         {visitedVideoTabs.has("motion-transfer") ? <div hidden={activeVideoTab !== "motion-transfer"}><MotionTransferWorkspace /></div> : null}
-        {visitedVideoTabs.has("lipsync") ? <div hidden={activeVideoTab !== "lipsync"}><LipsyncWorkspace /></div> : null}
         {visitedVideoTabs.has("extend-video") ? <div hidden={activeVideoTab !== "extend-video"}><ExtendVideoWorkspace /></div> : null}
         {activeVideoTab === "image-to-video" ? <div className={styles.columns}>
           <div className={styles.leftColumn}>
@@ -3019,6 +3012,7 @@ export function VideoGenerationPage() {
                     <ModelPreviewMedia
                       url={selectedModelOption.previewUrl}
                       type={selectedModelOption.previewType}
+                      autoPlay={selectedModelOption.previewType === "video"}
                       alt={`${selectedModelOption.displayName} model preview`}
                       className={styles.generatedVideoPlayer}
                       onAspectRatioChange={handlePreviewAspectRatioChange}

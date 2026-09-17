@@ -120,7 +120,15 @@ function Ledger({ month, usageOnly, topupsOnly = false, refresh }: { month: stri
   const [query, setQuery] = useState(""), [kind, setKind] = useState("all");
   useEffect(() => {
     let cancelled = false;
-    Promise.all(Array.from({ length: offset / 50 + 1 }, (_, index) => fetchUsageDashboard(month, "daily", 50, index * 50))).then(pages => { if (cancelled) return; setItems([...new Map(pages.flatMap(page => page.recentActivity.items).map(item => [item.id, item])).values()]); setHasMore(pages[pages.length - 1].recentActivity.pagination.hasMore); setError(false); }).catch(() => { if (!cancelled) setError(true); }).finally(() => { if (!cancelled) setLoading(false); });
+    fetchUsageDashboard(month, "daily", 50, offset).then(page => {
+      if (cancelled) return;
+      setItems(current => {
+        const nextItems = offset === 0 ? page.recentActivity.items : [...current, ...page.recentActivity.items];
+        return [...new Map(nextItems.map(item => [item.id, item])).values()];
+      });
+      setHasMore(page.recentActivity.pagination.hasMore);
+      setError(false);
+    }).catch(() => { if (!cancelled) setError(true); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [month, offset, retry, refresh]);
   const filtered = items.filter(item => (!usageOnly || item.transactionType === "usage") && (!topupsOnly || (item.referenceType === "stripe_checkout" && item.amount > 0)) && (topupsOnly || kind === "all" || (kind === "added" ? item.amount > 0 : item.amount < 0)) && `${usageOnly ? activityLabel(item) : creditLabel(item)} ${item.title} ${item.id} ${item.referenceId ?? ""}`.toLowerCase().includes(query.toLowerCase()));
@@ -171,6 +179,8 @@ export function UsagePage() {
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [catalogError, setCatalogError] = useState(false), [refresh, setRefresh] = useState(0);
   const [checkoutState, setCheckoutState] = useState<string | null>(null), [pollCount, setPollCount] = useState(0);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const dashboardCacheRef = useRef(new Map<string, { data: UsageDashboard; cachedAt: number }>());
+  const cacheRefreshRef = useRef(refresh);
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("tab") !== "topup") return;
     const timer = window.setTimeout(() => {
@@ -195,14 +205,39 @@ export function UsagePage() {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    void Promise.allSettled([fetchUsageDashboard(month, "daily"), fetchCheckoutCatalog()]).then(([usage, packs]) => {
-      if (cancelled) return;
-      if (usage.status === "fulfilled") { setDashboard(usage.value); setError(false); } else { setDashboard(null); setError(true); }
-      if (packs.status === "fulfilled") { setCatalog(packs.value); setCatalogError(false); } else { setCatalog(null); setCatalogError(true); }
+    if (cacheRefreshRef.current !== refresh) {
+      dashboardCacheRef.current.clear();
+      cacheRefreshRef.current = refresh;
+    }
+    const cached = dashboardCacheRef.current.get(month);
+    if (cached && Date.now() - cached.cachedAt < 30_000) {
+      setDashboard(cached.data);
+      setError(false);
       setLoading(false);
+      return () => { cancelled = true; };
+    }
+    void fetchUsageDashboard(month, "daily").then((nextDashboard) => {
+      if (cancelled) return;
+      dashboardCacheRef.current.set(month, { data: nextDashboard, cachedAt: Date.now() });
+      setDashboard(nextDashboard);
+      setError(false);
+    }).catch(() => {
+      if (!cancelled) { setDashboard(null); setError(true); }
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
   }, [month, refresh]);
+  useEffect(() => {
+    if (activeTab !== 3) return undefined;
+    let cancelled = false;
+    void fetchCheckoutCatalog().then((nextCatalog) => {
+      if (!cancelled) { setCatalog(nextCatalog); setCatalogError(false); }
+    }).catch(() => {
+      if (!cancelled) { setCatalog(null); setCatalogError(true); }
+    });
+    return () => { cancelled = true; };
+  }, [activeTab, refresh]);
   useEffect(() => {
     if (checkoutState !== "success" || pollCount >= 6) return;
     const timer = window.setTimeout(() => { setRefresh(value => value + 1); setPollCount(value => value + 1); }, 5000);
@@ -213,7 +248,7 @@ export function UsagePage() {
   const selectTab = (value: number, focus = false) => { if (paymentBusy) return; setActiveTab(value); if (focus) tabRefs.current[value]?.focus(); };
   const summary = dashboard?.summary;
   return <div className={styles.usagePage} data-page="usage" data-no-translate>
-    <header className={styles.hero}><div className={styles.heroCopy}><h1>YOUR CREATIVE<br />PULSE<span>.</span></h1><p>การใช้งานและเครดิต</p></div><Image src="/generated-assets/usage-hero-art-v2.png" alt="" width={1984} height={794} priority className={styles.heroImage} sizes="(max-width: 600px) 100vw, 50vw" /></header>
+     <header className={styles.hero}><div className={styles.heroCopy}><h1>YOUR CREATIVE<br />PULSE<span>.</span></h1><p>การใช้งานและเครดิต</p></div><Image src="/generated-assets/usage-hero-art-v2.webp" alt="" width={1984} height={794} priority className={styles.heroImage} sizes="(max-width: 600px) 100vw, 50vw" /></header>
     {checkoutState && <div className={styles.notice} role="status"><Info size={18} /><span>{checkoutState === "cancelled" ? "ยกเลิกการชำระเงินแล้ว ยังไม่มีการเพิ่มเครดิต คุณสามารถเลือกแพ็กเกจใหม่ได้" : pollCount < 6 ? "กลับจาก Stripe แล้ว กำลังอัปเดตยอดเครดิต โปรดรอการยืนยันการชำระเงินจากระบบ" : "หากเครดิตยังไม่เพิ่ม ให้ตรวจสอบสถานะการชำระเงินและลองรีเฟรชอีกครั้ง"}</span><button onClick={reload} disabled={loading} aria-label="รีเฟรชยอดเครดิต"><RefreshCw size={17} /></button><button aria-label="ปิดข้อความการชำระเงิน" onClick={() => { setCheckoutState(null); const url = new URL(window.location.href); url.searchParams.delete("checkout"); window.history.replaceState(null, "", url); }}><X size={17} /></button></div>}
     <section className={styles.summary} aria-label="สรุปเครดิต" aria-busy={loading}><div className={styles.balance}><span>เครดิตพร้อมใช้</span><strong>{loading ? "…" : summary ? number(summary.creditsRemaining) : "—"}</strong></div><div className={styles.periodStats}><span>ใช้แล้ว <b>{loading ? "…" : summary ? number(summary.creditsUsed) : "—"}</b> เครดิต</span><span>เพิ่มแล้ว <b>{loading ? "…" : summary ? number(summary.creditsAdded) : "—"}</b> เครดิต</span><small>{dashboard ? monthLabel(dashboard.period.startAt) : "ช่วงเวลาที่เลือก"}</small></div><div className={styles.topupAction}><button className={styles.primaryButton} disabled={paymentBusy} onClick={() => selectTab(3, true)}>เติมเครดิต <ArrowRight size={24} /></button><small>ชำระด้วย PromptPay ผ่าน Stripe</small></div></section>
     <div className={styles.tabBar} role="tablist" aria-label="ส่วนการใช้งานและเครดิต">{tabs.map((tab, index) => <button key={tab} id={`usage-tab-${index}`} ref={element => { tabRefs.current[index] = element; }} type="button" role="tab" disabled={paymentBusy} aria-selected={activeTab === index} aria-controls={`usage-panel-${index}`} tabIndex={activeTab === index ? 0 : -1} onClick={() => selectTab(index)} onKeyDown={event => { const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); selectTab(next, true); } }}>{tab}</button>)}</div>

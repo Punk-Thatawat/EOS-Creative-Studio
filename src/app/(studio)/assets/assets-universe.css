@@ -25,6 +25,12 @@
 .assets-page .asset-card { border:1px solid #e8e7e5; border-radius:12px; box-shadow:none; overflow:visible; min-width:0; }
 .assets-page .asset-card-media { height:auto; aspect-ratio:1.65; border-radius:11px 11px 0 0; }
 .assets-page .asset-card-media > img { object-position:top; }
+.assets-page .asset-audio-preview { position:relative; display:grid; height:100%; min-height:0; place-items:center; overflow:hidden; background:radial-gradient(circle at 50% 42%, #ffe9f7 0%, #f5c9e6 28%, #ede8f8 70%, #faf9ff 100%); }
+.assets-page .asset-audio-preview-glow { position:absolute; width:62%; aspect-ratio:1; border-radius:50%; background:#ff3ba855; filter:blur(28px); }
+.assets-page .asset-audio-waveform { position:absolute; inset:12% 0; width:100%; height:76%; object-fit:cover; mix-blend-mode:multiply; opacity:.82; filter:saturate(1.25) contrast(1.08); }
+.assets-page .asset-audio-preview-label { position:absolute; top:12px; left:12px; display:inline-flex; align-items:center; gap:5px; padding:5px 9px; border:1px solid #ffffffaa; border-radius:999px; background:#ffffffb8; color:#9b276f; font-size:10px; font-weight:800; letter-spacing:.12em; box-shadow:0 4px 12px #8a39721c; }
+.assets-page .asset-card:has(.asset-audio-preview) .asset-play { background:#d92c91; border-color:#fff; box-shadow:0 6px 18px #c21d7b55; }
+.assets-page .asset-card:has(.asset-audio-preview) .asset-card-footer strong { color:#282338; }
 .assets-page .asset-type-badge { display:none; }
 .assets-page .asset-card-footer { min-height:78px; padding:12px; gap:8px; }
 .assets-page .asset-card-footer > div:first-child { min-width:0; flex:1; }

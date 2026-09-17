@@ -180,7 +180,8 @@ export function FeatureTutorialPanel({ feature, featureName, includeFeatureOverv
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const visibleSlots = includeFeatureOverview ? slots : slots.filter((slot) => Boolean(slot.mode));
+  const hasModeSlots = slots.some((slot) => Boolean(slot.mode));
+  const visibleSlots = includeFeatureOverview && !hasModeSlots ? slots : slots.filter((slot) => Boolean(slot.mode));
   const activeSlot = useMemo(() => visibleSlots.find((slot) => slotKey(slot) === activeKey) ?? null, [activeKey, visibleSlots]);
   const configuredCount = visibleSlots.filter((slot) => Boolean(slot.videoStorageKey)).length;
   const updateSlot = (next: AdminTutorialSlot) => setSlots((current) => current.map((slot) => slotKey(slot) === slotKey(next) ? next : slot));
@@ -188,7 +189,7 @@ export function FeatureTutorialPanel({ feature, featureName, includeFeatureOverv
   return <section aria-labelledby="feature-tutorial-heading" className="mb-7 rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Feature tutorial</p><h2 id="feature-tutorial-heading" className="mt-1 text-xl font-bold tracking-tight">{featureName} tutorial videos</h2><p className="mt-1 text-[11px] text-muted-foreground">จัดการ tutorial ของ feature และ mode ใน popup</p></div>
-      <div className="flex items-center gap-2"><span className="rounded-full bg-[#fff0e9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">{configuredCount}/{slots.length || "—"} uploaded</span><Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading || Boolean(busyKey)} aria-label="Refresh tutorial videos"><RefreshCw size={14} className={loading ? "animate-spin" : undefined} /></Button></div>
+      <div className="flex items-center gap-2"><span className="rounded-full bg-[#fff0e9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">{configuredCount}/{visibleSlots.length || "—"} uploaded</span><Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading || Boolean(busyKey)} aria-label="Refresh tutorial videos"><RefreshCw size={14} className={loading ? "animate-spin" : undefined} /></Button></div>
     </div>
 
     {error ? <div className="mt-4 flex items-start gap-2 rounded-xl border border-[#efc2c2] bg-[#fff6f6] p-3 text-xs text-[#9f3b3b]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={16} /><p>{error}</p></div> : null}
