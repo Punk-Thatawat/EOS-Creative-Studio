@@ -1,6 +1,9 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 import type { ChangeEvent, ReactNode } from "react";
 import { promptMaxLength } from "@/lib/prompt-limits";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 export type PromptFieldProps = {
   value: string;
@@ -31,6 +34,7 @@ export function PromptField({
   afterField,
   metaClassName,
 }: PromptFieldProps) {
+  const { t } = useLocale();
   const fieldProps = {
     id,
     value,
@@ -49,7 +53,7 @@ export function PromptField({
     </label>
     {afterField}
     <div className={cn("mt-1 flex items-center justify-between gap-2 text-[9px] text-[#8c8d91]", metaClassName)}>
-      <span>Maximum {maxLength.toLocaleString()} characters</span>
+      <span>{t("create.image.charLimit", { count: maxLength.toLocaleString() })}</span>
       <span>{value.length.toLocaleString()} / {maxLength.toLocaleString()}</span>
     </div>
   </>;
