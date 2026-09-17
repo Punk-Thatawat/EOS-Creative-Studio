@@ -13,9 +13,9 @@
 .previewLayout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);min-height:560px;height:min(700px,86dvh)}
 .artworkPane{position:relative;min-width:0;min-height:0;background:#f0ece8;overflow:hidden;display:flex;align-items:center;justify-content:center}
 .artworkPane>.still{height:100%;width:100%}.artworkPane .poster,.artworkPane .video{object-fit:contain;object-position:center}.artworkPane .video{height:100%;width:100%}
-.artworkLabel{position:absolute;bottom:16px;left:18px;font-size:9px;font-weight:700;letter-spacing:.18em;background:#ffffffdd;color:#333;padding:6px 9px;border-radius:4px;pointer-events:none}
+.artworkLabel{position:absolute;bottom:16px;left:18px;font-size:9px;font-weight:700;letter-spacing:var(--eos-label-tracking, .18em);background:#ffffffdd;color:#333;padding:6px 9px;border-radius:4px;pointer-events:none}
 .previewInfo{display:flex;flex-direction:column;padding:54px 32px 28px;min-width:0;overflow-y:auto}
-.previewEyebrow{color:#cf490b;font-size:11px;font-weight:700;letter-spacing:.14em;margin-bottom:16px}
+.previewEyebrow{color:#cf490b;font-size:11px;font-weight:700;letter-spacing:var(--eos-label-tracking, .14em);margin-bottom:16px}
 .previewInfo h2{font-size:clamp(24px,2.5vw,34px);line-height:1.35;letter-spacing:-.025em;font-weight:750;margin:0 0 14px;overflow-wrap:anywhere}
 .previewInfo .previewDescription{font-size:14px;color:#69646a;line-height:1.8;margin:0 0 26px}
 .presetHeading{font-size:12px;font-weight:700;border-top:1px solid #eee8e4;padding-top:24px;margin-bottom:14px}
