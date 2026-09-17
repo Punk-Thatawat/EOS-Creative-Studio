@@ -22,6 +22,10 @@ export function StudioHeader() {
   const hydrated = useHydrated();
   const pathname = hydrated ? pathnameFromRouter : "";
   const isAssets = pathname.startsWith("/assets");
+  // The hint has to name the key the listener below actually accepts, which is
+  // Ctrl on everything except Apple hardware. Gated on `hydrated` so the server
+  // and the first client render agree before navigator is read.
+  const isMac = hydrated && /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   useEffect(() => {
     if (!isAssets) return;
@@ -65,7 +69,7 @@ export function StudioHeader() {
               onChange={(event) => { if (isAssets) { const query = event.currentTarget.value; window.history.replaceState(null, "", query ? `/assets?q=${encodeURIComponent(query)}` : "/assets"); window.dispatchEvent(new Event("assets-search")); } }}
               className="h-[46px] w-full rounded-[17px] border border-border bg-surface/95 pl-11 pr-12 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
             />
-            {isAssets ? <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-[#f6f7f9] px-2 py-1 text-[10px] font-semibold text-[#4c4e5c]">⌘ K</span> : null}
+            {isAssets ? <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-[#f6f7f9] px-2 py-1 text-[10px] font-semibold text-[#4c4e5c]">{isMac ? "⌘ K" : "Ctrl K"}</span> : null}
           </div> : null}
           {isAssets ? <button className="rounded-xl p-2.5 text-muted-foreground hover:bg-surface-muted md:hidden" aria-label={text.header.openSearch}><Search size={18} /></button> : null}
           {<Link href="/usage?tab=topup" title={locale === "th" ? "เติมเครดิต" : "Top up credits"} className="header-credits-badge shrink-0 hidden h-9 items-center gap-2 rounded-full border border-border bg-white px-3.5 text-[13px] font-semibold text-foreground transition-colors hover:border-primary hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 sm:flex"><Layers3 size={18} className="text-primary" strokeWidth={2.4} /><span>{locale === "th" ? account.creditsLabel.replace(/ Credits$/, " เครดิต") : account.creditsLabel}</span><span className="sr-only">{locale === "th" ? " — เติมเครดิต" : " — Top up credits"}</span></Link>}
