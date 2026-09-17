@@ -34,7 +34,7 @@
 .gen-setting-block { margin-top: 18px; }.gen-setting-block h3 { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }.gen-model-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }.gen-model-grid button { position: relative; min-height: 58px; padding: 9px 23px 8px 10px; color: #333; background: #fff; border: 1px solid #e2e2e2; border-radius: 8px; text-align: left; cursor: pointer; }.gen-model-grid button.is-selected { border-color: #f26b38; }.gen-model-grid button > svg { position: absolute; top: 9px; right: 7px; }.gen-model-grid button.is-selected > svg { color: #fff; padding: 2px; border-radius: 50%; background: #f26b38; }.gen-model-grid b, .gen-model-grid small { display: block; }.gen-model-grid b { font-size: 10px; }.gen-model-grid small { margin-top: 3px; color: #76808b; font-size: 8px; line-height: 1.25; }.gen-select { display: flex; width: 100%; align-items: center; justify-content: space-between; padding: 10px; color: #252a31; background: #fff; border: 1px solid #e2e2e2; border-radius: 7px; font-size: 10px; cursor: pointer; }.gen-select span { display: flex; align-items: center; gap: 8px; }.gen-select small { color: #7b818a; }.gen-segmented { display: grid; grid-template-columns: repeat(4, 1fr); overflow: hidden; border: 1px solid #e0e2e5; border-radius: 7px; }.gen-segmented button { min-height: 30px; color: #5d6470; background: #fff; border: 0; border-right: 1px solid #e0e2e5; font-size: 9px; cursor: pointer; }.gen-segmented button:last-child { border: 0; }.gen-segmented button.is-selected { color: #f15b20; background: #fff7f3; box-shadow: inset 0 0 0 1px #f26b38; }.gen-estimate { margin-top: 20px; padding-top: 14px; border-top: 1px dashed #d9d9d9; }.gen-estimate h3 { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 11px; }.gen-estimate p { margin: 6px 0 0; color: #626872; font-size: 9px; }.gen-estimate strong { float: right; color: #34383e; }.gen-generate-button { display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; padding: 13px 8px; color: #fff; background: linear-gradient(100deg, #ff620b, #f33d13); border: 0; border-radius: 9px; box-shadow: 0 8px 17px rgba(242, 107, 56, .22); font-size: 16px; font-weight: 800; cursor: pointer; }.gen-generate-button:hover { filter: brightness(1.08); transform: translateY(-1px); }.gen-private { display: flex; justify-content: center; gap: 5px; margin: 8px 0 0; color: #727780; font-size: 9px; }
 .gen-tools { margin-top: 9px; padding: 13px 16px 15px; border: 1px solid var(--gen-border); border-radius: 0 0 14px 14px; background: #fff; }.gen-tools .gen-section-heading { margin: 0 0 9px; }.gen-tools .gen-section-heading h2 { margin: 0; font-size: 12px; }.gen-tools .gen-section-heading span { margin-left: auto; color: #f15b20; font-size: 10px; font-weight: 700; }.gen-tool-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }.gen-tool-grid button { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 10px; color: #31343a; background: #fff; border: 1px solid #ebebeb; border-radius: 8px; text-align: left; cursor: pointer; }.gen-tool-grid button:hover { border-color: #f7a079; }.gen-tool-icon { display: grid; width: 36px; height: 36px; flex: 0 0 36px; place-items: center; color: #fff; background: #131417; border-radius: 9px; }.tool-1 { background: #f51591; }.tool-2 { background: #0c1718; }.tool-3 { background: #ffb20b; }.tool-4 { background: #191a1e; }.tool-5 { background: #77d43e; }.gen-tool-grid b, .gen-tool-grid small { display: block; }.gen-tool-grid b { font-size: 10px; }.gen-tool-grid small { margin-top: 3px; color: #68707b; font-size: 8px; line-height: 1.25; }
 @media (max-width: 1100px) { .gen-workspace { grid-template-columns: 1fr 1.35fr; }.gen-settings-panel { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 16px; }.gen-settings-panel .gen-panel-title, .gen-settings-panel .gen-estimate, .gen-settings-panel .gen-generation-validation, .gen-settings-panel .gen-generate-button, .gen-settings-panel .gen-private { grid-column: 1 / -1; }.gen-settings-panel .gen-panel-title { margin-bottom: 0; }.gen-setting-block { margin-top: 12px; }.gen-tool-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 700px) { .gen-image-hero { min-height: 125px; padding: 10px 12px; }.gen-hero-copy h1 { font-size: 44px; }.gen-hero-copy p { margin-left: 95px; font-size: 20px; }.gen-hero-kicker { margin-left: 0; font-size: 7px; }.gen-hero-art { width: 42%; height: 100px; }.gen-hero-art small { font-size: 6px; text-align: center; }.gen-workspace { grid-template-columns: 1fr; }.gen-panel { border-top: 0; }.gen-settings-panel { display: block; }.gen-style-thumb { height: 58px; }.gen-thumb-row { grid-template-columns: repeat(4, 1fr); }.gen-tool-grid { grid-template-columns: repeat(2, 1fr); }.gen-tool-grid button { padding: 8px; }.gen-panel-title h2 { font-size: 12px; } }
+@media (max-width: 767.98px) { .gen-image-hero { min-height: 125px; padding: 10px 12px; }.gen-hero-copy h1 { font-size: 44px; }.gen-hero-copy p { margin-left: 95px; font-size: 20px; }.gen-hero-kicker { margin-left: 0; font-size: 7px; }.gen-hero-art { width: 42%; height: 100px; }.gen-hero-art small { font-size: 6px; text-align: center; }.gen-workspace { grid-template-columns: 1fr; }.gen-panel { border-top: 0; }.gen-settings-panel { display: block; }.gen-style-thumb { height: 58px; }.gen-thumb-row { grid-template-columns: repeat(4, 1fr); }.gen-tool-grid { grid-template-columns: repeat(2, 1fr); }.gen-tool-grid button { padding: 8px; }.gen-panel-title h2 { font-size: 12px; } }
 .gen-panel-title h2 em { color: #8c8d91; font-size: 9px; font-style: normal; font-weight: 400; }
 .gen-prompt-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; color: #8c8d91; font-size: 9px; }
 .gen-style-thumb { box-shadow: inset 0 -18px 20px rgba(0,0,0,.22); }
@@ -43,19 +43,19 @@
 .gen-style-none-icon { position: relative !important; inset: auto !important; color: #a4a9af; }
 .gen-style-grid button.is-selected .gen-style-none { border-color: #f26b38; background: #fff7f3; }
 .gen-style-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-@media (max-width: 700px) { .gen-style-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; } }
+@media (max-width: 767.98px) { .gen-style-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; } }
 .gen-style-preset-gallery { position: relative; min-width: 0; }
 .gen-style-preset-gallery .gen-style-grid { display: flex; grid-template-columns: none; gap: 6px; margin-top: 0; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; scroll-snap-type: x proximity; }
 .gen-style-preset-gallery .gen-style-grid::-webkit-scrollbar { display: none; }
 .gen-style-preset-gallery .gen-style-grid > button { width: 54px; min-width: 54px; max-width: 54px; flex: 0 0 54px; scroll-snap-align: start; }
 .gen-style-preset-gallery .gen-gallery-prev { left: -10px; }
 .gen-style-preset-gallery .gen-gallery-next { right: -10px; }
-@media (max-width: 1100px) and (min-width: 701px) { .gen-gallery-column .gen-thumb-row { grid-template-columns: repeat(4, 1fr); }.gen-recent-column .gen-thumb-row { grid-template-columns: repeat(5, 1fr) 24px; } }
+@media (max-width: 1100px) and (min-width: 768px) { .gen-gallery-column .gen-thumb-row { grid-template-columns: repeat(4, 1fr); }.gen-recent-column .gen-thumb-row { grid-template-columns: repeat(5, 1fr) 24px; } }
 .gen-selected-check { position: absolute; top: 3px; right: 3px; display: grid; width: 17px; height: 17px; place-items: center; color: #fff; background: #f26b38; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
 .gen-dial { width: 104px; height: 46px; padding: 0; color: transparent !important; background: url('/generated-assets/dial-it-in.png') center / contain no-repeat; font-size: 0; }
 .gen-generated-image { width: 100%; height: 100%; object-fit: contain; background: #101820; }.gen-image-actions button:disabled { cursor: not-allowed; opacity: .45; }.gen-generation-error { margin: 12px 0 -8px; color: #b42318; font-size: 10px; line-height: 1.4; }.gen-generation-validation { margin: 10px 0 -8px; color: #b42318; font-size: 9px; line-height: 1.4; }
 .gen-tabs { width: calc((100% - 16px) * .7714286 + 8px); margin-top: 0; margin-right: auto; margin-left: 0; }
-@media (max-width: 1100px) and (min-width: 701px) { .gen-tabs { width: 100%; margin-left: 0; } }
+@media (max-width: 1100px) and (min-width: 768px) { .gen-tabs { width: 100%; margin-left: 0; } }
 .gen-live-badge { top: 0; left: -8px; width: 116px; height: auto; padding: 0; color: transparent; background: transparent; border: 0; border-radius: 0; transform: rotate(-3deg); object-fit: contain; }
 .gen-prompt-annotation { display: block; width: 145px; height: auto; object-fit: contain; }
 .gen-prompt-panel .gen-panel-title { display: grid; grid-template-columns: auto 1fr; align-items: center; }
@@ -78,7 +78,7 @@
 .gen-image-hero { min-height: 0; aspect-ratio: 5.5 / 1; padding: 0; display: block; }.gen-hero-picture { display: block; width: 100%; height: 100%; }.gen-hero-artwork { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; }
 .gen-image-hero { position: relative; background: transparent; border: 0; border-radius: 0; margin-top: 0; pointer-events: none; }
 .gen-image-hero * { pointer-events: none; }
-@media (max-width: 700px) { .gen-image-hero { min-height: 0; aspect-ratio: 2 / 1; background: transparent; }.gen-hero-artwork { width: 100%; height: 100%; object-fit: cover; object-position: center; } }
+@media (max-width: 767.98px) { .gen-image-hero { min-height: 0; aspect-ratio: 2 / 1; background: transparent; }.gen-hero-artwork { width: 100%; height: 100%; object-fit: cover; object-position: center; } }
 .gen-select-wrap { position: relative; }
 .gen-select { min-height: 44px; padding: 10px 12px; text-align: left; }
 .gen-model-loading { cursor: wait; }
@@ -100,13 +100,13 @@
 .gen-preview-panel { border-radius: 0 0 10px 10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.65); }
 .gen-gallery-grid { display: grid; grid-template-columns: .85fr 1.15fr; margin-top: 5px; }.gen-gallery-column { min-width: 0; padding-right: 12px; }.gen-recent-column { padding-right: 0; padding-left: 12px; border-left: 1px solid #e5e5e5; }.gen-recent-column .gen-gallery-heading { justify-content: space-between; }.gen-gallery-column .gen-gallery-heading { min-height: 20px; }.gen-gallery-column .gen-gallery-heading h3 { font-size: 10px; }.gen-gallery-column .gen-gallery-heading button { font-size: 9px; }.gen-gallery-column .gen-thumb-row { display: flex; min-width: 0; gap: 7px; margin-top: 5px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; scroll-snap-type: x proximity; }.gen-gallery-column .gen-thumb-row::-webkit-scrollbar { display: none; }.gen-gallery-column .gen-thumb-row button { box-sizing: border-box; width: 90px; min-width: 90px; max-width: 90px; flex: 0 0 90px; scroll-snap-align: start; }.gen-variation-gallery, .gen-recent-gallery { position: relative; min-width: 0; }.gen-recent-gallery { padding-right: 0; }.gen-recent-gallery .gen-thumb-row button { width: 90px; min-width: 90px; max-width: 90px; flex: 0 0 90px; }.gen-gallery-prev, .gen-gallery-next { position: absolute; top: 50%; z-index: 2; display: grid; width: 28px; height: 28px; place-items: center; min-width: 28px; color: #3c434c; background: #fff !important; border: 1px solid #e2e2e2 !important; border-radius: 50% !important; box-shadow: 0 1px 5px rgba(0,0,0,.08); transform: translateY(-50%); }.gen-gallery-prev { left: -10px; }.gen-gallery-next { right: -14px; }.gen-gallery-prev svg, .gen-gallery-next svg { transform: none; }
 .gen-thumbnail-image { z-index: 0; object-fit: cover; }
-@media (max-width: 700px) { .gen-gallery-grid { grid-template-columns: 1fr; gap: 12px; }.gen-recent-column { padding-top: 10px; padding-left: 0; border-top: 1px solid #e5e5e5; border-left: 0; }.gen-gallery-column { padding-right: 0; }.gen-recent-column .gen-thumb-row { grid-template-columns: repeat(5, 1fr) 24px; } }
-@media (max-width: 700px) { .gen-image-page { width: 100%; min-width: 0; overflow-x: clip; }.gen-image-hero, .gen-tabs, .gen-workspace, .gen-tools { width: 100%; max-width: 100%; }.gen-image-hero { margin-bottom: 0; }.gen-workspace { min-width: 0; }.gen-panel { width: 100%; min-width: 0; padding: 12px; } }
-@media (max-width: 700px) { .gen-image-hero { margin-top: 0; } }
-@media (max-width: 700px) { .gen-tabs { width: 100%; margin-top: 0; margin-right: 0; margin-left: 0; } }
-@media (max-width: 700px) { .gen-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; } .gen-tabs button { min-width: 0; flex: none; white-space: normal; } .gen-tabs button:last-child { grid-column: 1 / -1; } }
+@media (max-width: 767.98px) { .gen-gallery-grid { grid-template-columns: 1fr; gap: 12px; }.gen-recent-column { padding-top: 10px; padding-left: 0; border-top: 1px solid #e5e5e5; border-left: 0; }.gen-gallery-column { padding-right: 0; }.gen-recent-column .gen-thumb-row { grid-template-columns: repeat(5, 1fr) 24px; } }
+@media (max-width: 767.98px) { .gen-image-page { width: 100%; min-width: 0; overflow-x: clip; }.gen-image-hero, .gen-tabs, .gen-workspace, .gen-tools { width: 100%; max-width: 100%; }.gen-image-hero { margin-bottom: 0; }.gen-workspace { min-width: 0; }.gen-panel { width: 100%; min-width: 0; padding: 12px; } }
+@media (max-width: 767.98px) { .gen-image-hero { margin-top: 0; } }
+@media (max-width: 767.98px) { .gen-tabs { width: 100%; margin-top: 0; margin-right: 0; margin-left: 0; } }
+@media (max-width: 767.98px) { .gen-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; } .gen-tabs button { min-width: 0; flex: none; white-space: normal; } .gen-tabs button:last-child { grid-column: 1 / -1; } }
 .gen-mobile-mode-switcher { display: none; }
-@media (max-width: 700px) {
+@media (max-width: 767.98px) {
   .gen-desktop-tabs { display: none; }
 
   .gen-mobile-mode-switcher {
@@ -220,13 +220,14 @@
   .gen-mobile-mode-menu button.is-selected { color: #f15b20; background: #fff7f3; }
   .gen-mobile-mode-menu button small { color: #8a9098; font-size: 8px; font-weight: 400; text-align: right; }
 }
-@media (max-width: 700px) { .gen-settings-panel .gen-dial { top: -28px; right: -8px; width: 140px; height: 63px; } }
+@media (max-width: 767.98px) { .gen-settings-panel .gen-dial { top: -28px; right: -8px; width: 140px; height: 63px; } }
 .gen-mobile-action-dock { display: contents; }
 /* Keep the credits, validation state, primary action, and privacy note together while the form scrolls. */
-@media (max-width: 700px) {
-  .gen-settings-panel {
-    padding-bottom: calc(10rem + env(safe-area-inset-bottom, 0px));
-  }
+@media (max-width: 767.98px) {
+  /* The action dock is position: fixed -- it floats over the viewport, not
+     inside this panel. Room to scroll past it is reserved at page level in
+     globals.css (body:has([data-mobile-action-dock]) .page-gutter); adding it
+     here instead drew 160px of empty panel below the last setting. */
 
   .gen-mobile-action-dock {
     box-sizing: border-box;
@@ -256,8 +257,8 @@
     border-top: 0;
   }
 
-  .gen-mobile-action-dock .gen-estimate h3 { font-size: 9px; }
-  .gen-mobile-action-dock .gen-estimate p { margin-top: 2px; font-size: 8px !important; line-height: 1.2; }
+  .gen-mobile-action-dock .gen-estimate h3 { font-size: 13px; }
+  .gen-mobile-action-dock .gen-estimate p { margin-top: 2px; font-size: 13px !important; line-height: 1.3; }
   .gen-mobile-action-dock .gen-estimate strong { font-weight: 800; }
 
   .gen-mobile-action-dock .gen-generation-status,
@@ -295,8 +296,8 @@
   .gen-mobile-action-dock .gen-private {
     display: flex;
     margin: 0;
-    font-size: 7px;
-    line-height: 1.2;
+    font-size: 12px;
+    line-height: 1.3;
   }
 
   .gen-mobile-action-dock .gen-generate-button:focus-visible {
@@ -326,7 +327,7 @@
 .gen-generate-button { white-space: nowrap; }
 .gen-generating-icon { animation: gen-spin .8s linear infinite; transform-origin: center; will-change: transform; }
 @keyframes gen-spin { to { transform: rotate(360deg); } }
-@media (max-width: 700px) { .gen-source-preview { aspect-ratio: 16 / 10; } }
+@media (max-width: 767.98px) { .gen-source-preview { aspect-ratio: 16 / 10; } }
 .gen-generated-thumbnail-image { display: block; width: 100%; height: 100%; object-fit: cover; }
 .gen-gallery-status { flex: 0 0 100%; padding: 18px 8px; color: #7b818a; font-size: 9px; text-align: center; }
 .gen-variation-status { font-size: 13px; line-height: 1.5; }
@@ -372,10 +373,10 @@
 .gen-compare-content > div { min-width: 0; }
 .gen-compare-content > div > span { display: block; margin-bottom: 7px; color: #fff; font-size: 9px; font-weight: 800; letter-spacing: var(--eos-label-tracking, .12em); }
 .gen-compare-content img { display: block; width: 100%; max-height: 78vh; object-fit: contain; border-radius: 7px; background: #0c202c; }
-@media (max-width: 700px) { .gen-image-popup { padding: 14px; }.gen-image-popup-close { top: -10px; right: -10px; width: 30px; height: 30px; }.gen-image-popup-content img { max-width: 92vw; max-height: 86vh; } }
-@media (max-width: 700px) { .gen-compare-popup { padding: 12px; }.gen-compare-content { grid-template-columns: 1fr; width: 94vw; padding: 12px; }.gen-compare-content img { max-height: 42vh; } }
-@media (max-width: 700px) { .gen-image-popup-nav { width: 36px; height: 36px; }.gen-image-popup-prev { left: 8px; }.gen-image-popup-next { right: 8px; } }
-@media (min-width: 701px) {
+@media (max-width: 767.98px) { .gen-image-popup { padding: 14px; }.gen-image-popup-close { top: -10px; right: -10px; width: 30px; height: 30px; }.gen-image-popup-content img { max-width: 92vw; max-height: 86vh; } }
+@media (max-width: 767.98px) { .gen-compare-popup { padding: 12px; }.gen-compare-content { grid-template-columns: 1fr; width: 94vw; padding: 12px; }.gen-compare-content img { max-height: 42vh; } }
+@media (max-width: 767.98px) { .gen-image-popup-nav { width: 36px; height: 36px; }.gen-image-popup-prev { left: 8px; }.gen-image-popup-next { right: 8px; } }
+@media (min-width: 768px) {
   .gen-prompt-panel:not(.is-image-to-image) { display: flex; flex-direction: column; }
   .gen-prompt-panel:not(.is-image-to-image) > .gen-textarea-wrap { flex: 0 0 auto; }
   .gen-prompt-panel:not(.is-image-to-image) > .gen-textarea-wrap textarea { height: 233px; min-height: 233px; }
@@ -456,7 +457,7 @@
 .gen-face-preservation { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .gen-face-preservation span { display: grid; gap: 3px; }
 .gen-face-preservation small { color: #8a9098; font-size: 8px; }
-@media (max-width: 700px) {
+@media (max-width: 767.98px) {
   .gen-style-transfer-thumb { height: 72px; }
   .gen-style-transfer-panel .gen-source-preview { aspect-ratio: 16 / 10; }
 }
@@ -542,7 +543,7 @@
 .gen-preview-view-switch button:hover { color: #ed5c2d; }
 .gen-preview-view-switch button.is-selected { color: #202124; background: #fff; box-shadow: 0 1px 4px rgba(43, 35, 28, .12); }
 .gen-preview-mask-tools { margin-top: 7px; border: 1px solid #e5e5e5; border-radius: 8px; }
-@media (max-width: 700px) {
+@media (max-width: 767.98px) {
   .gen-background-mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gen-background-option-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gen-mask-tools { grid-template-columns: 1fr; }
@@ -605,7 +606,7 @@
 .gen-extend-original-label, .gen-extend-direction-label { position: absolute; z-index: 2; padding: 4px 6px; color: #fff; background: rgba(12, 15, 18, .7); border-radius: 4px; font-size: 8px; font-weight: 800; letter-spacing: .08em; }
 .gen-extend-original-label { left: 10px; bottom: 10px; }
 .gen-extend-direction-label { right: 10px; bottom: 10px; color: #ffd3bd; font-weight: 600; letter-spacing: 0; }
-@media (max-width: 700px) { .gen-extend-direction-grid { gap: 5px; }.gen-extend-direction-grid button { padding: 7px 6px; }.gen-extend-direction-grid button.is-all { width: 100%; }.gen-extend-direction-grid small { font-size: 6.5px; }.gen-extend-direction-label { display: none; } }
+@media (max-width: 767.98px) { .gen-extend-direction-grid { gap: 5px; }.gen-extend-direction-grid button { padding: 7px 6px; }.gen-extend-direction-grid button.is-all { width: 100%; }.gen-extend-direction-grid small { font-size: 6.5px; }.gen-extend-direction-label { display: none; } }
 
 /* Keep image-create upload fields visually consistent with the video uploader. */
 .gen-upload { flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 96px; padding: 13px; color: #f26b38; background: #fff; border-radius: 9px; text-align: center; }
@@ -617,7 +618,7 @@
 .gen-image-hero { height: min(220px, 18vw); min-height: 0; aspect-ratio: auto; background: transparent; }
 .gen-hero-picture { display: block; width: 100%; height: 100%; }
 .gen-hero-artwork { width: 100%; height: 100%; object-fit: cover; object-position: center 58%; }
-@media (max-width: 700px) {
+@media (max-width: 767.98px) {
   .gen-image-hero { height: 115px; aspect-ratio: auto; }
   .gen-hero-artwork { object-position: center center; }
 }
@@ -646,8 +647,11 @@
 .gen-textarea-wrap textarea { font-weight: 400; }
 
 /* Final mobile action-card sizing: keep the original stacked layout, only tighter. */
-@media (max-width: 700px) {
-  .gen-settings-panel { padding-bottom: calc(10rem + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 767.98px) {
+  /* The action dock is position: fixed -- it floats over the viewport, not
+     inside this panel. Room to scroll past it is reserved at page level in
+     globals.css (body:has([data-mobile-action-dock]) .page-gutter); adding it
+     here instead drew 160px of empty panel below the last setting. */
   .gen-mobile-action-dock {
     box-sizing: border-box;
     right: 12px;
@@ -664,14 +668,14 @@
     border-radius: 14px;
   }
   .gen-mobile-action-dock .gen-estimate { margin: 0; padding: 0; border-top: 0; }
-  .gen-mobile-action-dock .gen-estimate h3 { font-size: 9px; }
-  .gen-mobile-action-dock .gen-estimate p { margin-top: 2px; font-size: 8px; }
+  .gen-mobile-action-dock .gen-estimate h3 { font-size: 13px; }
+  .gen-mobile-action-dock .gen-estimate p { margin-top: 2px; font-size: 13px !important; }
   .gen-mobile-action-dock .gen-generation-status,
   .gen-mobile-action-dock .gen-generation-error,
   .gen-mobile-action-dock .gen-generation-validation { margin: 0; padding: 5px 8px; font-size: 12px !important; line-height: 1.25; }
   .gen-mobile-action-dock .gen-generate-button { width: 100%; min-height: 42px; margin-top: 0; padding: 6px; font-size: 14px !important; line-height: 1.1; white-space: nowrap; }
   .gen-mobile-action-dock .gen-generate-button svg { width: 16px; height: 16px; }
-  .gen-mobile-action-dock .gen-private { display: flex; margin: 0; font-size: 8px !important; line-height: 1.2; }
+  .gen-mobile-action-dock .gen-private { display: flex; margin: 0; font-size: 12px !important; line-height: 1.3; }
 }
 /* This page runs edge to edge with no page gutter, so anything hanging past a
    panel's right edge widens the document and lets the whole screen scroll
@@ -683,3 +687,97 @@
    Meta size is the floor the surrounding help text already uses, so the label
    stays readable and fits. */
 .gen-segmented button { font-size: var(--eos-font-meta) !important; }
+
+/* ==========================================================================
+   COMPACT SCREENS (<= lg, 1023.98px) -- readability + thumb-friendly targets
+   --------------------------------------------------------------------------
+   The desktop layout above is an editorial design that deliberately uses
+   8–11px type, which is fine at arm's length and unreadable on a device
+   held in the hand. globals.css already lifts p / label / button / a / small to a
+   readable floor, so ONLY the tags it does not cover need help here:
+   h2, h3, em, b, strong, span, div.
+
+   Three sizes, nothing else — put new mobile rules in the matching group:
+     15px  panel titles
+     13px  headings, inline labels, body copy
+     12px  captions that sit under another control
+
+   Touch targets follow the same idea: 40px minimum, per WCAG 2.2 (2.5.8).
+   Desktop (>= lg) values are untouched — edit compact sizes HERE only.
+   ========================================================================== */
+@media (max-width: 1023.98px) {
+  /* --- 15px: panel titles ------------------------------------------------ */
+  .gen-panel-title h2 { font-size: 15px; }
+
+  /* --- 13px: headings, inline labels, body copy -------------------------- */
+  .gen-section-heading h3,
+  .gen-setting-block h3,
+  .gen-gallery-heading h3,
+  .gen-gallery-column .gen-gallery-heading h3,
+  .gen-estimate h3,
+  .gen-toggle-row,
+  .gen-prompt-optimizer-toggle > span,
+  .gen-gallery-status,
+  .gen-model-grid b,
+  .gen-tool-grid b,
+  .gen-background-mode-grid b,
+  .gen-extend-direction-grid b,
+  .gen-color-picker b,
+  .gen-range-control,
+  .gen-range-control strong { font-size: 13px; }
+
+  /* The sticky action dock sets its own sizes in its own block above. */
+
+  /* --- 12px: captions under a control ------------------------------------ */
+  .gen-panel-title h2 em,
+  .gen-section-heading h3 em,
+  .gen-background-section > .gen-section-heading em,
+  .gen-prompt-meta,
+  .gen-range-control p,
+  .gen-brush-size,
+  .gen-mask-edit-heading p,
+  .gen-dynamic-note { font-size: 12px; }
+
+}
+
+/* Hit areas only: a finger, not a mouse, so this also covers iPad. The type
+   sizes above stay phone-only. See the two-query note in globals.css. */
+@media (max-width: 1023.98px), (pointer: coarse) {
+  .gen-segmented button,
+  .gen-ratio-grid button,
+  .gen-action-row button,
+  .gen-style-source-switch button,
+  .gen-mask-tool-tabs button,
+  .gen-background-preview-tabs button,
+  .gen-preview-view-switch button,
+  .gen-tutorial-trigger,
+  .gen-section-heading button,
+  .gen-gallery-heading button,
+  .gen-advanced summary,
+  .gen-input-wrap input { min-height: 40px; height: auto; }
+
+  .gen-image-actions button,
+  .gen-gallery-prev,
+  .gen-gallery-next,
+  .gen-source-remove {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+  }
+
+  /* The switch keeps its pill shape, just sized for a thumb. The pill stays
+     28px tall so the row does not grow; a transparent pseudo-element carries
+     the tap area up to 40px. */
+  .gen-toggle { position: relative; width: 46px; height: 28px; }
+  .gen-toggle i { width: 24px; height: 24px; }
+
+  .gen-toggle::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 46px;
+    height: 40px;
+    transform: translate(-50%, -50%);
+  }
+}

@@ -73,7 +73,7 @@ export function RecentAssets() {
   }, []);
 
   return <section>
-    <div className="mb-3 flex items-end justify-between gap-4"><h2 className="text-lg font-black tracking-tight">{t("home.recentAssets")}</h2><Link href="/assets" className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-primary hover:text-[#c85427]">{t("home.viewAllAssets")} <span aria-hidden="true">→</span></Link></div>
+    <div className="mb-3 flex items-end justify-between gap-4"><h2 className="text-lg font-black tracking-tight">{t("home.recentAssets")}</h2><Link href="/assets" className="inline-flex touch:min-h-10 shrink-0 items-center gap-1 text-xs font-bold text-primary hover:text-[#c85427]">{t("home.viewAllAssets")} <span aria-hidden="true">→</span></Link></div>
     {isLoading ? <div className="rounded-2xl border border-dashed border-border bg-surface p-6 text-sm text-muted-foreground">{t("home.loadingRecentAssets")}</div> : assets.length > 0 ? <ProjectCarousel previousLabel={t("home.previousAssets")} nextLabel={t("home.nextAssets")} className="[&>a]:shrink-0 [&>a]:basis-[82%] sm:[&>a]:basis-[48%] lg:[&>a]:basis-[32%] xl:[&>a]:basis-[24%] lg:[&>a]:min-w-0">{assets.map((asset) => <AssetCard key={asset.id} asset={asset} locale={locale} t={t} />)}</ProjectCarousel> : <div className="rounded-2xl border border-dashed border-border bg-surface p-6"><p className="text-sm font-bold">{error ? t("home.unableToLoadAssets") : t("home.noAssets")}</p><p className="mt-1 text-xs text-muted-foreground">{t("home.createFirstAsset")}</p></div>}
   </section>;
 }

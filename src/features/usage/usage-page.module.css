@@ -2,7 +2,7 @@
 .usagePage button,.usagePage input,.usagePage select { font:inherit; }
 .desktopAccount { position:fixed; bottom:16px; left:16px; width:220px; background:#fff; padding:8px 0; z-index:45; }
 .desktopAccount [role=menu] { top:auto; bottom:100%; }
-@media(max-width:767px) { .desktopAccount { display:none; } }
+@media(max-width:767.98px) { .desktopAccount { display:none; } }
 .usagePage button { cursor:pointer; }
 .usagePage button:disabled { cursor:not-allowed; opacity:.5; }
 /* Focus falls through to the app-wide orange ring: this page's magenta one
@@ -13,8 +13,8 @@
 .heroCopy h1 span { color:#ff5800; }
 .heroCopy p { margin:14px 0 0; font-size:clamp(16px,1.5vw,22px); font-weight:600; }
 .heroImage { display:block; flex:1; min-width:0; width:60%; max-width:740px; height:auto; object-fit:contain; pointer-events:none; }
-@media(min-width:601px) and (max-width:900px) { .heroImage { width:65%; }.heroCopy h1 { font-size:40px; } }
-@media(max-width:600px) { .hero { min-height:0; display:grid; grid-template-columns:1fr; gap:0; padding:22px 0 8px; }.heroCopy h1 { font-size:42px; letter-spacing:-1px; }.heroCopy p { margin-top:10px; font-size:17px; }.heroImage { position:static; transform:none; width:100%; height:110px; object-position:right center; } }
+@media(min-width:640px) and (max-width:900px) { .heroImage { width:65%; }.heroCopy h1 { font-size:40px; } }
+@media(max-width:639.98px) { .hero { min-height:0; display:grid; grid-template-columns:1fr; gap:0; padding:22px 0 8px; }.heroCopy h1 { font-size:42px; letter-spacing:-1px; }.heroCopy p { margin-top:10px; font-size:17px; }.heroImage { position:static; transform:none; width:100%; height:110px; object-position:right center; } }
 .srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .summary { display:grid; grid-template-columns:1fr 1.7fr 1.15fr; align-items:center; gap:24px; padding:18px 8px 24px; border-top:1px solid #eee; border-bottom:3px solid #ff5900; }
 .balance { display:flex; flex-direction:column; gap:3px; }
@@ -27,7 +27,13 @@
 .primaryButton { width:100%; min-height:50px; padding:12px 20px; border:0; border-radius:5px; color:#fff; background:linear-gradient(105deg,#f65000,#eb0080); font-weight:700!important; display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .primaryButton:hover:not(:disabled) { filter:brightness(.93); }
 .topupAction small { display:block; font-size:12px; color:#525263; text-align:right; margin-top:8px; }
-.tabBar { display:flex; gap:36px; border-bottom:1px solid #e9e9ed; padding:8px 8px 0; overflow-x:auto; }
+/* The tab row scrolls sideways when the labels do not fit. The scrollbar is
+   hidden the same way the other swipeable strips in this app hide theirs
+   (.tool-strip, .voiceRow, .auth-modal-shell): a classic scrollbar draws a
+   grey bar under the tabs and steals ~15px, which pushed the panel below it
+   down. Swiping and keyboard scrolling still work. */
+.tabBar { display:flex; gap:36px; border-bottom:1px solid #e9e9ed; padding:8px 8px 0; overflow-x:auto; scrollbar-width:none; -ms-overflow-style:none; }
+.tabBar::-webkit-scrollbar { display:none; }
 .tabBar button { position:relative; border:0; background:none; color:#494953; min-height:62px; white-space:nowrap; padding:14px 0; }
 .tabBar button[aria-selected=true] { color:#d84300; font-weight:700; border-bottom:3px solid #ff5900; }
 .periodControl { display:flex; gap:12px; align-items:center; padding:22px 8px 2px; }
@@ -128,5 +134,25 @@
 .order .totalRow { margin-top:20px; padding-top:16px; border-top:1px solid #eadbd2; font-size:16px; font-weight:700; }
 .order .muted { margin-top:18px; }
 @media(min-width:1400px) { .recent .activityRow { grid-template-columns:34px minmax(68px,1fr) auto minmax(120px,.9fr); }.recent .activityRow time { grid-column:auto; }.recent .activityRow small { display:none; } }
-@media(max-width:1100px) { .summary { grid-template-columns:1fr 1fr; }.periodStats { grid-column:1; grid-row:2; }.topupAction { grid-column:2; grid-row:1/3; }.overview { grid-template-columns:1fr; }.recent { border-left:0; padding-left:0; margin-top:0; }.tools>div { padding:0 8px; gap:3px; }.topup { gap:24px; }.tabBar { gap:24px; } }
-@media(max-width:700px) { .summary { gap:16px; padding:14px 0 18px; }.balance strong { font-size:48px; }.periodStats { grid-column:1/3; grid-row:2; gap:8px 16px; }.periodStats b { font-size:18px; }.topupAction { grid-row:1; }.primaryButton { padding:12px; font-size:14px!important; }.topupAction small { font-size:10px; }.tabBar { gap:24px; padding:0; }.tabBar button { min-height:56px; font-size:13px; }.periodControl { padding:18px 0 0; }.overview { padding:0 0 20px; gap:16px; }.chart canvas { height:230px; }.tools { grid-template-columns:repeat(2,minmax(0,1fr)); }.tools>div { border:0; }.toolIcon { width:64px; height:64px; }.tools strong { font-size:12px; }.tools b { font-size:20px; }.ledger { padding-inline:0; }.ledger .activityRow { grid-template-columns:34px minmax(80px,1fr) auto; }.ledger .activityRow time { grid-column:2/4; }.filters { flex-wrap:wrap; }.search { flex-basis:100%; }.topup { grid-template-columns:1fr; padding:24px 0; gap:16px; }.packages strong { font-size:23px; }.packages b { font-size:16px; }.order { padding:20px; }.notice { flex-wrap:wrap; }.notice span { min-width:180px; } }
+@media(max-width:1279.98px) { .summary { grid-template-columns:1fr 1fr; }.periodStats { grid-column:1; grid-row:2; }.topupAction { grid-column:2; grid-row:1/3; }.overview { grid-template-columns:1fr; }.recent { border-left:0; padding-left:0; margin-top:0; }.tools>div { padding:0 8px; gap:3px; }.topup { gap:24px; }.tabBar { gap:24px; } }
+@media(max-width:767.98px) { .summary { gap:16px; padding:14px 0 18px; }.balance strong { font-size:48px; }.periodStats { grid-column:1/3; grid-row:2; gap:8px 16px; }.periodStats b { font-size:18px; }.topupAction { grid-row:1; }.primaryButton { padding:12px; font-size:14px!important; }.topupAction small { font-size:10px; }.tabBar { gap:24px; padding:0; }.tabBar button { min-height:56px; font-size:13px; }.periodControl { padding:18px 0 0; }.overview { padding:0 0 20px; gap:16px; }.chart canvas { height:230px; }.tools { grid-template-columns:repeat(2,minmax(0,1fr)); }.tools>div { border:0; }.toolIcon { width:64px; height:64px; }.tools strong { font-size:14px; }.tools b { font-size:20px; }.ledger { padding-inline:0; }.ledger .activityRow { grid-template-columns:34px minmax(80px,1fr) auto; }.ledger .activityRow time { grid-column:2/4; }.filters { flex-wrap:wrap; }.search { flex-basis:100%; }.topup { grid-template-columns:1fr; padding:24px 0; gap:16px; }.packages strong { font-size:23px; }.packages b { font-size:16px; }.order { padding:20px; }.notice { flex-wrap:wrap; }.notice span { min-width:180px; } }
+
+/* ==========================================================================
+   COMPACT SCREENS (<= lg, 1023.98px) -- readability + thumb-friendly targets
+   --------------------------------------------------------------------------
+   globals.css floors p / label / button / a / small / time; <span> is not
+   covered, so the two caption spans are lifted to the 14px meta size.
+   The artwork link is the only target on this page the shared Button
+   component does not own, so it gets the 40px WCAG 2.2 (2.5.8) minimum here.
+   ========================================================================== */
+@media (max-width: 1023.98px) {
+  .chartCaption,
+  .artworkCaption { font-size: 14px; }
+
+}
+
+/* Hit areas only: a finger, not a mouse, so this also covers iPad. The type
+   sizes above stay phone-only. See the two-query note in globals.css. */
+@media (max-width: 1023.98px), (pointer: coarse) {
+  .artworkLink { min-height: 40px; }
+}

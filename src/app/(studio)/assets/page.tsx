@@ -339,20 +339,19 @@ export default function AssetsPage() {
   const assetsCacheRef = useRef(new Map<string, AssetsCacheEntry>());
   const hasLoadedAssetsRef = useRef(false);
 
+  // Keeps ?q= and the search box in step when the user goes back or forward.
+  // The "assets-search" listener that used to sit here was for the header's
+  // search box, which no longer exists -- nothing dispatches that event now.
   useEffect(() => {
-    const syncHeaderSearch = () => {
+    const syncSearchFromUrl = () => {
       const nextSearch = new URLSearchParams(window.location.search).get("q") ?? "";
       if (searchRef.current === nextSearch) return;
       searchRef.current = nextSearch;
       setSearch(nextSearch);
       setPage(1);
     };
-    window.addEventListener("assets-search", syncHeaderSearch);
-    window.addEventListener("popstate", syncHeaderSearch);
-    return () => {
-      window.removeEventListener("assets-search", syncHeaderSearch);
-      window.removeEventListener("popstate", syncHeaderSearch);
-    };
+    window.addEventListener("popstate", syncSearchFromUrl);
+    return () => window.removeEventListener("popstate", syncSearchFromUrl);
   }, []);
 
   useEffect(() => {

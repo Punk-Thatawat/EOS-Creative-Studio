@@ -83,7 +83,7 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
     { label: "System settings", href: "/admin/settings", icon: Settings, disabled: true },
   ] satisfies Array<NavigationItem & { disabled?: boolean }>;
 
-  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 md:flex md:px-5"><SidebarHeader className="mb-8 items-center px-2"><EosLogo /></SidebarHeader><SidebarContent className="gap-1"><AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} /><AdminFeatureNavigationTree pathname={pathname} hydrated={hydrated} /><AdminNavigationGroup label="Operations" items={operations} pathname={pathname} /><SidebarGroup className="mt-2 px-0"><SidebarGroupContent><SidebarMenu className="gap-1"><SidebarMenuItem><SidebarMenuButton render={<Link href="/home" />} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"><ArrowLeft size={18} /><span>Back to workspace</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent></Sidebar>;
+  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 lg:flex lg:px-5"><SidebarHeader className="mb-8 items-center px-2"><EosLogo /></SidebarHeader><SidebarContent className="gap-1"><AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} /><AdminFeatureNavigationTree pathname={pathname} hydrated={hydrated} /><AdminNavigationGroup label="Operations" items={operations} pathname={pathname} /><SidebarGroup className="mt-2 px-0"><SidebarGroupContent><SidebarMenu className="gap-1"><SidebarMenuItem><SidebarMenuButton render={<Link href="/home" />} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"><ArrowLeft size={18} /><span>Back to workspace</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent></Sidebar>;
 }
 
 function WorkspaceSidebarHeader() {
@@ -95,7 +95,7 @@ export function SidebarNavigation() {
   const hydrated = useHydrated();
   const pathname = hydrated ? pathnameFromRouter : "";
   if (pathname.startsWith("/admin")) return <AdminSidebarNavigation pathname={pathname} hydrated={hydrated} />;
-  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 md:flex md:px-5">
+  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 lg:flex lg:px-5">
     <WorkspaceSidebarHeader />
     <SidebarContent className="gap-1"><WorkspaceNavigation pathname={pathname} /></SidebarContent>
   </Sidebar>;

@@ -124,7 +124,7 @@
 .sessionSecurityNote { display: flex; align-items: flex-start; gap: 0.45rem; border-top: 1px solid var(--settings-line); color: #8b817a; font-size: 0.68rem; line-height: 1.5; padding: 0.9rem 1.2rem 1rem; }
 .sessionSecurityNote svg { flex: none; color: #f26b38; margin-top: 0.05rem; }
 
-@media (max-width: 760px) {
+@media (max-width: 767.98px) {
   .pageIntro { align-items: stretch; flex-direction: column; gap: 1rem; }
   .saveButton { align-self: flex-start; }
   .layout { display: block; }
@@ -145,4 +145,19 @@
 
 @media (prefers-reduced-motion: reduce) {
   .navItem, .languageSwitch button, .toggle, .toggleKnob { transition: none; }
+}
+
+/* ==========================================================================
+   COMPACT SCREENS (<= lg, 1023.98px) -- readability
+   --------------------------------------------------------------------------
+   These three sit in rem, which put them at 10.9-12.8px on a phone. They are
+   status and value text the reader needs, and globals.css does not floor
+   <span>/<strong>, so they are lifted to the 14px meta size here.
+   Touch targets on this page come from the shared Button component
+   (src/components/ui/button.tsx), which clears 40px below md.
+   ========================================================================== */
+@media (max-width: 1023.98px) {
+  .statusPill,
+  .infoRow,
+  .rowValue { font-size: 0.875rem; }
 }

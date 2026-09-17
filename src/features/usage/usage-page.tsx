@@ -179,6 +179,22 @@ export function UsagePage() {
   const [loading, setLoading] = useState(true), [error, setError] = useState(false), [catalogError, setCatalogError] = useState(false), [refresh, setRefresh] = useState(0);
   const [checkoutState, setCheckoutState] = useState<string | null>(null), [pollCount, setPollCount] = useState(0);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const tabBarRef = useRef<HTMLDivElement | null>(null);
+
+  // Bring the chosen tab fully into view when it sits past the edge of the
+  // strip. This nudges the strip's own scrollLeft rather than calling
+  // scrollIntoView, which would also scroll the PAGE vertically.
+  const revealTab = (value: number) => {
+    const bar = tabBarRef.current;
+    const tab = tabRefs.current[value];
+    if (!bar || !tab) return;
+    const peek = 24; // leave a sliver of the neighbour showing, so it reads as scrollable
+    const left = tab.offsetLeft;
+    const right = left + tab.offsetWidth;
+    const behavior: ScrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    if (right + peek > bar.scrollLeft + bar.clientWidth) bar.scrollTo({ left: right + peek - bar.clientWidth, behavior });
+    else if (left - peek < bar.scrollLeft) bar.scrollTo({ left: Math.max(0, left - peek), behavior });
+  };
   const dashboardCacheRef = useRef(new Map<string, { data: UsageDashboard; cachedAt: number }>());
   const cacheRefreshRef = useRef(refresh);
   useEffect(() => {
@@ -245,13 +261,13 @@ export function UsagePage() {
   }, [checkoutState, pollCount]);
   const reload = () => { setLoading(true); setRefresh(value => value + 1); };
   const changeMonth = (value: string) => { setMonth(value); setDashboard(null); setLoading(true); };
-  const selectTab = (value: number, focus = false) => { if (paymentBusy) return; setActiveTab(value); if (focus) tabRefs.current[value]?.focus(); };
+  const selectTab = (value: number, focus = false) => { if (paymentBusy) return; setActiveTab(value); revealTab(value); if (focus) tabRefs.current[value]?.focus(); };
   const summary = dashboard?.summary;
   return <div className={styles.usagePage} data-page="usage" data-no-translate>
      <header className={styles.hero}><div className={styles.heroCopy}><h1>YOUR CREATIVE<br />PULSE<span>.</span></h1><p>การใช้งานและเครดิต</p></div><Image src="/generated-assets/usage-hero-art-v2.webp" alt="" width={1984} height={794} priority className={styles.heroImage} sizes="(max-width: 600px) 100vw, 50vw" /></header>
     {checkoutState && <div className={styles.notice} role="status"><Info size={18} /><span>{checkoutState === "cancelled" ? "ยกเลิกการชำระเงินแล้ว ยังไม่มีการเพิ่มเครดิต คุณสามารถเลือกแพ็กเกจใหม่ได้" : pollCount < 6 ? "กลับจาก Stripe แล้ว กำลังอัปเดตยอดเครดิต โปรดรอการยืนยันการชำระเงินจากระบบ" : "หากเครดิตยังไม่เพิ่ม ให้ตรวจสอบสถานะการชำระเงินและลองรีเฟรชอีกครั้ง"}</span><button onClick={reload} disabled={loading} aria-label="รีเฟรชยอดเครดิต"><RefreshCw size={17} /></button><button aria-label="ปิดข้อความการชำระเงิน" onClick={() => { setCheckoutState(null); const url = new URL(window.location.href); url.searchParams.delete("checkout"); window.history.replaceState(null, "", url); }}><X size={17} /></button></div>}
     <section className={styles.summary} aria-label="สรุปเครดิต" aria-busy={loading}><div className={styles.balance}><span>เครดิตพร้อมใช้</span><strong>{loading ? "…" : summary ? number(summary.creditsRemaining) : "—"}</strong></div><div className={styles.periodStats}><span>ใช้แล้ว <b>{loading ? "…" : summary ? number(summary.creditsUsed) : "—"}</b> เครดิต</span><span>เพิ่มแล้ว <b>{loading ? "…" : summary ? number(summary.creditsAdded) : "—"}</b> เครดิต</span><small>{dashboard ? monthLabel(dashboard.period.startAt) : "ช่วงเวลาที่เลือก"}</small></div><div className={styles.topupAction}><button className={styles.primaryButton} disabled={paymentBusy} onClick={() => selectTab(3, true)}>เติมเครดิต <ArrowRight size={24} /></button><small>ชำระด้วย PromptPay ผ่าน Stripe</small></div></section>
-    <div className={styles.tabBar} role="tablist" aria-label="ส่วนการใช้งานและเครดิต">{tabs.map((tab, index) => <button key={tab} id={`usage-tab-${index}`} ref={element => { tabRefs.current[index] = element; }} type="button" role="tab" disabled={paymentBusy} aria-selected={activeTab === index} aria-controls={`usage-panel-${index}`} tabIndex={activeTab === index ? 0 : -1} onClick={() => selectTab(index)} onKeyDown={event => { const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); selectTab(next, true); } }}>{tab}</button>)}</div>
+    <div ref={tabBarRef} className={styles.tabBar} role="tablist" aria-label="ส่วนการใช้งานและเครดิต">{tabs.map((tab, index) => <button key={tab} id={`usage-tab-${index}`} ref={element => { tabRefs.current[index] = element; }} type="button" role="tab" disabled={paymentBusy} aria-selected={activeTab === index} aria-controls={`usage-panel-${index}`} tabIndex={activeTab === index ? 0 : -1} onClick={() => selectTab(index)} onKeyDown={event => { const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : null; if (next !== null) { event.preventDefault(); selectTab(next, true); } }}>{tab}</button>)}</div>
     {error && <div className={styles.error} role="alert"><AlertCircle size={20} /><span>โหลดข้อมูลเครดิตไม่สำเร็จ กรุณาตรวจสอบการเข้าสู่ระบบแล้วลองอีกครั้ง</span><a href="/login">เข้าสู่ระบบ</a><button onClick={reload} disabled={loading}>ลองอีกครั้ง</button></div>}
     <div role="tabpanel" id={`usage-panel-${activeTab}`} aria-labelledby={`usage-tab-${activeTab}`} tabIndex={0}>
       {activeTab !== 3 && <div className={styles.periodControl}><MonthPicker className={styles.periodDropdown} ariaLabel="เดือนที่ต้องการดูรายงาน" value={month} onChange={changeMonth} options={monthOptions} /><button className={styles.refresh} aria-label="รีเฟรชข้อมูล" disabled={loading} onClick={reload}><RefreshCw size={16} /></button></div>}
