@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MailCheck, Pause, Play, UserRound, X, type LucideIcon } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MailCheck, UserRound, X, type LucideIcon } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { EosLogo } from "@/components/brand/eos-logo";
 import { VideoSource } from "@/components/media/video-source";
@@ -15,24 +14,15 @@ import { listPublicLandingIntroVideo, listPublicVideoShowcase } from "@/lib/api/
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 const tools = [
-  ["AI Image", "/generated-icons-v2/icon-1-image.png"],
-  ["AI Video", "/generated-icons-v2/icon-2-video.png"],
-  ["AI Presenter", "/generated-icons-v2/icon-3-profile.png"],
-  ["AI Audio", "/generated-icons-v2/icon-4-audio.png"],
-  ["AI Document", "/generated-icons-v2/icon-5-document.png"],
-  ["More Tools", "/generated-icons-v2/icon-6-sparkles.png"],
+  ["AI Image", "/generated-icons-v2/icon-1-image.webp"],
+  ["AI Video", "/generated-icons-v2/icon-2-video.webp"],
+  ["AI Presenter", "/generated-icons-v2/icon-3-profile.webp"],
+  ["AI Audio", "/generated-icons-v2/icon-4-audio.webp"],
+  ["AI Document", "/generated-icons-v2/icon-5-document.webp"],
+  ["More Tools", "/generated-icons-v2/icon-6-sparkles.webp"],
 ] as const;
 
-const fallbackExamples = [
-  { label: "PRODUCT AD", video: "/uploaded-videos/product-ad.mp4", webm: "/uploaded-videos/product-ad.webm" },
-  { label: "BRAND CAMPAIGN", video: "/uploaded-videos/brand-campaign.mp4", webm: "/uploaded-videos/brand-campaign.webm" },
-  { label: "AI PRESENTER VIDEO", video: "/uploaded-videos/ai-presenter.mp4", webm: "/uploaded-videos/ai-presenter.webm" },
-  { label: "GROOVY GOODS", video: "/uploaded-videos/groovy-goods.mp4", webm: "/uploaded-videos/groovy-goods.webm" },
-  { label: "BLOWAWAY", video: "/uploaded-videos/blowaway.mp4", webm: "/uploaded-videos/blowaway.webm" },
-  { label: "TAPE LOOK", video: "/uploaded-videos/tape-look.mp4", webm: "/uploaded-videos/tape-look.webm" },
-];
-
-type ShowcaseExample = { id?: string; label: string; video: string; webm?: string; mimeType?: string };
+type ShowcaseExample = { id?: string; label: string; video: string; mimeType?: string };
 
 const introVideoShownDateKey = "eos-intro-video-shown-date-v1";
 const fallbackIntroVideo = "/uploaded-videos/intro-ai-image-generator.mp4";
@@ -105,9 +95,8 @@ function isInvalidCredentialsError(error: unknown): boolean {
 
 export function PreLoginPage() {
   const { t } = useLocale();
-  const [examples, setExamples] = useState<ShowcaseExample[]>(fallbackExamples);
+  const [examples, setExamples] = useState<ShowcaseExample[]>([]);
   const [exampleOffset, setExampleOffset] = useState(0);
-  const [playingExampleIndex, setPlayingExampleIndex] = useState<number | null>(null);
   const [showIntroVideo, setShowIntroVideo] = useState(false);
   const [introVideoUrl, setIntroVideoUrl] = useState(fallbackIntroVideo);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -126,27 +115,11 @@ export function PreLoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
-  const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
+  const showcaseVideoRefs = useRef<Array<HTMLVideoElement | null>>([]);
   const maxExampleOffset = Math.max(0, examples.length - 5);
   const visibleExampleOffset = Math.min(exampleOffset, maxExampleOffset);
   const authEmailError = authEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(authEmail) ? t("auth.validation.emailInvalid") : null;
   const authPasswordError = authMode === "register" && authPassword.length > 0 && authPassword.length < 8 ? t("auth.validation.passwordMin") : null;
-
-  const toggleExamplePlayback = (index: number) => {
-    const video = videoRefs.current[index];
-    if (!video) return;
-
-    if (video.paused) {
-      videoRefs.current.forEach((current, currentIndex) => {
-        if (currentIndex !== index) current?.pause();
-      });
-      void video.play().then(() => setPlayingExampleIndex(index)).catch(() => setPlayingExampleIndex(null));
-      return;
-    }
-
-    video.pause();
-    setPlayingExampleIndex(null);
-  };
 
   useEffect(() => {
     let active = true;
@@ -159,6 +132,22 @@ export function PreLoginPage() {
     }).catch(() => undefined);
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const video = entry.target as HTMLVideoElement;
+        if (!entry.isIntersecting || video.dataset.showcaseActive !== "true") {
+          video.pause();
+          return;
+        }
+        void video.play().catch(() => undefined);
+      });
+    }, { rootMargin: "120px 0px", threshold: 0.15 });
+    showcaseVideoRefs.current.forEach((video) => { if (video) observer.observe(video); });
+    return () => observer.disconnect();
+  }, [examples, visibleExampleOffset]);
 
   const handleGoogleLogin = async () => {
     setGoogleLoginLoading(true);
@@ -329,30 +318,6 @@ export function PreLoginPage() {
   }, [loginOpen]);
 
   useEffect(() => {
-    const videos = videoRefs.current.filter((video): video is HTMLVideoElement => Boolean(video));
-    if (showIntroVideo) {
-      videos.forEach((video) => video.pause());
-      return undefined;
-    }
-    if (typeof IntersectionObserver === "undefined") {
-      videos.forEach((video) => void video.play().catch(() => undefined));
-      return undefined;
-    }
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        const video = entry.target as HTMLVideoElement;
-        if (entry.isIntersecting) void video.play().catch(() => undefined);
-        else video.pause();
-      });
-    }, { rootMargin: "120px 0px", threshold: 0.1 });
-    videos.forEach((video) => observer.observe(video));
-    return () => {
-      observer.disconnect();
-      videos.forEach((video) => video.pause());
-    };
-  }, [examples, showIntroVideo]);
-
-  useEffect(() => {
     const timer = window.setTimeout(() => {
       const today = getLocalDateKey();
       let hasShownToday = false;
@@ -431,20 +396,14 @@ export function PreLoginPage() {
         ))}
       </section>
 
-      <section id="examples" className="examples-section">
+      {examples.length > 0 ? <section id="examples" className="examples-section">
         <div className="section-heading"><h2>SEE WHAT YOU CAN CREATE</h2><span>EXPLORE EXAMPLES</span><div className="carousel-actions"><button aria-label="Previous examples" onClick={() => setExampleOffset(Math.max(0, visibleExampleOffset - 1))} disabled={visibleExampleOffset === 0}><ChevronLeft size={18} /></button><button aria-label="Next examples" onClick={() => setExampleOffset(Math.min(maxExampleOffset, visibleExampleOffset + 1))} disabled={visibleExampleOffset >= maxExampleOffset}><ChevronRight size={18} /></button></div></div>
         <div className="examples-swipe-hint" aria-hidden="true">SWIPE TO EXPLORE <ArrowRight size={14} /></div>
         <div className="example-window" role="region" aria-label="Creative examples"><div className="example-track" style={{ transform: `translateX(-${visibleExampleOffset * 20.5}%)` }}>{examples.map((example, index) => <article className={`example-card example-${index}${index === visibleExampleOffset + 2 ? " example-featured" : ""}`} key={example.id ?? `${example.label}-${index}`}>
-          <div className="example-placeholder">{getVideoEmbedUrl(example.video) ? <iframe src={getVideoEmbedUrl(example.video) ?? undefined} title={`${example.label} preview`} className="example-video example-video-embed" allow="autoplay; encrypted-media; picture-in-picture" /> : <>
-            <video ref={(video) => { videoRefs.current[index] = video; }} className="example-video" muted loop playsInline preload="metadata" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`} onPlay={() => setPlayingExampleIndex(index)} onPause={() => setPlayingExampleIndex((current) => current === index ? null : current)} onEnded={() => setPlayingExampleIndex((current) => current === index ? null : current)}>
-            {example.webm ? <source src={example.webm} type="video/webm" /> : null}
-            {example.video ? <source src={example.video} type={example.mimeType ?? "video/mp4"} /> : null}
-            </video>
-            <button type="button" className={`example-video-control${playingExampleIndex === index ? " is-playing" : ""}`} aria-label={`${playingExampleIndex === index ? "Pause" : "Play"} ${example.label}`} onClick={() => toggleExamplePlayback(index)}>{playingExampleIndex === index ? <Pause size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}</button>
-          </>}</div>
+          <div className="example-placeholder">{getVideoEmbedUrl(example.video) ? <iframe src={getVideoEmbedUrl(example.video) ?? undefined} title={`${example.label} preview`} className="example-video example-video-embed" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" /> : <video ref={(video) => { showcaseVideoRefs.current[index] = video; }} className="example-video" muted autoPlay loop playsInline preload="metadata" data-showcase-active="true" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`}><source src={example.video} type={example.mimeType ?? "video/mp4"} /></video>}</div>
           <div className="example-label">{example.label}</div>
         </article>)}</div></div>
-      </section>
+      </section> : null}
 
       {showIntroVideo && <div className="video-modal intro-video-modal" role="dialog" aria-modal="true" aria-label="AI Image Generator intro video" onClick={() => setShowIntroVideo(false)}>
         <div className="intro-video-decor" aria-hidden="true">
@@ -517,7 +476,6 @@ export function PreLoginPage() {
           </button>
         </div>
       </footer>
-      <div className="landing-legal-links"><span>EOS Creative Studio</span><Link href="/legal">Legal Center</Link><Link href="/legal/cookies">Cookies</Link><Link href="/legal/privacy">Privacy</Link><Link href="/legal/terms-of-use">Terms</Link></div>
     </main>
   );
 }

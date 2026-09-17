@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   Bell,
@@ -96,6 +96,9 @@ type Copy = { [Key in keyof typeof settingsKeys]: string };
 
 const sectionIds = ["language", "security"] as const;
 const showNotificationSettings = false;
+const SETTINGS_CACHE_TTL_MS = 60_000;
+let cachedAuthProvider: { value: "email" | "google" | "unknown"; cachedAt: number } | null = null;
+let cachedSessions: { value: BackendSessionSummary[]; cachedAt: number } | null = null;
 
 async function syncLocale(locale: Locale) {
   const token = await getApiAccessToken();
@@ -185,6 +188,7 @@ export function SettingsPageClient() {
   const [sessions, setSessions] = useState<BackendSessionSummary[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState(false);
+  const sessionsRequestRef = useRef(0);
 
   const t: Copy = useMemo(
     () => Object.fromEntries(Object.entries(settingsKeys).map(([name, key]) => [name, translateKey(key as TranslationKey)])) as Copy,
@@ -192,13 +196,20 @@ export function SettingsPageClient() {
   );
 
   useEffect(() => {
+    if (cachedAuthProvider && Date.now() - cachedAuthProvider.cachedAt < SETTINGS_CACHE_TTL_MS) {
+      setAuthProvider(cachedAuthProvider.value);
+      return undefined;
+    }
     let active = true;
     void getApiAccessToken()
       .then((accessToken) => accessToken ? fetchBackendAuthProvider(accessToken) : null)
       .then((provider) => {
-        if (active) setAuthProvider(provider ?? "unknown");
+        const value = provider ?? "unknown";
+        cachedAuthProvider = { value, cachedAt: Date.now() };
+        if (active) setAuthProvider(value);
       })
       .catch(() => {
+        cachedAuthProvider = { value: "unknown", cachedAt: Date.now() };
         if (active) setAuthProvider("unknown");
       });
     return () => {
@@ -256,14 +267,24 @@ export function SettingsPageClient() {
     }
   }
 
-  async function handleReviewSessions() {
+  async function handleReviewSessions(forceRefresh = false) {
     setSessionsOpen(true);
+    if (!forceRefresh && cachedSessions && Date.now() - cachedSessions.cachedAt < SETTINGS_CACHE_TTL_MS) {
+      setSessions(cachedSessions.value);
+      setSessionsError(false);
+      return;
+    }
+    const requestId = sessionsRequestRef.current + 1;
+    sessionsRequestRef.current = requestId;
     setSessionsLoading(true);
     setSessionsError(false);
     try {
       const accessToken = await getApiAccessToken({ forceRefresh: true });
       if (!accessToken) throw new Error("Session expired");
-      setSessions(await fetchBackendAuthSessions(accessToken));
+      const nextSessions = await fetchBackendAuthSessions(accessToken);
+      if (sessionsRequestRef.current !== requestId) return;
+      cachedSessions = { value: nextSessions, cachedAt: Date.now() };
+      setSessions(nextSessions);
     } catch {
       setSessionsError(true);
     } finally {
@@ -396,7 +417,7 @@ export function SettingsPageClient() {
             <button type="button" className={styles.sessionClose} onClick={() => setSessionsOpen(false)} aria-label={t.closeSessions}><X size={18} /></button>
           </div>
           <div className={styles.sessionDialogBody}>
-            {sessionsLoading ? <p className={styles.sessionState} role="status">{t.sessionsLoading}</p> : sessionsError ? <div className={styles.sessionState} role="alert"><p>{t.sessionsError}</p><Button type="button" variant="outline" size="sm" onClick={() => { void handleReviewSessions(); }}>{t.sessionsRetry}</Button></div> : sessions.length === 0 ? <p className={styles.sessionState}>{t.sessionsEmpty}</p> : <div className={styles.sessionList}>{sessions.map((session) => <div className={styles.sessionItem} key={session.id}><span className={styles.sessionDeviceIcon}><Monitor size={17} /></span><div className={styles.sessionItemCopy}><strong>{sessionDeviceLabel(session.userAgent, locale, t.unknownDevice)}</strong><span>{t.sessionLastUsed}: {formatSessionDate(session.lastUsedAt ?? session.createdAt, locale)}</span><span>{t.sessionSignedIn}: {formatSessionDate(session.createdAt, locale)}</span></div></div>)}</div>}
+            {sessionsLoading ? <p className={styles.sessionState} role="status">{t.sessionsLoading}</p> : sessionsError ? <div className={styles.sessionState} role="alert"><p>{t.sessionsError}</p><Button type="button" variant="outline" size="sm" onClick={() => { void handleReviewSessions(true); }}>{t.sessionsRetry}</Button></div> : sessions.length === 0 ? <p className={styles.sessionState}>{t.sessionsEmpty}</p> : <div className={styles.sessionList}>{sessions.map((session) => <div className={styles.sessionItem} key={session.id}><span className={styles.sessionDeviceIcon}><Monitor size={17} /></span><div className={styles.sessionItemCopy}><strong>{sessionDeviceLabel(session.userAgent, locale, t.unknownDevice)}</strong><span>{t.sessionLastUsed}: {formatSessionDate(session.lastUsedAt ?? session.createdAt, locale)}</span><span>{t.sessionSignedIn}: {formatSessionDate(session.createdAt, locale)}</span></div></div>)}</div>}
           </div>
           <p className={styles.sessionSecurityNote}><ShieldCheck size={15} />{t.sessionSecurityNote}</p>
         </div>

@@ -64,6 +64,7 @@ type PeopleSource = {
 };
 
 type PeopleGenerationStatus = "idle" | "uploading" | "processing" | "completed" | "failed";
+type PeopleWorkspaceVariant = "people-video" | "lipsync";
 
 const peopleCoreParameterNames = new Set([
   "prompt",
@@ -285,9 +286,9 @@ function peopleProgress(payload: PeopleVideoGenerationStatus | LipsyncGeneration
   return fallback;
 }
 
-export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "people-video" | "lipsync" }) {
+export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVariant?: PeopleWorkspaceVariant }) {
   const { locale, t } = useLocale();
-  const isLipsync = variant === "lipsync";
+  const isLipsync = initialVariant === "lipsync";
   const workspaceFeature = isLipsync ? "lipsync" : "people-video";
   const workspaceLabel = isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title");
   const [models, setModels] = useState<GenerationModelOption[]>([]);
@@ -909,7 +910,7 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
                 <small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small>
               </div>
             ) : previewView === "model" && selectedModelOption?.previewUrl ? (
-              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} />
+              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} autoPlay={selectedModelOption.previewType === "video"} alt={`${selectedModelOption.displayName} model preview`} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} frameClassName={styles.videoPreviewMediaFrame} />
             ) : previewVideoUrlForView ? (
               <EosVideoPlayer key={previewVideoUrlForView} src={previewVideoUrlForView} className={`${styles.generatedVideoPlayer} ${styles.peopleGeneratedVideoPlayer}`} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={`${t("create.video.common.generatedVideo")} ${workspaceLabel}`} />
             ) : (
@@ -958,5 +959,5 @@ export function PeopleVideoWorkspace({ variant = "people-video" }: { variant?: "
 }
 
 export function LipsyncWorkspace() {
-  return <PeopleVideoWorkspace variant="lipsync" />;
+  return <PeopleVideoWorkspace initialVariant="lipsync" />;
 }

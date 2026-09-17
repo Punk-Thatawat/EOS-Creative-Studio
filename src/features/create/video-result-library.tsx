@@ -42,14 +42,20 @@ function completedHistory(items: GenerationHistoryItem[]): Array<{ id: string; u
 
 function VideoGalleryThumbnail({ url, playSize = 14 }: { url: string; playSize?: number }) {
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [shouldLoad, setShouldLoad] = useState(false);
 
   return (
-    <span className={styles.videoGalleryThumb}>
+    <span
+      className={styles.videoGalleryThumb}
+      onMouseEnter={() => setShouldLoad(true)}
+      onFocus={() => setShouldLoad(true)}
+      onTouchStart={() => setShouldLoad(true)}
+    >
       <video
-        src={url}
+        src={shouldLoad ? url : undefined}
         muted
         playsInline
-        preload="metadata"
+        preload={shouldLoad ? "metadata" : "none"}
         controls={false}
         disablePictureInPicture
         disableRemotePlayback

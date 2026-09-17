@@ -161,7 +161,7 @@ function mapApiAsset(asset: AssetsApiAsset): Asset {
     date: formatDate(asset.createdAt),
     size: asset.sizeLabel || formatBytes(asset.sizeBytes),
     type,
-    image: asset.type === "video" && asset.url ? asset.url : asset.previewUrl ?? (asset.type === "image" && asset.url ? asset.url : previewFallbacks[asset.type]),
+    image: asset.previewUrl ?? (asset.type === "image" && asset.url ? asset.url : asset.type === "video" && asset.url ? asset.url : previewFallbacks[asset.type]),
     filter: filterByApiType[asset.type],
     mediaKind: asset.type,
     url: asset.url ?? null,
@@ -185,6 +185,14 @@ function TypeIcon({ kind }: { kind: AssetsApiType }) {
   if (kind === "audio") return <AudioLines size={15} strokeWidth={2.5} />;
   if (kind === "document") return <FileText size={15} strokeWidth={2.5} />;
   return <ImageIcon size={15} strokeWidth={2.5} />;
+}
+
+function AudioAssetPreview() {
+  return <div className="asset-audio-preview" aria-hidden="true">
+    <span className="asset-audio-preview-glow" />
+    <Image src="/generated-assets/audio-ui/audio-waveform.png" alt="" fill sizes="(max-width: 767px) 90vw, 30vw" unoptimized className="asset-audio-waveform" />
+    <span className="asset-audio-preview-label"><AudioLines size={13} /> AUDIO</span>
+  </div>;
 }
 
 function FilterSelect({
@@ -238,6 +246,7 @@ function FilterSelect({
 }
 
 function AssetPreview({ asset }: { asset: Asset }) {
+  if (asset.mediaKind === "audio") return <AudioAssetPreview />;
   if (asset.mediaKind === "video" && asset.url && asset.image === asset.url) {
     return <VideoFrameThumbnail key={asset.url} src={asset.url} alt={`ภาพตัวอย่าง ${asset.title}`} className="asset-preview-video" fallback={<span className="flex h-full w-full items-center justify-center text-white/70"><Video size={32} /></span>} />;
   }
@@ -601,7 +610,7 @@ export default function AssetsPage() {
     <div className="assets-page" data-active-tab={activeTab} data-no-translate>
       <section className="assets-universe-hero" aria-label="EOS Creative Studio Assets">
         <Image
-          src="/generated-assets/assets-universe-hero-full-v1.png"
+          src="/generated-assets/assets-universe-hero-full-v1.webp"
           alt="YOUR CREATIVE UNIVERSE. ทุกผลงาน พร้อมต่อยอด"
           width={2172}
           height={724}

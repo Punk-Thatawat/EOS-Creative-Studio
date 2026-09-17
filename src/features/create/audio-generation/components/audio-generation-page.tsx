@@ -409,8 +409,13 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const audioUrlsRef = useRef<Record<number, string>>({});
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  useEffect(() => () => { Object.values(audioUrls).forEach((url) => URL.revokeObjectURL(url)); }, [audioUrls]);
+  useEffect(() => () => {
+    previewAudioRef.current?.pause();
+    Object.values(audioUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   const handleGenerate = async () => {
     setStatus("generating");
@@ -424,6 +429,9 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
         nextUrls[variant.index] = URL.createObjectURL(blob);
         void onHistorySaved?.({ audio: blob, feature: "sound-effects", label: `${effectType} variation ${variant.index}`, outputFormat: "mp3", metadata: { description, durationSeconds: duration, variation: variant.index } });
       });
+      previewAudioRef.current?.pause();
+      Object.values(audioUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+      audioUrlsRef.current = nextUrls;
       setVariants(nextVariants);
       setAudioUrls(nextUrls);
       setSelectedIndex(nextVariants[0]?.index ?? 0);
@@ -456,8 +464,8 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>{variants.length || variationCount} VARIATIONS</span><h2>SOUND PREVIEW</h2></div><span className={styles.altStatus}><span /> {status === "generating" ? "Generating" : "Ready"}</span></div>
       <div className={styles.mockNotice}><LockKeyhole size={13} /><span>{status === "generating" ? "GENERATING VIA BACKEND" : error ?? "BACKEND SOUND EFFECTS API"}</span></div>
       <AltWaveform label="CINEMATIC WHOOSH" />
-      {selectedUrl ? <audio controls src={selectedUrl} style={{ width: "100%" }} /> : null}
-      <div className={styles.effectPlayer}><button type="button" className={styles.altRoundButton} onClick={() => selectedUrl ? void new Audio(selectedUrl).play() : void handleGenerate()} disabled={status === "generating"}><Play size={18} fill="currentColor" /></button><div><strong>{selectedIndex ? `Sound Effect ${selectedIndex}` : "Generate a sound effect"}</strong><small>{duration.toString().padStart(2, "0")}s · {effectType} · MP3</small></div><MoreHorizontal size={17} /></div>
+       {selectedUrl ? <audio ref={previewAudioRef} controls src={selectedUrl} preload="metadata" style={{ width: "100%" }} /> : null}
+       <div className={styles.effectPlayer}><button type="button" className={styles.altRoundButton} onClick={() => { if (!selectedUrl) { void handleGenerate(); return; } const audio = previewAudioRef.current; if (!audio) return; if (audio.paused) void audio.play(); else audio.pause(); }} disabled={status === "generating"}><Play size={18} fill="currentColor" /></button><div><strong>{selectedIndex ? `Sound Effect ${selectedIndex}` : "Generate a sound effect"}</strong><small>{duration.toString().padStart(2, "0")}s · {effectType} · MP3</small></div><MoreHorizontal size={17} /></div>
       <div className={styles.effectVariationGrid}>{variants.map((variant) => <button type="button" key={variant.index} className={selectedIndex === variant.index ? styles.effectCardActive : styles.effectCard} onClick={() => setSelectedIndex(variant.index)}><span className={styles.effectMiniWave} /><strong>Variation {variant.index}</strong><small>{duration.toString().padStart(2, "0")}s</small><Play size={12} fill="currentColor" /></button>)}</div>
       <div className={styles.altActionRow}><button type="button" className={styles.altPrimaryButton} onClick={downloadSelected} disabled={!selectedUrl}><Download size={15} /> Download selected</button><button type="button" className={styles.altSecondaryButton} onClick={() => void handleGenerate()} disabled={status === "generating"}>Regenerate</button></div>
     </section>
@@ -563,6 +571,7 @@ export function AudioGenerationPage() {
   }, []);
 
   useEffect(() => {
+    if (activeTab !== "Text to Speech") return undefined;
     let cancelled = false;
     void listAudioBackgroundMusic().then((items) => {
       if (cancelled) return;
@@ -578,17 +587,19 @@ export function AudioGenerationPage() {
       setBackgroundMusicLoadState("error");
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "Text to Speech") return undefined;
     let cancelled = false;
     void getAudioCreditBalance().then(({ balance }) => {
       if (!cancelled) setCreditBalance(balance);
     }).catch(() => undefined);
     return () => { cancelled = true; };
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "Text to Speech") return undefined;
     let cancelled = false;
     void listAudioHistory({ limit: AUDIO_HISTORY_LIMIT }).then((items) => {
       if (cancelled) return;
@@ -597,7 +608,7 @@ export function AudioGenerationPage() {
       setAudioHistory(history);
     }).catch(() => undefined);
     return () => { cancelled = true; };
-  }, []);
+  }, [activeTab]);
 
   const loadModels = useCallback(async () => {
     setModelLoadState("loading");
@@ -631,14 +642,16 @@ export function AudioGenerationPage() {
   }, []);
 
   useEffect(() => {
+    if (activeTab !== "Text to Speech") return undefined;
     const timer = window.setTimeout(() => void loadModels(), 0);
     return () => window.clearTimeout(timer);
-  }, [loadModels]);
+  }, [activeTab, loadModels]);
 
   useEffect(() => {
+    if (activeTab !== "Text to Speech") return undefined;
     const timer = window.setTimeout(() => void loadVoices(selectedModel || undefined), 0);
     return () => window.clearTimeout(timer);
-  }, [loadVoices, selectedModel]);
+  }, [activeTab, loadVoices, selectedModel]);
 
   useEffect(() => {
     if (!availableVoices.length) return;
@@ -1156,8 +1169,8 @@ export function AudioGenerationPage() {
   return <div className={`${styles.audioPage} audio-studio-page`}>
     <section className={styles.heroBanner} aria-label="Gen Audio hero">
       <picture>
-        <source media="(max-width: 700px)" srcSet="/generated-assets/gen-audio-hero-v3-transparent.png" />
-        <Image src="/generated-assets/gen-audio-hero-v3-transparent.png" alt="Gen Audio — AI audio generation studio" width={2172} height={724} priority unoptimized sizes="100vw" />
+         <source media="(max-width: 700px)" srcSet="/generated-assets/gen-audio-hero-v3-transparent.webp" />
+         <Image src="/generated-assets/gen-audio-hero-v3-transparent.webp" alt="Gen Audio — AI audio generation studio" width={2172} height={724} priority unoptimized sizes="100vw" />
       </picture>
     </section>
 
