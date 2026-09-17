@@ -101,16 +101,16 @@ type AudioScene = { id: string; title: string; durationSeconds: number; text: st
 type PodcastSpeaker = { id: string; role: string; name: string; voice: string; image: string };
 type PodcastLine = { id: string; speakerId: string; text: string; durationSeconds: number };
 
-const DEFAULT_AUDIO_PROMPT = "Introducing EOS Creative Studio — your all-in-one platform to create, communicate, and captivate. From stunning visuals to powerful voices, we help your ideas hit harder and connect deeper.";
+const DEFAULT_AUDIO_PROMPT = "ขอแนะนำ EOS Creative Studio — แพลตฟอร์มครบวงจรสำหรับสร้างสรรค์ สื่อสาร และสร้างความประทับใจ ตั้งแต่ภาพที่โดดเด่นไปจนถึงเสียงที่ทรงพลัง เราช่วยให้ไอเดียของคุณส่งถึงใจและเชื่อมต่อได้ลึกกว่าเดิม";
 const defaultAudioScenes: AudioScene[] = [
-  { id: "01", title: "Scene 1", durationSeconds: 12, text: DEFAULT_AUDIO_PROMPT, voice: "" },
+  { id: "01", title: "ฉากที่ 1", durationSeconds: 12, text: DEFAULT_AUDIO_PROMPT, voice: "" },
 ];
 const podcastSpeakerTones = ["orange", "blue", "green", "purple", "pink"] as const;
 const defaultPodcastSpeakers: PodcastSpeaker[] = [
-  { id: "host", role: "Host", name: "Nattapong", voice: "Female Warm", image: voiceImages[0] },
-  { id: "guest-1", role: "Guest 1", name: "Supiticha", voice: "Female Bright", image: voiceImages[2] },
-  { id: "guest-2", role: "Guest 2", name: "Thanakrit", voice: "Male Bold", image: voiceImages[1] },
-  { id: "co-host", role: "Co-host", name: "Pimchanok", voice: "Podcast Host", image: voiceImages[4] },
+  { id: "host", role: "พิธีกร", name: "ณัฐพงษ์", voice: "เสียงหญิงนุ่ม", image: voiceImages[0] },
+  { id: "guest-1", role: "แขกรับเชิญ 1", name: "สุพิชฌาย์", voice: "เสียงหญิงสดใส", image: voiceImages[2] },
+  { id: "guest-2", role: "แขกรับเชิญ 2", name: "ธนกฤต", voice: "เสียงชายหนักแน่น", image: voiceImages[1] },
+  { id: "co-host", role: "ผู้ร่วมดำเนินรายการ", name: "พิมพ์ชนก", voice: "เสียงพิธีกรพอดแคสต์", image: voiceImages[4] },
 ];
 const defaultPodcastLines: PodcastLine[] = [
   { id: "line-1", speakerId: "host", text: "สวัสดีครับทุกคน ยินดีต้อนรับเข้าสู่พอดแคสต์เปิดโลก AI สำหรับครีเอเตอร์ครับ", durationSeconds: 3.2 },
@@ -149,8 +149,9 @@ function SelectField({ label, options, value, onChange, disabled = false, loadin
 }
 
 function PreviewWaveform({ audioUrl, progress, isPlaying }: { audioUrl: string | null; progress: number; isPlaying: boolean }) {
+  const { t } = useLocale();
   const safeProgress = Math.min(100, Math.max(0, progress));
-  return <div className={`${styles.waveform} ${isPlaying ? styles.waveformPlaying : ""}`} aria-label="Audio waveform preview">
+  return <div className={`${styles.waveform} ${isPlaying ? styles.waveformPlaying : ""}`} aria-label={t("create.audio.a11y.waveform")}>
     <div className={styles.waveformBars} aria-hidden="true">
       {waveformBars.map((height, index) => {
         const barProgress = (index / Math.max(1, waveformBars.length - 1)) * 100;
@@ -180,6 +181,7 @@ function AltWaveform({ label = "LIVE PREVIEW" }: { label?: string }) {
 }
 
 function PodcastDialogueLayout({ onHistorySaved, scenesTimeline }: { onHistorySaved?: SaveHistoryCallback; scenesTimeline: ReactNode }) {
+  const { t } = useLocale();
   const [speakers, setSpeakers] = useState(defaultPodcastSpeakers);
   const [lines, setLines] = useState(defaultPodcastLines);
   const [activeSpeakerId, setActiveSpeakerId] = useState(defaultPodcastSpeakers[0]!.id);
@@ -232,7 +234,7 @@ function PodcastDialogueLayout({ onHistorySaved, scenesTimeline }: { onHistorySa
 
   const addSpeaker = () => {
     const nextNumber = speakers.length + 1;
-    const nextSpeaker: PodcastSpeaker = { id: `speaker-${nextNumber}`, role: `Guest ${nextNumber - 1}`, name: `New Speaker ${nextNumber}`, voice: nextNumber % 2 === 0 ? "Male Bold" : "Female Warm", image: voiceImages[(nextNumber - 1) % voiceImages.length] };
+    const nextSpeaker: PodcastSpeaker = { id: `speaker-${nextNumber}`, role: t("create.audio.podcast.roleGuest", { index: nextNumber - 1 }), name: t("create.audio.podcast.newSpeaker", { index: nextNumber }), voice: nextNumber % 2 === 0 ? t("create.audio.podcast.voiceMaleBold") : t("create.audio.podcast.voiceFemaleWarm"), image: voiceImages[(nextNumber - 1) % voiceImages.length] };
     setSpeakers((current) => [...current, nextSpeaker]);
     setActiveSpeakerId(nextSpeaker.id);
   };
@@ -258,56 +260,57 @@ function PodcastDialogueLayout({ onHistorySaved, scenesTimeline }: { onHistorySa
   return <div className={styles.podcastLayout}>
     <main className={styles.podcastMainColumn}>
       <section className={styles.podcastHeaderSection}>
-        <div className={styles.podcastTitleGroup}><div className={styles.podcastTitleIcon}><Sparkles size={21} /></div><div><span className={styles.podcastEyebrow}>PODCAST &amp; DIALOGUE</span><h1>Podcast &amp; Dialogue</h1><p>Create natural conversations with multiple speakers.</p></div></div>
-        <div className={styles.podcastHeaderActions}><button type="button" className={styles.podcastEpisodeButton}>Ep.01 เปิดโลก AI สำหรับครีเอเตอร์ <Pencil size={12} /></button><button type="button" className={styles.podcastToolbarButton}><CloudUpload size={15} /> Import Script</button><button type="button" className={styles.podcastToolbarButton}><Sparkles size={15} /> AI Assist</button><button type="button" className={styles.podcastToolbarButton}><Bookmark size={15} /> Save Draft</button></div>
+        <div className={styles.podcastTitleGroup}><div className={styles.podcastTitleIcon}><Sparkles size={21} /></div><div><span className={styles.podcastEyebrow}>{t("create.audio.podcast.eyebrow")}</span><h1>{t("create.audio.podcast.title")}</h1><p>{t("create.audio.podcast.subtitle")}</p></div></div>
+        <div className={styles.podcastHeaderActions}><button type="button" className={styles.podcastEpisodeButton}>Ep.01 เปิดโลก AI สำหรับครีเอเตอร์ <Pencil size={12} /></button><button type="button" className={styles.podcastToolbarButton}><CloudUpload size={15} /> {t("create.audio.podcast.importScript")}</button><button type="button" className={styles.podcastToolbarButton}><Sparkles size={15} /> {t("create.audio.podcast.aiAssist")}</button><button type="button" className={styles.podcastToolbarButton}><Bookmark size={15} /> {t("create.audio.podcast.saveDraft")}</button></div>
       </section>
 
-      <section className={styles.podcastSection} aria-label="Podcast speakers">
-        <div className={styles.podcastSectionHeader}><h2>Speakers</h2><span>{speakers.length} people</span></div>
-        <div className={styles.podcastSpeakerRow}>{speakers.map((speaker, index) => <button type="button" key={speaker.id} className={`${styles.podcastSpeakerCard} ${activeSpeakerId === speaker.id ? styles.podcastSpeakerCardActive : ""}`} onClick={() => setActiveSpeakerId(speaker.id)} aria-pressed={activeSpeakerId === speaker.id}><span className={styles.podcastSpeakerAvatar}><Image src={speaker.image} alt="" fill unoptimized sizes="54px" /></span><span className={styles.podcastSpeakerCopy}><small>{speaker.role}</small><strong>{speaker.name}</strong><em>{speaker.voice}</em></span><i data-tone={podcastSpeakerTones[index % podcastSpeakerTones.length]} /></button>)}<button type="button" className={styles.podcastAddSpeakerCard} onClick={addSpeaker}><Plus size={18} /><span>Add Speaker</span></button></div>
+      <section className={styles.podcastSection} aria-label={t("create.audio.podcast.a11y.speakers")}>
+        <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.speakers")}</h2><span>{t("create.audio.podcast.peopleCount", { count: speakers.length })}</span></div>
+        <div className={styles.podcastSpeakerRow}>{speakers.map((speaker, index) => <button type="button" key={speaker.id} className={`${styles.podcastSpeakerCard} ${activeSpeakerId === speaker.id ? styles.podcastSpeakerCardActive : ""}`} onClick={() => setActiveSpeakerId(speaker.id)} aria-pressed={activeSpeakerId === speaker.id}><span className={styles.podcastSpeakerAvatar}><Image src={speaker.image} alt="" fill unoptimized sizes="54px" /></span><span className={styles.podcastSpeakerCopy}><small>{speaker.role}</small><strong>{speaker.name}</strong><em>{speaker.voice}</em></span><i data-tone={podcastSpeakerTones[index % podcastSpeakerTones.length]} /></button>)}<button type="button" className={styles.podcastAddSpeakerCard} onClick={addSpeaker}><Plus size={18} /><span>{t("create.audio.podcast.addSpeaker")}</span></button></div>
       </section>
 
-      <section className={styles.podcastSection} aria-label="Dialogue lines">
-        <div className={styles.podcastSectionHeader}><h2>Dialogue</h2><span>{lines.length} lines · {formatSceneSeconds(totalDuration)}</span></div>
+      <section className={styles.podcastSection} aria-label={t("create.audio.podcast.a11y.dialogue")}>
+        <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.dialogue")}</h2><span>{t("create.audio.podcast.lineCount", { count: lines.length })} · {formatSceneSeconds(totalDuration)}</span></div>
         <div className={styles.podcastLineList}>{lines.map((line, index) => { const speaker = speakers.find((item) => item.id === line.speakerId) ?? speakers[0]!; const start = lines.slice(0, index).reduce((total, item) => total + item.durationSeconds, 0); return <div className={`${styles.podcastLineRow} ${index === 0 ? styles.podcastLineRowActive : ""}`} key={line.id}>
-          <button type="button" className={styles.podcastDragHandle} aria-label={`Reorder line ${index + 1}`}><GripVertical size={15} /></button>
+          <button type="button" className={styles.podcastDragHandle} aria-label={t("create.audio.podcast.a11y.reorderLine", { index: index + 1 })}><GripVertical size={15} /></button>
           <span className={styles.podcastLineAvatar}><Image src={speaker.image} alt="" fill unoptimized sizes="34px" /></span>
           <time>{formatSceneSeconds(start)}</time>
           <span className={styles.podcastSpeakerChip} data-tone={podcastSpeakerTones[speakers.findIndex((item) => item.id === speaker.id) % podcastSpeakerTones.length]}>{speaker.role}</span>
-          <input className={styles.podcastLineInput} value={line.text} onChange={(event) => updateLine(line.id, { text: event.target.value })} aria-label={`Dialogue line ${index + 1}`} />
-          <input className={styles.podcastLineDuration} type="number" min="0.5" max="120" step="0.1" value={line.durationSeconds} onChange={(event) => updateLine(line.id, { durationSeconds: Math.max(0.5, Number(event.target.value) || 0.5) })} aria-label={`Duration for line ${index + 1}`} />
-          <button type="button" className={`${styles.podcastLineAction} ${styles.podcastLineCopyAction}`} onClick={() => duplicateLine(line)} aria-label={`Duplicate line ${index + 1}`}><Copy size={15} /></button>
-          <button type="button" className={styles.podcastLineActionDanger} onClick={() => removeLine(line.id)} disabled={lines.length <= 1} aria-label={`Delete line ${index + 1}`}><Trash2 size={15} /></button>
-          <button type="button" className={`${styles.podcastLineAction} ${styles.podcastLineMoreAction}`} aria-label={`More actions for line ${index + 1}`}><MoreHorizontal size={15} /></button>
+          <input className={styles.podcastLineInput} value={line.text} onChange={(event) => updateLine(line.id, { text: event.target.value })} aria-label={t("create.audio.podcast.a11y.line", { index: index + 1 })} />
+          <input className={styles.podcastLineDuration} type="number" min="0.5" max="120" step="0.1" value={line.durationSeconds} onChange={(event) => updateLine(line.id, { durationSeconds: Math.max(0.5, Number(event.target.value) || 0.5) })} aria-label={t("create.audio.podcast.a11y.lineDuration", { index: index + 1 })} />
+          <button type="button" className={`${styles.podcastLineAction} ${styles.podcastLineCopyAction}`} onClick={() => duplicateLine(line)} aria-label={t("create.audio.podcast.a11y.duplicateLine", { index: index + 1 })}><Copy size={15} /></button>
+          <button type="button" className={styles.podcastLineActionDanger} onClick={() => removeLine(line.id)} disabled={lines.length <= 1} aria-label={t("create.audio.podcast.a11y.deleteLine", { index: index + 1 })}><Trash2 size={15} /></button>
+          <button type="button" className={`${styles.podcastLineAction} ${styles.podcastLineMoreAction}`} aria-label={t("create.audio.podcast.a11y.moreLine", { index: index + 1 })}><MoreHorizontal size={15} /></button>
         </div>; })}</div>
-        <button type="button" className={styles.podcastAddLine} onClick={addLine}><Plus size={15} /> Add Next Line</button>
+        <button type="button" className={styles.podcastAddLine} onClick={addLine}><Plus size={15} /> {t("create.audio.podcast.addNextLine")}</button>
       </section>
 
-      <section className={styles.podcastPreviewCard} aria-label="Audio preview">
-        <div className={styles.podcastSectionHeader}><h2>Audio Preview <span className={styles.podcastBeta}>Beta</span></h2><div className={styles.podcastPreviewActions}><button type="button" className={styles.podcastToolbarButton} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> Download</button><button type="button" className={styles.podcastLineAction} aria-label="Fullscreen audio preview"><Maximize2 size={15} /></button></div></div>
-        <div className={styles.podcastAudioPlayer}><button type="button" className={styles.podcastPlayButton} onClick={() => void togglePreview()} disabled={status === "generating"}><span>{isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}</span></button><div className={styles.podcastWaveformWrap}><PreviewWaveform audioUrl={audioUrl} progress={previewProgress} isPlaying={isPlaying} /><div className={styles.podcastAudioMeta}><span>{formatSceneSeconds(previewCurrentTime)} / {formatSceneSeconds(previewDuration || totalDuration)}</span><input type="range" min="0" max="100" value={previewProgress} onChange={(event) => { const nextProgress = Number(event.target.value); setPreviewProgress(nextProgress); if (previewAudioRef.current && previewDuration) previewAudioRef.current.currentTime = nextProgress / 100 * previewDuration; }} aria-label="Audio progress" disabled={!audioUrl} /></div></div><Volume2 size={16} className={styles.podcastVolumeIcon} /><input className={styles.podcastVolumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (previewAudioRef.current) previewAudioRef.current.volume = nextVolume / 100; }} aria-label="Volume" /><audio ref={previewAudioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { setPreviewDuration(event.currentTarget.duration); event.currentTarget.volume = volume / 100; }} onTimeUpdate={(event) => { const current = event.currentTarget.currentTime; const duration = event.currentTarget.duration || previewDuration; setPreviewCurrentTime(current); setPreviewProgress(duration ? current / duration * 100 : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => { setIsPlaying(false); setPreviewProgress(100); }} /></div>
+      <section className={styles.podcastPreviewCard} aria-label={t("create.audio.podcast.a11y.preview")}>
+        <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.audioPreview")} <span className={styles.podcastBeta}>Beta</span></h2><div className={styles.podcastPreviewActions}><button type="button" className={styles.podcastToolbarButton} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button><button type="button" className={styles.podcastLineAction} aria-label={t("create.audio.a11y.fullscreen")}><Maximize2 size={15} /></button></div></div>
+        <div className={styles.podcastAudioPlayer}><button type="button" className={styles.podcastPlayButton} onClick={() => void togglePreview()} disabled={status === "generating"}><span>{isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}</span></button><div className={styles.podcastWaveformWrap}><PreviewWaveform audioUrl={audioUrl} progress={previewProgress} isPlaying={isPlaying} /><div className={styles.podcastAudioMeta}><span>{formatSceneSeconds(previewCurrentTime)} / {formatSceneSeconds(previewDuration || totalDuration)}</span><input type="range" min="0" max="100" value={previewProgress} onChange={(event) => { const nextProgress = Number(event.target.value); setPreviewProgress(nextProgress); if (previewAudioRef.current && previewDuration) previewAudioRef.current.currentTime = nextProgress / 100 * previewDuration; }} aria-label={t("create.audio.a11y.audioProgress")} disabled={!audioUrl} /></div></div><Volume2 size={16} className={styles.podcastVolumeIcon} /><input className={styles.podcastVolumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (previewAudioRef.current) previewAudioRef.current.volume = nextVolume / 100; }} aria-label={t("create.audio.a11y.volume")} /><audio ref={previewAudioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { setPreviewDuration(event.currentTarget.duration); event.currentTarget.volume = volume / 100; }} onTimeUpdate={(event) => { const current = event.currentTarget.currentTime; const duration = event.currentTarget.duration || previewDuration; setPreviewCurrentTime(current); setPreviewProgress(duration ? current / duration * 100 : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => { setIsPlaying(false); setPreviewProgress(100); }} /></div>
         {status === "error" || error ? <p className={styles.podcastError} role="alert">{error}</p> : null}
       </section>
       {scenesTimeline}
     </main>
 
-    <aside className={styles.podcastSettingsCard} aria-label="Podcast settings">
-      <div className={styles.podcastSettingsHeader}><h2>Podcast Settings</h2><AudioWaveform size={18} /></div>
-      <div className={styles.podcastSettingGroup}><span className={styles.podcastFieldLabel}>OUTPUT FORMAT</span><div className={styles.podcastFormatRow}>{(["mp3", "wav", "ogg"] as const).map((format) => <button type="button" key={format} className={outputFormat === format ? styles.podcastFormatActive : styles.podcastFormatButton} onClick={() => setOutputFormat(format)}>{format.toUpperCase()}</button>)}</div></div>
-      <label className={styles.podcastSelectField}><span className={styles.podcastFieldLabel}>LANGUAGE</span><select value={language} onChange={(event) => setLanguage(event.target.value)}><option>Thai (ไทย)</option><option>English (US)</option><option>English (UK)</option></select><ChevronDown size={14} /></label>
-      <label className={styles.podcastSelectField}><span className={styles.podcastFieldLabel}>SPEAKING STYLE</span><select value={speakingStyle} onChange={(event) => setSpeakingStyle(event.target.value as typeof speakingStyle)}><option value="Interview">Conversational</option><option value="Roundtable">Roundtable</option><option value="Storytelling">Storytelling</option></select><ChevronDown size={14} /></label>
-      <div className={styles.podcastSettingGroup}><div className={styles.podcastSpeedHeader}><span className={styles.podcastFieldLabel}>PACING / SPEED</span><b>{speed.toFixed(2)}x</b></div><input className={styles.podcastSpeedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.podcastSpeedLabels}><span>0.5x</span><span>1x</span><span>1.5x</span><span>2x</span></div></div>
-      <div className={styles.podcastToggleGroup}><label><span><strong>Background Music</strong><small>เพิ่มเพลงประกอบระหว่างบทพูด</small></span><button type="button" className={backgroundMusic ? styles.podcastToggleOn : styles.podcastToggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic}><i /></button></label><label><span><strong>Normalize Audio</strong><small>ปรับระดับเสียงให้สม่ำเสมอ</small></span><button type="button" className={normalizeAudio ? styles.podcastToggleOn : styles.podcastToggleOff} onClick={() => setNormalizeAudio((current) => !current)} aria-pressed={normalizeAudio}><i /></button></label></div>
+    <aside className={styles.podcastSettingsCard} aria-label={t("create.audio.podcast.a11y.settings")}>
+      <div className={styles.podcastSettingsHeader}><h2>{t("create.audio.podcast.settings")}</h2><AudioWaveform size={18} /></div>
+      <div className={styles.podcastSettingGroup}><span className={styles.podcastFieldLabel}>{t("create.audio.podcast.outputFormat")}</span><div className={styles.podcastFormatRow}>{(["mp3", "wav", "ogg"] as const).map((format) => <button type="button" key={format} className={outputFormat === format ? styles.podcastFormatActive : styles.podcastFormatButton} onClick={() => setOutputFormat(format)}>{format.toUpperCase()}</button>)}</div></div>
+      <label className={styles.podcastSelectField}><span className={styles.podcastFieldLabel}>{t("create.audio.podcast.language")}</span><select value={language} onChange={(event) => setLanguage(event.target.value)}><option>Thai (ไทย)</option><option>English (US)</option><option>English (UK)</option></select><ChevronDown size={14} /></label>
+      <label className={styles.podcastSelectField}><span className={styles.podcastFieldLabel}>{t("create.audio.podcast.speakingStyle")}</span><select value={speakingStyle} onChange={(event) => setSpeakingStyle(event.target.value as typeof speakingStyle)}><option value="Interview">{t("create.audio.podcast.styleConversational")}</option><option value="Roundtable">{t("create.audio.podcast.styleRoundtable")}</option><option value="Storytelling">{t("create.audio.podcast.styleStorytelling")}</option></select><ChevronDown size={14} /></label>
+      <div className={styles.podcastSettingGroup}><div className={styles.podcastSpeedHeader}><span className={styles.podcastFieldLabel}>{t("create.audio.podcast.pacing")}</span><b>{speed.toFixed(2)}x</b></div><input className={styles.podcastSpeedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.podcastSpeedLabels}><span>0.5x</span><span>1x</span><span>1.5x</span><span>2x</span></div></div>
+      <div className={styles.podcastToggleGroup}><label><span><strong>{t("create.audio.podcast.backgroundMusic")}</strong><small>เพิ่มเพลงประกอบระหว่างบทพูด</small></span><button type="button" className={backgroundMusic ? styles.podcastToggleOn : styles.podcastToggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic}><i /></button></label><label><span><strong>{t("create.audio.podcast.normalizeAudio")}</strong><small>ปรับระดับเสียงให้สม่ำเสมอ</small></span><button type="button" className={normalizeAudio ? styles.podcastToggleOn : styles.podcastToggleOff} onClick={() => setNormalizeAudio((current) => !current)} aria-pressed={normalizeAudio}><i /></button></label></div>
       <div className={styles.mobileActionDock}>
-        <div className={styles.podcastEstimate}><div><span>Estimated Duration</span><strong>{formatSceneSeconds(totalDuration)}</strong></div><div><span>Estimated Credits</span><strong>~ {estimatedCredits} Credits</strong></div><small>{estimatedCredits} Credits available · Failed generations refunded</small></div>
-        <button type="button" className={styles.podcastGenerateButton} onClick={() => void handleGenerate()} disabled={status === "generating" || !episodeScript.trim()}>{status === "generating" ? "GENERATING..." : "Generate Podcast"} <Sparkles size={16} /></button>
-        <p className={styles.podcastSecurityNote}><LockKeyhole size={11} /> Secure generation. Your data is private.</p>
+        <div className={styles.podcastEstimate}><div><span>{t("create.audio.podcast.estimatedDuration")}</span><strong>{formatSceneSeconds(totalDuration)}</strong></div><div><span>{t("create.audio.podcast.estimatedCredits")}</span><strong>{t("create.audio.podcast.creditsApprox", { count: estimatedCredits })}</strong></div><small>{t("create.audio.podcast.creditsAvailable", { count: estimatedCredits })}</small></div>
+        <button type="button" className={styles.podcastGenerateButton} onClick={() => void handleGenerate()} disabled={status === "generating" || !episodeScript.trim()}>{status === "generating" ? t("create.audio.podcast.generating") : t("create.audio.podcast.generate")} <Sparkles size={16} /></button>
+        <p className={styles.podcastSecurityNote}><LockKeyhole size={11} /> {t("create.audio.podcast.securityNote")}</p>
       </div>
     </aside>
   </div>;
 }
 
 function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
+  const { t } = useLocale();
   const [sampleReady, setSampleReady] = useState(false);
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [voiceName, setVoiceName] = useState("EOS Narrator");
@@ -369,37 +372,38 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
 
   return <div className={styles.alternateLayout}>
     <section className={`${styles.alternatePanel} ${styles.alternateFormPanel}`}>
-      <AlternateHeading eyebrow="VOICE CLONE" title="Create a voice identity" description="Upload a clean sample and tune a voice for your next project." icon={<WandSparkles size={24} />} />
+      <AlternateHeading eyebrow={t("create.audio.clone.eyebrow")} title={t("create.audio.clone.title")} description={t("create.audio.clone.description")} icon={<WandSparkles size={24} />} />
       <input ref={sampleInputRef} hidden type="file" accept="audio/wav,audio/mpeg,audio/ogg,audio/*" onChange={(event) => handleSample(event.target.files?.[0])} />
-      <button type="button" className={`${styles.cloneDropzone} ${sampleReady ? styles.cloneDropzoneReady : ""} ${isSampleDragging ? styles.cloneDropzoneDragging : ""}`} onClick={() => sampleInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSampleDragging(true); }} onDragLeave={() => setIsSampleDragging(false)} onDrop={handleSampleDrop}><span className={styles.cloneIcon}><CloudUpload size={23} /></span><strong>{sampleReady ? "Voice sample ready" : "Drop a voice sample here"}</strong><small>{sampleReady ? `${sampleFile?.name ?? "sample-voice.wav"} · ready to upload` : "WAV or MP3 · 10–60 seconds"}</small><em>{sampleReady ? "Click to replace" : "Browse files"}</em></button>
-      <label className={styles.altTextField}><span>VOICE NAME</span><input value={voiceName} onChange={(event) => setVoiceName(event.target.value)} /></label>
-      <div className={styles.altFieldGroup}><span className={styles.altFieldLabel}>VOICE CHARACTER</span><div className={styles.altChoiceRow}>{["Natural", "Cinematic", "Expressive"].map((item) => <button type="button" key={item} className={character === item ? styles.altChoiceActive : styles.altChoice} onClick={() => setCharacter(item)}>{item}</button>)}</div></div>
-      <label className={styles.altConsent}><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /> I have permission to use this voice sample</label>
+      <button type="button" className={`${styles.cloneDropzone} ${sampleReady ? styles.cloneDropzoneReady : ""} ${isSampleDragging ? styles.cloneDropzoneDragging : ""}`} onClick={() => sampleInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSampleDragging(true); }} onDragLeave={() => setIsSampleDragging(false)} onDrop={handleSampleDrop}><span className={styles.cloneIcon}><CloudUpload size={23} /></span><strong>{sampleReady ? t("create.audio.clone.sampleReady") : t("create.audio.clone.dropSample")}</strong><small>{sampleReady ? t("create.audio.clone.readyToUpload", { name: sampleFile?.name ?? "sample-voice.wav" }) : t("create.audio.clone.sampleHint")}</small><em>{sampleReady ? t("create.audio.clone.clickToReplace") : t("create.audio.clone.browseFiles")}</em></button>
+      <label className={styles.altTextField}><span>{t("create.audio.clone.voiceName")}</span><input value={voiceName} onChange={(event) => setVoiceName(event.target.value)} /></label>
+      <div className={styles.altFieldGroup}><span className={styles.altFieldLabel}>{t("create.audio.clone.voiceCharacter")}</span><div className={styles.altChoiceRow}>{([["Natural", "create.audio.clone.characterNatural"], ["Cinematic", "create.audio.clone.characterCinematic"], ["Expressive", "create.audio.clone.characterExpressive"]] as const).map(([item, labelKey]) => <button type="button" key={item} className={character === item ? styles.altChoiceActive : styles.altChoice} onClick={() => setCharacter(item)}>{t(labelKey)}</button>)}</div></div>
+      <label className={styles.altConsent}><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /> {t("create.audio.clone.consent")}</label>
     </section>
 
     <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel}`}>
-      <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>VOICE PREVIEW</span><h2>CLONE PLAYGROUND</h2></div><span className={styles.altStatus}><span /> {voiceId ? "Voice ready" : "Sample loaded"}</span></div>
-      <div className={styles.mockNotice}><LockKeyhole size={13} /><span>{status === "creating" ? "CREATING VOICE VIA BACKEND" : error ?? (voiceId ? "VOICE READY" : "BACKEND VOICE CLONE API")}</span></div>
-      <div className={styles.clonePreviewCard}><div className={styles.clonePortrait}><Mic2 size={25} /><span>EOS</span></div><div><strong>{voiceName}</strong><small>{character} · English (US)</small><div className={styles.cloneMeta}><span>Warm</span><span>Clear</span><span>Studio</span></div></div><button type="button" className={styles.altRoundButton} onClick={() => void handlePreview()} disabled={!voiceId || status === "previewing"}><Play size={17} fill="currentColor" /></button></div>
-      <AltWaveform label="VOICE SAMPLE" />
+      <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>{t("create.audio.clone.voicePreview")}</span><h2>{t("create.audio.clone.playground")}</h2></div><span className={styles.altStatus}><span /> {voiceId ? t("create.audio.clone.voiceReady") : t("create.audio.clone.sampleLoaded")}</span></div>
+      <div className={styles.mockNotice}><LockKeyhole size={13} /><span>{status === "creating" ? t("create.audio.clone.creatingNotice") : error ?? (voiceId ? t("create.audio.clone.readyNotice") : t("create.audio.clone.pendingNotice"))}</span></div>
+      <div className={styles.clonePreviewCard}><div className={styles.clonePortrait}><Mic2 size={25} /><span>EOS</span></div><div><strong>{voiceName}</strong><small>{character} · English (US)</small><div className={styles.cloneMeta}><span>{t("create.audio.clone.toneWarm")}</span><span>{t("create.audio.clone.toneClear")}</span><span>{t("create.audio.clone.toneStudio")}</span></div></div><button type="button" className={styles.altRoundButton} onClick={() => void handlePreview()} disabled={!voiceId || status === "previewing"}><Play size={17} fill="currentColor" /></button></div>
+      <AltWaveform label={t("create.audio.clone.voiceSample")} />
       {audioUrl ? <audio controls src={audioUrl} style={{ width: "100%" }} /> : null}
       <div className={styles.altTimeline}><span>00:00</span><div><i style={{ width: "58%" }} /><b /><b /></div><span>00:34</span></div>
-      <label className={styles.altTextField}><span>TEST PHRASE</span><textarea value={testPhrase} onChange={(event) => setTestPhrase(event.target.value)} maxLength={2000} /></label>
-      <div className={styles.altActionRow}><button type="button" className={styles.altPrimaryButton} onClick={() => void handlePreview()} disabled={!voiceId || status === "previewing"}><Play size={15} fill="currentColor" /> {status === "previewing" ? "Generating..." : "Play test phrase"}</button><button type="button" className={styles.altSecondaryButton} onClick={() => void handleCreate()} disabled={status === "creating" || !sampleFile}>{status === "creating" ? "Creating..." : "Save voice"}</button></div>
+      <label className={styles.altTextField}><span>{t("create.audio.clone.testPhrase")}</span><textarea value={testPhrase} onChange={(event) => setTestPhrase(event.target.value)} maxLength={2000} /></label>
+      <div className={styles.altActionRow}><button type="button" className={styles.altPrimaryButton} onClick={() => void handlePreview()} disabled={!voiceId || status === "previewing"}><Play size={15} fill="currentColor" /> {status === "previewing" ? t("create.audio.clone.generatingPreview") : t("create.audio.clone.playTestPhrase")}</button><button type="button" className={styles.altSecondaryButton} onClick={() => void handleCreate()} disabled={status === "creating" || !sampleFile}>{status === "creating" ? t("create.audio.clone.creating") : t("create.audio.clone.saveVoice")}</button></div>
     </section>
 
     <aside className={styles.alternateSettings}>
-      <div className={styles.altPanelHeader}><h2>CLONE SETTINGS</h2><Settings2 size={20} /></div>
-      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>SIMILARITY</span><b>88%</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="88" /></div>
-      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>EXPRESSIVENESS</span><b>64%</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="64" /></div>
-      <label className={styles.altField}><span>LANGUAGE</span><select defaultValue="English (US)"><option>English (US)</option><option>English (UK)</option><option>Thai</option></select></label>
-      <div className={styles.altSettingBlock}><span className={styles.altFieldLabel}>OUTPUT FORMAT</span><div className={styles.altFormatGrid}><button type="button" className={styles.altFormatActive}>MP3</button><button type="button" className={styles.altFormat}>WAV</button><button type="button" className={styles.altFormat}>OGG</button></div></div>
-      <div className={styles.mobileActionDock}><button type="button" className={styles.altGenerateButton} onClick={() => void handleCreate()} disabled={status === "creating" || !sampleFile}>{status === "creating" ? "CREATING..." : "CREATE VOICE"} <Sparkles size={16} /></button></div>
+      <div className={styles.altPanelHeader}><h2>{t("create.audio.clone.settings")}</h2><Settings2 size={20} /></div>
+      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>{t("create.audio.clone.similarity")}</span><b>88%</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="88" /></div>
+      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>{t("create.audio.clone.expressiveness")}</span><b>64%</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="64" /></div>
+      <label className={styles.altField}><span>{t("create.audio.clone.language")}</span><select defaultValue="English (US)"><option>English (US)</option><option>English (UK)</option><option>ไทย</option></select></label>
+      <div className={styles.altSettingBlock}><span className={styles.altFieldLabel}>{t("create.audio.clone.outputFormat")}</span><div className={styles.altFormatGrid}><button type="button" className={styles.altFormatActive}>MP3</button><button type="button" className={styles.altFormat}>WAV</button><button type="button" className={styles.altFormat}>OGG</button></div></div>
+      <div className={styles.mobileActionDock}><button type="button" className={styles.altGenerateButton} onClick={() => void handleCreate()} disabled={status === "creating" || !sampleFile}>{status === "creating" ? t("create.audio.clone.creatingButton") : t("create.audio.clone.createVoice")} <Sparkles size={16} /></button></div>
     </aside>
   </div>;
 }
 
 function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
+  const { t } = useLocale();
   const [effectType, setEffectType] = useState("Cinematic");
   const [description, setDescription] = useState("A cinematic whoosh that rises quickly, hits with a soft impact, and fades into a deep room tone.");
   const [duration, setDuration] = useState(4);
@@ -453,59 +457,60 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
 
   return <div className={styles.alternateLayout}>
     <section className={`${styles.alternatePanel} ${styles.alternateFormPanel}`}>
-      <AlternateHeading eyebrow="SOUND EFFECTS" title="Design the moment" description="Describe a sound and create variations ready for your edit." icon={<AudioLines size={24} />} />
-      <label className={styles.altTextField}><span>SOUND DESCRIPTION</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></label>
-      <div className={styles.altFieldGroup}><span className={styles.altFieldLabel}>EFFECT CATEGORY</span><div className={styles.altChoiceRow}>{["Cinematic", "Nature", "UI / Tech", "Impact"].map((item) => <button type="button" key={item} className={effectType === item ? styles.altChoiceActive : styles.altChoice} onClick={() => setEffectType(item)}>{item}</button>)}</div></div>
-      <div className={styles.altTwoFields}><label className={styles.altField}><span>DURATION</span><select value={String(duration)} onChange={(event) => setDuration(Number(event.target.value))}><option value="2">02 seconds</option><option value="4">04 seconds</option><option value="8">08 seconds</option></select></label><label className={styles.altField}><span>VARIATIONS</span><select value={String(variationCount)} onChange={(event) => setVariationCount(Number(event.target.value))}><option value="2">2 variations</option><option value="4">4 variations</option><option value="6">6 variations</option></select></label></div>
-      <button disabled type="button" className={styles.altUploadButton}><CloudUpload size={17} /> Use reference audio</button>
+      <AlternateHeading eyebrow={t("create.audio.sfx.eyebrow")} title={t("create.audio.sfx.title")} description={t("create.audio.sfx.description")} icon={<AudioLines size={24} />} />
+      <label className={styles.altTextField}><span>{t("create.audio.sfx.soundDescription")}</span><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} /></label>
+      <div className={styles.altFieldGroup}><span className={styles.altFieldLabel}>{t("create.audio.sfx.effectCategory")}</span><div className={styles.altChoiceRow}>{([["Cinematic", "create.audio.sfx.categoryCinematic"], ["Nature", "create.audio.sfx.categoryNature"], ["UI / Tech", "create.audio.sfx.categoryUi"], ["Impact", "create.audio.sfx.categoryImpact"]] as const).map(([item, labelKey]) => <button type="button" key={item} className={effectType === item ? styles.altChoiceActive : styles.altChoice} onClick={() => setEffectType(item)}>{t(labelKey)}</button>)}</div></div>
+      <div className={styles.altTwoFields}><label className={styles.altField}><span>{t("create.audio.sfx.duration")}</span><select value={String(duration)} onChange={(event) => setDuration(Number(event.target.value))}>{[2, 4, 8].map((seconds) => <option key={seconds} value={String(seconds)}>{t("create.audio.sfx.seconds", { count: String(seconds).padStart(2, "0") })}</option>)}</select></label><label className={styles.altField}><span>{t("create.audio.sfx.variations")}</span><select value={String(variationCount)} onChange={(event) => setVariationCount(Number(event.target.value))}>{[2, 4, 6].map((amount) => <option key={amount} value={String(amount)}>{t("create.audio.sfx.variationOptions", { count: amount })}</option>)}</select></label></div>
+      <button disabled type="button" className={styles.altUploadButton}><CloudUpload size={17} /> {t("create.audio.sfx.useReference")}</button>
     </section>
 
     <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel}`}>
-      <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>{variants.length || variationCount} VARIATIONS</span><h2>SOUND PREVIEW</h2></div><span className={styles.altStatus}><span /> {status === "generating" ? "Generating" : "Ready"}</span></div>
-      <div className={styles.mockNotice}><LockKeyhole size={13} /><span>{status === "generating" ? "GENERATING VIA BACKEND" : error ?? "BACKEND SOUND EFFECTS API"}</span></div>
-      <AltWaveform label="CINEMATIC WHOOSH" />
+      <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>{t("create.audio.sfx.variationsLabel", { count: variants.length || variationCount })}</span><h2>{t("create.audio.sfx.soundPreview")}</h2></div><span className={styles.altStatus}><span /> {status === "generating" ? t("create.audio.sfx.generatingStatus") : t("create.audio.sfx.ready")}</span></div>
+      <div className={styles.mockNotice}><LockKeyhole size={13} /><span>{status === "generating" ? t("create.audio.sfx.generatingNotice") : error ?? t("create.audio.sfx.pendingNotice")}</span></div>
+      <AltWaveform label={t("create.audio.sfx.waveformLabel")} />
        {selectedUrl ? <audio ref={previewAudioRef} controls src={selectedUrl} preload="metadata" style={{ width: "100%" }} /> : null}
-       <div className={styles.effectPlayer}><button type="button" className={styles.altRoundButton} onClick={() => { if (!selectedUrl) { void handleGenerate(); return; } const audio = previewAudioRef.current; if (!audio) return; if (audio.paused) void audio.play(); else audio.pause(); }} disabled={status === "generating"}><Play size={18} fill="currentColor" /></button><div><strong>{selectedIndex ? `Sound Effect ${selectedIndex}` : "Generate a sound effect"}</strong><small>{duration.toString().padStart(2, "0")}s · {effectType} · MP3</small></div><MoreHorizontal size={17} /></div>
-      <div className={styles.effectVariationGrid}>{variants.map((variant) => <button type="button" key={variant.index} className={selectedIndex === variant.index ? styles.effectCardActive : styles.effectCard} onClick={() => setSelectedIndex(variant.index)}><span className={styles.effectMiniWave} /><strong>Variation {variant.index}</strong><small>{duration.toString().padStart(2, "0")}s</small><Play size={12} fill="currentColor" /></button>)}</div>
-      <div className={styles.altActionRow}><button type="button" className={styles.altPrimaryButton} onClick={downloadSelected} disabled={!selectedUrl}><Download size={15} /> Download selected</button><button type="button" className={styles.altSecondaryButton} onClick={() => void handleGenerate()} disabled={status === "generating"}>Regenerate</button></div>
+       <div className={styles.effectPlayer}><button type="button" className={styles.altRoundButton} onClick={() => { if (!selectedUrl) { void handleGenerate(); return; } const audio = previewAudioRef.current; if (!audio) return; if (audio.paused) void audio.play(); else audio.pause(); }} disabled={status === "generating"}><Play size={18} fill="currentColor" /></button><div><strong>{selectedIndex ? t("create.audio.sfx.effectNumber", { index: selectedIndex }) : t("create.audio.sfx.emptyEffect")}</strong><small>{duration.toString().padStart(2, "0")}s · {effectType} · MP3</small></div><MoreHorizontal size={17} /></div>
+       <div className={styles.effectVariationGrid}>{variants.map((variant) => <button type="button" key={variant.index} className={selectedIndex === variant.index ? styles.effectCardActive : styles.effectCard} onClick={() => setSelectedIndex(variant.index)}><span className={styles.effectMiniWave} /><strong>{t("create.audio.sfx.variationNumber", { index: variant.index })}</strong><small>{duration.toString().padStart(2, "0")}s</small><Play size={12} fill="currentColor" /></button>)}</div>
+       <div className={styles.altActionRow}><button type="button" className={styles.altPrimaryButton} onClick={downloadSelected} disabled={!selectedUrl}><Download size={15} /> {t("create.audio.sfx.downloadSelected")}</button><button type="button" className={styles.altSecondaryButton} onClick={() => void handleGenerate()} disabled={status === "generating"}>{t("create.audio.sfx.regenerate")}</button></div>
     </section>
 
     <aside className={styles.alternateSettings}>
-      <div className={styles.altPanelHeader}><h2>EFFECT SETTINGS</h2><Settings2 size={20} /></div>
-      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>INTENSITY</span><b>72%</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="72" /></div>
-      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>VARIATION</span><b>Balanced</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="52" /></div>
-      <label className={styles.altToggleRow}><span>Seamless loop</span><button disabled type="button" className={styles.altToggleOff}><i /></button></label>
-      <label className={styles.altToggleRow}><span>Normalize loudness</span><button disabled type="button" className={styles.altToggleOn}><i /></button></label>
-      <div className={styles.altSettingBlock}><span className={styles.altFieldLabel}>OUTPUT FORMAT</span><div className={styles.altFormatGrid}><button disabled type="button" className={styles.altFormat}>WAV</button><button disabled type="button" className={styles.altFormatActive}>MP3</button><button disabled type="button" className={styles.altFormat}>OGG</button></div></div>
-      <div className={styles.mobileActionDock}><button type="button" className={styles.altGenerateButton} onClick={() => void handleGenerate()} disabled={status === "generating" || !description.trim()}>{status === "generating" ? "GENERATING..." : "GENERATE SOUND"} <Sparkles size={16} /></button></div>
+      <div className={styles.altPanelHeader}><h2>{t("create.audio.sfx.settings")}</h2><Settings2 size={20} /></div>
+      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>{t("create.audio.sfx.intensity")}</span><b>72%</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="72" /></div>
+      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>{t("create.audio.sfx.variation")}</span><b>{t("create.audio.sfx.balanced")}</b></div><input className={styles.altRange} type="range" min="0" max="100" defaultValue="52" /></div>
+      <label className={styles.altToggleRow}><span>{t("create.audio.sfx.seamlessLoop")}</span><button disabled type="button" className={styles.altToggleOff}><i /></button></label>
+      <label className={styles.altToggleRow}><span>{t("create.audio.sfx.normalizeLoudness")}</span><button disabled type="button" className={styles.altToggleOn}><i /></button></label>
+      <div className={styles.altSettingBlock}><span className={styles.altFieldLabel}>{t("create.audio.sfx.outputFormat")}</span><div className={styles.altFormatGrid}><button disabled type="button" className={styles.altFormat}>WAV</button><button disabled type="button" className={styles.altFormatActive}>MP3</button><button disabled type="button" className={styles.altFormat}>OGG</button></div></div>
+      <div className={styles.mobileActionDock}><button type="button" className={styles.altGenerateButton} onClick={() => void handleGenerate()} disabled={status === "generating" || !description.trim()}>{status === "generating" ? t("create.audio.sfx.generatingButton") : t("create.audio.sfx.generate")} <Sparkles size={16} /></button></div>
     </aside>
   </div>;
 }
 
 function AudioCleanupLayout() {
+  const { t } = useLocale();
   return <div className={styles.alternateLayout}>
     <section className={`${styles.alternatePanel} ${styles.alternateFormPanel}`}>
-      <AlternateHeading eyebrow="AUDIO CLEANUP" title="Polish every recording" description="Remove noise and restore clarity without losing the character of the voice." icon={<Waves size={24} />} />
+      <AlternateHeading eyebrow={t("create.audio.cleanup.eyebrow")} title={t("create.audio.cleanup.title")} description={t("create.audio.cleanup.description")} icon={<Waves size={24} />} />
       <button disabled type="button" className={`${styles.cleanupUpload} ${styles.cleanupUploadReady}`}><span className={styles.cleanupFileIcon}><FileAudio size={21} /></span><span><strong>interview-recording.wav</strong><small>WAV · 00:42 · 18.4 MB</small></span><Check size={17} /></button>
-      <div className={styles.altFieldGroup}><span className={styles.altFieldLabel}>CLEANUP TOOLS</span><div className={styles.cleanupToolList}><label><input disabled type="checkbox" defaultChecked /><span><strong>Noise reduction</strong><small>Remove room tone and hiss</small></span></label><label><input disabled type="checkbox" defaultChecked /><span><strong>Voice clarity</strong><small>Bring speech forward</small></span></label><label><input disabled type="checkbox" /><span><strong>Remove reverb</strong><small>Tighten the recording space</small></span></label></div></div>
-      <button disabled type="button" className={styles.altUploadButton}><CloudUpload size={17} /> Replace audio file</button>
+      <div className={styles.altFieldGroup}><span className={styles.altFieldLabel}>{t("create.audio.cleanup.tools")}</span><div className={styles.cleanupToolList}><label><input disabled type="checkbox" defaultChecked /><span><strong>{t("create.audio.cleanup.noiseReduction")}</strong><small>{t("create.audio.cleanup.noiseReductionHint")}</small></span></label><label><input disabled type="checkbox" defaultChecked /><span><strong>{t("create.audio.cleanup.voiceClarity")}</strong><small>{t("create.audio.cleanup.voiceClarityHint")}</small></span></label><label><input disabled type="checkbox" /><span><strong>{t("create.audio.cleanup.removeReverb")}</strong><small>{t("create.audio.cleanup.removeReverbHint")}</small></span></label></div></div>
+      <button disabled type="button" className={styles.altUploadButton}><CloudUpload size={17} /> {t("create.audio.cleanup.replaceFile")}</button>
     </section>
 
     <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel}`}>
-      <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>CLEANUP PREVIEW</span><h2>BEFORE &amp; AFTER</h2></div><span className={styles.altStatus}><span /> Coming soon</span></div>
-      <div className={styles.mockNotice}><LockKeyhole size={13} /><span>COMING SOON · API PENDING</span></div>
-      <div className={styles.cleanupCompare}><div><span>ORIGINAL</span><AltWaveform label="ROOM NOISE" /></div><div><span>CLEANED</span><AltWaveform label="VOICE CLARITY" /></div></div>
-      <div className={styles.cleanupStats}><div><strong>−18 dB</strong><small>Noise floor</small></div><div><strong>+24%</strong><small>Speech clarity</small></div><div><strong>−2.4 LUFS</strong><small>Loudness change</small></div></div>
-      <div className={styles.altActionRow}><button disabled type="button" className={styles.altPrimaryButton}><Play size={15} fill="currentColor" /> Preview cleaned audio</button><button disabled type="button" className={styles.altSecondaryButton}>Compare</button></div>
+      <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>{t("create.audio.cleanup.previewEyebrow")}</span><h2>{t("create.audio.cleanup.beforeAfter")}</h2></div><span className={styles.altStatus}><span /> {t("create.audio.cleanup.comingSoon")}</span></div>
+      <div className={styles.mockNotice}><LockKeyhole size={13} /><span>{t("create.audio.cleanup.comingSoonNotice")}</span></div>
+      <div className={styles.cleanupCompare}><div><span>{t("create.audio.cleanup.original")}</span><AltWaveform label={t("create.audio.cleanup.roomNoise")} /></div><div><span>{t("create.audio.cleanup.cleaned")}</span><AltWaveform label={t("create.audio.cleanup.clarityLabel")} /></div></div>
+      <div className={styles.cleanupStats}><div><strong>−18 dB</strong><small>{t("create.audio.cleanup.noiseFloor")}</small></div><div><strong>+24%</strong><small>{t("create.audio.cleanup.speechClarity")}</small></div><div><strong>−2.4 LUFS</strong><small>{t("create.audio.cleanup.loudnessChange")}</small></div></div>
+      <div className={styles.altActionRow}><button disabled type="button" className={styles.altPrimaryButton}><Play size={15} fill="currentColor" /> {t("create.audio.cleanup.previewCleaned")}</button><button disabled type="button" className={styles.altSecondaryButton}>{t("create.audio.cleanup.compare")}</button></div>
     </section>
 
     <aside className={styles.alternateSettings}>
-      <div className={styles.altPanelHeader}><h2>CLEANUP SETTINGS</h2><Settings2 size={20} /></div>
-      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>NOISE REDUCTION</span><b>68%</b></div><input disabled className={styles.altRange} type="range" min="0" max="100" defaultValue="68" /></div>
-      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>VOICE PRESENCE</span><b>76%</b></div><input disabled className={styles.altRange} type="range" min="0" max="100" defaultValue="76" /></div>
-      <label className={styles.altToggleRow}><span>Preserve natural tone</span><button disabled type="button" className={styles.altToggleOn}><i /></button></label>
-      <label className={styles.altField}><span>OUTPUT FORMAT</span><select disabled defaultValue="MP3"><option>MP3</option><option>WAV</option><option>OGG</option></select></label>
-      <div className={styles.mobileActionDock}><button disabled type="button" className={styles.altGenerateButton}>CLEAN AUDIO <Sparkles size={16} /></button></div>
+      <div className={styles.altPanelHeader}><h2>{t("create.audio.cleanup.settings")}</h2><Settings2 size={20} /></div>
+      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>{t("create.audio.cleanup.noiseReductionLevel")}</span><b>68%</b></div><input disabled className={styles.altRange} type="range" min="0" max="100" defaultValue="68" /></div>
+      <div className={styles.altSettingBlock}><div className={styles.altSettingHeading}><span>{t("create.audio.cleanup.voicePresence")}</span><b>76%</b></div><input disabled className={styles.altRange} type="range" min="0" max="100" defaultValue="76" /></div>
+      <label className={styles.altToggleRow}><span>{t("create.audio.cleanup.preserveTone")}</span><button disabled type="button" className={styles.altToggleOn}><i /></button></label>
+      <label className={styles.altField}><span>{t("create.audio.cleanup.outputFormat")}</span><select disabled defaultValue="MP3"><option>MP3</option><option>WAV</option><option>OGG</option></select></label>
+      <div className={styles.mobileActionDock}><button disabled type="button" className={styles.altGenerateButton}>{t("create.audio.cleanup.clean")} <Sparkles size={16} /></button></div>
     </aside>
   </div>;
 }
@@ -896,7 +901,7 @@ export function AudioGenerationPage() {
     const nextNumber = audioScenes.reduce((highest, scene) => Math.max(highest, Number(scene.id) || 0), 0) + 1;
     const nextScene: AudioScene = {
       id: String(nextNumber).padStart(2, "0"),
-      title: `Scene ${nextNumber}`,
+      title: t("create.audio.scenes.sceneNumber", { index: nextNumber }),
       durationSeconds: 6,
       text: audioScenes.length === 0 ? prompt : "",
       voice: selectedVoice || availableVoices[0]?.key || "",
@@ -1147,11 +1152,11 @@ export function AudioGenerationPage() {
     audioRef.current.currentTime = Math.max(0, Math.min(audioDuration, audioRef.current.currentTime + amount));
   };
 
-  const scenesTimeline = <section className={styles.podcastScenesBlock} aria-label="Audio scenes and timeline">
-    <div className={styles.sectionHeading}><div className={styles.sceneHeadingCopy}><h2>AUDIO SCENES / TIMELINE</h2><small>Organize the episode into editable scenes.</small></div><span className={styles.timelineHint}>{audioScenes.length} scene{audioScenes.length === 1 ? "" : "s"} · {formatSceneSeconds(audioScenes.reduce((total, scene) => total + scene.durationSeconds, 0))} total</span></div>
+  const scenesTimeline = <section className={styles.podcastScenesBlock} aria-label={t("create.audio.scenes.a11y.panel")}>
+    <div className={styles.sectionHeading}><div className={styles.sceneHeadingCopy}><h2>{t("create.audio.scenes.title")}</h2><small>{t("create.audio.scenes.subtitle")}</small></div><span className={styles.timelineHint}>{t("create.audio.scenes.summary", { count: audioScenes.length, total: formatSceneSeconds(audioScenes.reduce((total, scene) => total + scene.durationSeconds, 0)) })}</span></div>
     <div className={styles.sceneRow}>{audioScenes.map((scene, index) => <button type="button" key={scene.id} className={selectedSceneId === scene.id ? styles.sceneCardActive : styles.sceneCard} onClick={() => setSelectedSceneId(scene.id)} aria-pressed={selectedSceneId === scene.id}>
       <Image src={availableVoices.find((voice) => voice.key === scene.voice)?.imageUrl || voiceImages[index % voiceImages.length]} alt="" width={42} height={50} unoptimized /><span className={styles.sceneCopy}><strong><em>{scene.id}</em> {scene.title}</strong><small>{sceneTimeRange(audioScenes, index)}</small></span><span className={styles.miniWave} aria-hidden="true" />
-    </button>)}<button type="button" className={styles.addScene} onClick={addAudioScene} disabled={audioScenes.length >= 20}><Plus size={17} />Add Scene</button></div>
+    </button>)}<button type="button" className={styles.addScene} onClick={addAudioScene} disabled={audioScenes.length >= 20}><Plus size={17} />{t("create.audio.scenes.addScene")}</button></div>
   </section>;
 
   useTemplateSettings('audio',{ready:modelLoadState==='ready'&&voiceLoadState==='ready',model:selectedModel,models:availableModels.map(m=>m.key),setModel:setSelectedModel,apply:(s,p)=>{
@@ -1167,7 +1172,7 @@ export function AudioGenerationPage() {
     if(typeof s.pronunciationHint==='string')setPronunciation(s.pronunciationHint);
   }});
   return <div className={`${styles.audioPage} audio-studio-page`}>
-    <section className={styles.heroBanner} aria-label="Gen Audio hero">
+    <section className={styles.heroBanner} aria-label={t("create.audio.a11y.hero")}>
       <picture>
          <source media="(max-width: 700px)" srcSet="/generated-assets/gen-audio-hero-v3-transparent.webp" />
          <Image src="/generated-assets/gen-audio-hero-v3-transparent.webp" alt="Gen Audio — AI audio generation studio" width={2172} height={724} priority unoptimized sizes="100vw" />
@@ -1191,42 +1196,42 @@ export function AudioGenerationPage() {
     />
 
     {activeTab === "Text to Speech" ? <div className={styles.audioGrid}>
-      <section className={styles.scriptPanel} aria-label="Audio script and prompt">
+      <section className={styles.scriptPanel} aria-label={t("create.audio.a11y.scriptPanel")}>
         <div className={styles.audioPromptTopActions}>
           <ImageTutorialButton feature="textToSpeech" featureName="Text to Speech" />
           <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
         </div>
-        <div className={styles.panelHeading}><h2><span>1</span> SCRIPT / PROMPT</h2><InfoTooltip content={t("create.audio.info.script")} size={14} /></div>
+        <div className={styles.panelHeading}><h2><span>1</span> {t("create.audio.scriptPrompt")}</h2><InfoTooltip content={t("create.audio.info.script")} size={14} /></div>
         <div className={styles.promptBox}>
-          <textarea aria-label="Script or prompt" value={prompt} onChange={(event) => { const value = event.target.value; setPrompt(value); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: value } : scene)); }} maxLength={promptMaxLength} />
-          <div className={styles.promptMeta}><span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span><button type="button" onClick={() => { setPrompt(""); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: "" } : scene)); }}>Clear <Trash2 size={13} /></button></div>
+          <textarea aria-label={t("create.audio.a11y.scriptInput")} value={prompt} onChange={(event) => { const value = event.target.value; setPrompt(value); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: value } : scene)); }} maxLength={promptMaxLength} />
+          <div className={styles.promptMeta}><span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span><button type="button" onClick={() => { setPrompt(""); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: "" } : scene)); }}>{t("create.audio.clear")} <Trash2 size={13} /></button></div>
         </div>
 
         <div className={styles.inputSection}>
-          <FieldLabel hint="Choose or describe">TONE</FieldLabel>
+          <FieldLabel hint={t("create.audio.toneHint")}>{t("create.audio.tone")}</FieldLabel>
           <div className={styles.chipRow}>{tones.map(({ label, icon: ToneIcon }) => <button type="button" key={label} className={tone === label ? styles.toneActive : styles.toneButton} onClick={() => setTone((current) => current === label ? "" : label)} aria-pressed={tone === label}><ToneIcon size={12} />{t(toneKeys[label])}</button>)}</div>
         </div>
 
         <div className={styles.twoColumnFields}>
-          <SelectField label="LANGUAGE" value={language} onChange={setLanguage} options={[{ value: "Thai", label: "ภาษาไทย" }, { value: "English (US)", label: "English (US)" }, { value: "English (UK)", label: "English (UK)" }, { value: "Japanese", label: "日本語" }]} />
-          <label className={styles.selectField}><FieldLabel>PRONUNCIATION HINTS</FieldLabel><input value={pronunciation} onChange={(event) => setPronunciation(event.target.value)} placeholder={'e.g. EOS as “อี-โอ-เอส”'} /></label>
+          <SelectField label={t("create.audio.language")} value={language} onChange={setLanguage} options={[{ value: "Thai", label: "ภาษาไทย" }, { value: "English (US)", label: "English (US)" }, { value: "English (UK)", label: "English (UK)" }, { value: "Japanese", label: "日本語" }]} />
+          <label className={styles.selectField}><FieldLabel>{t("create.audio.pronunciationHints")}</FieldLabel><input value={pronunciation} onChange={(event) => setPronunciation(event.target.value)} placeholder={'e.g. EOS as “อี-โอ-เอส”'} /></label>
         </div>
 
       </section>
 
-      <section className={styles.centerColumn} aria-label="Audio preview and scenes">
+      <section className={styles.centerColumn} aria-label={t("create.audio.a11y.centerColumn")}>
         <div className={`${styles.sectionBlock} ${styles.voiceSection}`}>
-          <div className={styles.sectionHeading}><h2>VOICE / SPEAKER</h2></div>
+          <div className={styles.sectionHeading}><h2>{t("create.audio.voiceSpeaker")}</h2></div>
           <div className={styles.voiceCarousel}>
             <button type="button" className={`${styles.voiceCarouselButton} ${styles.voiceCarouselButtonLeft}`} onClick={() => scrollVoices(-1)} disabled={!canScrollVoicesLeft} aria-label="เลื่อน Voice ไปทางซ้าย" aria-controls="audio-voice-carousel"><ChevronLeft size={16} /></button>
             <div ref={voiceRowRef} id="audio-voice-carousel" className={styles.voiceRow}>
-            {voiceLoadState === "loading" ? <div className={styles.voiceState} role="status">Loading voices...</div> : null}
-            {voiceLoadState === "error" ? <div className={styles.voiceStateError} role="alert"><span>{voiceError ?? "Unable to load voices"}</span><button type="button" className={styles.voiceRetry} onClick={() => void loadVoices(selectedModel || undefined)}>Try again</button></div> : null}
-            {voiceLoadState === "ready" && availableVoices.length === 0 ? <div className={styles.voiceState}>No voices available.</div> : null}
+            {voiceLoadState === "loading" ? <div className={styles.voiceState} role="status">{t("create.audio.loadingVoices")}</div> : null}
+            {voiceLoadState === "error" ? <div className={styles.voiceStateError} role="alert"><span>{voiceError ?? t("create.audio.voicesError")}</span><button type="button" className={styles.voiceRetry} onClick={() => void loadVoices(selectedModel || undefined)}>{t("create.audio.tryAgain")}</button></div> : null}
+            {voiceLoadState === "ready" && availableVoices.length === 0 ? <div className={styles.voiceState}>{t("create.audio.noVoices")}</div> : null}
             {voiceLoadState === "ready" ? voicePages.map((page, pageIndex) => <div className={styles.voicePage} key={`voice-page-${pageIndex}`}>
               {page.map((voice, index) => <div className={styles.voiceCardWrap} key={voice.key}>
                 <button type="button" className={selectedVoice === voice.key ? styles.voiceCardActive : styles.voiceCard} onClick={() => setSelectedVoice(voice.key)} aria-pressed={selectedVoice === voice.key}>
-                  <div className={styles.voiceImage}><Image src={voice.imageUrl || voiceImages[(pageIndex * 10 + index) % voiceImages.length]} alt="" fill unoptimized sizes="60px" /></div><strong>{voice.name}</strong><small>{voice.description || "Voice"}</small>{selectedVoice === voice.key ? <Check size={14} className={styles.voiceCheck} /> : null}
+                  <div className={styles.voiceImage}><Image src={voice.imageUrl || voiceImages[(pageIndex * 10 + index) % voiceImages.length]} alt="" fill unoptimized sizes="60px" /></div><strong>{voice.name}</strong><small>{voice.description || t("create.audio.voiceFallback")}</small>{selectedVoice === voice.key ? <Check size={14} className={styles.voiceCheck} /> : null}
                 </button>
                 <button type="button" data-voice-key={voice.key} className={`${styles.voicePreviewButton} ${previewingVoiceKey === voice.key ? styles.voicePreviewButtonActive : ""}`} onClick={handleVoicePreviewClick} disabled={!voice.previewUrl} aria-label={voice.previewUrl ? (previewingVoiceKey === voice.key ? `หยุดตัวอย่างเสียง ${voice.name}` : `ฟังตัวอย่างเสียง ${voice.name}`) : `ยังไม่มีตัวอย่างเสียง ${voice.name}`} title={voice.previewUrl ? "ฟังตัวอย่างเสียง" : "ยังไม่มีตัวอย่างเสียง"}>
                   {previewingVoiceKey === voice.key ? <span className={styles.voicePauseGlyph} /> : <Play size={11} fill="currentColor" />}
@@ -1239,44 +1244,44 @@ export function AudioGenerationPage() {
         </div>
 
         {audioUrl ? <div className={styles.previewPanel}>
-           <div className={styles.previewHeader}><h2>AUDIO PREVIEW</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> Download</button><button type="button" className={styles.iconAction} aria-label="More preview actions"><MoreHorizontal size={17} /></button></div></div>
+           <div className={styles.previewHeader}><h2>{t("create.audio.preview")}</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button><button type="button" className={styles.iconAction} aria-label={t("create.audio.a11y.morePreviewActions")}><MoreHorizontal size={17} /></button></div></div>
            <PreviewWaveform audioUrl={audioUrl} progress={progress} isPlaying={isPlaying} />
            <div className={styles.playerRow}>
-             <button type="button" className={styles.playButton} onClick={togglePlayback} aria-label={isPlaying ? "Pause audio" : "Play audio"} disabled={!audioUrl}>{isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}</button>
-             <button type="button" className={styles.skipButton} onClick={() => seekBy(-10)} aria-label="Rewind 10 seconds" disabled={!audioUrl}><RotateCcw size={17} /><small>10</small></button>
-             <button type="button" className={styles.skipButton} onClick={() => seekBy(10)} aria-label="Forward 10 seconds" disabled={!audioUrl}><RotateCw size={17} /><small>10</small></button>
+             <button type="button" className={styles.playButton} onClick={togglePlayback} aria-label={t(isPlaying ? "create.audio.a11y.pause" : "create.audio.a11y.play")} disabled={!audioUrl}>{isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}</button>
+             <button type="button" className={styles.skipButton} onClick={() => seekBy(-10)} aria-label={t("create.audio.a11y.rewind10")} disabled={!audioUrl}><RotateCcw size={17} /><small>10</small></button>
+             <button type="button" className={styles.skipButton} onClick={() => seekBy(10)} aria-label={t("create.audio.a11y.forward10")} disabled={!audioUrl}><RotateCw size={17} /><small>10</small></button>
              <span className={styles.timeLabel}>{formatTime(currentTime)} / {formatTime(duration)}</span>
-             <input className={styles.scrubber} type="range" min="0" max="100" value={progress} onChange={(event) => { const nextProgress = Number(event.target.value); const audioDuration = durationRef.current || duration; setProgress(nextProgress); if (audioRef.current && audioDuration) audioRef.current.currentTime = (nextProgress / 100) * audioDuration; }} aria-label="Audio progress" disabled={!audioUrl} />
+             <input className={styles.scrubber} type="range" min="0" max="100" value={progress} onChange={(event) => { const nextProgress = Number(event.target.value); const audioDuration = durationRef.current || duration; setProgress(nextProgress); if (audioRef.current && audioDuration) audioRef.current.currentTime = (nextProgress / 100) * audioDuration; }} aria-label={t("create.audio.a11y.audioProgress")} disabled={!audioUrl} />
              <Volume2 size={17} className={styles.volumeIcon} />
-             <input className={styles.volumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (audioRef.current) audioRef.current.volume = nextVolume / 100; }} aria-label="Volume" />
-             <button type="button" className={styles.iconAction} aria-label="Fullscreen audio preview"><Maximize2 size={16} /></button>
+             <input className={styles.volumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (audioRef.current) audioRef.current.volume = nextVolume / 100; }} aria-label={t("create.audio.a11y.volume")} />
+             <button type="button" className={styles.iconAction} aria-label={t("create.audio.a11y.fullscreen")}><Maximize2 size={16} /></button>
            </div>
            <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { syncAudioDuration(event.currentTarget); event.currentTarget.volume = volume / 100; event.currentTarget.playbackRate = speed; }} onDurationChange={(event) => syncAudioDuration(event.currentTarget)} onTimeUpdate={(event) => { const nextTime = event.currentTarget.currentTime; const nextDuration = durationRef.current || (Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); if (nextDuration > 0 && durationRef.current !== nextDuration) { durationRef.current = nextDuration; setDuration(nextDuration); } setCurrentTime(nextTime); setProgress(nextDuration ? Math.min(100, (nextTime / nextDuration) * 100) : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={(event) => { const endDuration = durationRef.current || event.currentTarget.duration; setIsPlaying(false); if (Number.isFinite(endDuration) && endDuration > 0) { durationRef.current = endDuration; setDuration(endDuration); setCurrentTime(endDuration); } setProgress(100); }} />
            <audio ref={voicePreviewAudioRef} preload="none" onEnded={() => setPreviewingVoiceKey(null)} onError={() => setPreviewingVoiceKey(null)} aria-hidden="true" />
            {errorMessage ? <p className={styles.securityNote} role="alert">{errorMessage}</p> : null}
         </div> : null}
 
-        <section className={styles.historyPanel} aria-label="Generation history">
-          <div className={styles.sectionHeading}><h2><History size={13} /> GENERATION HISTORY</h2><span className={styles.timelineHint}>{audioHistory.length ? `${audioHistory.length} result${audioHistory.length === 1 ? "" : "s"}` : "No results yet"}</span></div>
+        <section className={styles.historyPanel} aria-label={t("create.audio.a11y.historyPanel")}>
+          <div className={styles.sectionHeading}><h2><History size={13} /> {t("create.audio.generationHistory")}</h2><span className={styles.timelineHint}>{audioHistory.length ? audioHistory.length === 1 ? t("create.audio.resultCountOne") : t("create.audio.resultCountMany", { count: audioHistory.length }) : t("create.audio.noResults")}</span></div>
           {audioHistory.length ? <div className={styles.historyList}>{audioHistory.map((item) => <div key={item.id} className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}>
-            <button type="button" className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem} onClick={() => selectHistoryItem(item)} disabled={historyLoadingId === item.id} aria-busy={historyLoadingId === item.id}><span className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>{historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}</span><span className={styles.historyCopy}><strong>{item.label}</strong><small>{item.createdAt}</small></span><span className={styles.historyCurrent}>{item.url === audioUrl ? "CURRENT" : "PLAY"}</span></button>
-            <button type="button" className={styles.historyDelete} aria-label={`Delete ${item.label}`} onClick={() => removeHistoryItem(item)}><Trash2 size={13} /></button>
-          </div>)}</div> : <div className={styles.historyEmpty}><History size={15} /><span>Generate audio to save and replay results here.</span></div>}
+            <button type="button" className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem} onClick={() => selectHistoryItem(item)} disabled={historyLoadingId === item.id} aria-busy={historyLoadingId === item.id}><span className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>{historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}</span><span className={styles.historyCopy}><strong>{item.label}</strong><small>{item.createdAt}</small></span><span className={styles.historyCurrent}>{item.url === audioUrl ? t("create.audio.historyCurrent") : t("create.audio.historyPlay")}</span></button>
+            <button type="button" className={styles.historyDelete} aria-label={t("create.audio.a11y.deleteItem", { label: item.label })} onClick={() => removeHistoryItem(item)}><Trash2 size={13} /></button>
+          </div>)}</div> : <div className={styles.historyEmpty}><History size={15} /><span>{t("create.audio.historyEmpty")}</span></div>}
         </section>
 
       </section>
 
-      <aside className={styles.settingsPanel} aria-label="Audio settings">
-        <div className={`${styles.settingsTitle} flex-wrap gap-2`}><h2>SETTINGS</h2><WandSparkles size={22} /></div>
-        <div className={styles.settingBlock}><SelectField label="VOICE MODEL" value={selectedModel} onChange={(modelId) => { setSelectedModel(modelId); setSelectedVoice(""); }} disabled={modelLoadState !== "ready" || availableModels.length === 0} loading={modelLoadState === "loading"} options={availableModels.map((model) => ({ value: model.key, label: model.name, preserveLabel: true }))} /></div>
-        <div className={styles.settingBlock}><FieldLabel>OUTPUT FORMAT</FieldLabel><div className={styles.formatRow}>{["MP3", "WAV", "OGG"].map((item) => <button type="button" key={item} className={format === item ? styles.formatActive : styles.formatButton} onClick={() => setFormat(item)}>{item}</button>)}</div></div>
-        <div className={styles.settingBlock}><div className={styles.speedHeader}><FieldLabel>SPEECH SPEED</FieldLabel><strong>{speed.toFixed(2)}x</strong></div><input className={styles.speedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.rangeLabels}><span>0.5x</span><span>1x</span><span>2x</span></div></div>
-        <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>AUTO BACKGROUND MUSIC</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}><span /></button></div>{backgroundMusic ? <SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0} loading={backgroundMusicLoadState === "loading"} options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))} /> : null}</div>
+      <aside className={styles.settingsPanel} aria-label={t("create.audio.a11y.settingsPanel")}>
+        <div className={`${styles.settingsTitle} flex-wrap gap-2`}><h2>{t("create.audio.settings")}</h2><WandSparkles size={22} /></div>
+        <div className={styles.settingBlock}><SelectField label={t("create.audio.voiceModel")} value={selectedModel} onChange={(modelId) => { setSelectedModel(modelId); setSelectedVoice(""); }} disabled={modelLoadState !== "ready" || availableModels.length === 0} loading={modelLoadState === "loading"} options={availableModels.map((model) => ({ value: model.key, label: model.name, preserveLabel: true }))} /></div>
+        <div className={styles.settingBlock}><FieldLabel>{t("create.audio.outputFormat")}</FieldLabel><div className={styles.formatRow}>{["MP3", "WAV", "OGG"].map((item) => <button type="button" key={item} className={format === item ? styles.formatActive : styles.formatButton} onClick={() => setFormat(item)}>{item}</button>)}</div></div>
+        <div className={styles.settingBlock}><div className={styles.speedHeader}><FieldLabel>{t("create.audio.speechSpeed")}</FieldLabel><strong>{speed.toFixed(2)}x</strong></div><input className={styles.speedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.rangeLabels}><span>0.5x</span><span>1x</span><span>2x</span></div></div>
+        <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>{t("create.audio.autoBackgroundMusic")}</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}><span /></button></div>{backgroundMusic ? <SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0} loading={backgroundMusicLoadState === "loading"} options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))} /> : null}</div>
         <div className={styles.mobileActionDock}>
-          <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}><div className={styles.creditEstimateHeader}><strong>ESTIMATED CREDITS <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} /></strong><b>{creditEstimateLoading || modelLoadState === "loading" || voiceLoadState === "loading" ? "Calculating…" : creditEstimate ? `= ${formatCreditAmount(creditEstimate.creditCost)} Credits` : "—"}</b></div><p className={styles.creditEstimateCount}>{isSceneMode ? `${audioScenes.length} scene${audioScenes.length === 1 ? "" : "s"}` : "1 audio"}</p></div>
+          <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}><div className={styles.creditEstimateHeader}><strong>{t("create.audio.estimatedCredits")} <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} /></strong><b>{creditEstimateLoading || modelLoadState === "loading" || voiceLoadState === "loading" ? t("create.audio.calculating") : creditEstimate ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditEstimate.creditCost) }) : "—"}</b></div><p className={styles.creditEstimateCount}>{isSceneMode ? audioScenes.length === 1 ? t("create.audio.sceneCountOne") : t("create.audio.sceneCountMany", { count: audioScenes.length }) : t("create.audio.audioCount")}</p></div>
           {generationValidationMessage ? <p className={styles.generationValidation} role="status">{generationValidationMessage}</p> : null}
-          <button type="button" className={styles.generateButton} onClick={() => void (isSceneMode ? handleGenerateScenes() : handleGenerate())} disabled={isGenerating || !selectedModel || voiceLoadState !== "ready" || (isSceneMode ? hasIncompleteScene : !prompt.trim() || !selectedVoice)}>{isGenerating ? <><span className={styles.spinner} /> GENERATING...</> : <>GENERATE AUDIO <Sparkles size={17} /></>}</button>
-          <p className={styles.securityNote}><LockKeyhole size={11} /> Your generation is private and secure</p>
+          <button type="button" className={styles.generateButton} onClick={() => void (isSceneMode ? handleGenerateScenes() : handleGenerate())} disabled={isGenerating || !selectedModel || voiceLoadState !== "ready" || (isSceneMode ? hasIncompleteScene : !prompt.trim() || !selectedVoice)}>{isGenerating ? <><span className={styles.spinner} /> {t("create.audio.generating")}</> : <>{t("create.audio.generateAudio")} <Sparkles size={17} /></>}</button>
+          <p className={styles.securityNote}><LockKeyhole size={11} /> {t("create.audio.privateSecure")}</p>
         </div>
       </aside>
   </div> : activeTab === "Podcast & Dialogue" ? <PodcastDialogueLayout onHistorySaved={persistGeneratedAudio} scenesTimeline={scenesTimeline} /> : activeTab === "Voice Clone" ? <VoiceCloneLayout onHistorySaved={persistGeneratedAudio} /> : activeTab === "Sound Effects" ? <SoundEffectsLayout onHistorySaved={persistGeneratedAudio} /> : <AudioCleanupLayout />}
