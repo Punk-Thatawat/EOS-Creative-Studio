@@ -111,6 +111,16 @@ input[type="file"].hidden { display: none !important; }
 
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 
+/* Letter tracking is a Latin convention. Thai writes no spaces between words
+   and puts some vowels (เ แ โ ใ ไ) before the consonant they belong to, so
+   spacing the letters apart strands those vowels and every cluster starts to
+   read as a word of its own. `--eos-label-tracking` is deliberately left
+   undeclared: a label rule writes `var(--eos-label-tracking, .12em)` and keeps
+   its own tracking, and the one rule below drops all of it at once while the
+   document is in Thai. A Latin-only sticker that should keep its tracking
+   writes the value on its own, without the variable. */
+html:lang(th) { --eos-label-tracking: normal; }
+
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid rgba(242, 107, 56, 0.35);
   outline-offset: 2px;
@@ -542,7 +552,7 @@ body :where([data-studio-main], [data-page], .audio-studio-page, .landing-page, 
 .intro-video-modal .video-modal-caption { display:none; }
 .intro-video-modal .intro-countdown { display:none; }
 .video-modal-caption strong { font-size:14px; letter-spacing:.04em; }
-.video-modal-caption span { color:#f51591; font-size:10px; font-weight:800; letter-spacing:.12em; }
+.video-modal-caption span { color:#f51591; font-size:10px; font-weight:800; letter-spacing:var(--eos-label-tracking, .12em); }
 @keyframes video-modal-in { from { opacity:0; } to { opacity:1; } }
 @keyframes video-modal-shell-in { 0% { opacity:0; transform:translateY(18vh) scale(.84); filter:blur(8px); } 65% { opacity:1; transform:translateY(-1.5vh) scale(1.015); filter:blur(0); } 100% { opacity:1; transform:translateY(0) scale(1); filter:blur(0); } }
 @keyframes intro-video-play-feedback { 0% { opacity:0; transform:translate(-50%,-50%) scale(.72); } 18% { opacity:1; transform:translate(-50%,-50%) scale(1); } 68% { opacity:1; transform:translate(-50%,-50%) scale(1); } 100% { opacity:0; transform:translate(-50%,-50%) scale(1.08); } }
