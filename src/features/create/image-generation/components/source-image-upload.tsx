@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CloudUpload, ImagePlus, Trash2, Upload } from "lucide-react";
+import { AlertCircle, CloudUpload, Plus, Trash2, Upload } from "lucide-react";
 import type { PendingImageUpload } from "@/lib/media/deferred-upload";
 import { imageUploadHint, type ImageUploadConstraints, validateMediaFile } from "@/lib/media/upload-validation";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -174,8 +174,10 @@ function MultipleSourceImageUpload({ imageUrls, onImagesChange, onClear, imageCo
   return <div className={cx("gen-source-upload-wrap")}>
     <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(event) => { void readImageFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} />
     {(imageUrls.length > 0) ? <div className={cx("gen-multi-source-preview")} onDragOver={(event) => { if (!disabled && canAddMore) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}>
-      <div className={cx("gen-multi-source-grid")}>{imageUrls.map((url, index) => <div className={cx("gen-multi-source-item")} key={url}><img src={url} alt={t("create.image.upload.selectedAlt", { index: index + 1 })} /><button type="button" onClick={() => removeImage(index)} aria-label={t("create.image.upload.removeIndexed", { index: index + 1 })}><Trash2 size={12} /></button></div>)}</div>
-      {canAddMore && <button type="button" className={cx("gen-multi-source-add")} onClick={chooseFile} disabled={disabled}><ImagePlus size={14} /> {t("create.image.upload.addImages")}</button>}
+      <div className={cx("gen-multi-source-grid")}>
+        {imageUrls.map((url, index) => <div className={cx("gen-multi-source-item")} key={url}><img src={url} alt={t("create.image.upload.selectedAlt", { index: index + 1 })} /><button type="button" onClick={() => removeImage(index)} aria-label={t("create.image.upload.removeIndexed", { index: index + 1 })}><Trash2 size={12} /></button></div>)}
+        {canAddMore && <button type="button" className={cx("gen-multi-source-add")} onClick={chooseFile} aria-label={t("create.image.upload.addImages")} title={t("create.image.upload.addImages")} disabled={disabled}><Plus size={19} strokeWidth={1.8} aria-hidden="true" /></button>}
+      </div>
     </div> : <button type="button" className={cx("gen-upload", dragging && "is-dragging")} onClick={chooseFile} onDragOver={(event) => { if (!disabled && canAddMore) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} disabled={disabled || !canAddMore}>
       <CloudUpload size={20} />
       <strong>{t("create.image.upload.chooseImages")}</strong>
