@@ -135,6 +135,10 @@ export function PreLoginPage() {
   }, []);
 
   useEffect(() => {
+    if (showIntroVideo) {
+      showcaseVideoRefs.current.forEach((video) => video?.pause());
+      return undefined;
+    }
     if (typeof IntersectionObserver === "undefined") return undefined;
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
@@ -148,7 +152,7 @@ export function PreLoginPage() {
     }, { rootMargin: "120px 0px", threshold: 0.15 });
     showcaseVideoRefs.current.forEach((video) => { if (video) observer.observe(video); });
     return () => observer.disconnect();
-  }, [examples, visibleExampleOffset]);
+  }, [examples, showIntroVideo, visibleExampleOffset]);
 
   const handleGoogleLogin = async () => {
     setGoogleLoginLoading(true);
@@ -317,30 +321,6 @@ export function PreLoginPage() {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [loginOpen]);
-
-  useEffect(() => {
-    const videos = videoRefs.current.filter((video): video is HTMLVideoElement => Boolean(video));
-    if (showIntroVideo) {
-      videos.forEach((video) => video.pause());
-      return undefined;
-    }
-    if (typeof IntersectionObserver === "undefined") {
-      videos.forEach((video) => void video.play().catch(() => undefined));
-      return undefined;
-    }
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        const video = entry.target as HTMLVideoElement;
-        if (entry.isIntersecting) void video.play().catch(() => undefined);
-        else video.pause();
-      });
-    }, { rootMargin: "120px 0px", threshold: 0.1 });
-    videos.forEach((video) => observer.observe(video));
-    return () => {
-      observer.disconnect();
-      videos.forEach((video) => video.pause());
-    };
-  }, [examples, showIntroVideo]);
 
   useEffect(() => {
     const today = getLocalDateKey();
