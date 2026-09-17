@@ -677,3 +677,8 @@
    sideways. Clip instead of hide: it keeps the sticky action dock working and
    leaves vertical overhang (the dial sticker sits above its panel) untouched. */
 .gen-image-page { overflow-x: clip; }
+/* The page-wide readability floor forces every button to 1rem, which pushed
+   longer segmented labels past their column and clipped them to an ellipsis.
+   Meta size is the floor the surrounding help text already uses, so the label
+   stays readable and fits. */
+.gen-segmented button { font-size: var(--eos-font-meta) !important; }
