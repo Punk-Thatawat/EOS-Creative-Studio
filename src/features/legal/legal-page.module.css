@@ -1,7 +1,5 @@
 .page { min-height: 100vh; color: #202124; background: #fbfaf8; font-family: var(--font-noto-sans-thai), Arial, sans-serif; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 74px; padding: 16px clamp(20px, 5vw, 72px); border-bottom: 1px solid #ece5df; background: rgba(255, 255, 255, .9); }
-.brand { display: inline-flex; align-items: center; gap: 9px; color: #17181d; font-family: var(--font-kanit), sans-serif; font-size: 18px; font-weight: 800; text-decoration: none; }
-.brandMark { display: grid; width: 34px; height: 34px; place-items: center; color: #fff; border-radius: 11px; background: linear-gradient(135deg, #ff671d, #f51591); font-size: 17px; }
 .backLink { display: inline-flex; align-items: center; gap: 6px; color: #ad4b25; font-size: 12px; font-weight: 700; text-decoration: none; }
 .backLink:hover { color: #f15b20; }
 .container { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 52px 0 72px; }
@@ -36,5 +34,7 @@
 .hubCard:hover { border-color: #f2a17c; box-shadow: 0 10px 26px rgba(62, 36, 20, .08); transform: translateY(-2px); }
 .hubCard strong { color: #29262a; font-family: var(--font-kanit), sans-serif; font-size: 18px; }
 .hubCard span { color: #706970; font-size: 12px; line-height: 1.6; }
-.hubCard small { align-self: end; color: #c64f1f; font-size: 10px; font-weight: 800; }
-@media (max-width: 760px) { .header { min-height: 64px; padding: 12px 16px; }.brand { font-size: 16px; }.brandMark { width: 30px; height: 30px; }.container { width: min(100% - 24px, 620px); padding-top: 32px; }.hero { display: grid; gap: 15px; }.hero h1 { font-size: 38px; }.layout { grid-template-columns: 1fr; gap: 14px; }.toc { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }.tocTitle { grid-column: 1 / -1; }.article { padding: 20px 16px; }.footer { width: calc(100% - 24px); display: grid; gap: 13px; }.footerLinks { justify-content: start; }.hubGrid { grid-template-columns: 1fr; } }
+/* Tailwind preflight makes every svg a block, so the arrow started its own
+   line no matter how wide the card was. A flex row keeps it beside the label. */
+.hubCard small { display: flex; align-items: center; gap: 5px; align-self: end; color: #c64f1f; font-size: 10px; font-weight: 800; }
+@media (max-width: 760px) { .header { min-height: 64px; padding: 12px 16px; }.container { width: min(100% - 24px, 620px); padding-top: 32px; }.hero { display: grid; gap: 15px; }.hero h1 { font-size: 38px; }.layout { grid-template-columns: 1fr; gap: 14px; }.toc { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }.tocTitle { grid-column: 1 / -1; }.article { padding: 20px 16px; }.footer { width: calc(100% - 24px); display: grid; gap: 13px; }.footerLinks { justify-content: start; }.hubGrid { grid-template-columns: 1fr; } }
