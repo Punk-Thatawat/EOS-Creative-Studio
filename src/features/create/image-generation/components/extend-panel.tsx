@@ -9,7 +9,7 @@ import { SourceImageUpload } from "./source-image-upload";
 import type { ImageUploadConstraints } from "@/lib/media/upload-validation";
 import { PromptOptimizerToggle } from "./prompt-optimizer-toggle";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
-import { useLocale } from "@/lib/i18n/locale-provider";
+import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 
 type ExtendPanelProps = {
   tutorialButton?: ReactNode;
@@ -43,32 +43,34 @@ const directionMeta: Record<ExtendDirection, { label: string; helper: string; ic
 export function ExtendPanel({ tutorialButton, clearButton, sourceImage, workspaceId, imageUploadConstraints, prompt, negativePrompt, direction, amount, onSourceImageChange, onSourceImageClear, onPendingImageChange, onPromptChange, promptOptimizerEnabled, onPromptOptimizerChange, onNegativePromptChange, onDirectionChange, onAmountChange }: ExtendPanelProps) {
   const { t } = useLocale();
   return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-extend-panel")}>
-    <div className={cx("gen-prompt-top-action")}><span>{tutorialButton}</span><span>{clearButton}</span></div><div className={cx("gen-panel-title")}><h2>PROMPT <em>(Optional)</em></h2><Image src="/generated-assets/be-descriptive.png" alt="Be descriptive" width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
-    <PromptField id="gen-extend-prompt" value={prompt} onChange={onPromptChange} placeholder="Continue the sunset sky, trees and warm window light naturally" ariaLabel="Extend image prompt" wrapperClassName={cx("gen-textarea-wrap", "gen-extend-prompt")} metaClassName={cx("gen-prompt-meta")} />
+    <div className={cx("gen-prompt-top-action")}><span>{tutorialButton}</span><span>{clearButton}</span></div><div className={cx("gen-panel-title")}><h2>{t("create.prompt")} <em>({t("create.optional")})</em></h2><Image src="/generated-assets/be-descriptive.png" alt={t("create.image.beDescriptive")} width={2051} height={509} className={cx("gen-prompt-annotation")} /></div>
+    <PromptField id="gen-extend-prompt" value={prompt} onChange={onPromptChange} placeholder={t("create.image.promptHint.extend")} ariaLabel={t("create.image.extend.promptAria")} wrapperClassName={cx("gen-textarea-wrap", "gen-extend-prompt")} metaClassName={cx("gen-prompt-meta")} />
     <PromptOptimizerToggle enabled={promptOptimizerEnabled} onChange={onPromptOptimizerChange} />
-    <div className={cx("gen-section-heading")}><h3>SOURCE IMAGE <em>(Required)</em></h3></div>
+    <div className={cx("gen-section-heading")}><h3>{t("create.image.sourceImage")} <em>({t("create.required")})</em></h3></div>
     <SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} purpose="content" feature="extend-image" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} onPendingImageChange={onPendingImageChange} />
-    <p className={cx("gen-inline-helper")}>Upload an image, then choose where AI should continue the scene beyond its original borders.</p>
+    <p className={cx("gen-inline-helper")}>{t("create.image.extend.sourceHelper")}</p>
 
-    <div className={cx("gen-section-heading", "gen-inline-heading")}><h3>EXPAND DIRECTION</h3><InfoTooltip content={t("create.settings.info.expandDirection")} size={12} /></div>
-    <div className={cx("gen-extend-direction-grid")} role="radiogroup" aria-label="Expand direction">
+    <div className={cx("gen-section-heading", "gen-inline-heading")}><h3>{t("create.image.extend.direction")}</h3><InfoTooltip content={t("create.settings.info.expandDirection")} size={12} /></div>
+    <div className={cx("gen-extend-direction-grid")} role="radiogroup" aria-label={t("create.image.extend.direction")}>
       {extendDirections.map((item) => {
         const meta = directionMeta[item];
+        const label = t(`create.image.extend.dir.${item}` as TranslationKey);
+        const helper = t(`create.image.extend.dir.${item}Helper` as TranslationKey);
         const Icon = meta.icon;
-        return <button type="button" key={item} role="radio" aria-checked={direction === item} className={cx(direction === item && "is-selected", item === "all" && "is-all")} onClick={() => onDirectionChange(item)}><span className={cx("gen-extend-direction-icon")}><Icon size={16} /></span><span><b>{meta.label}</b><small>{meta.helper}</small></span></button>;
+        return <button type="button" key={item} role="radio" aria-checked={direction === item} className={cx(direction === item && "is-selected", item === "all" && "is-all")} onClick={() => onDirectionChange(item)}><span className={cx("gen-extend-direction-icon")}><Icon size={16} /></span><span><b>{label}</b><small>{helper}</small></span></button>;
       })}
     </div>
 
-    <div className={cx("gen-section-heading", "gen-inline-heading")}><h3>EXPAND AMOUNT</h3><InfoTooltip content={t("create.settings.info.expandAmount")} size={12} /></div>
-    <div className={cx("gen-segmented", "gen-extend-amounts")} role="radiogroup" aria-label="Expand amount">
+    <div className={cx("gen-section-heading", "gen-inline-heading")}><h3>{t("create.image.extend.amount")}</h3><InfoTooltip content={t("create.settings.info.expandAmount")} size={12} /></div>
+    <div className={cx("gen-segmented", "gen-extend-amounts")} role="radiogroup" aria-label={t("create.image.extend.amount")}>
       {extendAmounts.map((item) => <button type="button" key={item} role="radio" aria-checked={amount === item} className={cx(amount === item && "is-selected")} onClick={() => onAmountChange(item)}>{item}</button>)}
     </div>
-    <p className={cx("gen-extend-amount-helper")}>How much new canvas should be added on the selected side(s).</p>
+    <p className={cx("gen-extend-amount-helper")}>{t("create.image.extend.amountHelper")}</p>
 
     <details className={cx("gen-advanced")}>
-      <summary><span>ADVANCED</span><span aria-hidden="true">⌄</span></summary>
+      <summary><span>{t("create.image.advanced")}</span><span aria-hidden="true">⌄</span></summary>
       <div className={cx("gen-advanced-body")}>
-        <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-extend">Negative prompt</label><PromptField id="gen-negative-prompt-extend" value={negativePrompt} onChange={onNegativePromptChange} placeholder="blurry, seams, duplicated objects" ariaLabel="Extend image negative prompt" multiline={false} maxLength={100} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} /></div>
+        <div className={cx("gen-advanced-field")}><label htmlFor="gen-negative-prompt-extend">{t("create.image.negativePrompt")}</label><PromptField id="gen-negative-prompt-extend" value={negativePrompt} onChange={onNegativePromptChange} placeholder={t("create.image.extend.negativeHint")} ariaLabel={t("create.image.extend.negativeAria")} multiline={false} maxLength={100} wrapperClassName={cx("gen-input-wrap")} metaClassName={cx("gen-prompt-meta")} /></div>
       </div>
     </details>
   </aside>;

@@ -20,13 +20,13 @@ type UpscalePanelProps = {
 export function UpscalePanel({ tutorialButton, clearButton, sourceImage, workspaceId, imageUploadConstraints, onSourceImageChange, onSourceImageClear, onPendingImageChange }: UpscalePanelProps) {
   const { t } = useLocale();
   return <aside className={cx("gen-panel", "gen-prompt-panel", "gen-upscale-panel")}>
-    <div className={cx("gen-prompt-top-action")}><span>{tutorialButton}</span><span>{clearButton}</span></div><div className={cx("gen-section-heading")}><h3>SOURCE IMAGE <em>(Required)</em></h3></div>
+    <div className={cx("gen-prompt-top-action")}><span>{tutorialButton}</span><span>{clearButton}</span></div><div className={cx("gen-section-heading")}><h3>{t("create.image.sourceImage")} <em>({t("create.required")})</em></h3></div>
     <SourceImageUpload imageUrl={sourceImage} onImageChange={onSourceImageChange} onClear={onSourceImageClear} purpose="content" feature="upscale" workspaceId={workspaceId} imageConstraints={imageUploadConstraints} onPendingImageChange={onPendingImageChange} />
-    <p className={cx("gen-inline-helper")}>Upload a low-resolution image. Upscale increases resolution while preserving the original composition.</p>
+    <p className={cx("gen-inline-helper")}>{t("create.image.upscale.helper")}</p>
     <div className={cx("gen-upscale-info")}>
       <div className={cx("gen-upscale-info-icon")}><Sparkles size={15} /></div>
-      <div><b>AI detail reconstruction</b><p>The model may recreate fine details such as texture, edges, and facial features.</p></div>
+      <div><b>{t("create.image.upscale.detailTitle")}</b><p>{t("create.image.upscale.detailBody")}</p></div>
     </div>
-    <p className={cx("gen-upscale-note")}><InfoTooltip content={t("create.settings.info.upscaleAspectRatio")} size={12} /> Original aspect ratio is preserved automatically.</p>
+    <p className={cx("gen-upscale-note")}><InfoTooltip content={t("create.settings.info.upscaleAspectRatio")} size={12} /> {t("create.image.upscale.aspectNote")}</p>
   </aside>;
 }

@@ -116,6 +116,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   outline-offset: 2px;
 }
 
+/* A hint longer than its field gets cut mid-letter, and in Thai the tail of a
+   word simply disappears, which reads as a rendering fault rather than as
+   overflow. Fade it out instead. Applies to the resting state only, so it does
+   not follow the caret while someone types. */
+input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"] { text-overflow: ellipsis; }
+
 @media (max-width: 1023px) {
   :root { --sidebar-width: 76px; }
 }

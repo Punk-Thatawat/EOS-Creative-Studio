@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CloudUpload, ImagePlus, Trash2, Upload } from "lucide-react";
 import type { PendingImageUpload } from "@/lib/media/deferred-upload";
 import { imageUploadHint, type ImageUploadConstraints, validateMediaFile } from "@/lib/media/upload-validation";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { cx } from "../styles";
 
 /* These URLs can be local object URLs or temporary provider-hosted URLs. */
@@ -27,6 +28,7 @@ type SourceImageUploadProps = {
 };
 
 function SingleSourceImageUpload({ imageUrl, onImageChange, onClear, imageConstraints, disabled = false, onPendingImageChange }: SourceImageUploadProps) {
+  const { t } = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
@@ -90,23 +92,24 @@ function SingleSourceImageUpload({ imageUrl, onImageChange, onClear, imageConstr
   return <div className={cx("gen-source-upload-wrap")}>
     <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImageFile(file); event.currentTarget.value = ""; }} />
     {hasPreviewImage ? <div className={cx("gen-source-preview")}>
-      {imageUrl && <img src={imageUrl} alt={visibleLocalPreviewUrl ? "" : "Uploaded source image"} aria-hidden={Boolean(visibleLocalPreviewUrl)} className={cx("gen-source-preview-image", "is-remote-preview", isRemoteImageLoaded && "is-visible")} onLoad={handleRemoteImageLoad} onError={handleRemoteImageError} />}
-      {visibleLocalPreviewUrl && <img src={visibleLocalPreviewUrl} alt="Local preview of selected source image" className={cx("gen-source-preview-image", "is-local-preview")} />}
+      {imageUrl && <img src={imageUrl} alt={visibleLocalPreviewUrl ? "" : t("create.image.upload.uploadedAlt")} aria-hidden={Boolean(visibleLocalPreviewUrl)} className={cx("gen-source-preview-image", "is-remote-preview", isRemoteImageLoaded && "is-visible")} onLoad={handleRemoteImageLoad} onError={handleRemoteImageError} />}
+      {visibleLocalPreviewUrl && <img src={visibleLocalPreviewUrl} alt={t("create.image.upload.localAlt")} className={cx("gen-source-preview-image", "is-local-preview")} />}
       {imageUrl && <div className={cx("gen-source-actions")}>
-        <button type="button" onClick={chooseFile} aria-label="Replace source image" title="Replace source image"><Upload size={14} /> Replace</button>
-        <button type="button" onClick={handleClear} aria-label="Remove source image" title="Remove source image"><Trash2 size={14} /> Remove</button>
+        <button type="button" onClick={chooseFile} aria-label={t("create.image.upload.replaceAria")} title={t("create.image.upload.replaceAria")}><Upload size={14} /> {t("create.image.upload.replace")}</button>
+        <button type="button" onClick={handleClear} aria-label={t("create.image.upload.removeAria")} title={t("create.image.upload.removeAria")}><Trash2 size={14} /> {t("create.image.upload.remove")}</button>
       </div>}
     </div> : <button type="button" className={cx("gen-upload", dragging && "is-dragging")} onClick={chooseFile} onDragOver={(event) => { if (disabled) return; event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} disabled={disabled}>
       <CloudUpload size={20} />
-      <strong>Choose image</strong>
-      <small>Uploads when you generate · PNG / JPG / WEBP{imageUploadHint(imageConstraints)}</small>
+      <strong>{t("create.image.upload.chooseImage")}</strong>
+      <small>{t("create.image.upload.hintSingle", { limit: imageUploadHint(imageConstraints) })}</small>
     </button>}
-    {disabled && !hasPreviewImage && <p className={cx("gen-upload-helper", "is-disabled")}>This model does not support content image input.</p>}
+    {disabled && !hasPreviewImage && <p className={cx("gen-upload-helper", "is-disabled")}>{t("create.image.upload.noInput")}</p>}
     {error && <p className={cx("gen-upload-error")} role="alert"><AlertCircle size={12} /> {error}</p>}
   </div>;
 }
 
 function MultipleSourceImageUpload({ imageUrls, onImagesChange, onClear, imageConstraints, maxImages = 8, disabled = false, onPendingImagesChange, onPendingImageRemove, onPendingImagesClear }: SourceImageUploadProps & { imageUrls: string[]; onImagesChange: (imageUrls: string[]) => void }) {
+  const { t } = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,14 +174,14 @@ function MultipleSourceImageUpload({ imageUrls, onImagesChange, onClear, imageCo
   return <div className={cx("gen-source-upload-wrap")}>
     <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(event) => { void readImageFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} />
     {(imageUrls.length > 0) ? <div className={cx("gen-multi-source-preview")} onDragOver={(event) => { if (!disabled && canAddMore) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}>
-      <div className={cx("gen-multi-source-grid")}>{imageUrls.map((url, index) => <div className={cx("gen-multi-source-item")} key={url}><img src={url} alt={`Selected source image ${index + 1}`} /><button type="button" onClick={() => removeImage(index)} aria-label={`Remove source image ${index + 1}`}><Trash2 size={12} /></button></div>)}</div>
-      {canAddMore && <button type="button" className={cx("gen-multi-source-add")} onClick={chooseFile} disabled={disabled}><ImagePlus size={14} /> Add images</button>}
+      <div className={cx("gen-multi-source-grid")}>{imageUrls.map((url, index) => <div className={cx("gen-multi-source-item")} key={url}><img src={url} alt={t("create.image.upload.selectedAlt", { index: index + 1 })} /><button type="button" onClick={() => removeImage(index)} aria-label={t("create.image.upload.removeIndexed", { index: index + 1 })}><Trash2 size={12} /></button></div>)}</div>
+      {canAddMore && <button type="button" className={cx("gen-multi-source-add")} onClick={chooseFile} disabled={disabled}><ImagePlus size={14} /> {t("create.image.upload.addImages")}</button>}
     </div> : <button type="button" className={cx("gen-upload", dragging && "is-dragging")} onClick={chooseFile} onDragOver={(event) => { if (!disabled && canAddMore) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} disabled={disabled || !canAddMore}>
       <CloudUpload size={20} />
-      <strong>Choose images</strong>
-      <small>Uploads when you generate · Up to {maxImages} images{imageUploadHint(imageConstraints)} each</small>
+      <strong>{t("create.image.upload.chooseImages")}</strong>
+      <small>{t("create.image.upload.hintMulti", { count: maxImages, limit: imageUploadHint(imageConstraints) })}</small>
     </button>}
-    {disabled && imageUrls.length === 0 && <p className={cx("gen-upload-helper", "is-disabled")}>This model accepts one source image only.</p>}
+    {disabled && imageUrls.length === 0 && <p className={cx("gen-upload-helper", "is-disabled")}>{t("create.image.upload.singleOnly")}</p>}
     {error && <p className={cx("gen-upload-error")} role="alert"><AlertCircle size={12} /> {error}</p>}
   </div>;
 }

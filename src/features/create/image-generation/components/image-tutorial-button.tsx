@@ -8,6 +8,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import { cx } from "../styles";
 
 function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature: string; featureName: string; mode?: string; onClose: () => void }) {
+  const { t } = useLocale();
   const [tutorial, setTutorial] = useState<AdminTutorialSlot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,11 +39,11 @@ function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature:
 
   return <div className={cx("gen-tutorial-dialog")} role="dialog" aria-modal="true" aria-labelledby="image-tutorial-dialog-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div className={cx("gen-tutorial-dialog-content")}>
-      <header className={cx("gen-tutorial-dialog-header")}><div><span>TUTORIAL</span><h2 id="image-tutorial-dialog-title">{title}</h2><p>{tutorial?.mode ? "Mode-specific guide" : "Feature guide"}</p></div><button type="button" onClick={onClose} className={cx("gen-tutorial-dialog-close")} aria-label="Close tutorial"><X size={18} /></button></header>
+      <header className={cx("gen-tutorial-dialog-header")}><div><span>{t("create.image.tutorial.title")}</span><h2 id="image-tutorial-dialog-title">{title}</h2><p>{tutorial?.mode ? "Mode-specific guide" : "Feature guide"}</p></div><button type="button" onClick={onClose} className={cx("gen-tutorial-dialog-close")} aria-label="Close tutorial"><X size={18} /></button></header>
       <div className={cx("gen-tutorial-dialog-body")}>
         {loading ? <div className={cx("gen-tutorial-dialog-state")}><LoaderCircle size={22} className={cx("gen-generating-icon")} /><span>Loading tutorial...</span></div> : error ? <div className={cx("gen-tutorial-dialog-state", "is-error")}><span>{error}</span></div> : tutorial?.videoUrl ? <EosVideoPlayer src={tutorial.videoUrl} autoPlay muted className={cx("gen-tutorial-video-player")} ariaLabel={`${tutorial.featureName} ${tutorial.modeName ?? "tutorial"}`} /> : <div className={cx("gen-tutorial-dialog-state")}><Video size={26} /><span>No tutorial is available for this tool yet.</span></div>}
       </div>
-      <footer className={cx("gen-tutorial-dialog-footer")}><p>{tutorial?.description ?? "Learn the key steps before you generate."}</p><button type="button" onClick={onClose}>Close</button></footer>
+      <footer className={cx("gen-tutorial-dialog-footer")}><p>{tutorial?.description ?? "Learn the key steps before you generate."}</p><button type="button" onClick={onClose}>{t("create.image.tutorial.close")}</button></footer>
     </div>
   </div>;
 }
