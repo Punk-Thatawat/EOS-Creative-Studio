@@ -199,9 +199,10 @@ async function adminRequest(path: string, init: RequestInit = {}): Promise<unkno
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in as an admin");
   const apiPath = path.startsWith("/api/v1") ? path.slice("/api/v1".length) : path;
+  const isMultipart = typeof FormData !== "undefined" && init.body instanceof FormData;
   const response = await fetch(`${backendApiUrl}${apiPath}`, {
     ...init,
-    headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, ...(init.headers ?? {}) },
+    headers: { Accept: "application/json", ...(isMultipart ? {} : { "Content-Type": "application/json" }), Authorization: `Bearer ${accessToken}`, ...(init.headers ?? {}) },
     cache: "no-store",
   });
   const payload = await response.json().catch(() => null);
@@ -704,5 +705,16 @@ export type AdminAudioVoicePreviewResult = { previewUrl: string; previewStorageK
 export async function generateAdminAudioVoicePreview(input: AdminAudioVoicePreviewInput): Promise<AdminAudioVoicePreviewResult> {
   const payload = await adminRequest("/api/v1/admin/audio-settings/voice-preview", { method: "POST", body: JSON.stringify(input) }) as { data?: AdminAudioVoicePreviewResult };
   if (!payload.data?.previewUrl || !payload.data.previewStorageKey) throw new Error("Unable to generate voice preview");
+  return payload.data;
+}
+
+export async function uploadAdminAudioVoicePreview(input: { feature: AdminAudioFeature; modelId: string; voiceId: string; file: File }): Promise<AdminAudioVoicePreviewResult> {
+  const formData = new FormData();
+  formData.append("feature", input.feature);
+  formData.append("modelId", input.modelId);
+  formData.append("voiceId", input.voiceId);
+  formData.append("file", input.file, input.file.name);
+  const payload = await adminRequest("/api/v1/admin/audio-settings/voice-preview/upload", { method: "POST", body: formData }) as { data?: AdminAudioVoicePreviewResult };
+  if (!payload.data?.previewUrl || !payload.data.previewStorageKey) throw new Error("Unable to upload voice preview");
   return payload.data;
 }

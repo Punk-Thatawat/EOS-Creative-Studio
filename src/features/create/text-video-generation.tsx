@@ -779,7 +779,7 @@ export function TextToVideoWorkspace() {
                  <small>{generationProgress ? t("create.video.common.percentComplete", { percent: generationProgress }) : t("create.video.common.working")}</small>
               </div>
             ) : previewView === "model" && selectedModelOption?.previewUrl ? (
-              <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} alt={`${selectedModelOption.displayName} model preview`} className={styles.generatedVideoPlayer} frameClassName={styles.videoPreviewMediaFrame} />
+               <ModelPreviewMedia url={selectedModelOption.previewUrl} type={selectedModelOption.previewType} autoPlay={selectedModelOption.previewType === "video"} alt={`${selectedModelOption.displayName} model preview`} className={styles.generatedVideoPlayer} frameClassName={styles.videoPreviewMediaFrame} />
             ) : previewVideoUrlForView ? (
                <EosVideoPlayer key={previewVideoUrlForView} src={previewVideoUrlForView} className={styles.generatedVideoPlayer} mediaFrameClassName={styles.videoPreviewMediaFrame} ariaLabel={t("create.video.common.generatedVideo")} />
             ) : (

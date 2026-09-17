@@ -24,20 +24,20 @@ export const stylePresets = ["Realistic", "Cyberpunk", "Cinematic", "3D Render",
 export type StylePreset = string;
 
 export const styleTransferPresets = [
-  { name: "Anime", image: "/generated-assets/style-anime.png" },
-  { name: "Watercolor", image: "/generated-assets/style-cinematic.png" },
-  { name: "Oil Painting", image: "/generated-assets/style-realistic.png" },
-  { name: "Cyberpunk", image: "/generated-assets/style-cyberpunk.png" },
+  { name: "Anime", image: "/generated-assets/style-anime.webp" },
+  { name: "Watercolor", image: "/generated-assets/style-cinematic.webp" },
+  { name: "Oil Painting", image: "/generated-assets/style-realistic.webp" },
+  { name: "Cyberpunk", image: "/generated-assets/style-cyberpunk.webp" },
 ] as const;
 export type StyleTransferPreset = string;
 export type StyleSourceMode = "preset" | "reference";
 
 export const stylePresetImages = [
-  "/generated-assets/style-realistic.png",
-  "/generated-assets/style-cyberpunk.png",
-  "/generated-assets/style-cinematic.png",
-  "/generated-assets/style-3d-render.png",
-  "/generated-assets/style-anime.png",
+  "/generated-assets/style-realistic.webp",
+  "/generated-assets/style-cyberpunk.webp",
+  "/generated-assets/style-cinematic.webp",
+  "/generated-assets/style-3d-render.webp",
+  "/generated-assets/style-anime.webp",
 ] as const;
 
 export const imageRatios = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] as const;

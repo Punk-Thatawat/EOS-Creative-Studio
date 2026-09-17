@@ -124,7 +124,8 @@ export function ImageGenerationPage() {
     setObservedOutput({ key: activeOutputKey, status: activeGenerationStatus });
     // Reveal new outputs before rendering children, including resumed jobs and
     // completion after the user browsed history while a job was running.
-    if (activeGeneratedUrls.length > 0 && (
+    const generationIsActive = activeGenerationStatus === "queued" || activeGenerationStatus === "processing";
+    if ((activeGeneratedUrls.length > 0 || generationIsActive) && (
       observedOutput.key !== activeOutputKey || activeGenerationStatus === "completed"
     )) setPreviewDisplayMode("current");
   }
@@ -155,7 +156,7 @@ export function ImageGenerationPage() {
   const generateCurrentTab = isTextToImageTab ? generateTextToImage : isImageToImageTab ? generateImageToImage : isStyleTransferTab ? generateStyleTransfer : isBackgroundTab ? generateBackground : isUpscaleTab ? generateUpscale : generateExtend;
 
   return <div className={cx("gen-image-page")} data-page="gen-image">
-    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><source media="(max-width: 700px)" srcSet="/generated-assets/gen-image-hero-v3-transparent.png" /><Image src="/generated-assets/gen-image-hero-v3-transparent.png" alt={t("create.image.heroArtwork")} width={2170} height={725} priority className={cx("gen-hero-artwork")} /></picture></section>
+    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><source media="(max-width: 700px)" srcSet="/generated-assets/gen-image-hero-v3-transparent.webp" /><Image src="/generated-assets/gen-image-hero-v3-transparent.webp" alt={t("create.image.heroArtwork")} width={2170} height={725} priority className={cx("gen-hero-artwork")} /></picture></section>
     <ImageGenerationTabs activeTab={state.activeTab} onTabChange={(nextTab) => { setPreviewDisplayMode("current"); state.setActiveTab(nextTab); if (requestedTab) router.replace("/create/image", { scroll: false }); }} />
     <div className={cx("gen-workspace")}>
       <PromptPanel
@@ -340,7 +341,7 @@ export function ImageGenerationPage() {
         onCountChange={state.setCount}
         onGenerate={generateCurrentTab}
         onImageSizeToggle={state.toggleImageSize}
-        onModelChange={(model) => { state.clearRecentSelection(); const nextModel = state.activeModelOptions.find((item) => item.model === model); setPreviewDisplayMode(nextModel?.previewType === "image" && Boolean(nextModel.previewUrl) ? "model" : "current"); state.setOutputFormat(null); if (isImageToImageTab) state.setSelectedImageToImageModel(model); else if (isStyleTransferTab) state.setSelectedStyleTransferModel(model); else if (isBackgroundTab) state.setSelectedBackgroundModel(model); else if (isUpscaleTab) state.setSelectedUpscaleModel(model); else if (isExtendTab) state.setSelectedExtendModel(model); else state.setSelectedModel(model); }}
+        onModelChange={(model) => { state.clearRecentSelection(); const nextModel = state.activeModelOptions.find((item) => item.model === model); setPreviewDisplayMode(nextModel?.previewType !== "video" && Boolean(nextModel?.previewUrl) ? "model" : "current"); state.setOutputFormat(null); if (isImageToImageTab) state.setSelectedImageToImageModel(model); else if (isStyleTransferTab) state.setSelectedStyleTransferModel(model); else if (isBackgroundTab) state.setSelectedBackgroundModel(model); else if (isUpscaleTab) state.setSelectedUpscaleModel(model); else if (isExtendTab) state.setSelectedExtendModel(model); else state.setSelectedModel(model); }}
         onQualityChange={state.setQuality}
         onOutputFormatChange={state.setOutputFormat}
         onResolutionChange={state.setResolution}

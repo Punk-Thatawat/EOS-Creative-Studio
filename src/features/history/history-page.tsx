@@ -11,6 +11,7 @@ import { templateCopy } from "@/features/templates/template-copy";
 import s from "./history-page.module.css";
 
 const PAGE_SIZE = 24;
+const HISTORY_CACHE_TTL_MS = 30_000;
 const types = [{ value: "all", label: "ทั้งหมด", icon: Sparkles }, { value: "image", label: "ภาพ", icon: ImageIcon }, { value: "video", label: "วิดีโอ", icon: Video }, { value: "audio", label: "เสียง", icon: AudioLines }] as const;
 const statuses = { all: "ทุกสถานะ", queued: "รอคิว", processing: "กำลังสร้าง", completed: "สำเร็จ", failed: "ไม่สำเร็จ", cancelled: "ยกเลิกแล้ว" };
 const features: Record<string, string> = { "text-to-image": "สร้างภาพจากข้อความ", "image-to-image": "ปรับแต่งภาพ", "style-transfer": "เปลี่ยนสไตล์", "background-removal": "พื้นหลัง AI", "extend-image": "ขยายภาพ", upscale: "เพิ่มความละเอียด", "image-to-video": "ภาพเป็นวิดีโอ", "text-to-video": "ข้อความเป็นวิดีโอ", "reference-to-video": "วิดีโอจากภาพอ้างอิง", "people-video": "พรีเซนเตอร์ AI", lipsync: "ลิปซิงก์", "motion-transfer": "ถ่ายทอดการเคลื่อนไหว", tts: "เสียงบรรยาย", dialogue: "พอดแคสต์", "voice-clone": "โคลนเสียง", "sound-effects": "เอฟเฟกต์เสียง", "audio-cleanup": "ปรับคุณภาพเสียง" };
@@ -78,19 +79,37 @@ export function HistoryPageClient() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const results = useRef<HTMLElement>(null);
   const fetching = useRef(false);
+  const historyCacheRef = useRef(new Map<string, { data: HistoryResponse; cachedAt: number }>());
+  const cacheRefreshRef = useRef(refresh);
   useEffect(() => {
     const requestedType = new URLSearchParams(window.location.search).get("type");
     if (!requestedType || !historyTypeValues.has(requestedType as HistoryType)) return;
+    // Sync the initial URL filter once after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setQuery(current => current.type === requestedType ? current : { ...current, type: requestedType as HistoryType, offset: 0 });
   }, []);
   useEffect(() => {
     const controller = new AbortController();
+    const cacheKey = JSON.stringify({ ...query, limit: PAGE_SIZE });
+    if (cacheRefreshRef.current !== refresh) {
+      historyCacheRef.current.clear();
+      cacheRefreshRef.current = refresh;
+    }
+    const cached = historyCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < HISTORY_CACHE_TTL_MS) {
+      setData(cached.data);
+      setLoadedQuery(query);
+      setError(null);
+      setLoading(false);
+      return undefined;
+    }
     fetching.current = true;
     const timer = window.setTimeout(() => {
       setLoading(true); setError(null);
       fetchHistory({ ...query, limit: PAGE_SIZE, signal: controller.signal }).then(next => {
         if (controller.signal.aborted) return;
         if (query.offset > 0 && next.items.length === 0) { setQuery(current => ({ ...current, offset: Math.max(0, Math.ceil(next.pagination.total / PAGE_SIZE) - 1) * PAGE_SIZE })); return; }
+        historyCacheRef.current.set(cacheKey, { data: next, cachedAt: Date.now() });
         setData(next); setLoadedQuery(query);
       }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "โหลดประวัติไม่สำเร็จ"); }).finally(() => { if (!controller.signal.aborted) { fetching.current = false; setLoading(false); } });
     }, query.search ? 250 : 0);

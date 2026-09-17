@@ -11,11 +11,12 @@ type ModelPreviewMediaProps = {
   frameClassName?: string;
   frameStyle?: CSSProperties;
   onAspectRatioChange?: (aspectRatio: string) => void;
+  autoPlay?: boolean;
 };
 
 /* Provider preview URLs are already public/signed media, so render them directly. */
 /* eslint-disable @next/next/no-img-element */
-export function ModelPreviewMedia({ url, type = "image", alt, className, frameClassName, frameStyle, onAspectRatioChange }: ModelPreviewMediaProps) {
+export function ModelPreviewMedia({ url, type = "image", alt, className, frameClassName, frameStyle, onAspectRatioChange, autoPlay = false }: ModelPreviewMediaProps) {
   const [mediaAspectRatio, setMediaAspectRatio] = useState("16 / 9");
   const handleAspectRatioChange = (width: number, height: number) => {
     const nextAspectRatio = `${width} / ${height}`;
@@ -29,8 +30,10 @@ export function ModelPreviewMedia({ url, type = "image", alt, className, frameCl
 
   if (type === "video") {
     return <EosVideoPlayer
+      key={url}
       src={url}
       className={className}
+      autoPlay={autoPlay}
       mediaFrameClassName={frameClassName}
       mediaFrameStyle={frameStyle}
       ariaLabel={alt}
