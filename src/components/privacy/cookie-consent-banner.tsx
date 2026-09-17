@@ -9,12 +9,18 @@ const MAX_AGE = 60 * 60 * 24 * 180;
 const CONSENT_EVENT = "eos:cookie-consent";
 const OPEN_SETTINGS_EVENT = "eos:open-cookie-settings";
 
+export const COOKIE_CONSENT_EVENT = CONSENT_EVENT;
+
 type Consent = { necessary: true; analytics: boolean; marketing: boolean };
 
 function readConsentCookieValue(): string | null {
   if (typeof document === "undefined") return null;
   const entry = document.cookie.split("; ").find((cookie) => cookie.startsWith(`${COOKIE_NAME}=`));
   return entry ? entry.slice(COOKIE_NAME.length + 1) : null;
+}
+
+export function hasAnsweredCookieConsent(): boolean {
+  return readConsentCookieValue() !== null;
 }
 
 function parseConsent(rawValue: string | null): Consent | null {
