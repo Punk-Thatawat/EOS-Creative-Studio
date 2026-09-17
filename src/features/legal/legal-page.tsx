@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, FileText, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText } from "lucide-react";
+import { EosLogo } from "@/components/brand/eos-logo";
 import { CookieSettingsButton } from "@/components/privacy/cookie-settings-button";
 import { legalDocuments, type LegalDocument } from "./legal-documents";
 import styles from "./legal-page.module.css";
@@ -7,7 +8,7 @@ import styles from "./legal-page.module.css";
 export function LegalShell({ children, title = "Legal Center" }: { children: React.ReactNode; title?: string }) {
   return <div className={styles.page} data-page="legal">
     <header className={styles.header}>
-      <Link href="/" className={styles.brand}><span className={styles.brandMark}><ShieldCheck size={17} /></span>EOS<span style={{ color: "#f51591" }}>.</span>studio</Link>
+      <EosLogo href="/" />
       <Link href="/" className={styles.backLink}><ArrowLeft size={14} /> กลับหน้าแรก</Link>
     </header>
     <main>{children}</main>
