@@ -11,6 +11,7 @@ import { completePendingEmailLoginWithBackend, loginWithBackend, persistBackendS
 import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 import { listPublicLandingIntroVideo, listPublicVideoShowcase } from "@/lib/api/video-showcase";
+import { COOKIE_CONSENT_EVENT, hasAnsweredCookieConsent } from "@/components/privacy/cookie-consent-banner";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 const tools = [
@@ -318,20 +319,61 @@ export function PreLoginPage() {
   }, [loginOpen]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const today = getLocalDateKey();
-      let hasShownToday = false;
+    const videos = videoRefs.current.filter((video): video is HTMLVideoElement => Boolean(video));
+    if (showIntroVideo) {
+      videos.forEach((video) => video.pause());
+      return undefined;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      videos.forEach((video) => void video.play().catch(() => undefined));
+      return undefined;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        const video = entry.target as HTMLVideoElement;
+        if (entry.isIntersecting) void video.play().catch(() => undefined);
+        else video.pause();
+      });
+    }, { rootMargin: "120px 0px", threshold: 0.1 });
+    videos.forEach((video) => observer.observe(video));
+    return () => {
+      observer.disconnect();
+      videos.forEach((video) => video.pause());
+    };
+  }, [examples, showIntroVideo]);
 
+  useEffect(() => {
+    const today = getLocalDateKey();
+    let hasShownToday = false;
+
+    try {
+      hasShownToday = window.localStorage.getItem(introVideoShownDateKey) === today;
+    } catch {
+      // If storage is unavailable, allow the intro to show for this visit.
+    }
+    if (hasShownToday) return;
+
+    let timer = 0;
+    const play = () => {
       try {
-        hasShownToday = window.localStorage.getItem(introVideoShownDateKey) === today;
-        if (!hasShownToday) window.localStorage.setItem(introVideoShownDateKey, today);
+        window.localStorage.setItem(introVideoShownDateKey, today);
       } catch {
-        // If storage is unavailable, allow the intro to show for this visit.
+        // Nothing to remember if storage is unavailable.
       }
+      setShowIntroVideo(true);
+    };
 
-      if (!hasShownToday) setShowIntroVideo(true);
-    }, 400);
-    return () => window.clearTimeout(timer);
+    if (hasAnsweredCookieConsent()) {
+      timer = window.setTimeout(play, 400);
+      return () => window.clearTimeout(timer);
+    }
+
+    const onConsent = () => { timer = window.setTimeout(play, 400); };
+    window.addEventListener(COOKIE_CONSENT_EVENT, onConsent, { once: true });
+    return () => {
+      window.removeEventListener(COOKIE_CONSENT_EVENT, onConsent);
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
