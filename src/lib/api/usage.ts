@@ -140,8 +140,9 @@ async function backendRequest<T>(path: string, init: RequestInit = {}): Promise<
   return payload?.data as T;
 }
 
-export function fetchUsageDashboard(period: UsagePeriodKey, trend: UsageTrend, activityLimit = 5, activityOffset = 0): Promise<UsageDashboard> {
-  const params = new URLSearchParams({ period, trend, activityLimit: String(activityLimit), activityOffset: String(activityOffset) });
+/** `month` is a calendar month as YYYY-MM. */
+export function fetchUsageDashboard(month: string, trend: UsageTrend, activityLimit = 5, activityOffset = 0): Promise<UsageDashboard> {
+  const params = new URLSearchParams({ month, trend, activityLimit: String(activityLimit), activityOffset: String(activityOffset) });
   return backendRequest<UsageDashboard>(`/users/me/usage?${params.toString()}`);
 }
 

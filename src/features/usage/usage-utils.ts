@@ -9,6 +9,13 @@ export function calculateVat(amountThb: number, vatPercent: number) {
 export const signed = (value: number) => `${value > 0 ? "+" : ""}${number(value)}`;
 export const dateLabel = (value: string) => new Intl.DateTimeFormat("th-TH-u-ca-gregory", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
 export const monthLabel = (value: string) => new Intl.DateTimeFormat("th-TH-u-ca-gregory", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(value));
+/** The last `count` calendar months, newest first, as { value: "YYYY-MM", label }. */
+export function recentMonths(count = 12, now = new Date()) {
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - index, 1));
+    return { value: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`, label: monthLabel(date.toISOString()) };
+  });
+}
 export function creditLabel(item: Activity) {
   if (item.referenceType === "stripe_checkout") return "เติมเครดิตผ่าน Stripe";
   if (item.referenceType === "admin_adjustment") return "ปรับเครดิตโดยผู้ดูแล";

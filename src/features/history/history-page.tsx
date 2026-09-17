@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, AudioLines, Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileClock, Image as ImageIcon, LoaderCircle, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from "lucide-react";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { deleteHistoryItem, fetchHistory, type HistoryItem, type HistoryResponse, type HistoryStatus, type HistoryType } from "@/lib/api/history";
 import { templateCopy } from "@/features/templates/template-copy";
 import s from "./history-page.module.css";
@@ -14,6 +16,7 @@ const statuses = { all: "ทุกสถานะ", queued: "รอคิว", p
 const features: Record<string, string> = { "text-to-image": "สร้างภาพจากข้อความ", "image-to-image": "ปรับแต่งภาพ", "style-transfer": "เปลี่ยนสไตล์", "background-removal": "พื้นหลัง AI", "extend-image": "ขยายภาพ", upscale: "เพิ่มความละเอียด", "image-to-video": "ภาพเป็นวิดีโอ", "text-to-video": "ข้อความเป็นวิดีโอ", "reference-to-video": "วิดีโอจากภาพอ้างอิง", "people-video": "พรีเซนเตอร์ AI", lipsync: "ลิปซิงก์", "motion-transfer": "ถ่ายทอดการเคลื่อนไหว", tts: "เสียงบรรยาย", dialogue: "พอดแคสต์", "voice-clone": "โคลนเสียง", "sound-effects": "เอฟเฟกต์เสียง", "audio-cleanup": "ปรับคุณภาพเสียง" };
 const historyTypeValues = new Set<HistoryType>(["all", "image", "video", "audio"]);
 const featureLabel = (item: HistoryItem) => features[item.feature] ?? item.feature;
+const modelLabel = (item: HistoryItem) => item.modelLabel || item.model;
 const title = (item: HistoryItem) => templateCopy(item.title, "", item.feature, item.mediaKind).title || featureLabel(item);
 const dateLabel = (value: string) => Number.isNaN(Date.parse(value)) ? "ไม่ระบุวันที่" : new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 function creatorHref(item: HistoryItem) {
@@ -47,7 +50,7 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
     <div className={s.dialogLayout}><div className={s.dialogMedia}><Media key={item.outputUrl ?? item.id} item={item} large /></div><div className={s.dialogInfo}>
       <button className={s.close} onClick={close} aria-label="ปิดตัวอย่าง" autoFocus><X size={21} /></button>
       <span className={s.eyebrow}>YOUR CREATIVE ARCHIVE</span><Status item={item} /><h2 id="history-work-title">{title(item)}</h2><p>{featureLabel(item)}</p>
-      <dl><div><dt>สร้างเมื่อ</dt><dd>{dateLabel(item.createdAt)}</dd></div><div><dt>โมเดล</dt><dd>{item.model || "ไม่ระบุ"}</dd></div><div><dt>จำนวนผลงาน</dt><dd>{item.outputCount} ไฟล์{item.outputCount > 1 ? " · แสดงตัวอย่างไฟล์แรก" : ""}</dd></div>{item.creditCost != null && <div><dt>เครดิตที่ใช้</dt><dd>{item.creditCost.toLocaleString()} เครดิต</dd></div>}</dl>
+      <dl><div><dt>สร้างเมื่อ</dt><dd>{dateLabel(item.createdAt)}</dd></div><div><dt>โมเดล</dt><dd>{modelLabel(item) || "ไม่ระบุ"}</dd></div><div><dt>จำนวนผลงาน</dt><dd>{item.outputCount} ไฟล์{item.outputCount > 1 ? " · แสดงตัวอย่างไฟล์แรก" : ""}</dd></div>{item.creditCost != null && <div><dt>เครดิตที่ใช้</dt><dd>{item.creditCost.toLocaleString()} เครดิต</dd></div>}</dl>
       {item.errorMessage && <details className={s.errorDetails}><summary>รายละเอียดข้อผิดพลาด</summary><p>{item.errorMessage}</p></details>}
       <div className={s.dialogActions}>{item.outputUrl && <a href={item.outputUrl} target="_blank" rel="noreferrer" className={s.primary}>เปิดไฟล์ต้นฉบับ <ExternalLink size={16} /></a>}<Link href={creatorHref(item)} className={s.secondary}>ไปหน้าสร้างงาน <ArrowRight size={16} /></Link><small>เปิดดูผลงานได้โดยไม่ใช้เครดิต</small></div>
     </div></div>
@@ -57,7 +60,7 @@ function WorkCard({ item, open, remove, deleting }: { item: HistoryItem; open: (
   const providerAudio = item.source === "audio" && item.id.startsWith("wavespeed:");
   const canDelete = !providerAudio && item.status !== "queued" && item.status !== "processing";
   const deleteHint = providerAudio ? "ประวัติเสียงจากผู้ให้บริการลบไม่ได้" : item.status === "queued" || item.status === "processing" ? "ลบไม่ได้ขณะกำลังสร้าง" : "ลบรายการนี้";
-  return <article className={s.card}><div className={s.cardMedia}><Media key={item.outputUrl ?? item.id} item={item} /><div className={s.cardBadge}><Status item={item} /></div>{item.outputCount > 1 && <span className={s.outputCount}>{item.outputCount} ไฟล์</span>}</div><div className={s.cardBody}><div className={s.feature}><span>{featureLabel(item)}</span>{item.creditCost != null && <span>{item.creditCost.toLocaleString()} เครดิต</span>}</div><button className={s.cardTitle} onClick={open}>{title(item)}</button><p className={s.model} title={item.model}>{item.model || "—"}</p><div className={s.cardFooter}><time dateTime={item.createdAt}>{dateLabel(item.createdAt)}</time><div className={s.cardActions}><button onClick={open} aria-label={`ดูรายละเอียด ${title(item)}`}>ดูงาน <ArrowRight size={15} /></button><button type="button" className={s.deleteButton} onClick={() => remove(item)} disabled={!canDelete || deleting} aria-label={canDelete ? `ลบ ${title(item)}` : `ลบไม่ได้ ${title(item)}`} title={deleteHint}>{deleting ? <LoaderCircle size={15} className={s.spin} /> : <Trash2 size={15} />}</button></div></div></div></article>;
+  return <article className={s.card}><div className={s.cardMedia}><Media key={item.outputUrl ?? item.id} item={item} /><div className={s.cardBadge}><Status item={item} /></div>{item.outputCount > 1 && <span className={s.outputCount}>{item.outputCount} ไฟล์</span>}</div><div className={s.cardBody}><div className={s.feature}><span>{featureLabel(item)}</span>{item.creditCost != null && <span>{item.creditCost.toLocaleString()} เครดิต</span>}</div><button className={s.cardTitle} onClick={open}>{title(item)}</button><p className={s.model} title={item.model}>{modelLabel(item) || "—"}</p><div className={s.cardFooter}><time dateTime={item.createdAt}>{dateLabel(item.createdAt)}</time><div className={s.cardActions}><button onClick={open} aria-label={`ดูรายละเอียด ${title(item)}`}>ดูงาน <ArrowRight size={15} /></button><button type="button" className={s.deleteButton} onClick={() => remove(item)} disabled={!canDelete || deleting} aria-label={canDelete ? `ลบ ${title(item)}` : `ลบไม่ได้ ${title(item)}`} title={deleteHint}>{deleting ? <LoaderCircle size={15} className={s.spin} /> : <Trash2 size={15} />}</button></div></div></div></article>;
 }
 type Query = { type: HistoryType; status: HistoryStatus; search: string; offset: number };
 export function HistoryPageClient() {
@@ -71,6 +74,8 @@ export function HistoryPageClient() {
   const [refresh, setRefresh] = useState(0);
   const [selected, setSelected] = useState<HistoryItem | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<HistoryItem | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const results = useRef<HTMLElement>(null);
   const fetching = useRef(false);
   useEffect(() => {
@@ -105,10 +110,14 @@ export function HistoryPageClient() {
   const page = Math.floor(query.offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil((data?.pagination.total ?? 0) / PAGE_SIZE));
   const goPage = (offset: number) => { change({ offset }); results.current?.focus(); results.current?.scrollIntoView({ block: "start" }); };
-  const remove = async (item: HistoryItem) => {
+  const remove = (item: HistoryItem) => {
     if (item.source === "audio" && item.id.startsWith("wavespeed:")) return;
     if (item.status === "queued" || item.status === "processing") return;
-    if (!window.confirm(`ต้องการลบ “${title(item)}” ออกจากประวัติหรือไม่?`)) return;
+    setPendingDelete(item);
+    setConfirmOpen(true);
+  };
+  const confirmDelete = async (item: HistoryItem) => {
+    setConfirmOpen(false);
     const key = `${item.source}:${item.id}`;
     setDeletingKey(key); setActionError(null);
     try {
@@ -134,5 +143,17 @@ export function HistoryPageClient() {
         {loading ? <div className={s.list} aria-label="กำลังโหลดประวัติ">{[0, 1, 2].map(i => <div className={s.skeleton} key={i}><div /><span /><span /></div>)}</div> : error ? <div className={s.empty} role="alert"><AlertCircle size={34} /><h3>โหลดประวัติไม่สำเร็จ</h3><p>{error}</p><button className={s.secondary} onClick={() => setRefresh(v => v + 1)}><RefreshCw size={16} />ลองอีกครั้ง</button></div> : data?.items.length ? <><div className={s.list}>{data.items.map(item => <WorkCard key={`${item.source}-${item.id}`} item={item} open={() => setSelected(item)} remove={remove} deleting={deletingKey === `${item.source}:${item.id}`} />)}</div><nav className={s.pagination} aria-label="แบ่งหน้าประวัติ"><span>แสดง {query.offset + 1}–{query.offset + data.items.length} จาก {data.pagination.total.toLocaleString()} รายการ</span><div><button disabled={query.offset === 0} onClick={() => goPage(Math.max(0, query.offset - PAGE_SIZE))} aria-label="หน้าก่อนหน้า"><ChevronLeft size={17} /></button><span>หน้า {page} / {pageCount}</span><button disabled={!data.pagination.hasMore} onClick={() => goPage(query.offset + PAGE_SIZE)} aria-label="หน้าถัดไป"><ChevronRight size={17} /></button></div></nav></> : <div className={s.empty}><FileClock size={36} /><h3>{hasFilters ? "ยังไม่พบงานที่ตรงกับตัวกรอง" : "ไอเดียแรกของคุณ เริ่มได้ที่นี่"}</h3><p>{hasFilters ? "ลองเปลี่ยนคำค้นหา หรือแสดงผลงานทั้งหมด" : "เมื่อสร้างงานแล้ว ผลงานและสถานะจะปรากฏในหน้านี้"}</p>{hasFilters ? <button className={s.secondary} onClick={reset}>แสดงผลงานทั้งหมด</button> : <Link href="/create/image" className={s.primary}>สร้างภาพแรก <ArrowRight size={16} /></Link>}</div>}
       </div>
     </section>{selected && <WorkDialog item={data?.items.find(item => item.id === selected.id && item.source === selected.source) ?? selected} close={() => setSelected(null)} />}
+    <Dialog open={confirmOpen} onOpenChange={next => { if (!next) setConfirmOpen(false); }} onOpenChangeComplete={next => { if (!next) setPendingDelete(null); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>ลบรายการนี้?</DialogTitle>
+          <DialogDescription>ต้องการลบ “{pendingDelete ? title(pendingDelete) : ""}” ออกจากประวัติหรือไม่ ไฟล์ผลงานจะถูกลบถาวรและกู้คืนไม่ได้</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmOpen(false)}>ยกเลิก</Button>
+          <Button type="button" variant="destructive" size="sm" onClick={() => { if (pendingDelete) void confirmDelete(pendingDelete); }}><Trash2 size={15} /> ลบรายการ</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>;
 }

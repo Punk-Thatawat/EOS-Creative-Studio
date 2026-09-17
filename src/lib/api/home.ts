@@ -10,7 +10,7 @@ export type HomeCredits = {
   available: number;
   reserved: number;
   usedPercent: number;
-  plan: string;
+  plan: string | null;
   renewal: string | null;
   allowance: number;
   walletValueThb: number;

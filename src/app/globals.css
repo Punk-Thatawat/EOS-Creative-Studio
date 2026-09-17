@@ -443,8 +443,10 @@ body :where([data-studio-main], [data-page], .audio-studio-page, .landing-page, 
 .eos-mark { font-size: 42px; font-weight: 300; letter-spacing: 6px; line-height: .82; position: relative; }
 .eos-mark::after { content: ""; position: absolute; width: 36px; height: 36px; border: 4px solid #ff560c; border-radius: 50%; left: 39px; top: -6px; z-index: -1; }
 .eos-caption { display: block; width: 100%; color: #0c0c0e; font-size: 8px; letter-spacing: 1.2px; line-height: 1; font-weight: 700; text-align: center; margin-top: 1px; white-space: nowrap; }
-.login-button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 250px; height: 100px; padding: 0; color: white; text-decoration: none; background: url('/generated-assets/login-signup-brush-only.webp') center / 100% 100% no-repeat; font-size: 13px; font-weight: 800; }
-.login-button svg { transition: transform .25s ease; }
+.login-button { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 250px; height: 100px; padding: 0 8% 0 11%; color: white; text-decoration: none; background: url('/generated-assets/login-signup-brush-only.webp') center / 100% 100% no-repeat; font-size: 13px; font-weight: 800; }
+/* flex:none keeps the arrow from being the flex item that absorbs any squeeze;
+   an SVG's automatic minimum size is zero, so it silently collapses instead. */
+.login-button svg { flex: none; transition: transform .25s ease; }
 .login-button:hover svg { transform: translateX(7px); }
 .landing-menu { position: absolute; z-index: 5; top: 75px; left: 3.5vw; display: grid; gap: 14px; padding: 20px 26px; background: #050505; color: white; box-shadow: 10px 10px 0 #ff1493; }
 .landing-menu a { color: white; text-decoration: none; font-weight: 800; font-size: 14px; }
@@ -590,7 +592,9 @@ body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0
 @media (max-width: 700px) { body:has([data-page="gen-image"]) .page-gutter { padding-inline: 10px; } }
 @media (max-width: 767px) { body:has([data-mobile-bottom-navigation]) .page-gutter { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); } }
 .login-button { flex:0 0 250px; min-width:250px; white-space:nowrap; }
-@media (max-width: 800px) { .login-button { flex:0 0 190px; min-width:190px; width:190px; height:60px; } }
+/* !important clears the page-wide 16px readability floor, which inflated this
+   label past the brush stroke on phones. */
+@media (max-width: 800px) { .login-button { flex:0 0 190px; min-width:190px; width:190px; height:60px; font-size:clamp(11px, 3.2vw, 12px) !important; } }
 @media (max-width: 800px) { .tool-strip { grid-template-columns:repeat(2,1fr); grid-template-rows:repeat(3,1fr); }.tool-item:nth-child(3) { border-right:1px solid #ddd; }.tool-item:nth-child(2n) { border-right:0; } }
 @media (max-width: 800px) { .tool-strip { padding:12px 4px; gap:8px 0; }.tool-item { min-height:72px; padding:48px 6px 0; gap:4px; }.tool-image { width:44px; height:44px; }.tool-item strong { font-size:10px; }.tool-item small { max-width:105px; font-size:8px; line-height:1.25; } }
 @media (max-width: 800px) { .tool-strip { margin-top:-12px; position:relative; z-index:2; } }
@@ -670,19 +674,33 @@ body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0
 @media (max-width: 600px) { .auth-callback-page { padding:18px 14px; }.auth-callback-card { min-height:430px; padding:42px 20px 48px; border-radius:18px; }.auth-callback-loader { width:60px; height:60px; margin-bottom:24px; border-width:7px; }.auth-callback-title-row { gap:11px; }.auth-callback-title-row h1 { font-size:clamp(28px,9vw,42px); }.auth-callback-title-row svg { width:28px; height:28px; }.auth-callback-title-row h1 span::after { bottom:-8px; height:4px; }.auth-callback-subtitle { margin:20px 0 31px; font-size:13px; }.auth-callback-step { gap:10px; font-size:11px; }.auth-callback-step:not(:last-child)::after { top:11px; left:calc(50% + 20px); width:calc(100% - 40px); }.auth-callback-step-dot { width:24px; height:24px; border-width:3px; font-size:10px; }.auth-callback-step.is-active .auth-callback-step-dot { box-shadow:inset 0 0 0 5px #fff,0 0 0 1px #f51591; }.auth-callback-progress { margin-top:30px; } }
 
 /* Login artwork popup */
-.auth-modal-shell { position:relative; width:min(100%,1440px,calc((100vh - 40px) * 1672 / 941)); aspect-ratio:1672 / 941; overflow:hidden; border:0; border-radius:12px; background:#fff url('/generated-assets/login-background.webp') center / 100% 100% no-repeat; box-shadow:0 24px 90px rgba(0,0,0,.45); }
+.auth-modal-shell { position:relative; width:min(100%,1440px,calc((100vh - 40px) * 1672 / 941)); aspect-ratio:1672 / 941; min-height:min(calc(100dvh - 40px),780px); overflow:hidden; border:0; border-radius:12px; background:#fff url('/generated-assets/login-background.webp') center / cover no-repeat; box-shadow:0 24px 90px rgba(0,0,0,.45); }
 .auth-modal-panel { position:absolute; top:9%; right:5.5%; width:min(31%,430px); max-height:90%; overflow:auto; padding:38px 34px 28px; color:#111; background:rgba(255,255,255,.97); border-radius:20px; box-shadow:0 18px 50px rgba(0,0,0,.16); }
 .auth-modal-panel::-webkit-scrollbar { width:5px; }.auth-modal-panel::-webkit-scrollbar-thumb { background:#d7d7dc; border-radius:99px; }
-.auth-modal-panel, .auth-modal-shell { scrollbar-width:none; -ms-overflow-style:none; }.auth-modal-panel::-webkit-scrollbar, .auth-modal-shell::-webkit-scrollbar { display:none; width:0; height:0; }
+.auth-modal-panel { scrollbar-width:thin; scrollbar-color:#d7d7dc transparent; }
+.auth-modal-shell { scrollbar-width:none; -ms-overflow-style:none; }.auth-modal-shell::-webkit-scrollbar { display:none; width:0; height:0; }
 .auth-modal-close { top:14px; right:14px; color:#111; background:#fff; box-shadow:0 3px 12px rgba(0,0,0,.12); }
 .auth-modal-heading { display:none; }
-.auth-modal-heading-art { position:relative; width:100%; height:62px; margin:-16px 0 4px; overflow:hidden; }
-.auth-modal-heading-art img { object-fit:cover; object-position:center; }
+/* The artwork occupies only y 293-554 of the 887px-tall source, and the window
+   into it has to scale with the card's width, not a fixed pixel height, or the
+   bolt's tip gets cropped as the panel grows. */
+.auth-modal-heading-art { position:relative; width:100%; aspect-ratio:1774 / 300; margin:-6px 0 4px; overflow:hidden; }
+.auth-modal-heading-art img { object-fit:cover; object-position:center 46%; }
 .auth-submit-wrap { position:relative; height:54px; margin-top:2px; overflow:hidden; }
 .auth-submit-wrap img { object-fit:cover; object-position:center; }
 .auth-submit { position:absolute; inset:0; z-index:1; width:100%; height:100%; background:transparent; border-radius:0; }
 .auth-socials { grid-template-columns:1fr; }.auth-socials button { display:flex; align-items:center; justify-content:center; gap:9px; }.auth-socials button img { width:20px; height:20px; object-fit:contain; }
 .auth-mobile-logo, .auth-heading-mobile, .auth-brush-mobile { display:none; }
+
+@media (min-width: 801px) and (max-height: 760px) {
+  .auth-modal-panel { padding:26px 30px 20px; }
+  .auth-modal-panel input[type="email"], .auth-modal-panel input[type="password"] 
+                    { height:40px; margin-bottom:12px; }
+  .auth-modal-heading-art { height:50px; margin:-12px 0 2px; }
+  .auth-modal-subtitle { margin:6px 0 16px; }
+  .auth-remember { margin-bottom:12px !important; }
+  .auth-submit-wrap { height:48px; }
+}
 @media (max-width: 800px) {
   .auth-modal { padding:12px; }
   .auth-modal-shell { width:100%; max-height:calc(100vh - 24px); aspect-ratio:941 / 1672; min-height:calc(100vh - 24px); background-image:url('/generated-assets/login-background-mobile.webp'); background-position:center; background-size:100% 100%; }
@@ -704,6 +722,50 @@ body:has(.audio-studio-page) .page-gutter > main { width: 100%; }
 @media (max-width: 800px) {
   .auth-modal-panel { top:auto; bottom:3%; max-height:calc(100% - 24px); padding-bottom:30px; }
   .auth-signup { margin-top:14px; padding-bottom:2px; }
+}
+
+/* Login card on phones.
+   Every gap derives from one viewport-driven unit instead of a per-device
+   breakpoint, so the card grows and shrinks continuously and keeps the whole
+   form visible from a 320px-wide phone up to a tablet. The upper bound matters
+   as much as the lower one: without it the card kept growing on tall phones
+   until it covered the artwork behind it. The card is anchored to the top
+   because the logo sits at a fixed offset, so a purely proportional offset
+   slides under it once the screen gets short. Selectors are scoped to the
+   panel to outrank the plain single-class rules later in this file. */
+@media (max-width: 800px) {
+  .auth-modal-panel {
+    --auth-space: clamp(6px, calc(6.5vh - 28px), 20px);
+    top: max(9%, 64px);
+    bottom: auto;
+    max-height: calc(100% - max(9%, 64px) - 6px);
+    padding: clamp(13px, calc(7vh - 30px), 32px) 22px;
+    overflow-y: auto;
+  }
+  /* height:auto hands sizing back to the aspect-ratio above. */
+  .auth-modal-heading-art { height: auto; margin: -2px 0 2px; }
+  /* Sized to hold this sentence on one line down to a 320px screen. The
+     !important clears the page-wide 16px readability floor, which is what
+     pushed the line into wrapping in the first place. */
+  .auth-modal-subtitle { margin: 4px 0 var(--auth-space); font-size: clamp(11.5px, 3.6vw, 14px) !important; text-align: center; text-wrap: balance; }
+  .auth-modal-panel .auth-field { margin-bottom: var(--auth-space); }
+  .auth-modal-panel .auth-remember { margin-bottom: var(--auth-space) !important; }
+  .auth-modal-panel .auth-forgot-link { margin-bottom: calc(var(--auth-space) * 0.75); }
+  .auth-modal-panel .auth-divider { margin: var(--auth-space) 0 calc(var(--auth-space) * 0.7); }
+  .auth-modal-panel .auth-signup { margin-top: var(--auth-space); padding-bottom: 0; }
+  /* The inputs are the largest fixed block, so they shrink a little too rather
+     than pushing the smallest phones into a scroll. */
+  .auth-modal-panel .auth-field .auth-input-wrap input[type="email"],
+  .auth-modal-panel .auth-field .auth-input-wrap input[type="password"],
+  .auth-modal-panel .auth-field .auth-input-wrap input[type="text"] { height: clamp(42px, 5.4vh, 48px); }
+  .auth-modal-panel .auth-submit-wrap { height: clamp(46px, 6.4vh, 54px); }
+}
+/* Landscape phones cannot fit a portrait login card, so drop the decorative
+   logo and start the card at the top: the form then owns the whole sheet and
+   scrolls against a visible scrollbar instead of hiding behind the artwork. */
+@media (max-width: 800px) and (max-height: 520px) {
+  .auth-mobile-logo { display: none; }
+  .auth-modal-panel { top: 12px; max-height: calc(100% - 24px); }
 }
 
 /* Email/password auth states inside the landing-page popup. */
