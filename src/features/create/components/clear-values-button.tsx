@@ -9,7 +9,7 @@ export function ClearValuesButton({ onClick, disabled = false }: ClearValuesButt
   return (
     <button
       type="button"
-      className="gen-clear-values-button inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+      className="gen-clear-values-button inline-flex h-8 min-h-8 touch:min-h-10 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
       onClick={onClick}
       disabled={disabled}
       title="เคลียร์ค่าทั้งหมดในหน้านี้"

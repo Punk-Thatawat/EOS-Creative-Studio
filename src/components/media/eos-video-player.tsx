@@ -230,9 +230,9 @@ export function EosVideoPlayer({
           </div>
           <div className="intro-video-center-controls">
             <div className="intro-video-transport">
-              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label={t("create.video.common.rewind10")} onClick={() => seek(-10)}><RotateCcw size={17} /><span>10</span></button>
+              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label={t("create.video.common.rewind10")} onClick={() => seek(-10)}><RotateCcw size={17} /><span aria-hidden="true">10</span></button>
               <button type="button" className="intro-video-play-button" aria-label={paused ? t("create.video.common.playVideo") : t("create.video.common.pauseVideo")} onClick={togglePlay}>{paused ? <Play size={21} fill="white" /> : <Pause size={21} />}</button>
-              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label={t("create.video.common.forward10")} onClick={() => seek(10)}><RotateCw size={17} /><span>10</span></button>
+              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label={t("create.video.common.forward10")} onClick={() => seek(10)}><RotateCw size={17} /><span aria-hidden="true">10</span></button>
             </div>
             <span className="intro-video-time">{formatVideoDuration(currentTime)} / {formatVideoDuration(duration)}</span>
           </div>

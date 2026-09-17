@@ -41,10 +41,10 @@
 .assets-page .assets-list .asset-card-media { width:150px; height:100px; border-radius:11px 0 0 11px; }
 .assets-page .assets-search-row { display:none; }
 .assets-page :is(button,summary,input):focus-visible { outline:2px solid #ff601f; outline-offset:3px; }
-@media(max-width:1100px) {
+@media(max-width:1279.98px) {
  .assets-page .assets-grid { gap:14px; }
 }
-@media(max-width:767px) {
+@media(max-width:767.98px) {
  .assets-page .assets-search-row { display:flex; margin:0 0 14px; }
  .assets-search-row > span { display:none; }
  .assets-page .assets-inline-search { width:100%; }
@@ -52,8 +52,52 @@
  .assets-media-tabs button { font-size:12px; padding:8px 11px; }
  .assets-page .assets-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .assets-page .asset-card-footer { padding:10px; flex-wrap:wrap; }
- .assets-page .asset-card-footer strong { font-size:12px; }
+ .assets-page .asset-card-footer strong { font-size:14px; }
 }
+/* Below the Tailwind scale on purpose: two cards side by side stop being
+   legible under ~420px, so the smallest phones get one per row. */
 @media(max-width:420px) {
  .assets-page .assets-grid { grid-template-columns:1fr; }
+}
+
+/* ==========================================================================
+   COMPACT SCREENS (<= lg, 1023.98px) -- readability + thumb-friendly targets
+   --------------------------------------------------------------------------
+   The rail and toolbar are drawn at desktop density (24-35px rows). Every control here is reached with a thumb, so each one gets the
+   40px minimum from WCAG 2.2 (2.5.8), and the labels globals.css does not
+   floor -- strong / b / span -- are lifted to 14px.
+
+   Sizes for the compact grid live in the media queries above; this block only
+   holds what that block was still leaving too small.
+   ========================================================================== */
+@media (max-width: 1023.98px) {
+  .assets-page .assets-panel-heading strong,
+  .assets-page .assets-sidebar-empty,
+  .assets-page .assets-pagination span { font-size: 14px; }
+
+  .assets-page .assets-folder-list > button b,
+  .assets-page .assets-tag-grid button b { font-size: 13px; }
+
+}
+
+/* Hit areas: a finger, not a mouse (see globals.css). */
+@media (max-width: 1023.98px), (pointer: coarse) {
+  .assets-page .assets-select-trigger,
+  .assets-page .assets-view-toggle,
+  .assets-page .assets-view-toggle button,
+  .assets-page .assets-folder-list > button,
+  .assets-page .assets-tag-grid button,
+  .assets-page .assets-add-group,
+  .assets-page .assets-media-tabs button,
+  .assets-page .asset-card-actions > button { min-height: 40px; height: auto; }
+
+  .assets-page .assets-view-toggle button,
+  .assets-page .assets-panel-heading button,
+  .assets-page .assets-pagination button,
+  .assets-page .asset-card-actions > button {
+    min-width: 40px;
+    width: auto;
+    min-height: 40px;
+    height: auto;
+  }
 }
