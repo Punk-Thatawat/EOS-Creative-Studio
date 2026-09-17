@@ -10,7 +10,7 @@ import { imageRatioFromSize, imageRatios, imageResolutionSizes, type BackgroundM
 import { cx } from "../styles";
 import { DynamicModelParameters } from "./dynamic-model-parameters";
 import { Segmented } from "./image-generation-ui";
-import { useLocale } from "@/lib/i18n/locale-provider";
+import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
 
 type SettingsPanelProps = {
@@ -85,12 +85,37 @@ function findSchemaField(properties: Record<string, SchemaProperty>, names: stri
   return name ? { name, property: properties[name] } : undefined;
 }
 
+const qualityValueKeys: Record<string, TranslationKey> = {
+  draft: "create.settings.qualityValue.draft",
+  low: "create.settings.qualityValue.low",
+  standard: "create.settings.qualityValue.standard",
+  medium: "create.settings.qualityValue.medium",
+  high: "create.settings.qualityValue.high",
+  ultra: "create.settings.qualityValue.ultra",
+};
+
+const schemaFieldCopy: Record<string, { label: TranslationKey; info: TranslationKey }> = {
+  resolution: { label: "create.settings.resolution", info: "create.settings.info.resolution" },
+  outputresolution: { label: "create.settings.resolution", info: "create.settings.info.resolution" },
+  size: { label: "create.settings.size", info: "create.settings.info.size" },
+  imagesize: { label: "create.settings.size", info: "create.settings.info.size" },
+  seed: { label: "create.settings.seed", info: "create.settings.info.seed" },
+};
+
+function schemaFieldName(name: string): string {
+  return name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/(^| )(.)/g, (match, lead, character) => lead + character.toUpperCase());
+}
+
 function SchemaFieldControl({ field, value, options, onChange }: { field: SchemaField; value: unknown; options?: string[]; onChange: (value: unknown) => void }) {
   const { t } = useLocale();
   const enumValues = options ?? (field.property.enum ?? []).map((item) => String(item));
   const isAspectRatioField = /^(aspect[_-]?ratio|aspectRatio|ratio)$/i.test(field.name);
   const selectedValue = value ?? field.property.default ?? (isAspectRatioField ? enumValues[0] ?? "" : "");
-  const description = typeof field.property.description === "string" ? field.property.description : undefined;
+  const copy = schemaFieldCopy[field.name.toLowerCase().replace(/[_-]/g, "")];
+  const providerDescription = typeof field.property.description === "string" ? field.property.description : undefined;
+  const label = copy ? t(copy.label) : schemaFieldName(field.name);
+  const info = copy ? t(copy.info) : providerDescription || t("create.settings.info.modelParameter");
+  const description = copy ? undefined : providerDescription;
   const type = field.property.type ?? "string";
   if (enumValues.length > 0) {
     const placeholder = typeof field.property["x-placeholder"] === "string" ? String(field.property["x-placeholder"]) : t("create.settings.auto");
@@ -99,9 +124,9 @@ function SchemaFieldControl({ field, value, options, onChange }: { field: Schema
     if (isAspectRatioField && ratioEnumValues.length > 0) {
       return <div className={cx("gen-setting-block")}><h3>{t("create.settings.aspectRatio")} <InfoTooltip content={t("create.settings.info.aspectRatio")} size={12} /></h3><AspectRatioPicker options={ratioEnumValues} value={ratioEnumValues.includes(String(selectedValue) as ImageRatio) ? String(selectedValue) : ratioEnumValues[0]} onChange={onChange} />{description && <small className={cx("gen-model-options-note")}>{description}</small>}</div>;
     }
-    return <div className={cx("gen-setting-block")}><h3>{field.name} <InfoTooltip content={description || t("create.settings.info.modelParameter")} size={12} /></h3><div className={cx("gen-dynamic-field")}><Dropdown value={String(selectedValue)} options={enumValues.map((item) => ({ value: item, label: item }))} onChange={(nextValue) => onChange(nextValue || undefined)} placeholder={placeholder} ariaLabel={field.name} triggerClassName={cx("gen-select")} menuClassName={cx("gen-select-menu")} />{description && <small>{description}</small>}</div></div>;
+    return <div className={cx("gen-setting-block")}><h3>{label} <InfoTooltip content={info} size={12} /></h3><div className={cx("gen-dynamic-field")}><Dropdown value={String(selectedValue)} options={enumValues.map((item) => ({ value: item, label: item }))} onChange={(nextValue) => onChange(nextValue || undefined)} placeholder={placeholder} ariaLabel={field.name} triggerClassName={cx("gen-select")} menuClassName={cx("gen-select-menu")} />{description && <small>{description}</small>}</div></div>;
   }
-  return <div className={cx("gen-setting-block")}><h3>{field.name} <InfoTooltip content={description || t("create.settings.info.modelParameter")} size={12} /></h3><div className={cx("gen-dynamic-field")}><input type={type === "number" || type === "integer" ? "number" : "text"} value={selectedValue === undefined ? "" : String(selectedValue)} min={typeof field.property.minimum === "number" ? field.property.minimum : undefined} max={typeof field.property.maximum === "number" ? field.property.maximum : undefined} step={type === "integer" ? 1 : "any"} onChange={(event) => { const raw = event.target.value; if (type === "integer") onChange(raw === "" ? undefined : Number.parseInt(raw, 10)); else if (type === "number") onChange(raw === "" ? undefined : Number(raw)); else onChange(raw || undefined); }} />{description && <small>{description}</small>}</div></div>;
+  return <div className={cx("gen-setting-block")}><h3>{label} <InfoTooltip content={info} size={12} /></h3><div className={cx("gen-dynamic-field")}><input type={type === "number" || type === "integer" ? "number" : "text"} value={selectedValue === undefined ? "" : String(selectedValue)} min={typeof field.property.minimum === "number" ? field.property.minimum : undefined} max={typeof field.property.maximum === "number" ? field.property.maximum : undefined} step={type === "integer" ? 1 : "any"} onChange={(event) => { const raw = event.target.value; if (type === "integer") onChange(raw === "" ? undefined : Number.parseInt(raw, 10)); else if (type === "number") onChange(raw === "" ? undefined : Number(raw)); else onChange(raw || undefined); }} />{description && <small>{description}</small>}</div></div>;
 }
 
 export function SettingsPanel({ activeTab, canGenerate, count, countOptions, backgroundMode = "remove", generationError, generationValidationMessage, generationStatus, isGenerating, modelOptions, isLoadingModels, modelCapabilities, modelParams, ratioOptions, qualityOptions, qualityEnabled, imageCreditEstimate, imageCreditEstimateLoading, imageCreditEstimateError, outputFormatOptions, outputFormat, optionsFollowModel, selectedModel, resolution, resolutionOptions, quality, ratio, onCountChange, onGenerate, onModelChange, onQualityChange, onOutputFormatChange, onRatioChange, onResolutionChange, onModelParamChange }: SettingsPanelProps) {
@@ -140,6 +165,7 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
     if (matchingSize && modelParams[textSizeFieldName] !== matchingSize) onModelParamChange(textSizeFieldName, matchingSize);
   }, [aspectRatioParameter, modelParams, modelSupportedSizesKey, onModelParamChange, textSizeFieldName, textSizeSchemaValuesKey]);
   const textCountSupported = Boolean(isTextToImage && findSchemaField(schemaProperties, ["count", "num_images", "numImages", "batch_size", "batchSize"]));
+  const qualityLabel = (value: ImageQuality) => { const key = qualityValueKeys[value.toLowerCase()]; return key ? t(key) : undefined; };
   const qualityIsPromptBased = Boolean(qualityEnabled && !modelCapabilities?.qualityParameter && !findSchemaField(schemaProperties, ["quality", "quality_level", "qualityLevel"]));
   const showCountControl = !isUpscale && countOptions.length > 0 && (!isTextToImage || textCountSupported);
   const modelDropdownOptions = modelOptions.map((item) => { const disabled = isImageInputTab && !supportsImageInput(item); return { value: item.model, label: item.displayName, preserveLabel: true, description: disabled ? t("create.settings.imageInputNotSupported") : undefined, disabled }; });
@@ -177,8 +203,8 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
     {isTextToImage && textResolutionField && <SchemaFieldControl field={textResolutionField} value={modelParams[textResolutionField.name]} onChange={(value) => onModelParamChange(textResolutionField.name, value)} />}
     {showTextSizeField && textSizeField && <SchemaFieldControl field={textSizeField} value={modelParams[textSizeField.name]} options={textSizeOptions.length > 0 ? textSizeOptions : undefined} onChange={handleSizeChange} />}
     {isTextToImage && textSeedField && <SchemaFieldControl field={textSeedField} value={modelParams[textSeedField.name]} onChange={(value) => onModelParamChange(textSeedField.name, value)} />}
-    {qualityEnabled && <div className={cx("gen-setting-block")}><h3>{isTextToImage && modelCapabilities?.qualityParameter ? modelCapabilities.qualityParameter : t("create.settings.quality")} <InfoTooltip content={t("create.settings.info.quality")} size={12} /></h3><Segmented items={qualityOptions} value={quality} onChange={onQualityChange} />{qualityIsPromptBased && <p className={cx("gen-model-options-note")}>{t("create.settings.qualityPromptNote")}</p>}</div>}
-    {outputFormatOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{isTextToImage && modelCapabilities?.outputFormatParameter ? modelCapabilities.outputFormatParameter : t("create.settings.outputFormat")} <InfoTooltip content={t("create.settings.info.outputFormat")} size={12} /></h3><Segmented items={outputFormatOptions} value={outputFormat && outputFormatOptions.includes(outputFormat) ? outputFormat : outputFormatOptions[0] ?? ""} onChange={onOutputFormatChange} /><p className={cx("gen-model-options-note")}>{t("create.settings.outputFormatNote")}</p></div>}
+    {qualityEnabled && <div className={cx("gen-setting-block")}><h3>{t("create.settings.quality")} <InfoTooltip content={t("create.settings.info.quality")} size={12} /></h3><Segmented items={qualityOptions} value={quality} onChange={onQualityChange} labelFor={qualityLabel} />{qualityIsPromptBased && <p className={cx("gen-model-options-note")}>{t("create.settings.qualityPromptNote")}</p>}</div>}
+    {outputFormatOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{t("create.settings.outputFormat")} <InfoTooltip content={t("create.settings.info.outputFormat")} size={12} /></h3><Segmented items={outputFormatOptions} value={outputFormat && outputFormatOptions.includes(outputFormat) ? outputFormat : outputFormatOptions[0] ?? ""} onChange={onOutputFormatChange} /><p className={cx("gen-model-options-note")}>{t("create.settings.outputFormatNote")}</p></div>}
     {showCountControl && <div className={cx("gen-setting-block")}><h3>{t("create.settings.numberOfImages")} <InfoTooltip content={t("create.settings.info.numberOfImages")} size={12} /></h3><Segmented items={countOptions} value={count} onChange={onCountChange} /></div>}
     <div className={cx("gen-mobile-action-dock")}>
       <div className={cx("gen-estimate")}><div><h3>{t("create.settings.estimatedCredits")} <InfoTooltip content={t("create.settings.info.estimatedCredits")} size={12} /></h3><p>{isUpscale ? `1 ${t("create.settings.image")} × ${resolution}` : `${showCountControl ? `${count} ${t("create.settings.images")}` : `1 ${t("create.settings.image")}`} `}<strong>{estimatedCreditsValue}</strong></p></div></div>

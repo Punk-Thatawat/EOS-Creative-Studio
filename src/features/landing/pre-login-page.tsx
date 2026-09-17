@@ -11,6 +11,7 @@ import { completePendingEmailLoginWithBackend, loginWithBackend, persistBackendS
 import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
 import { signInWithGoogle } from "@/lib/auth/google-login";
 import { listPublicLandingIntroVideo, listPublicVideoShowcase } from "@/lib/api/video-showcase";
+import { COOKIE_CONSENT_EVENT, hasAnsweredCookieConsent } from "@/components/privacy/cookie-consent-banner";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 const tools = [
@@ -134,6 +135,10 @@ export function PreLoginPage() {
   }, []);
 
   useEffect(() => {
+    if (showIntroVideo) {
+      showcaseVideoRefs.current.forEach((video) => video?.pause());
+      return undefined;
+    }
     if (typeof IntersectionObserver === "undefined") return undefined;
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
@@ -147,7 +152,7 @@ export function PreLoginPage() {
     }, { rootMargin: "120px 0px", threshold: 0.15 });
     showcaseVideoRefs.current.forEach((video) => { if (video) observer.observe(video); });
     return () => observer.disconnect();
-  }, [examples, visibleExampleOffset]);
+  }, [examples, showIntroVideo, visibleExampleOffset]);
 
   const handleGoogleLogin = async () => {
     setGoogleLoginLoading(true);
@@ -318,20 +323,37 @@ export function PreLoginPage() {
   }, [loginOpen]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const today = getLocalDateKey();
-      let hasShownToday = false;
+    const today = getLocalDateKey();
+    let hasShownToday = false;
 
+    try {
+      hasShownToday = window.localStorage.getItem(introVideoShownDateKey) === today;
+    } catch {
+      // If storage is unavailable, allow the intro to show for this visit.
+    }
+    if (hasShownToday) return;
+
+    let timer = 0;
+    const play = () => {
       try {
-        hasShownToday = window.localStorage.getItem(introVideoShownDateKey) === today;
-        if (!hasShownToday) window.localStorage.setItem(introVideoShownDateKey, today);
+        window.localStorage.setItem(introVideoShownDateKey, today);
       } catch {
-        // If storage is unavailable, allow the intro to show for this visit.
+        // Nothing to remember if storage is unavailable.
       }
+      setShowIntroVideo(true);
+    };
 
-      if (!hasShownToday) setShowIntroVideo(true);
-    }, 400);
-    return () => window.clearTimeout(timer);
+    if (hasAnsweredCookieConsent()) {
+      timer = window.setTimeout(play, 400);
+      return () => window.clearTimeout(timer);
+    }
+
+    const onConsent = () => { timer = window.setTimeout(play, 400); };
+    window.addEventListener(COOKIE_CONSENT_EVENT, onConsent, { once: true });
+    return () => {
+      window.removeEventListener(COOKIE_CONSENT_EVENT, onConsent);
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {

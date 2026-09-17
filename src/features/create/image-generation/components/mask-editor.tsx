@@ -3,6 +3,7 @@
 import { useEffect, useRef, type PointerEvent } from "react";
 import { Upload } from "lucide-react";
 import type { MaskTool } from "../config";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { cx } from "../styles";
 
 /* The source image is a signed CDN URL and cannot use Next Image without a fixed remote host. */
@@ -11,6 +12,7 @@ import { cx } from "../styles";
 type MaskPoint = { x: number; y: number };
 
 export function MaskEditor({ imageUrl, tool, brushSize, resetKey, onMaskChange }: { imageUrl: string | null; tool: MaskTool; brushSize: number; resetKey: number; onMaskChange: (mask: string | null) => void }) {
+  const { t } = useLocale();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
@@ -162,7 +164,7 @@ export function MaskEditor({ imageUrl, tool, brushSize, resetKey, onMaskChange }
   };
 
   return <div className={cx("gen-mask-editor", !imageUrl && "is-empty")}><div className={cx("gen-mask-canvas-wrap")}>
-    {imageUrl ? <img src={imageUrl} alt="Source image for mask refinement" className={cx("gen-mask-source")} /> : <div className={cx("gen-mask-empty")}><Upload size={22} /><span>Upload a source image to edit the mask</span></div>}
-    <canvas ref={canvasRef} className={cx("gen-mask-canvas")} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const point = getPoint(event); if (!point) return; drawingRef.current = true; lastPointRef.current = point; if (tool === "lasso") lassoPointsRef.current = [point]; else paint(event); }} onPointerMove={paint} onPointerUp={finishPaint} onPointerCancel={finishPaint} aria-label="Draw a black and white subject removal mask" />
+    {imageUrl ? <img src={imageUrl} alt={t("create.image.mask.sourceAlt")} className={cx("gen-mask-source")} /> : <div className={cx("gen-mask-empty")}><Upload size={22} /><span>{t("create.image.mask.uploadFirst")}</span></div>}
+    <canvas ref={canvasRef} className={cx("gen-mask-canvas")} onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const point = getPoint(event); if (!point) return; drawingRef.current = true; lastPointRef.current = point; if (tool === "lasso") lassoPointsRef.current = [point]; else paint(event); }} onPointerMove={paint} onPointerUp={finishPaint} onPointerCancel={finishPaint} aria-label={t("create.image.mask.canvasAria")} />
   </div></div>;
 }

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { Dropdown } from "@/components/ui/dropdown";
 import type { GenerationModelOption } from "@/lib/api/generation-models";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import { cx } from "../styles";
 
 type ModelProperty = {
@@ -63,12 +64,13 @@ function isRenderableProperty(name: string, property: ModelProperty): boolean {
 }
 
 function DynamicField({ name, property, value, onChange }: { name: string; property: ModelProperty; value: unknown; onChange: (value: unknown) => void }) {
+  const { t } = useLocale();
   const label = labelFor(name, property);
   const type = property.type ?? (property.enum ? "string" : typeof property.default === "boolean" ? "boolean" : typeof property.default === "number" ? "number" : "string");
   const description = property.description?.trim();
 
   if (Array.isArray(property.enum) && property.enum.length > 0) {
-    return <div className={cx("gen-dynamic-field")}><label>{label}</label><Dropdown value={value === undefined ? "" : String(value)} options={property.enum.map((option) => ({ value: String(option), label: String(option) }))} onChange={(nextValue) => onChange(parseValue(nextValue, property))} placeholder="Auto" ariaLabel={label} triggerClassName={cx("gen-select")} menuClassName={cx("gen-select-menu")} />{description && <small>{description}</small>}</div>;
+    return <div className={cx("gen-dynamic-field")}><label>{label}</label><Dropdown value={value === undefined ? "" : String(value)} options={property.enum.map((option) => ({ value: String(option), label: String(option) }))} onChange={(nextValue) => onChange(parseValue(nextValue, property))} placeholder={t("create.image.params.auto")} ariaLabel={label} triggerClassName={cx("gen-select")} menuClassName={cx("gen-select-menu")} />{description && <small>{description}</small>}</div>;
   }
 
   if (type === "boolean") {
@@ -84,11 +86,12 @@ function DynamicField({ name, property, value, onChange }: { name: string; prope
 }
 
 export function DynamicModelParameters({ capabilities, values, onChange }: DynamicModelParametersProps) {
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const properties = capabilities?.apiSchema?.request_schema?.properties;
   const fields = useMemo(() => Object.entries(properties ?? {}).filter(([name, property]) => isRenderableProperty(name, property)), [properties]);
 
   if (!fields.length) return null;
 
-  return <details className={cx("gen-advanced", "gen-dynamic-params")} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}><summary><span><SlidersHorizontal size={13} /> MODEL PARAMETERS <small>{fields.length} model-specific</small></span><ChevronDown size={14} /></summary><div className={cx("gen-advanced-body", "gen-dynamic-params-body")}>{fields.map(([name, property]) => <DynamicField key={name} name={name} property={property} value={values[name]} onChange={(value) => onChange(name, value)} />)}<p className={cx("gen-dynamic-note")}>These controls come from the selected model schema. Unsupported values are rejected before provider submission.</p></div></details>;
+  return <details className={cx("gen-advanced", "gen-dynamic-params")} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}><summary><span><SlidersHorizontal size={13} /> {t("create.image.params.title")} <small>{fields.length} model-specific</small></span><ChevronDown size={14} /></summary><div className={cx("gen-advanced-body", "gen-dynamic-params-body")}>{fields.map(([name, property]) => <DynamicField key={name} name={name} property={property} value={values[name]} onChange={(value) => onChange(name, value)} />)}<p className={cx("gen-dynamic-note")}>{t("create.image.params.note")}</p></div></details>;
 }
