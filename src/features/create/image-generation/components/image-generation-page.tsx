@@ -84,29 +84,29 @@ export function ImageGenerationPage() {
   const activePrompt = isTextToImageTab ? state.prompt : isImageToImageTab ? state.imageToImagePrompt : isStyleTransferTab ? state.styleTransferPrompt : isBackgroundTab ? state.backgroundPrompt : isExtendTab ? state.extendPrompt : "";
   const generationValidationMessage = (() => {
     if (activeTabIsGenerating) return null;
-    if (state.isLoadingModels) return "Loading model options...";
-    if (!modelSelectionReady) return "Select a model before generating.";
-    if (activePrompt.length > textToImagePromptMaxLength) return `Prompt must be ${textToImagePromptMaxLength.toLocaleString()} characters or fewer.`;
-    if (isTextToImageTab && !state.prompt.trim()) return "Add a prompt before generating.";
+    if (state.isLoadingModels) return t("create.image.validation.loadingModels");
+    if (!modelSelectionReady) return t("create.image.validation.selectModel");
+    if (activePrompt.length > textToImagePromptMaxLength) return t("create.image.validation.promptTooLong", { max: textToImagePromptMaxLength.toLocaleString() });
+    if (isTextToImageTab && !state.prompt.trim()) return t("create.image.validation.addPrompt");
     if (isImageToImageTab) {
-      if (!state.imageToImageSupportsInput) return "The selected model does not support image input.";
-      if (!state.sourceImage) return "Upload a reference image before transforming.";
-      if (!state.imageToImagePrompt.trim()) return "Add a prompt before transforming.";
+      if (!state.imageToImageSupportsInput) return t("create.image.validation.noImageInput");
+      if (!state.sourceImage) return t("create.image.validation.uploadReference");
+      if (!state.imageToImagePrompt.trim()) return t("create.image.validation.addPromptTransform");
     }
     if (isStyleTransferTab) {
-      if (!state.styleTransferSupportsInput) return "The selected model does not support image input.";
-      if (!state.sourceImage) return "Upload a content image before applying a style.";
-      if (!hasStyleInstruction) return "Choose a style preset, upload a reference, or add a prompt.";
+      if (!state.styleTransferSupportsInput) return t("create.image.validation.noImageInput");
+      if (!state.sourceImage) return t("create.image.validation.uploadContentImage");
+      if (!hasStyleInstruction) return t("create.image.validation.chooseStyle");
     }
     if (isBackgroundTab) {
-      if (!state.backgroundSupportsInput) return "The selected model does not support image input.";
-      if (!state.sourceImage) return "Upload a source image before changing the background.";
-      if (!hasBackgroundInstruction) return "Choose a background mode, add a prompt, or upload a reference.";
+      if (!state.backgroundSupportsInput) return t("create.image.validation.noImageInput");
+      if (!state.sourceImage) return t("create.image.validation.uploadSourceBackground");
+      if (!hasBackgroundInstruction) return t("create.image.validation.chooseBackground");
     }
-    if (isUpscaleTab && !state.sourceImage) return "Upload an image before upscaling.";
+    if (isUpscaleTab && !state.sourceImage) return t("create.image.validation.uploadForUpscale");
     if (isExtendTab) {
-      if (!state.extendSupportsInput) return "The selected model does not support image input.";
-      if (!state.sourceImage) return "Upload a source image before extending.";
+      if (!state.extendSupportsInput) return t("create.image.validation.noImageInput");
+      if (!state.sourceImage) return t("create.image.validation.uploadSourceExtend");
     }
     return null;
   })();
