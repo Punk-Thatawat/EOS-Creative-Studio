@@ -720,7 +720,7 @@ export default function AssetsPage() {
         </div>
 
         <div className="assets-search-row">
-          <SearchInput className="w-full sm:w-[230px]" aria-label="ค้นหาแอสเซ็ต" value={search} onValueChange={setSearch} placeholder="ค้นหาแอสเซ็ต..." />
+          <SearchInput className="w-full sm:w-57.5" aria-label="ค้นหาแอสเซ็ต" value={search} onValueChange={setSearch} placeholder="ค้นหาแอสเซ็ต..." />
           <span>{rangeLabel}</span>
         </div>
 
