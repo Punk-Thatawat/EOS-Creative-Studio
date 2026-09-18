@@ -1,159 +1,374 @@
-.usagePage { color:#101014; background:#fff; font-family:var(--font-noto-sans-thai),Arial,sans-serif; font-size:14px; padding-bottom:32px; min-width:0; }
-.usagePage button,.usagePage input,.usagePage select { font:inherit; }
-.desktopAccount { position:fixed; bottom:16px; left:16px; width:220px; background:#fff; padding:8px 0; z-index:45; }
-.desktopAccount [role=menu] { top:auto; bottom:100%; }
-@media(max-width:767.98px) { .desktopAccount { display:none; } }
-.usagePage button { cursor:pointer; }
-.usagePage button:disabled { cursor:not-allowed; opacity:.5; }
-/* Focus falls through to the app-wide orange ring: this page's magenta one
-   read as a stray line beside the tabs and matched nothing else in the UI. */
-.hero { position:relative; isolation:isolate; margin:0; display:flex; align-items:center; padding:0 8px; }
-.heroCopy { position:absolute; top:50%; left:0; z-index:2; min-width:0; transform:translateY(-50%); }
-.heroCopy h1 { margin:0; font-family:Impact,"Arial Narrow",var(--font-kanit),sans-serif; font-size:clamp(36px,4.7vw,72px); font-weight:900; line-height:.98; letter-spacing:-1.8px; }
-.heroCopy h1 span { color:#ff5800; }
-.heroCopy p { margin:14px 0 0; font-size:clamp(16px,1.5vw,22px); font-weight:600; }
-.heroPicture { position:absolute; inset:0; display:block; z-index:0; pointer-events:none; }
-.heroImage { display:block; width:100%; height:100%; object-fit:contain; object-position:center; pointer-events:none; }
-@media(min-width:640px) and (max-width:900px) { .heroImage { width:65%; }.heroCopy h1 { font-size:40px; } }
-@media(max-width:639.98px) { .hero { display:flex; padding:0 12px; }.heroCopy h1 { font-size:32px; letter-spacing:-1px; }.heroCopy p { margin-top:5px; font-size:14px; }.heroImage { object-position:center; } }
-.srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
-.summary { display:grid; grid-template-columns:1fr 1.7fr 1.15fr; align-items:center; gap:24px; padding:18px 8px 24px; border-top:1px solid #eee; border-bottom:3px solid #ff5900; }
-.balance { display:flex; flex-direction:column; gap:3px; }
-.balance strong { font-family:var(--font-kanit),Arial,sans-serif; font-size:clamp(46px,4.7vw,72px); line-height:1.1; letter-spacing:-2px; font-weight:700; }
-.periodStats { display:flex; align-items:center; flex-wrap:wrap; gap:12px 24px; }
-.periodStats span { white-space:nowrap; }
-.periodStats b { color:#d84400; font-size:21px; padding:0 7px; }
-.periodStats span:nth-child(2) b { color:#cf0076; }
-.periodStats small { flex-basis:100%; color:#656571; font-size:12px; }
-.primaryButton { width:100%; min-height:50px; padding:12px 20px; border:0; border-radius:5px; color:#fff; background:linear-gradient(105deg,#f65000,#eb0080); font-weight:700!important; display:flex; align-items:center; justify-content:space-between; gap:16px; }
-.primaryButton:hover:not(:disabled) { filter:brightness(.93); }
-.topupAction small { display:block; font-size:12px; color:#525263; text-align:right; margin-top:8px; }
-/* The tab row scrolls sideways when the labels do not fit. The scrollbar is
-   hidden the same way the other swipeable strips in this app hide theirs
-   (.tool-strip, .voiceRow, .auth-modal-shell): a classic scrollbar draws a
-   grey bar under the tabs and steals ~15px, which pushed the panel below it
-   down. Swiping and keyboard scrolling still work. */
-.tabBar { display:flex; gap:36px; border-bottom:1px solid #e9e9ed; padding:8px 8px 0; overflow-x:auto; scrollbar-width:none; -ms-overflow-style:none; }
-.tabBar::-webkit-scrollbar { display:none; }
-.tabBar button { position:relative; border:0; background:none; color:#494953; min-height:62px; white-space:nowrap; padding:14px 0; }
-.tabBar button[aria-selected=true] { color:#d84300; font-weight:700; border-bottom:3px solid #ff5900; }
-.periodControl { display:flex; gap:12px; align-items:center; padding:22px 8px 2px; }
-.periodDropdown { flex:0 0 auto; width:min(240px,calc(100% - 52px)); }
-.refresh { display:grid; place-items:center; background:none; border:0; color:#686874; min-width:40px; min-height:40px; }
-.overview { display:grid; grid-template-columns:1.1fr 1fr; gap:28px; padding:0 8px 28px; }
-.chart canvas { width:100%; height:252px; display:block; }
-.chartCaption { font-size:11px; color:#686875; }
-.recent { border-left:1px solid #eaeaf0; padding-left:26px; margin-top:-42px; }
-.sectionHeading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; min-height:48px; }
-.usagePage h2 { font-size:18px; font-weight:700; margin:0; }
-.textButton { border:0; padding:8px 0; background:none; color:#c5006c; display:inline-flex; align-items:center; gap:8px; }
-.activityList { list-style:none; margin:0; padding:0; }
-.activityRow { display:grid; grid-template-columns:34px minmax(70px,1fr) auto; gap:8px 12px; align-items:center; border-bottom:1px solid #ededf1; padding:12px 0; min-height:65px; }
-.activityIcon { width:40px; height:40px; object-fit:contain; transform:scale(1.4); }
-.activityRow time { grid-column:2/4; font-size:11px; color:#5f6070; text-align:right; }
-.activityRow strong { font-size:14px; font-weight:600; }
-.activityRow small { font-size:11px; font-weight:400; }
-.activityName { min-width:0; }
-.artworkThumbnail { width:100%; height:48px; object-fit:cover; border-radius:8px; background:#f4f4f6; }
-.artworkThumbnail, .artworkPlaceholder { align-self:start; justify-self:start; }
-.artworkPlaceholder { display:grid; place-items:center; height:48px; background:#f4f4f6; border-radius:8px; font-size:9px; text-align:center; color:#656570; }
-.artworkName { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
-.artworkCaption { display:block; color:#656570; font-size:11px; margin-top:3px; }
-.artworkLink { display:inline-flex; align-items:center; min-height:32px; color:#c43d00; font-size:12px; text-decoration:underline; }
-.activityName details { font-size:12px; margin-top:8px; }
-.activityName summary { cursor:pointer; }
-.activityName details span { display:block; padding:6px 0; }
-.identifier { overflow-wrap:anywhere; color:#666; }
-.positive { color:#087e36; }
-.addIcon { color:#087e36; display:grid; place-items:center; width:36px; height:36px; }
-.tools { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:1px solid #e8e8ed; padding:14px 0; gap:18px 0; }
-.tools>div { display:flex; align-items:center; gap:12px; padding:0 20px; border-right:1px solid #ededf1; }
-.tools>div:nth-child(3n) { border-right:0; }
-.toolIcon { width:80px; height:80px; object-fit:contain; }
-.tools strong { display:block; font-weight:600; }
-.tools b { display:block; font-size:24px; color:#e54b00; }
-.tools small { font-size:12px; font-weight:400; color:#4f4f5b; }
-.tools>div:nth-child(n+2) b { color:#cf0076; }
-.notice,.error { display:flex; align-items:center; gap:12px; padding:14px; margin:12px 0; font-size:13px; border:1px solid #e8ccaa; background:#fff9ef; border-radius:6px; }
-.notice>svg,.error>svg { flex-shrink:0; }
-.notice span,.error span { flex:1; }
-.notice button,.error button { background:white; border:1px solid #ded5c7; border-radius:4px; padding:8px; min-width:36px; }
-.error { color:#9c2440; background:#fff5f7; border-color:#ebc5cd; flex-wrap:wrap; }
-.error a { text-decoration:underline; }
-.empty,.loading { padding:36px 16px; color:#62626e; text-align:center; }
-.loading { min-height:290px; display:grid; place-items:center; }
-.muted { color:#62626d; font-size:13px; line-height:1.8; margin:8px 0 18px; }
-.ledger { padding:12px 8px 24px; }
-.transactionScroll { max-width:100%; overflow-x:auto; }
-.transactionTable { border-collapse:collapse; width:100%; min-width:580px; font-size:13px; }
-.transactionTable caption { text-align:left; }
-.transactionTable th { text-align:left; background:#f7f7f9; font-weight:600; padding:14px 12px; }
-.transactionTable td { padding:18px 12px; border-bottom:1px solid #ededf1; vertical-align:top; }
-.transactionTable th:nth-last-child(-n+2), .transactionTable td:nth-last-child(-n+2) { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
-.transactionTable details { margin-top:8px; font-size:12px; }
-.transactionTable summary { cursor:pointer; min-height:28px; }
-.transactionTable .identifier { display:block; max-width:280px; padding:4px 0; }
-.receiptButton { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:34px; padding:7px 10px; border:1px solid #ff5800; border-radius:6px; background:#fff; color:#d84300; white-space:nowrap; }
-.receiptButton:hover:not(:disabled) { background:#fff5ef; }
-.receiptError { display:block; margin-top:5px; color:#b33b2e; font-size:11px; }
-.workUsage .activityRow { grid-template-columns:64px minmax(120px,1fr) auto minmax(160px,.5fr); }
-.workUsage .artworkThumbnail, .workUsage .artworkPlaceholder { height:64px; }
-.ledger .activityRow { grid-template-columns:40px minmax(120px,1fr) auto minmax(160px,.5fr); }
-.ledger .activityRow time { grid-column:auto; }
-.secondary { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid #dddde4; border-radius:6px; min-height:42px; padding:8px 14px; background:#fff; }
-.filters { display:flex; gap:14px; margin:18px 0 8px; }
-.search { display:flex; align-items:center; gap:10px; border:1px solid #dddde4; border-radius:var(--eos-field-radius); padding:0 12px; max-width:460px; flex:1; }
-.search:focus-within { border-color: var(--eos-field-focus); box-shadow: var(--eos-field-focus-ring); }
-.search input { width:100%; min-width:0; border:0; outline:0; background:transparent; padding:12px 0; }
-.filters select { border:1px solid #dddde4; border-radius:var(--eos-field-radius); padding:10px; background:#fff; }
-.topup { display:grid; grid-template-columns:1.3fr 1fr; gap:48px; padding:32px 8px; }
-.packages { margin:24px 0; padding:0; border:0; }
-.packages legend { font-size:14px; font-weight:600; margin-bottom:12px; }
-.pack,.selectedPack { display:flex; gap:16px; align-items:center; padding:22px 18px; border:1px solid #dfdfe5; border-radius:8px; margin-bottom:12px; cursor:pointer; }
-.selectedPack { border-color:#ff5800; background:#fff7f1; }
-.packages input { accent-color:#ec5200; width:18px; height:18px; }
-.packages span { flex:1; }
-.packages strong { font-size:26px; }
-.packages b { font-size:18px; }
-.packages small { display:block; margin-top:4px; color:#777781; font-size:12px; }
-.customPackTitle { font-size:22px!important; }
-.customTopup { margin:-2px 0 12px; padding:14px 16px; border:1px dashed #f0a381; border-radius:8px; background:#fffaf7; }
-.customTopup label { display:block; font-size:12px; font-weight:600; }
-.customInput { display:flex; align-items:center; gap:8px; margin-top:8px; min-height:44px; padding:0 12px; border:1px solid #dddde4; border-radius:var(--eos-field-radius); background:#fff; }
-.customInput:focus-within { border-color: var(--eos-field-focus); box-shadow: var(--eos-field-focus-ring); }
-.customInput span { flex:none; color:#777781; }
-.customInput input { width:100%; min-width:0; border:0; outline:0; background:transparent; font:inherit; }
-.customTopup p { margin:8px 0 0; color:#656570; font-size:11px; }
-.customError { display:block; margin-top:6px; color:#b33b2e; font-size:11px; }
-.order { padding:24px; background:#fff8f3; border-radius:10px; align-self:start; }
-.order>svg { color:#e04c00; }
-.order h3 { font-size:20px; font-weight:700; margin:12px 0; }
-.order dl { margin:24px 0; }
-.order dl>div { display:flex; justify-content:space-between; gap:12px; margin:16px 0; }
-.order dd { font-weight:700; }
-.order .vatRow { color:#777781; font-size:13px; }
-.order .totalRow { margin-top:20px; padding-top:16px; border-top:1px solid #eadbd2; font-size:16px; font-weight:700; }
-.order .muted { margin-top:18px; }
-@media(min-width:1400px) { .recent .activityRow { grid-template-columns:34px minmax(68px,1fr) auto minmax(120px,.9fr); }.recent .activityRow time { grid-column:auto; }.recent .activityRow small { display:none; } }
-@media(max-width:1279.98px) { .summary { grid-template-columns:1fr 1fr; }.periodStats { grid-column:1; grid-row:2; }.topupAction { grid-column:2; grid-row:1/3; }.overview { grid-template-columns:1fr; }.recent { border-left:0; padding-left:0; margin-top:0; }.tools>div { padding:0 8px; gap:3px; }.topup { gap:24px; }.tabBar { gap:24px; } }
-@media(max-width:767.98px) { .summary { gap:16px; padding:14px 0 18px; }.balance strong { font-size:48px; }.periodStats { grid-column:1/3; grid-row:2; gap:8px 16px; }.periodStats b { font-size:18px; }.topupAction { grid-row:1; }.primaryButton { padding:12px; font-size:14px!important; }.topupAction small { font-size:10px; }.tabBar { gap:24px; padding:0; }.tabBar button { min-height:56px; font-size:13px; }.periodControl { padding:18px 0 0; }.overview { padding:0 0 20px; gap:16px; }.chart canvas { height:230px; }.tools { grid-template-columns:repeat(2,minmax(0,1fr)); }.tools>div { border:0; }.toolIcon { width:64px; height:64px; }.tools strong { font-size:14px; }.tools b { font-size:20px; }.ledger { padding-inline:0; }.ledger .activityRow { grid-template-columns:34px minmax(80px,1fr) auto; }.ledger .activityRow time { grid-column:2/4; }.filters { flex-wrap:wrap; }.search { flex-basis:100%; }.topup { grid-template-columns:1fr; padding:24px 0; gap:16px; }.packages strong { font-size:23px; }.packages b { font-size:16px; }.order { padding:20px; }.notice { flex-wrap:wrap; }.notice span { min-width:180px; } }
-
-/* ==========================================================================
-   COMPACT SCREENS (<= lg, 1023.98px) -- readability + thumb-friendly targets
-   --------------------------------------------------------------------------
-   globals.css floors p / label / button / a / small / time; <span> is not
-   covered, so the two caption spans are lifted to the 14px meta size.
-   The artwork link is the only target on this page the shared Button
-   component does not own, so it gets the 40px WCAG 2.2 (2.5.8) minimum here.
-   ========================================================================== */
-@media (max-width: 1023.98px) {
-  .chartCaption,
-  .artworkCaption { font-size: 14px; }
-
+.usagePage {
+  color: #101014;
+  background: #fff;
+  font-family: var(--font-noto-sans-thai),Arial,sans-serif;
+  font-size: 14px;
+  padding-bottom: 32px;
+  min-width: 0;
 }
-
+.usagePage button, .usagePage input, .usagePage select { font: inherit; }
+.desktopAccount { position: fixed; bottom: 16px; left: 16px; width: 220px; background: #fff; padding: 8px 0; z-index: 45; }
+.desktopAccount [role=menu] { top: auto; bottom: 100%; }
+@media(max-width:767.98px) {
+  .desktopAccount { display: none; }
+}
+.usagePage button { cursor: pointer; }
+.usagePage button:disabled { cursor: not-allowed; opacity: .5; }
+/* Focus falls through to the app-wide orange ring: this page's magenta one
+read as a stray line beside the tabs and matched nothing else in the UI. */
+.hero { position: relative; isolation: isolate; margin: 0; display: flex; align-items: center; padding: 0 8px; }
+.heroCopy { position: absolute; top: 50%; left: 0; z-index: 2; min-width: 0; transform: translateY(-50%); }
+.heroCopy h1 {
+  margin: 0;
+  font-family: Impact,"Arial Narrow",var(--font-kanit),sans-serif;
+  font-size: clamp(36px,4.7vw,72px);
+  font-weight: 900;
+  line-height: .98;
+  letter-spacing: -1.8px;
+}
+.heroCopy h1 span { color: #ff5800; }
+.heroCopy p { margin: 14px 0 0; font-size: clamp(16px,1.5vw,22px); font-weight: 600; }
+.heroPicture { position: absolute; inset: 0; display: block; z-index: 0; pointer-events: none; }
+.heroImage { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; pointer-events: none; }
+@media(min-width:640px) and (max-width:900px) {
+  .heroImage { width: 65%; }
+  .heroCopy h1 { font-size: 40px; }
+}
+@media(max-width:639.98px) {
+  .hero { display: flex; padding: 0 12px; }
+  .heroCopy h1 { font-size: 32px; letter-spacing: -1px; }
+  .heroCopy p { margin-top: 5px; font-size: 14px; }
+  .heroImage { object-position: center; }
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+.summary {
+  display: grid;
+  grid-template-columns: 1fr 1.7fr 1.15fr;
+  align-items: center;
+  gap: 24px;
+  padding: 18px 8px 24px;
+  border-top: 1px solid #eee;
+  border-bottom: 3px solid #ff5900;
+}
+.balance { display: flex; flex-direction: column; gap: 3px; }
+.balance strong {
+  font-family: var(--font-kanit),Arial,sans-serif;
+  font-size: clamp(46px,4.7vw,72px);
+  line-height: 1.1;
+  letter-spacing: -2px;
+  font-weight: 700;
+}
+.periodStats { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 24px; }
+.periodStats span { white-space: nowrap; }
+.periodStats b { color: #d84400; font-size: 21px; padding: 0 7px; }
+.periodStats span:nth-child(2) b { color: #cf0076; }
+.periodStats small { flex-basis: 100%; color: #656571; font-size: 12px; }
+.primaryButton {
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 5px;
+  color: #fff;
+  background: linear-gradient(105deg,#f65000,#eb0080);
+  font-weight: 700!important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.primaryButton:hover:not(:disabled) { filter: brightness(.93); }
+.topupAction small { display: block; font-size: 12px; color: #525263; text-align: right; margin-top: 8px; }
+/* The tab row scrolls sideways when the labels do not fit. The scrollbar is
+hidden the same way the other swipeable strips in this app hide theirs
+(.tool-strip, .voiceRow, .auth-modal-shell): a classic scrollbar draws a
+grey bar under the tabs and steals ~15px, which pushed the panel below it
+down. Swiping and keyboard scrolling still work. */
+.tabBar {
+  display: flex;
+  gap: 36px;
+  border-bottom: 1px solid #e9e9ed;
+  padding: 8px 8px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.tabBar::-webkit-scrollbar { display: none; }
+.tabBar button {
+  position: relative;
+  border: 0;
+  background: none;
+  color: #494953;
+  min-height: 62px;
+  white-space: nowrap;
+  padding: 14px 0;
+}
+.tabBar button[aria-selected=true] { color: #d84300; font-weight: 700; border-bottom: 3px solid #ff5900; }
+.periodControl { display: flex; gap: 12px; align-items: center; padding: 22px 8px 2px; }
+.periodDropdown { flex: 0 0 auto; width: min(240px,calc(100% - 52px)); }
+.refresh { display: grid; place-items: center; background: none; border: 0; color: #686874; min-width: 40px; min-height: 40px; }
+.overview { display: grid; grid-template-columns: 1.1fr 1fr; gap: 28px; padding: 0 8px 28px; }
+.chart canvas { width: 100%; height: 252px; display: block; }
+.chartCaption { font-size: 11px; color: #686875; }
+.recent { border-left: 1px solid #eaeaf0; padding-left: 26px; margin-top: -42px; }
+.sectionHeading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 48px; }
+.usagePage h2 { font-size: 18px; font-weight: 700; margin: 0; }
+.textButton { border: 0; padding: 8px 0; background: none; color: #c5006c; display: inline-flex; align-items: center; gap: 8px; }
+.activityList { list-style: none; margin: 0; padding: 0; }
+.activityRow {
+  display: grid;
+  grid-template-columns: 34px minmax(70px,1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  border-bottom: 1px solid #ededf1;
+  padding: 12px 0;
+  min-height: 65px;
+}
+.activityIcon { width: 40px; height: 40px; object-fit: contain; transform: scale(1.4); }
+.activityRow time { grid-column: 2/4; font-size: 11px; color: #5f6070; text-align: right; }
+.activityRow strong { font-size: 14px; font-weight: 600; }
+.activityRow small { font-size: 11px; font-weight: 400; }
+.activityName { min-width: 0; }
+.artworkThumbnail { width: 100%; height: 48px; object-fit: cover; border-radius: 8px; background: #f4f4f6; }
+.artworkThumbnail, .artworkPlaceholder { align-self: start; justify-self: start; }
+.artworkPlaceholder {
+  display: grid;
+  place-items: center;
+  height: 48px;
+  background: #f4f4f6;
+  border-radius: 8px;
+  font-size: 9px;
+  text-align: center;
+  color: #656570;
+}
+.artworkName {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.artworkCaption { display: block; color: #656570; font-size: 11px; margin-top: 3px; }
+.artworkLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: #c43d00;
+  font-size: 12px;
+  text-decoration: underline;
+}
+.activityName details { font-size: 12px; margin-top: 8px; }
+.activityName summary { cursor: pointer; }
+.activityName details span { display: block; padding: 6px 0; }
+.identifier { overflow-wrap: anywhere; color: #666; }
+.positive { color: #087e36; }
+.addIcon { color: #087e36; display: grid; place-items: center; width: 36px; height: 36px; }
+.tools {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  border-top: 1px solid #e8e8ed;
+  padding: 14px 0;
+  gap: 18px 0;
+}
+.tools>div { display: flex; align-items: center; gap: 12px; padding: 0 20px; border-right: 1px solid #ededf1; }
+.tools>div:nth-child(3n) { border-right: 0; }
+.toolIcon { width: 80px; height: 80px; object-fit: contain; }
+.tools strong { display: block; font-weight: 600; }
+.tools b { display: block; font-size: 24px; color: #e54b00; }
+.tools small { font-size: 12px; font-weight: 400; color: #4f4f5b; }
+.tools>div:nth-child(n+2) b { color: #cf0076; }
+.notice, .error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  margin: 12px 0;
+  font-size: 13px;
+  border: 1px solid #e8ccaa;
+  background: #fff9ef;
+  border-radius: 6px;
+}
+.notice>svg, .error>svg { flex-shrink: 0; }
+.notice span, .error span { flex: 1; }
+.notice button, .error button { background: white; border: 1px solid #ded5c7; border-radius: 4px; padding: 8px; min-width: 36px; }
+.error { color: #9c2440; background: #fff5f7; border-color: #ebc5cd; flex-wrap: wrap; }
+.error a { text-decoration: underline; }
+.empty, .loading { padding: 36px 16px; color: #62626e; text-align: center; }
+.loading { min-height: 290px; display: grid; place-items: center; }
+.muted { color: #62626d; font-size: 13px; line-height: 1.8; margin: 8px 0 18px; }
+.ledger { padding: 12px 8px 24px; }
+.transactionScroll { max-width: 100%; overflow-x: auto; }
+.transactionTable { border-collapse: collapse; width: 100%; min-width: 580px; font-size: 13px; }
+.transactionTable caption { text-align: left; }
+.transactionTable th { text-align: left; background: #f7f7f9; font-weight: 600; padding: 14px 12px; }
+.transactionTable td { padding: 18px 12px; border-bottom: 1px solid #ededf1; vertical-align: top; }
+.transactionTable th:nth-last-child(-n+2), .transactionTable td:nth-last-child(-n+2) {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.transactionTable details { margin-top: 8px; font-size: 12px; }
+.transactionTable summary { cursor: pointer; min-height: 28px; }
+.transactionTable .identifier { display: block; max-width: 280px; padding: 4px 0; }
+.receiptButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid #ff5800;
+  border-radius: 6px;
+  background: #fff;
+  color: #d84300;
+  white-space: nowrap;
+}
+.receiptButton:hover:not(:disabled) { background: #fff5ef; }
+.receiptError { display: block; margin-top: 5px; color: #b33b2e; font-size: 11px; }
+.workUsage .activityRow { grid-template-columns: 64px minmax(120px,1fr) auto minmax(160px,.5fr); }
+.workUsage .artworkThumbnail, .workUsage .artworkPlaceholder { height: 64px; }
+.ledger .activityRow { grid-template-columns: 40px minmax(120px,1fr) auto minmax(160px,.5fr); }
+.ledger .activityRow time { grid-column: auto; }
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #dddde4;
+  border-radius: 6px;
+  min-height: 42px;
+  padding: 8px 14px;
+  background: #fff;
+}
+.filters { display: flex; gap: 14px; margin: 18px 0 8px; }
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #dddde4;
+  border-radius: var(--eos-field-radius);
+  padding: 0 12px;
+  max-width: 460px;
+  flex: 1;
+}
+.search:focus-within { border-color: var(--eos-field-focus); box-shadow: var(--eos-field-focus-ring); }
+.search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; padding: 12px 0; }
+.filters select { border: 1px solid #dddde4; border-radius: var(--eos-field-radius); padding: 10px; background: #fff; }
+.topup { display: grid; grid-template-columns: 1.3fr 1fr; gap: 48px; padding: 32px 8px; }
+.packages { margin: 24px 0; padding: 0; border: 0; }
+.packages legend { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.pack, .selectedPack {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 22px 18px;
+  border: 1px solid #dfdfe5;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.selectedPack { border-color: #ff5800; background: #fff7f1; }
+.packages input { accent-color: #ec5200; width: 18px; height: 18px; }
+.packages span { flex: 1; }
+.packages strong { font-size: 26px; }
+.packages b { font-size: 18px; }
+.packages small { display: block; margin-top: 4px; color: #777781; font-size: 12px; }
+.customPackTitle { font-size: 22px!important; }
+.customTopup { margin: -2px 0 12px; padding: 14px 16px; border: 1px dashed #f0a381; border-radius: 8px; background: #fffaf7; }
+.customTopup label { display: block; font-size: 12px; font-weight: 600; }
+.customInput {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #dddde4;
+  border-radius: var(--eos-field-radius);
+  background: #fff;
+}
+.customInput:focus-within { border-color: var(--eos-field-focus); box-shadow: var(--eos-field-focus-ring); }
+.customInput span { flex: none; color: #777781; }
+.customInput input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; font: inherit; }
+.customTopup p { margin: 8px 0 0; color: #656570; font-size: 11px; }
+.customError { display: block; margin-top: 6px; color: #b33b2e; font-size: 11px; }
+.order { padding: 24px; background: #fff8f3; border-radius: 10px; align-self: start; }
+.order>svg { color: #e04c00; }
+.order h3 { font-size: 20px; font-weight: 700; margin: 12px 0; }
+.order dl { margin: 24px 0; }
+.order dl>div { display: flex; justify-content: space-between; gap: 12px; margin: 16px 0; }
+.order dd { font-weight: 700; }
+.order .vatRow { color: #777781; font-size: 13px; }
+.order .totalRow { margin-top: 20px; padding-top: 16px; border-top: 1px solid #eadbd2; font-size: 16px; font-weight: 700; }
+.order .muted { margin-top: 18px; }
+@media(min-width:1400px) {
+  .recent .activityRow { grid-template-columns: 34px minmax(68px,1fr) auto minmax(120px,.9fr); }
+  .recent .activityRow time { grid-column: auto; }
+  .recent .activityRow small { display: none; }
+}
+@media(max-width:1279.98px) {
+  .summary { grid-template-columns: 1fr 1fr; }
+  .periodStats { grid-column: 1; grid-row: 2; }
+  .topupAction { grid-column: 2; grid-row: 1/3; }
+  .overview { grid-template-columns: 1fr; }
+  .recent { border-left: 0; padding-left: 0; margin-top: 0; }
+  .tools>div { padding: 0 8px; gap: 3px; }
+  .topup { gap: 24px; }
+  .tabBar { gap: 24px; }
+}
+@media(max-width:767.98px) {
+  .summary { gap: 16px; padding: 14px 0 18px; }
+  .balance strong { font-size: 48px; }
+  .periodStats { grid-column: 1/3; grid-row: 2; gap: 8px 16px; }
+  .periodStats b { font-size: 18px; }
+  .topupAction { grid-row: 1; }
+  .primaryButton { padding: 12px; font-size: 14px!important; }
+  .topupAction small { font-size: 10px; }
+  .tabBar { gap: 24px; padding: 0; }
+  .tabBar button { min-height: 56px; font-size: 13px; }
+  .periodControl { padding: 18px 0 0; }
+  .overview { padding: 0 0 20px; gap: 16px; }
+  .chart canvas { height: 230px; }
+  .tools { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .tools>div { border: 0; }
+  .toolIcon { width: 64px; height: 64px; }
+  .tools strong { font-size: 14px; }
+  .tools b { font-size: 20px; }
+  .ledger { padding-inline: 0; }
+  .ledger .activityRow { grid-template-columns: 34px minmax(80px,1fr) auto; }
+  .ledger .activityRow time { grid-column: 2/4; }
+  .filters { flex-wrap: wrap; }
+  .search { flex-basis: 100%; }
+  .topup { grid-template-columns: 1fr; padding: 24px 0; gap: 16px; }
+  .packages strong { font-size: 23px; }
+  .packages b { font-size: 16px; }
+  .order { padding: 20px; }
+  .notice { flex-wrap: wrap; }
+  .notice span { min-width: 180px; }
+}
+/* ==========================================================================
+COMPACT SCREENS (<= lg, 1023.98px) -- readability + thumb-friendly targets
+--------------------------------------------------------------------------
+globals.css floors p / label / button / a / small / time; <span> is not
+covered, so the two caption spans are lifted to the 14px meta size.
+The artwork link is the only target on this page the shared Button
+component does not own, so it gets the 40px WCAG 2.2 (2.5.8) minimum here.
+========================================================================== */
+@media (max-width: 1023.98px) {
+  .chartCaption, .artworkCaption { font-size: 14px; }
+}
 /* Hit areas only: a finger, not a mouse, so this also covers iPad. The type
-   sizes above stay phone-only. See the two-query note in globals.css. */
+sizes above stay phone-only. See the two-query note in globals.css. */
 @media (max-width: 1023.98px), (pointer: coarse) {
   .artworkLink { min-height: 40px; }
 }
