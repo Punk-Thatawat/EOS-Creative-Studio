@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   AlertCircle,
   Archive,
@@ -25,7 +26,6 @@ import {
   Play,
   Plus,
   RotateCcw,
-  Search,
   Trash2,
   Video,
   X,
@@ -626,15 +626,19 @@ export default function AssetsPage() {
 
   return (
     <div className="assets-page" data-active-tab={activeTab} data-no-translate>
-      <section className="assets-universe-hero" aria-label="แอสเซ็ตของ EOS Creative Studio">
-        <Image
-          src="/generated-assets/assets-universe-hero-full-v1.webp"
-          alt="YOUR CREATIVE UNIVERSE. ทุกผลงาน พร้อมต่อยอด"
-          width={2172}
-          height={724}
-          priority
-          className="assets-universe-full-art"
-        />
+      <section className="studio-hero-frame assets-universe-hero" aria-label="แอสเซ็ตของ EOS Creative Studio">
+        <picture>
+          <source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/assets-mobile.webp" />
+          <Image
+            src="/generated-assets/studio-heroes-v4/assets-desktop.webp"
+            alt="ภาพรวมเครื่องมือสร้างภาพ วิดีโอ เสียง และเอกสารของ EOS Creative Studio"
+            width={2400}
+            height={435}
+            priority
+            className="assets-universe-full-art"
+            sizes="100vw"
+          />
+        </picture>
       </section>
       <div className="assets-retention-notice" role="note"><Clock3 size={16} aria-hidden="true" /><span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span></div>
 
@@ -661,7 +665,7 @@ export default function AssetsPage() {
         </div>
 
         <div className="assets-search-row">
-          <div className="assets-inline-search"><Search size={16} /><input aria-label="ค้นหาแอสเซ็ต" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาแอสเซ็ต..." /></div>
+          <SearchInput className="w-full sm:w-[230px]" aria-label="ค้นหาแอสเซ็ต" value={search} onValueChange={setSearch} placeholder="ค้นหาแอสเซ็ต..." />
           <span>{rangeLabel}</span>
         </div>
 

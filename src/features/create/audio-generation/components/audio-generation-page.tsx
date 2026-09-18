@@ -44,6 +44,7 @@ import styles from "./audio-generation-page.module.css";
 import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
 import { ClearValuesButton } from "@/features/create/components/clear-values-button";
+import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { ImageTutorialButton } from "@/features/create/image-generation/components/image-tutorial-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { Dropdown, type DropdownOption } from "@/components/ui/dropdown";
@@ -53,7 +54,7 @@ const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Soun
 type AudioTab = typeof audioModes[number];
 
 // Keep the main audio workflow visible while the advanced audio tools are being finalized.
-const visibleTabs = ["Text to Speech"] as const;
+const visibleTabs = audioModes;
 
 const audioTabKeys = {
   "Text to Speech": "create.audio.tabs.textToSpeech",
@@ -1172,19 +1173,20 @@ export function AudioGenerationPage() {
     if(typeof s.pronunciationHint==='string')setPronunciation(s.pronunciationHint);
   }});
   return <div className={`${styles.audioPage} audio-studio-page`}>
-    <section className={styles.heroBanner} aria-label={t("create.audio.a11y.hero")}>
+    <section className={`studio-hero-frame ${styles.heroBanner}`} aria-label={t("create.audio.a11y.hero")}>
       <picture>
-         <source media="(max-width: 700px)" srcSet="/generated-assets/gen-audio-hero-v3-transparent.webp" />
-         <Image src="/generated-assets/gen-audio-hero-v3-transparent.webp" alt="Gen Audio — AI audio generation studio" width={2172} height={724} priority unoptimized sizes="100vw" />
+         <source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/create-audio-mobile-v2.webp" />
+         <Image src="/generated-assets/studio-heroes-v4/create-audio-desktop-v2.webp" alt="Gen Audio — AI audio generation studio" width={2400} height={435} priority sizes="100vw" />
       </picture>
     </section>
 
-    <nav className={styles.featureTabs} aria-label={t("create.audio.tools")}>
+    <CreatorWorkspaceLayout
+      tabs={<nav className={styles.featureTabs} aria-label={t("create.audio.tools")}>
       {visibleTabs.map((label) => <button key={label} type="button" className={activeTab === label ? styles.tabActive : styles.tab} onClick={() => setActiveTab(label)} aria-pressed={activeTab === label}>
         {t(audioTabKeys[label])}
       </button>)}
-    </nav>
-    <MobileModeDropdown
+      </nav>}
+      mobileTabs={<MobileModeDropdown
       menuId="audio-mode-menu"
       value={activeTab}
       options={audioModes.map((label) => ({ value: label, label: t(audioTabKeys[label]), icon: audioModeIcons[label] }))}
@@ -1193,7 +1195,9 @@ export function AudioGenerationPage() {
       switchModeLabel={t("create.mode.switch")}
       otherModesLabel={t("create.mode.other")}
       onChange={setActiveTab}
-    />
+      />}
+      content={
+        <>
 
     {activeTab === "Text to Speech" ? <div className={styles.audioGrid}>
       <section className={styles.scriptPanel} aria-label={t("create.audio.a11y.scriptPanel")}>
@@ -1285,5 +1289,8 @@ export function AudioGenerationPage() {
         </div>
       </aside>
   </div> : activeTab === "Podcast & Dialogue" ? <PodcastDialogueLayout onHistorySaved={persistGeneratedAudio} scenesTimeline={scenesTimeline} /> : activeTab === "Voice Clone" ? <VoiceCloneLayout onHistorySaved={persistGeneratedAudio} /> : activeTab === "Sound Effects" ? <SoundEffectsLayout onHistorySaved={persistGeneratedAudio} /> : <AudioCleanupLayout />}
+        </>
+      }
+    />
   </div>;
 }

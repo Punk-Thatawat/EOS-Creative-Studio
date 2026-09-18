@@ -54,7 +54,7 @@
 .gen-selected-check { position: absolute; top: 3px; right: 3px; display: grid; width: 17px; height: 17px; place-items: center; color: #fff; background: #f26b38; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
 .gen-dial { width: 104px; height: 46px; padding: 0; color: transparent !important; background: url('/generated-assets/dial-it-in.png') center / contain no-repeat; font-size: 0; }
 .gen-generated-image { width: 100%; height: 100%; object-fit: contain; background: #101820; }.gen-image-actions button:disabled { cursor: not-allowed; opacity: .45; }.gen-generation-error { margin: 12px 0 -8px; color: #b42318; font-size: 10px; line-height: 1.4; }.gen-generation-validation { margin: 10px 0 -8px; color: #b42318; font-size: 9px; line-height: 1.4; }
-.gen-tabs { width: calc((100% - 16px) * .7714286 + 8px); margin-top: 0; margin-right: auto; margin-left: 0; }
+.gen-tabs { width: 100%; margin-top: 0; margin-right: auto; margin-left: 0; }
 @media (max-width: 1100px) and (min-width: 768px) { .gen-tabs { width: 100%; margin-left: 0; } }
 .gen-live-badge { top: 0; left: -8px; width: 116px; height: auto; padding: 0; color: transparent; background: transparent; border: 0; border-radius: 0; transform: rotate(-3deg); object-fit: contain; }
 .gen-prompt-annotation { display: block; width: 145px; height: auto; object-fit: contain; }
@@ -75,10 +75,6 @@
 .gen-segmented button.is-selected { color: #202124; background: transparent; box-shadow: inset 0 0 0 1px #f26b38; }
 .gen-segmented button.is-selected { font-weight: 700; }
 .gen-select b { font-weight: 700; }
-.gen-image-hero { min-height: 0; aspect-ratio: 5.5 / 1; padding: 0; display: block; }.gen-hero-picture { display: block; width: 100%; height: 100%; }.gen-hero-artwork { display: block; width: 100%; height: 100%; object-fit: contain; object-position: center; }
-.gen-image-hero { position: relative; background: transparent; border: 0; border-radius: 0; margin-top: 0; pointer-events: none; }
-.gen-image-hero * { pointer-events: none; }
-@media (max-width: 767.98px) { .gen-image-hero { min-height: 0; aspect-ratio: 2 / 1; background: transparent; }.gen-hero-artwork { width: 100%; height: 100%; object-fit: cover; object-position: center; } }
 .gen-select-wrap { position: relative; }
 .gen-select { min-height: 44px; padding: 10px 12px; text-align: left; }
 .gen-model-loading { cursor: wait; }
@@ -617,11 +613,11 @@
 .gen-upload > span { flex: initial; }
 
 /* Keep the transparent hero compact so the creation controls stay above the fold. */
-.gen-image-hero { height: min(220px, 18vw); min-height: 0; aspect-ratio: auto; background: transparent; }
+.gen-image-hero { position: relative; display: block; height: 220px; min-height: 220px; aspect-ratio: auto; margin: 0 0 14px; padding: 0; overflow: hidden; border: 0; border-radius: 0; background: transparent; pointer-events: none; }
 .gen-hero-picture { display: block; width: 100%; height: 100%; }
 .gen-hero-artwork { width: 100%; height: 100%; object-fit: cover; object-position: center 58%; }
 @media (max-width: 767.98px) {
-  .gen-image-hero { height: 115px; aspect-ratio: auto; }
+  .gen-image-hero { height: 115px; min-height: 115px; aspect-ratio: auto; }
   .gen-hero-artwork { object-position: center center; }
 }
 
