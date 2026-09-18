@@ -18,7 +18,6 @@ import {
   Clock3,
   Download,
   FileText,
-  Folder,
   Grid2X2,
   Image as ImageIcon,
   List,
@@ -29,14 +28,13 @@ import {
   Trash2,
   Video,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import {
   deleteAsset,
-  deleteAssetFolder,
   deleteAssetTag,
   downloadAsset,
   fetchAssets,
-  createAssetFolder,
   createAssetTag,
   restoreAsset,
   updateAsset,
@@ -93,7 +91,22 @@ const filterByApiType: Record<AssetsApiType, Exclude<FilterType, "All Types">> =
   other: "Other",
 };
 
-const defaultAssetFolderNames = new Set(["image", "videos", "voice", "document"]);
+/* Nothing in the app generates documents yet, so the tab is held out of the
+   strip rather than deleted -- flip this to true on the day they ship. */
+const showDocumentsTab = false;
+
+type MediaTab = { value: FilterType; label: string; Icon: LucideIcon | null };
+
+const mediaTabs: MediaTab[] = [
+  { value: "All Types", label: "ทั้งหมด", Icon: null },
+  { value: "Images", label: "ภาพ", Icon: ImageIcon },
+  { value: "Videos", label: "วิดีโอ", Icon: Video },
+  { value: "Audio", label: "เสียง", Icon: AudioLines },
+  { value: "Documents", label: "เอกสาร", Icon: FileText },
+];
+
+const visibleMediaTabs = mediaTabs.filter((tab) => showDocumentsTab || tab.value !== "Documents");
+
 const SIDEBAR_GROUP_LIMIT = 5;
 const ASSETS_CACHE_TTL_MS = 15_000;
 
@@ -123,25 +136,6 @@ type AssetsCacheEntry = { data: AssetsApiListData; cachedAt: number };
 
 function formatLabel(value: string): string {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-const builtInFolderLabels: Record<string, string> = {
-  "all assets": "ทั้งหมด",
-  "all trash": "ถังขยะทั้งหมด",
-  "all shared": "ที่แชร์ทั้งหมด",
-  "all team assets": "ของทีมทั้งหมด",
-  image: "ภาพ",
-  images: "ภาพ",
-  video: "วิดีโอ",
-  videos: "วิดีโอ",
-  voice: "เสียง",
-  audio: "เสียง",
-  document: "เอกสาร",
-  documents: "เอกสาร",
-};
-
-function folderLabel(value: string): string {
-  return builtInFolderLabels[value.trim().toLowerCase()] ?? formatLabel(value);
 }
 
 function formatCount(value: number): string {
@@ -192,8 +186,7 @@ function mapApiAsset(asset: AssetsApiAsset): Asset {
   };
 }
 
-type GroupDialog = {
-  kind: "folder" | "tag";
+type TagDialog = {
   assetId: string | null;
 };
 
@@ -300,10 +293,79 @@ function AssetPreviewPopup({ asset, onClose }: { asset: Asset; onClose: () => vo
   </div>;
 }
 
-function FilterList({ items, activeId, onSelect, kind }: { items: AssetsApiFilter[]; activeId: string | null; onSelect: (id: string | null) => void; kind: "folder" | "tag" }) {
-  return <>{items.map((item) => <button type="button" key={item.id} className={activeId === item.id ? "is-active" : ""} onClick={() => onSelect(activeId === item.id ? null : item.id)}>
-      {kind === "folder" ? <Folder size={17} /> : null}<span>{kind === "folder" ? folderLabel(item.name) : formatLabel(item.name)}</span><b>{formatCount(item.count)}</b>
-  </button>)}</>;
+type TagListProps = {
+  items: AssetsApiFilter[];
+  activeId: string | null;
+  onSelect: (id: string | null) => void;
+  onRemove: (item: AssetsApiFilter) => void;
+  removeBusy: boolean;
+};
+
+function TagList({ items, activeId, onSelect, onRemove, removeBusy }: TagListProps) {
+  return (
+    <>
+      {items.map((item) => {
+        const isActive = activeId === item.id;
+        const label = formatLabel(item.name);
+
+        return (
+          <span className="assets-tag-chip" key={item.id}>
+            <button
+              type="button"
+              className={`assets-tag-chip-main ${isActive ? "is-active" : ""}`}
+              onClick={() => onSelect(isActive ? null : item.id)}
+            >
+              <span>{label}</span>
+              <b>{formatCount(item.count)}</b>
+            </button>
+
+            {/* Deleting a tag used to be one bin in the panel header, acting on
+                whatever happened to be selected. It rides its own chip now, so
+                only the selected tag offers one and the target is never in doubt. */}
+            {isActive ? (
+              <button
+                type="button"
+                className="assets-tag-remove"
+                aria-label={`ลบแท็ก ${label}`}
+                title={`ลบแท็ก ${label}`}
+                disabled={removeBusy}
+                onClick={() => onRemove(item)}
+              >
+                <X size={12} strokeWidth={3} />
+              </button>
+            ) : null}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+type TagDeleteConfirmProps = {
+  tag: AssetsApiFilter;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function TagDeleteConfirm({ tag, busy, onCancel, onConfirm }: TagDeleteConfirmProps) {
+  const label = formatLabel(tag.name);
+
+  return (
+    <div className="assets-tag-delete-popover" role="dialog" aria-label={`ยืนยันการลบ ${label}`}>
+      <div className="assets-tag-delete-copy">
+        <span className="assets-tag-delete-icon"><Trash2 size={16} /></span>
+        <div>
+          <strong>ลบแท็ก?</strong>
+          <p>“{label}” จะถูกลบออกจากแอสเซ็ตของคุณ</p>
+        </div>
+      </div>
+      <div className="assets-tag-delete-actions">
+        <button type="button" onClick={onCancel} disabled={busy}>ยกเลิก</button>
+        <button type="button" onClick={onConfirm} disabled={busy}>ลบ</button>
+      </div>
+    </div>
+  );
 }
 
 export default function AssetsPage() {
@@ -311,11 +373,9 @@ export default function AssetsPage() {
   const searchRef = useRef(queryParams.get("q") ?? "");
   const [activeTab] = useState<AssetTab>("My Assets");
   const [activeType, setActiveType] = useState<FilterType>("All Types");
-  const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeSort, setActiveSort] = useState<AssetSort>("Newest");
   const [openFilter, setOpenFilter] = useState<string | null>(null);
-  const [showAllFolders, setShowAllFolders] = useState(true);
   const [showAllTags, setShowAllTags] = useState(false);
   const [search, setSearch] = useState(() => queryParams.get("q") ?? "");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -324,11 +384,9 @@ export default function AssetsPage() {
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [openMenuAsset, setOpenMenuAsset] = useState<string | null>(null);
   const [busyAssetId, setBusyAssetId] = useState<string | null>(null);
-  const [busyFolderName, setBusyFolderName] = useState<string | null>(null);
   const [busyTagName, setBusyTagName] = useState<string | null>(null);
-  const [pendingDeleteFolder, setPendingDeleteFolder] = useState<AssetsApiFilter | null>(null);
   const [pendingDeleteTag, setPendingDeleteTag] = useState<AssetsApiFilter | null>(null);
-  const [groupDialog, setGroupDialog] = useState<GroupDialog | null>(null);
+  const [groupDialog, setGroupDialog] = useState<TagDialog | null>(null);
   const [groupName, setGroupName] = useState("");
   const [groupSaving, setGroupSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -359,7 +417,6 @@ export default function AssetsPage() {
       tab: apiTabByLabel[activeTab],
       type: apiTypeByFilter[activeType] ?? null,
       search: search.trim(),
-      folder: activeFolder,
       tag: activeTag,
       sort: activeSort,
       page,
@@ -387,7 +444,6 @@ export default function AssetsPage() {
           tab: apiTabByLabel[activeTab],
           type: apiTypeByFilter[activeType],
           search: search.trim(),
-          folder: activeFolder ?? undefined,
           tag: activeTag ?? undefined,
           sort: activeSort.toLowerCase() as "newest" | "oldest",
           page,
@@ -417,7 +473,7 @@ export default function AssetsPage() {
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [activeFolder, activeSort, activeTab, activeTag, activeType, page, refreshKey, search]);
+  }, [activeSort, activeTab, activeTag, activeType, page, refreshKey, search]);
 
   useEffect(() => {
     const refreshGeneratedAssets = () => {
@@ -432,44 +488,26 @@ export default function AssetsPage() {
     () => assetsData.assets.filter((asset) => asset.source === "generated").map(mapApiAsset),
     [assetsData.assets],
   );
-  const folderItems = useMemo(() => {
-    const tabFolderName = activeTab === "Trash" ? "All Trash" : activeTab === "Shared with me" ? "All Shared" : activeTab === "Team Assets" ? "All Team Assets" : "All Assets";
-    const fixedFolders = ["Image", "Videos", "Voice", "Document"].map((name) => {
-      const existing = assetsData.filters.folders.find((item) => item.name.toLowerCase() === name.toLowerCase());
-      return { ...(existing ?? { id: name, name, count: 0 }), name: name === "Videos" ? "Video" : name };
-    });
-    const customFolders = assetsData.filters.folders.filter((item) => item.id !== "all" && !defaultAssetFolderNames.has(item.name.toLowerCase()));
-    return [{ id: "all", name: tabFolderName, count: assetsData.summary.total }, ...fixedFolders, ...customFolders];
-  }, [activeTab, assetsData.filters.folders, assetsData.summary.total]);
-  const visibleFolderItems = showAllFolders ? folderItems : folderItems.slice(0, SIDEBAR_GROUP_LIMIT);
   const visibleTagItems = showAllTags ? assetsData.filters.tags : assetsData.filters.tags.slice(0, SIDEBAR_GROUP_LIMIT);
   const totalPages = Math.max(1, assetsData.pagination.totalPages || 1);
   const groupAsset = groupDialog?.assetId ? assets.find((asset) => asset.id === groupDialog.assetId) : null;
   const groupAssetTags = new Set((groupAsset?.tags ?? []).map((tag) => tag.trim().toLocaleLowerCase()));
   const groupOptions = groupDialog?.assetId
-    ? (groupDialog.kind === "tag"
-      ? assetsData.filters.tags.filter((item) => !groupAssetTags.has(item.name.trim().toLocaleLowerCase()))
-      : assetsData.filters.folders.filter((item) => !defaultAssetFolderNames.has(item.name.trim().toLocaleLowerCase())))
+    ? assetsData.filters.tags.filter((item) => !groupAssetTags.has(item.name.trim().toLocaleLowerCase()))
     : [];
-  const duplicateTag = groupDialog?.kind === "tag" && Boolean(groupDialog.assetId) && groupAssetTags.has(groupName.trim().toLocaleLowerCase());
-  const defaultFolderSelected = groupDialog?.kind === "folder" && Boolean(groupDialog.assetId) && defaultAssetFolderNames.has(groupName.trim().toLocaleLowerCase());
-  const selectedCustomFolder = activeFolder
-    ? assetsData.filters.folders.find((item) => item.id === activeFolder && !defaultAssetFolderNames.has(item.name.trim().toLocaleLowerCase()))
-    : undefined;
-  const selectedTag = activeTag ? assetsData.filters.tags.find((item) => item.id === activeTag) : undefined;
+  const duplicateTag = Boolean(groupDialog?.assetId) && groupAssetTags.has(groupName.trim().toLocaleLowerCase());
   const startItem = assetsData.pagination.total === 0 ? 0 : ((assetsData.pagination.page - 1) * assetsData.pagination.limit) + 1;
   const endItem = Math.min(assetsData.pagination.total, startItem + assetsData.pagination.limit - 1);
   const rangeLabel = assetsData.pagination.total === 0
     ? "ไม่มีรายการ"
     : `แสดง ${startItem}–${endItem} จาก ${formatCount(assetsData.pagination.total)} รายการ`;
 
-  const openGroupDialog = (kind: GroupDialog["kind"], assetId: string | null = null) => {
+  const openTagDialog = (assetId: string | null = null) => {
     setOpenFilter(null);
-    setPendingDeleteFolder(null);
     setPendingDeleteTag(null);
     setOpenMenuAsset(null);
     setGroupName("");
-    setGroupDialog({ kind, assetId });
+    setGroupDialog({ assetId });
   };
 
   const closeGroupDialog = () => {
@@ -484,7 +522,6 @@ export default function AssetsPage() {
       tab: "mine",
       type: apiTypeByFilter[activeType],
       search,
-      folder: activeFolder ?? undefined,
       tag: activeTag ?? undefined,
       sort: activeSort.toLowerCase() as "newest" | "oldest",
       page,
@@ -496,60 +533,28 @@ export default function AssetsPage() {
 
   const handleSaveGroup = async () => {
     if (!groupDialog || !groupName.trim()) return;
-    if (duplicateTag || defaultFolderSelected) return;
+    if (duplicateTag) return;
     const name = groupName.trim();
     setGroupSaving(true);
     setError(null);
     try {
-      const availableGroups = groupDialog.kind === "folder" ? assetsData.filters.folders : assetsData.filters.tags;
-      const existingGroup = availableGroups.find((item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
-      const savedName = existingGroup?.name ?? (groupDialog.kind === "folder" ? (await createAssetFolder(name)).name : (await createAssetTag(name)).name);
+      const existingGroup = assetsData.filters.tags.find((item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      const savedName = existingGroup?.name ?? (await createAssetTag(name)).name;
       if (groupDialog.assetId) {
         const sourceAsset = assetsData.assets.find((asset) => asset.id === groupDialog.assetId);
-        if (groupDialog.kind === "folder") {
-          await updateAsset(groupDialog.assetId, { folder: savedName });
-        } else {
-          const tags = Array.from(new Map([...(sourceAsset?.tags ?? []), savedName].map((tag) => [tag.toLocaleLowerCase(), tag])).values());
-          await updateAsset(groupDialog.assetId, { tags });
-        }
+        const tags = Array.from(new Map([...(sourceAsset?.tags ?? []), savedName].map((tag) => [tag.toLocaleLowerCase(), tag])).values());
+        await updateAsset(groupDialog.assetId, { tags });
       }
       setGroupDialog(null);
       setGroupName("");
       await refreshAfterGroupMutation();
     } catch (groupError) {
-      setError(groupError instanceof Error ? groupError.message : "Unable to save folder or tag");
+      setError(groupError instanceof Error ? groupError.message : "Unable to save tag");
     } finally {
       setGroupSaving(false);
     }
   };
 
-  const handleDeleteFolder = async (folder: AssetsApiFilter) => {
-    const normalizedName = folder.name.trim().toLocaleLowerCase();
-    if (folder.id === "all" || defaultAssetFolderNames.has(normalizedName) || busyFolderName) return;
-    setBusyFolderName(folder.name);
-    setPendingDeleteFolder(null);
-    setError(null);
-    assetsCacheRef.current.clear();
-    try {
-      await deleteAssetFolder(folder.name);
-      if (activeFolder === folder.id) {
-        setAssetsData((current) => ({
-          ...current,
-          filters: { ...current.filters, folders: current.filters.folders.filter((item) => item.id !== folder.id) },
-        }));
-        window.requestAnimationFrame(() => {
-          setActiveFolder(null);
-          setPage(1);
-        });
-      } else {
-        setRefreshKey((current) => current + 1);
-      }
-    } catch (folderError) {
-      setError(folderError instanceof Error ? folderError.message : "Unable to delete folder");
-    } finally {
-      setBusyFolderName(null);
-    }
-  };
 
   const handleDeleteTag = async (tag: AssetsApiFilter) => {
     if (!tag.name.trim() || busyTagName) return;
@@ -645,7 +650,57 @@ export default function AssetsPage() {
       <section className="assets-library" aria-label="คลังแอสเซ็ต">
         <div className="assets-toolbar">
           <div className="assets-media-tabs" role="group" aria-label="ประเภทไฟล์">
-            {([["All Types","ทั้งหมด",null],["Images","ภาพ",ImageIcon],["Videos","วิดีโอ",Video],["Audio","เสียง",AudioLines],["Documents","เอกสาร",FileText]] as const).map(([value,label,Icon]) => <button key={value} type="button" aria-pressed={activeType === value} className={activeType === value ? "is-active" : ""} onClick={() => {setActiveType(value);setPage(1);}}>{Icon ? <Icon size={16} /> : null}{label}</button>)}
+            {visibleMediaTabs.map(({ value, label, Icon }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={activeType === value}
+                className={activeType === value ? "is-active" : ""}
+                onClick={() => { setActiveType(value); setPage(1); }}
+              >
+                {Icon ? <Icon size={16} /> : null}
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tags share the row with the media types. They used to sit in a card
+              below, paired with folders; folders are gone from this page, so this
+              is the only grouping left and it belongs beside the other filters. */}
+          <div className="assets-tag-strip" aria-label="แท็ก">
+            <span className="assets-tag-strip-divider" aria-hidden="true" />
+
+            <TagList
+              items={visibleTagItems}
+              activeId={activeTag}
+              onSelect={(id) => { setActiveTag(id); setPage(1); }}
+              onRemove={setPendingDeleteTag}
+              removeBusy={busyTagName !== null}
+            />
+
+            {assetsData.filters.tags.length > SIDEBAR_GROUP_LIMIT ? (
+              <button
+                type="button"
+                className={`assets-show-more ${showAllTags ? "is-expanded" : ""}`}
+                aria-expanded={showAllTags}
+                onClick={() => setShowAllTags((current) => !current)}
+              >
+                {showAllTags ? "ย่อลง" : "ดูทั้งหมด"} <ChevronDown size={14} />
+              </button>
+            ) : null}
+
+            <button type="button" className="assets-add-tag" onClick={() => openTagDialog()}>
+              <Plus size={16} /> แท็ก
+            </button>
+
+            {pendingDeleteTag ? (
+              <TagDeleteConfirm
+                tag={pendingDeleteTag}
+                busy={busyTagName !== null}
+                onCancel={() => setPendingDeleteTag(null)}
+                onConfirm={() => void handleDeleteTag(pendingDeleteTag)}
+              />
+            ) : null}
           </div>
           <div className="assets-filters">
             <FilterSelect
@@ -670,29 +725,6 @@ export default function AssetsPage() {
         </div>
 
         <div className="assets-content-grid">
-          <section className="assets-sidebar-panel" aria-label="โฟลเดอร์และแท็ก">
-            <div className="assets-panel-heading"><strong>โฟลเดอร์</strong><div className="assets-panel-actions"><button type="button" aria-label="ลบโฟลเดอร์ที่เลือก" title={selectedCustomFolder ? `ลบ ${folderLabel(selectedCustomFolder.name)}` : "เลือกโฟลเดอร์ที่สร้างเองเพื่อลบ"} disabled={!selectedCustomFolder || busyFolderName !== null} onClick={() => { if (selectedCustomFolder) setPendingDeleteFolder(selectedCustomFolder); }}><Trash2 size={16} /></button><button type="button" className="assets-add-group" aria-label="สร้างโฟลเดอร์" onClick={() => openGroupDialog("folder")}><Plus size={17} /> สร้างโฟลเดอร์</button></div></div>
-            {pendingDeleteFolder ? <div className="assets-folder-delete-popover" role="dialog" aria-label={`ยืนยันการลบ ${folderLabel(pendingDeleteFolder.name)}`}>
-              <div className="assets-folder-delete-copy"><span className="assets-folder-delete-icon"><Trash2 size={16} /></span><div><strong>ลบโฟลเดอร์?</strong><p>“{folderLabel(pendingDeleteFolder.name)}” จะถูกลบ แอสเซ็ตยังอยู่ในโฟลเดอร์ทั้งหมด</p></div></div>
-              <div className="assets-folder-delete-actions"><button type="button" onClick={() => setPendingDeleteFolder(null)} disabled={busyFolderName !== null}>ยกเลิก</button><button type="button" onClick={() => void handleDeleteFolder(pendingDeleteFolder)} disabled={busyFolderName !== null}>ลบ</button></div>
-            </div> : null}
-            <div className="assets-folder-list">
-              {visibleFolderItems.length ? <FilterList items={visibleFolderItems} activeId={activeFolder ?? "all"} onSelect={(id) => { setActiveFolder(id === "all" ? null : id); setPage(1); }} kind="folder" /> : <span className="assets-sidebar-empty">ยังไม่มีโฟลเดอร์</span>}
-            </div>
-            {folderItems.length > SIDEBAR_GROUP_LIMIT ? <button type="button" className={`assets-show-more ${showAllFolders ? "is-expanded" : ""}`} aria-expanded={showAllFolders} onClick={() => setShowAllFolders((current) => !current)}>{showAllFolders ? "ย่อลง" : "ดูทั้งหมด"} <ChevronDown size={14} /></button> : null}
-            <div className="assets-panel-divider" />
-            <div className="assets-tags-section">
-              <div className="assets-panel-heading"><strong>แท็ก</strong><div className="assets-panel-actions"><button type="button" aria-label="ลบแท็กที่เลือก" title={selectedTag ? `ลบ ${formatLabel(selectedTag.name)}` : "เลือกแท็กเพื่อลบ"} disabled={!selectedTag || busyTagName !== null} onClick={() => { if (selectedTag) setPendingDeleteTag(selectedTag); }}><Trash2 size={16} /></button><button type="button" className="assets-add-group" aria-label="เพิ่มแท็ก" onClick={() => openGroupDialog("tag")}><Plus size={17} /> เพิ่มแท็ก</button></div></div>
-              {pendingDeleteTag ? <div className="assets-folder-delete-popover assets-tag-delete-popover" role="dialog" aria-label={`ยืนยันการลบ ${formatLabel(pendingDeleteTag.name)}`}>
-                <div className="assets-folder-delete-copy"><span className="assets-folder-delete-icon"><Trash2 size={16} /></span><div><strong>ลบแท็ก?</strong><p>“{formatLabel(pendingDeleteTag.name)}” จะถูกลบออกจากแอสเซ็ตของคุณ</p></div></div>
-                <div className="assets-folder-delete-actions"><button type="button" onClick={() => setPendingDeleteTag(null)} disabled={busyTagName !== null}>ยกเลิก</button><button type="button" onClick={() => void handleDeleteTag(pendingDeleteTag)} disabled={busyTagName !== null}>ลบ</button></div>
-              </div> : null}
-              <div className="assets-tag-grid">
-                {visibleTagItems.length ? <FilterList items={visibleTagItems} activeId={activeTag} onSelect={(id) => { setActiveTag(id); setPage(1); }} kind="tag" /> : <span className="assets-sidebar-empty">ยังไม่มีแท็ก</span>}
-              </div>
-              {assetsData.filters.tags.length > SIDEBAR_GROUP_LIMIT ? <button type="button" className={`assets-show-more ${showAllTags ? "is-expanded" : ""}`} aria-expanded={showAllTags} onClick={() => setShowAllTags((current) => !current)}>{showAllTags ? "ย่อลง" : "ดูทั้งหมด"} <ChevronDown size={14} /></button> : null}
-            </div>
-          </section>
 
           <div className={`${view === "grid" ? "assets-grid" : "assets-list"} ${isRefreshing ? "is-refreshing" : ""}`} aria-busy={loading || isRefreshing}>
             {loading ? Array.from({ length: 8 }, (_, index) => <div className="asset-card assets-loading-card" key={`loading-${index}`} aria-hidden="true" />) : null}
@@ -706,7 +738,7 @@ export default function AssetsPage() {
               </div>
               <div className="asset-card-footer"><div><strong>{asset.title}</strong><span>{asset.date} <i>•</i> {asset.size}</span></div><div className="asset-card-actions"><button type="button" aria-label={`ดาวน์โหลด ${asset.title}`} onClick={(event) => { event.stopPropagation(); void handleDownload(asset); }} disabled={busyAssetId === asset.id}><Download size={17} /></button><button type="button" aria-label={`ตัวเลือกเพิ่มเติมของ ${asset.title}`} onClick={(event) => { event.stopPropagation(); setOpenMenuAsset(openMenuAsset === asset.id ? null : asset.id); }} disabled={busyAssetId === asset.id}><MoreVertical size={18} /></button>{openMenuAsset === asset.id ? <div className="asset-card-menu" role="menu" onClick={(event) => event.stopPropagation()}>
                 <button type="button" role="menuitem" onClick={() => void handleDownload(asset)} disabled={busyAssetId === asset.id}><Download size={14} />{busyAssetId === asset.id ? "กำลังดาวน์โหลด..." : "ดาวน์โหลด"}</button>
-                {activeTab !== "Trash" ? <><button type="button" role="menuitem" onClick={() => openGroupDialog("folder", asset.id)}><Folder size={14} />ย้ายไปโฟลเดอร์</button><button type="button" role="menuitem" onClick={() => openGroupDialog("tag", asset.id)}><Plus size={14} />เพิ่มแท็ก</button></> : null}
+                {activeTab !== "Trash" ? <button type="button" role="menuitem" onClick={() => openTagDialog(asset.id)}><Plus size={14} />เพิ่มแท็ก</button> : null}
                 {activeTab === "Trash" ? <button type="button" role="menuitem" onClick={() => void handleAssetAction(asset.id, "restore")}><RotateCcw size={14} />กู้คืน</button> : <button type="button" role="menuitem" onClick={() => void handleAssetAction(asset.id, "trash")}><Trash2 size={14} />ย้ายไปถังขยะ</button>}
               </div> : null}</div></div>
             </article>) : null}
@@ -719,14 +751,13 @@ export default function AssetsPage() {
 
       {groupDialog ? <div className="assets-group-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeGroupDialog(); }}>
         <div className="assets-group-dialog" role="dialog" aria-modal="true" aria-labelledby="assets-group-dialog-title">
-          <div className="assets-group-dialog-heading"><strong id="assets-group-dialog-title">{groupDialog.assetId ? groupDialog.kind === "folder" ? "ย้ายไปโฟลเดอร์" : "เพิ่มแท็ก" : groupDialog.kind === "folder" ? "สร้างโฟลเดอร์" : "สร้างแท็ก"}</strong><button type="button" onClick={closeGroupDialog} disabled={groupSaving} aria-label="ปิด">×</button></div>
+          <div className="assets-group-dialog-heading"><strong id="assets-group-dialog-title">{groupDialog.assetId ? "เพิ่มแท็ก" : "สร้างแท็ก"}</strong><button type="button" onClick={closeGroupDialog} disabled={groupSaving} aria-label="ปิด">×</button></div>
           {groupDialog.assetId ? <div className="assets-group-options">
-            {groupOptions.length ? groupOptions.map((item) => <button type="button" key={item.id} className={groupName === item.name ? "is-selected" : ""} onClick={() => setGroupName(item.name)}>{formatLabel(item.name)}<span>{formatCount(item.count)}</span></button>) : <span className="assets-group-options-empty">{groupDialog.kind === "tag" ? "ไม่มีแท็กที่ใช้ได้กับแอสเซ็ตนี้" : "ยังไม่มีโฟลเดอร์ที่สร้างเอง"}</span>}
+            {groupOptions.length ? groupOptions.map((item) => <button type="button" key={item.id} className={groupName === item.name ? "is-selected" : ""} onClick={() => setGroupName(item.name)}>{formatLabel(item.name)}<span>{formatCount(item.count)}</span></button>) : <span className="assets-group-options-empty">ไม่มีแท็กที่ใช้ได้กับแอสเซ็ตนี้</span>}
           </div> : null}
-          <input autoFocus value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder={groupDialog.kind === "folder" ? "ชื่อโฟลเดอร์" : "ชื่อแท็ก"} maxLength={120} onKeyDown={(event) => { if (event.key === "Enter") void handleSaveGroup(); }} />
+          <input autoFocus value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="ชื่อแท็ก" maxLength={120} onKeyDown={(event) => { if (event.key === "Enter") void handleSaveGroup(); }} />
           {duplicateTag ? <span className="assets-group-dialog-error" role="alert">แอสเซ็ตนี้มีแท็กนี้อยู่แล้ว</span> : null}
-          {defaultFolderSelected ? <span className="assets-group-dialog-error" role="alert">เลือกโฟลเดอร์เริ่มต้นตรงนี้ไม่ได้</span> : null}
-          <div className="assets-group-dialog-actions"><button type="button" onClick={closeGroupDialog} disabled={groupSaving}>ยกเลิก</button><button type="button" onClick={() => void handleSaveGroup()} disabled={groupSaving || !groupName.trim() || duplicateTag || defaultFolderSelected}>{groupSaving ? "กำลังบันทึก..." : groupDialog.assetId ? "บันทึก" : "สร้าง"}</button></div>
+          <div className="assets-group-dialog-actions"><button type="button" onClick={closeGroupDialog} disabled={groupSaving}>ยกเลิก</button><button type="button" onClick={() => void handleSaveGroup()} disabled={groupSaving || !groupName.trim() || duplicateTag}>{groupSaving ? "กำลังบันทึก..." : groupDialog.assetId ? "บันทึก" : "สร้าง"}</button></div>
         </div>
       </div> : null}
       {previewAsset ? <AssetPreviewPopup asset={previewAsset} onClose={() => setPreviewAsset(null)} /> : null}

@@ -12,16 +12,19 @@
 .assets-media-tabs button:hover { border-color:#ff601f; }
 .assets-page .assets-filters { margin-left:auto; }
 .assets-page .assets-content-grid { display:flex; flex-direction:column; margin-top:0; gap:12px; }
-.assets-page .assets-sidebar-panel { width:100%; border:1px solid #e8e7e5; border-radius:12px; background:#fff; padding:16px; min-width:0; order:0; }
-.assets-page .assets-folder-list { display:flex; flex-wrap:wrap; gap:8px; }
-.assets-page .assets-folder-list > button { width:auto; min-height:38px; gap:10px; padding:6px 12px; border:1px solid #e8e7e5; font-size:13px; }
-.assets-page .assets-folder-list > button.is-active { border-color:#ff9a70; }
-.assets-page .assets-tag-grid { display:flex; flex-wrap:wrap; gap:8px; }
-.assets-page .assets-tag-grid button { min-height:30px; gap:10px; }
-.assets-page .assets-panel-actions .assets-add-group { display:flex; width:auto; height:34px; align-items:center; gap:6px; padding:0 10px; color:#c64d1d; background:#fff3ed; font-size:12px; }
-.assets-sidebar-panel > summary { display:flex; align-items:center; justify-content:flex-end; gap:5px; color:#777; font-size:12px; cursor:pointer; list-style:none; }
-.assets-sidebar-panel > summary::-webkit-details-marker { display:none; }
-.assets-sidebar-panel[open] { padding:16px; border:1px solid #eee; border-radius:12px; }
+.assets-page .assets-tag-strip { position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0; }
+.assets-page .assets-tag-strip-divider { width:1px; height:24px; flex:none; background:#e2e0dc; }
+.assets-page .assets-tag-chip { position:relative; display:inline-flex; align-items:center; }
+.assets-page .assets-tag-chip-main { display:inline-flex; min-height:38px; align-items:center; gap:8px; padding:0 13px; color:#555; border:1px solid #e9e7e5; border-radius:24px; background:#fff; cursor:pointer; font-size:14px; }
+.assets-page .assets-tag-chip-main:hover { border-color:#ff601f; }
+.assets-page .assets-tag-chip-main.is-active { color:#c64d1d; border-color:#ff9a70; background:#fff0e8; }
+.assets-page .assets-tag-chip-main b { color:#8d8e99; font-size:13px; font-weight:500; }
+.assets-page .assets-tag-chip-main.is-active b { color:#c64d1d; }
+.assets-page .assets-tag-remove { position:absolute; z-index:2; top:-6px; right:-6px; display:grid; width:20px; height:20px; place-items:center; padding:0; color:#fff; border:2px solid #fff; border-radius:50%; background:#c64d1d; cursor:pointer; }
+.assets-page .assets-tag-remove:hover:not(:disabled) { background:#9e3a13; }
+.assets-page .assets-tag-remove:disabled { cursor:wait; opacity:.6; }
+.assets-page .assets-add-tag { display:inline-flex; min-height:38px; align-items:center; gap:6px; padding:0 13px; color:#c64d1d; border:1px dashed #c9c7c2; border-radius:24px; background:transparent; cursor:pointer; font-size:14px; }
+.assets-page .assets-add-tag:hover { border-color:#ff9a70; background:#fff3ed; }
 .assets-page .assets-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px 18px; }
 .assets-page .asset-card { border:1px solid #e8e7e5; border-radius:12px; box-shadow:none; overflow:visible; min-width:0; }
 .assets-page .asset-card-media { height:auto; aspect-ratio:1.65; border-radius:11px 11px 0 0; }
@@ -56,29 +59,15 @@
  .assets-page .asset-card-footer { padding:10px; flex-wrap:wrap; }
  .assets-page .asset-card-footer strong { font-size:14px; }
 }
-/* Below the Tailwind scale on purpose: two cards side by side stop being
-   legible under ~420px, so the smallest phones get one per row. */
+
 @media(max-width:420px) {
  .assets-page .assets-grid { grid-template-columns:1fr; }
 }
 
-/* ==========================================================================
-   COMPACT SCREENS (<= lg, 1023.98px) -- readability + thumb-friendly targets
-   --------------------------------------------------------------------------
-   The rail and toolbar are drawn at desktop density (24-35px rows). Every control here is reached with a thumb, so each one gets the
-   40px minimum from WCAG 2.2 (2.5.8), and the labels globals.css does not
-   floor -- strong / b / span -- are lifted to 14px.
-
-   Sizes for the compact grid live in the media queries above; this block only
-   holds what that block was still leaving too small.
-   ========================================================================== */
 @media (max-width: 1023.98px) {
-  .assets-page .assets-panel-heading strong,
-  .assets-page .assets-sidebar-empty,
   .assets-page .assets-pagination span { font-size: 14px; }
 
-  .assets-page .assets-folder-list > button b,
-  .assets-page .assets-tag-grid button b { font-size: 13px; }
+  .assets-page .assets-tag-chip-main b { font-size: 13px; }
 
 }
 
@@ -87,14 +76,14 @@
   .assets-page .assets-select-trigger,
   .assets-page .assets-view-toggle,
   .assets-page .assets-view-toggle button,
-  .assets-page .assets-folder-list > button,
-  .assets-page .assets-tag-grid button,
-  .assets-page .assets-add-group,
+  .assets-page .assets-tag-chip-main,
+  .assets-page .assets-add-tag,
   .assets-page .assets-media-tabs button,
   .assets-page .asset-card-actions > button { min-height: 40px; height: auto; }
 
+  .assets-page .assets-tag-delete-actions button { min-height: 40px; }
+
   .assets-page .assets-view-toggle button,
-  .assets-page .assets-panel-heading button,
   .assets-page .assets-pagination button,
   .assets-page .asset-card-actions > button {
     min-width: 40px;
@@ -102,4 +91,6 @@
     min-height: 40px;
     height: auto;
   }
+
+  .assets-page .assets-tag-remove::after { position: absolute; inset: -11px; content: ""; }
 }
