@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowRight, AudioLines, Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileClock, Image as ImageIcon, LoaderCircle, RefreshCw, Search, SlidersHorizontal, Sparkles, Trash2, Video, X } from "lucide-react";
+import { AlertCircle, ArrowRight, AudioLines, Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileClock, Image as ImageIcon, LoaderCircle, RefreshCw, SlidersHorizontal, Sparkles, Trash2, Video, X } from "lucide-react";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Dropdown } from "@/components/ui/dropdown";
+import { SearchInput } from "@/components/ui/search-input";
 import { deleteHistoryItem, fetchHistory, type HistoryItem, type HistoryResponse, type HistoryStatus, type HistoryType } from "@/lib/api/history";
 import { templateCopy } from "@/features/templates/template-copy";
 import s from "./history-page.module.css";
@@ -151,11 +153,11 @@ export function HistoryPageClient() {
     }
   };
   return <div className={s.page} data-no-translate data-page="history">
-    <header className={s.hero}><div><span className={s.eyebrow}>EOS / YOUR CREATIVE ARCHIVE</span><h1>ทุกไอเดีย<span>มีเรื่องราว.</span></h1><p>ประวัติการสร้าง · รวมภาพ วิดีโอ และเสียงของคุณไว้ในที่เดียว</p></div></header>
+    <header className={`studio-hero-frame ${s.hero}`} aria-label="ประวัติการสร้าง"><picture className={s.heroPicture}><source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/history-mobile-v2.webp" /><Image src="/generated-assets/studio-heroes-v4/history-desktop-v2.webp" alt="History — every idea has a story" width={2400} height={435} priority className={s.heroImage} sizes="100vw" /></picture></header>
      <section className={s.stats} aria-label="สรุปงานทั้งหมดในเวิร์กสเปซ"><div><FileClock size={18} /><span>งานทั้งหมด</span><strong>{count(summary?.total)}</strong></div><div><Check size={18} /><span>สำเร็จ</span><strong>{count(summary?.completed)}</strong></div><div><Clock3 size={18} /><span>กำลังดำเนินการ</span><strong>{count(summary?.inProgress)}</strong></div><div><AlertCircle size={18} /><span>ไม่สำเร็จ / ยกเลิก</span><strong>{count(summary?.failed)}</strong></div></section>
      <div className={s.retentionNotice} role="note"><Clock3 size={16} aria-hidden="true" /><span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span></div>
     <section className={s.library} aria-label="คลังประวัติผลงาน" ref={results} tabIndex={-1}>
-      <div className={s.toolbar}><div className={s.typeFilters} role="group" aria-label="ประเภทผลงาน">{types.map(({ value, label, icon: Icon }) => <button key={value} aria-pressed={query.type === value} onClick={() => change({ type: value })}><Icon size={16} />{label}</button>)}</div><label className={s.search}><Search size={17} /><input value={query.search} onChange={event => change({ search: event.target.value })} placeholder="ค้นหาชื่อผลงานหรือโมเดล…" aria-label="ค้นหาประวัติผลงาน" />{query.search && <button onClick={() => change({ search: "" })} aria-label="ล้างคำค้นหา"><X size={16} /></button>}</label></div>
+      <div className={s.toolbar}><div className={s.typeFilters} role="group" aria-label="ประเภทผลงาน">{types.map(({ value, label, icon: Icon }) => <button key={value} aria-pressed={query.type === value} onClick={() => change({ type: value })}><Icon size={16} />{label}</button>)}</div><SearchInput className="w-full max-w-[380px] flex-1" value={query.search} onValueChange={value => change({ search: value })} placeholder="ค้นหาชื่อผลงานหรือโมเดล…" aria-label="ค้นหาประวัติผลงาน" /></div>
       <div className={s.resultBar}><div><h2>รายการของคุณ</h2><span role="status">{loading ? "กำลังอัปเดต…" : error ? "โหลดไม่สำเร็จ" : `${data?.pagination.total.toLocaleString() ?? 0} รายการ`}</span></div><div className={s.controls}><span className={s.statusFilter}><SlidersHorizontal size={15} aria-hidden="true" /><Dropdown className={s.statusDropdown} value={query.status} options={Object.entries(statuses).map(([value, label]) => ({ value, label }))} onChange={value => change({ status: value as HistoryStatus })} ariaLabel="กรองตามสถานะ" /></span><button onClick={() => setRefresh(v => v + 1)} disabled={busy} aria-label="รีเฟรชประวัติ"><RefreshCw size={16} className={busy ? s.spin : undefined} /></button></div></div>
       {hasFilters && <div className={s.filterNotice}><span>กำลังกรอง{query.type !== "all" ? ` · ${types.find(t => t.value === query.type)?.label}` : ""}{query.status !== "all" ? ` · ${statuses[query.status]}` : ""}{query.search.trim() ? ` · “${query.search.trim()}”` : ""}</span><button onClick={reset}>ล้างตัวกรอง <X size={13} /></button></div>}
       {actionError && <div className={s.actionError} role="alert"><AlertCircle size={15} /><span>{actionError}</span><button type="button" onClick={() => setActionError(null)} aria-label="ปิดข้อความผิดพลาด"><X size={14} /></button></div>}

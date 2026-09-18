@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { fetchHistory, type HistoryItem, type HistoryType } from "@/lib/api/history";
+import { SearchInput } from "@/components/ui/search-input";
 import type { TemplateAdminInput } from "@/lib/api/templates";
 import { templateCopy } from './template-copy';
 
@@ -49,7 +50,7 @@ export function GeneratedWorkPicker({ onSelect }: { onSelect: (patch: Partial<Te
     <button type="button" onClick={()=>setOpen(!open)} className="rounded-lg bg-white px-4 py-2 text-sm border">{open?"ปิดรายการ":"เลือกผลงานในระบบ"}</button>
     {selected && <p role="status" className="mt-2 text-xs">เลือก: {selected} · หาก prompt ว่าง งานเก่าไม่ได้เก็บข้อความต้นฉบับ กรุณาเติมเอง สำหรับวิดีโอ/เสียงให้เลือกภาพปกด้วย และตรวจว่าลิงก์ไฟล์ไม่หมดอายุก่อนเผยแพร่</p>}
     {open && <div className="mt-3 space-y-3">
-      <input aria-label="ค้นหาผลงานต้นฉบับ" placeholder="ค้นหางานของบัญชีนี้" value={search} onChange={e=>{setSearch(e.target.value);setOffset(0);}} className="w-full rounded-lg border bg-white p-2 text-sm"/>
+      <SearchInput size="compact" aria-label="ค้นหาผลงานต้นฉบับ" placeholder="ค้นหางานของบัญชีนี้" value={search} onValueChange={value=>{setSearch(value);setOffset(0);}} />
       <select aria-label="ประเภทผลงานต้นฉบับ" value={type} onChange={e=>{setType(e.target.value as HistoryType);setOffset(0);}} className="rounded-lg border bg-white p-2 text-sm"><option value="all">ทั้งหมด</option><option value="image">ภาพ</option><option value="video">วิดีโอ</option><option value="audio">เสียง</option></select>
       {loading?<p role="status">กำลังโหลด…</p>:error?<p role="alert">{error}</p>:<div className="max-h-72 overflow-y-auto space-y-2">{items.length===0?<p>ไม่พบงานที่เสร็จแล้ว</p>:items.map(item=><button type="button" key={item.source+item.id} disabled={!item.outputUrl} onClick={()=>choose(item)} className="flex w-full items-start gap-3 rounded-lg border bg-white p-3 text-left disabled:opacity-40">{item.mediaKind==="image" && item.outputUrl && <span role="img" aria-label={item.title} className="h-14 w-14 shrink-0 rounded bg-cover bg-center" style={{backgroundImage:`url(${JSON.stringify(item.outputUrl)})`}}/>}<span className="min-w-0"><b className="block line-clamp-2 text-xs">{item.title}</b><small>{item.mediaKind} · {new Date(item.createdAt).toLocaleDateString("th-TH")}</small><small className="block">{item.prompt?"มี prompt ต้นฉบับ":"ไม่มี prompt ต้นฉบับ — ต้องเติมเอง"}{!item.outputUrl?" · ไม่มีไฟล์พร้อมใช้":""}</small></span></button>)}</div>}
       <div className="flex gap-3"><button type="button" disabled={loading||offset===0} onClick={()=>setOffset(n=>Math.max(0,n-12))}>ก่อนหน้า</button><button type="button" disabled={loading||!more} onClick={()=>setOffset(n=>n+12)}>ถัดไป</button></div>
