@@ -97,9 +97,9 @@
 .tabs { display: flex; overflow: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tabs button {
-  flex: 1;
-  min-width: 110px;
-  padding: 13px 9px;
+  flex: 0 0 auto;
+  margin-bottom: -1px;
+  padding: 13px 16px;
   border: 0;
   border-bottom: 3px solid transparent;
   background: #fff;
@@ -372,28 +372,17 @@
 /* Keep video mode tabs aligned with the Image generator tab pattern. */
 .tabs { border: 1px solid var(--border); border-radius: 13px 13px 0 0; background: #fff; }
 .tabs button {
-  position: relative;
-  min-width: 125px;
-  margin-top: 3px;
-  padding: 12px 10px;
-  border-right: 1px solid #ece9e6;
+  margin-bottom: -1px;
+  padding: 12px 16px;
+  border: 0;
   border-bottom: 3px solid transparent;
   color: #515866;
   background: transparent;
   font-weight: 600;
   cursor: pointer;
 }
-.tabs button:last-child { border-right: 0; }
-.tabs button.active {
-  margin-top: 0;
-  border: 1px solid #e5e1de;
-  border-bottom: 3px solid #f26b38;
-  border-radius: 10px 10px 0 0;
-  color: #ef5c29;
-  background: #fff;
-  box-shadow: 0 -1px 5px rgba(58,42,30,.04);
-}
-.tabs button:has(+ button.active) { border-right: 0; }
+.tabs button:hover { color: #ef5c29; }
+.tabs button.active { border-bottom-color: #f26b38; color: #ef5c29; }
 .annotation {
   display: inline-block;
   width: 51px;
