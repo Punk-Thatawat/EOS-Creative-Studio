@@ -48,7 +48,7 @@ import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-la
 import { ImageTutorialButton } from "@/features/create/image-generation/components/image-tutorial-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { Dropdown, type DropdownOption } from "@/components/ui/dropdown";
-import { createDialogue, createSoundEffects, createTextToSpeech, createTextToSpeechScenes, createVoiceClone, deleteAudioHistory, fetchAudioHistoryAudio, getAudioCreditBalance, listAudioBackgroundMusic, listAudioHistory, listAudioModels, listAudioVoices, previewVoiceClone, quoteTextToSpeech, quoteTextToSpeechScenes, saveAudioHistory, type AudioBackgroundMusic, type AudioCreditQuote, type AudioHistoryEntry, type AudioModel, type AudioVoice, type SaveAudioHistoryInput, type SoundEffectVariant, type TextToSpeechResponse } from "@/lib/api/audio";
+import { createDialogue, createSoundEffects, createTextToSpeech, createTextToSpeechScenes, createVoiceClone, deleteAudioHistory, fetchAudioHistoryAudio, listAudioBackgroundMusic, listAudioHistory, listAudioModels, listAudioVoices, previewVoiceClone, quoteTextToSpeech, quoteTextToSpeechScenes, saveAudioHistory, type AudioBackgroundMusic, type AudioCreditQuote, type AudioHistoryEntry, type AudioModel, type AudioVoice, type SaveAudioHistoryInput, type SoundEffectVariant, type TextToSpeechResponse } from "@/lib/api/audio";
 
 const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
 type AudioTab = typeof audioModes[number];
@@ -545,11 +545,10 @@ export function AudioGenerationPage() {
   const [backgroundMusic, setBackgroundMusic] = useState(false);
   const [backgroundMusicPreset, setBackgroundMusicPreset] = useState("");
   const [backgroundMusicPresets, setBackgroundMusicPresets] = useState<AudioBackgroundMusic[]>([]);
-  const [backgroundMusicLoadState, setBackgroundMusicLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [backgroundMusicLoadState, setBackgroundMusicLoadState] = useState<"loading" | "ready" | "error">("ready");
   const [creditEstimate, setCreditEstimate] = useState<AudioCreditQuote | null>(null);
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
-  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [audioScenes, setAudioScenes] = useState<AudioScene[]>(defaultAudioScenes);
   const [selectedSceneId, setSelectedSceneId] = useState(defaultAudioScenes[0]!.id);
   const [sceneGenerationStatus, setSceneGenerationStatus] = useState<"idle" | "generating" | "complete" | "error">("idle");
@@ -577,43 +576,32 @@ export function AudioGenerationPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "Text to Speech") return undefined;
+    if (activeTab !== "Text to Speech" || !backgroundMusic || backgroundMusicPresets.length > 0) return undefined;
     let cancelled = false;
     void listAudioBackgroundMusic().then((items) => {
       if (cancelled) return;
       setBackgroundMusicPresets(items);
       setBackgroundMusicPreset((current) => items.some((preset) => preset.key === current) ? current : items[0]?.key ?? "");
-      setBackgroundMusic(false);
       setBackgroundMusicLoadState("ready");
     }).catch(() => {
       if (cancelled) return;
       setBackgroundMusicPresets([]);
       setBackgroundMusicPreset("");
-      setBackgroundMusic(false);
       setBackgroundMusicLoadState("error");
     });
     return () => { cancelled = true; };
-  }, [activeTab]);
+  }, [activeTab, backgroundMusic, backgroundMusicPresets.length]);
 
   useEffect(() => {
     if (activeTab !== "Text to Speech") return undefined;
     let cancelled = false;
-    void getAudioCreditBalance().then(({ balance }) => {
-      if (!cancelled) setCreditBalance(balance);
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (activeTab !== "Text to Speech") return undefined;
-    let cancelled = false;
-    void listAudioHistory({ limit: AUDIO_HISTORY_LIMIT }).then((items) => {
+    const timer = window.setTimeout(() => void listAudioHistory({ limit: AUDIO_HISTORY_LIMIT }).then((items) => {
       if (cancelled) return;
       const history = items.map((item) => ({ ...item, url: item.url ?? item.audioUrl ?? item.downloadUrl ?? "", localUrl: false, persisted: true }));
       audioHistoryRef.current = history;
       setAudioHistory(history);
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
+    }).catch(() => undefined), 600);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [activeTab]);
 
   const loadModels = useCallback(async () => {
@@ -646,6 +634,15 @@ export function AudioGenerationPage() {
       setVoiceError(error instanceof Error ? error.message : "Unable to load voices");
     }
   }, []);
+
+  const toggleBackgroundMusic = () => {
+    if (backgroundMusic) {
+      setBackgroundMusic(false);
+      return;
+    }
+    if (backgroundMusicPresets.length === 0) setBackgroundMusicLoadState("loading");
+    setBackgroundMusic(true);
+  };
 
   useEffect(() => {
     if (activeTab !== "Text to Speech") return undefined;
@@ -988,7 +985,6 @@ export function AudioGenerationPage() {
       });
       setGeneratedAudioResult(result, `Generation ${historySequenceRef.current + 1}`, selectedVoice);
       setStatus("complete");
-      void getAudioCreditBalance().then(({ balance }) => setCreditBalance(balance)).catch(() => undefined);
     } catch (error) {
       setStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Audio generation failed");
@@ -1038,7 +1034,6 @@ export function AudioGenerationPage() {
       setGeneratedAudioResult(result, `Scenes · ${scenesToGenerate.length} scenes`, scenesToGenerate[0]!.voice, { sceneCount: scenesToGenerate.length });
       setSceneGenerationStatus("complete");
       setStatus("complete");
-      void getAudioCreditBalance().then(({ balance }) => setCreditBalance(balance)).catch(() => undefined);
     } catch (error) {
       setSceneGenerationStatus("error");
       setStatus("error");
@@ -1205,7 +1200,7 @@ export function AudioGenerationPage() {
           <ImageTutorialButton feature="textToSpeech" featureName="Text to Speech" />
           <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
         </div>
-        <div className={styles.panelHeading}><h2><span>1</span> {t("create.audio.scriptPrompt")}</h2><InfoTooltip content={t("create.audio.info.script")} size={14} /></div>
+        <div className={styles.panelHeading}><InfoTooltip content={t("create.audio.info.script")} size={14} /><h2><span>1</span> {t("create.audio.scriptPrompt")}</h2></div>
         <div className={styles.promptBox}>
           <textarea aria-label={t("create.audio.a11y.scriptInput")} value={prompt} onChange={(event) => { const value = event.target.value; setPrompt(value); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: value } : scene)); }} maxLength={promptMaxLength} />
           <div className={styles.promptMeta}><span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span><button type="button" onClick={() => { setPrompt(""); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: "" } : scene)); }}>{t("create.audio.clear")} <Trash2 size={13} /></button></div>
@@ -1247,6 +1242,8 @@ export function AudioGenerationPage() {
           </div>
         </div>
 
+        <audio ref={voicePreviewAudioRef} className={styles.hiddenAudio} preload="none" onEnded={() => setPreviewingVoiceKey(null)} onError={() => setPreviewingVoiceKey(null)} aria-hidden="true" />
+
         {audioUrl ? <div className={styles.previewPanel}>
            <div className={styles.previewHeader}><h2>{t("create.audio.preview")}</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button><button type="button" className={styles.iconAction} aria-label={t("create.audio.a11y.morePreviewActions")}><MoreHorizontal size={17} /></button></div></div>
            <PreviewWaveform audioUrl={audioUrl} progress={progress} isPlaying={isPlaying} />
@@ -1261,7 +1258,6 @@ export function AudioGenerationPage() {
              <button type="button" className={styles.iconAction} aria-label={t("create.audio.a11y.fullscreen")}><Maximize2 size={16} /></button>
            </div>
            <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { syncAudioDuration(event.currentTarget); event.currentTarget.volume = volume / 100; event.currentTarget.playbackRate = speed; }} onDurationChange={(event) => syncAudioDuration(event.currentTarget)} onTimeUpdate={(event) => { const nextTime = event.currentTarget.currentTime; const nextDuration = durationRef.current || (Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); if (nextDuration > 0 && durationRef.current !== nextDuration) { durationRef.current = nextDuration; setDuration(nextDuration); } setCurrentTime(nextTime); setProgress(nextDuration ? Math.min(100, (nextTime / nextDuration) * 100) : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={(event) => { const endDuration = durationRef.current || event.currentTarget.duration; setIsPlaying(false); if (Number.isFinite(endDuration) && endDuration > 0) { durationRef.current = endDuration; setDuration(endDuration); setCurrentTime(endDuration); } setProgress(100); }} />
-           <audio ref={voicePreviewAudioRef} preload="none" onEnded={() => setPreviewingVoiceKey(null)} onError={() => setPreviewingVoiceKey(null)} aria-hidden="true" />
            {errorMessage ? <p className={styles.securityNote} role="alert">{errorMessage}</p> : null}
         </div> : null}
 
@@ -1280,7 +1276,7 @@ export function AudioGenerationPage() {
         <div className={styles.settingBlock}><SelectField label={t("create.audio.voiceModel")} value={selectedModel} onChange={(modelId) => { setSelectedModel(modelId); setSelectedVoice(""); }} disabled={modelLoadState !== "ready" || availableModels.length === 0} loading={modelLoadState === "loading"} options={availableModels.map((model) => ({ value: model.key, label: model.name, preserveLabel: true }))} /></div>
         <div className={styles.settingBlock}><FieldLabel>{t("create.audio.outputFormat")}</FieldLabel><div className={styles.formatRow}>{["MP3", "WAV", "OGG"].map((item) => <button type="button" key={item} className={format === item ? styles.formatActive : styles.formatButton} onClick={() => setFormat(item)}>{item}</button>)}</div></div>
         <div className={styles.settingBlock}><div className={styles.speedHeader}><FieldLabel>{t("create.audio.speechSpeed")}</FieldLabel><strong>{speed.toFixed(2)}x</strong></div><input className={styles.speedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.rangeLabels}><span>0.5x</span><span>1x</span><span>2x</span></div></div>
-        <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>{t("create.audio.autoBackgroundMusic")}</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={() => setBackgroundMusic((current) => !current)} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}><span /></button></div>{backgroundMusic ? <SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0} loading={backgroundMusicLoadState === "loading"} options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))} /> : null}</div>
+        <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>{t("create.audio.autoBackgroundMusic")}</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={toggleBackgroundMusic} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState === "loading"}><span /></button></div>{backgroundMusic ? <SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0} loading={backgroundMusicLoadState === "loading"} options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))} /> : null}</div>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
           <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}><div className={styles.creditEstimateHeader}><strong>{t("create.audio.estimatedCredits")} <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} /></strong><b>{creditEstimateLoading || modelLoadState === "loading" || voiceLoadState === "loading" ? t("create.audio.calculating") : creditEstimate ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditEstimate.creditCost) }) : "—"}</b></div><p className={styles.creditEstimateCount}>{isSceneMode ? audioScenes.length === 1 ? t("create.audio.sceneCountOne") : t("create.audio.sceneCountMany", { count: audioScenes.length }) : t("create.audio.audioCount")}</p></div>
           {generationValidationMessage ? <p className={styles.generationValidation} role="status">{generationValidationMessage}</p> : null}

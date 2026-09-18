@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fetchHeaderAccountData, type HeaderAccountData } from "@/lib/api/account";
+import { clearHeaderAccountCache, fetchHeaderAccountData, type HeaderAccountData } from "@/lib/api/account";
 import { AUTH_SESSION_EXPIRED_EVENT, getApiAccessToken } from "@/lib/auth/access-token";
 import {
   CREDIT_BALANCE_CHANGED_EVENT,
@@ -25,12 +25,13 @@ export function useHeaderAccount() {
     let isMounted = true;
     const handleSessionExpired = () => {
       if (!isMounted) return;
+      clearHeaderAccountCache();
       setAccount(initialAccount);
       window.location.replace("/?login=1&reason=session-expired");
     };
     const refreshAccount = async (confirmedDelta = 0) => {
       try {
-        const nextAccount = await fetchHeaderAccountData();
+        const nextAccount = await fetchHeaderAccountData({ force: confirmedDelta > 0 });
         if (!isMounted) return;
         if (confirmedDelta > 0) {
           optimisticDeduction.current = Math.max(0, optimisticDeduction.current - confirmedDelta);

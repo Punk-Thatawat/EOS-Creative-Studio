@@ -121,7 +121,8 @@ function Ledger({ month, usageOnly, topupsOnly = false, refresh }: { month: stri
   const [query, setQuery] = useState(""), [kind, setKind] = useState("all");
   useEffect(() => {
     let cancelled = false;
-    fetchUsageDashboard(month, "daily", 50, offset).then(page => {
+    const controller = new AbortController();
+    fetchUsageDashboard(month, "daily", 50, offset, controller.signal).then(page => {
       if (cancelled) return;
       setItems(current => {
         const nextItems = offset === 0 ? page.recentActivity.items : [...current, ...page.recentActivity.items];
@@ -129,8 +130,8 @@ function Ledger({ month, usageOnly, topupsOnly = false, refresh }: { month: stri
       });
       setHasMore(page.recentActivity.pagination.hasMore);
       setError(false);
-    }).catch(() => { if (!cancelled) setError(true); }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    }).catch(() => { if (!cancelled && !controller.signal.aborted) setError(true); }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; controller.abort(); };
   }, [month, offset, retry, refresh]);
   const filtered = items.filter(item => (!usageOnly || item.transactionType === "usage") && (!topupsOnly || (item.referenceType === "stripe_checkout" && item.amount > 0)) && (topupsOnly || kind === "all" || (kind === "added" ? item.amount > 0 : item.amount < 0)) && `${usageOnly ? activityLabel(item) : creditLabel(item)} ${item.title} ${item.id} ${item.referenceId ?? ""}`.toLowerCase().includes(query.toLowerCase()));
   const download = () => { const csv = usageOnly ? activityCsv(filtered) : topupsOnly ? "\uFEFF" + [["วันที่", "รายการ", "เครดิต", "ราคาก่อน VAT", "VAT", "ยอดชำระรวม", "รหัสรายการ", "รหัสอ้างอิง"], ...filtered.map(item => [item.createdAt, "เติมเครดิตผ่าน Stripe", item.amount, metadataNumber(item, "subtotal_thb") ?? "", metadataNumber(item, "vat_amount_thb") ?? "", metadataNumber(item, "total_thb") ?? "", item.id, item.referenceId ?? ""])].map(row => row.map(csvCell).join(",")).join("\r\n") : "\uFEFF" + [["วันที่", "รายการ", "เครดิตเข้า–ออก", "คงเหลือหลังรายการ", "รหัสรายการ", "รหัสอ้างอิง"], ...filtered.map(item => [item.createdAt, creditLabel(item), item.amount, item.balanceAfter, item.id, item.referenceId ?? ""])].map(row => row.map(csvCell).join(",")).join("\r\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" })); const link = document.createElement("a"); link.href = url; link.download = `eos-${usageOnly ? "usage" : topupsOnly ? "topup-history" : "credit"}-${month}.csv`; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); };
@@ -222,6 +223,7 @@ export function UsagePage() {
   }, []);
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     if (cacheRefreshRef.current !== refresh) {
       dashboardCacheRef.current.clear();
       cacheRefreshRef.current = refresh;
@@ -231,19 +233,19 @@ export function UsagePage() {
       setDashboard(cached.data);
       setError(false);
       setLoading(false);
-      return () => { cancelled = true; };
+      return () => { cancelled = true; controller.abort(); };
     }
-    void fetchUsageDashboard(month, "daily").then((nextDashboard) => {
+    void fetchUsageDashboard(month, "daily", 5, 0, controller.signal).then((nextDashboard) => {
       if (cancelled) return;
       dashboardCacheRef.current.set(month, { data: nextDashboard, cachedAt: Date.now() });
       setDashboard(nextDashboard);
       setError(false);
     }).catch(() => {
-      if (!cancelled) { setDashboard(null); setError(true); }
+      if (!cancelled && !controller.signal.aborted) { setDashboard(null); setError(true); }
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; controller.abort(); };
   }, [month, refresh]);
   useEffect(() => {
     if (activeTab !== 3) return undefined;
