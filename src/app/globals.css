@@ -596,6 +596,17 @@ body:has([data-page="gen-video"]) .page-gutter > aside { display: none; }
 body:has([data-page="gen-video"]) .page-gutter > main { width: 100%; }
 body:has([data-page="gen-video"]) .page-gutter { max-width: none; gap: 0; padding-inline: 0; padding-top: 0; padding-bottom: 0; }
 body:has([data-page="gen-video"]) header { position: sticky; top: 0; z-index: 70; }
+
+/* The creator workspace card is open at the bottom, so its column seams end on the
+   card's bottom edge. The footer's own 32px top margin would leave them hanging in
+   white space; zeroing it lets the seams run down into the footer rule.
+   These three pages also run full-bleed (.page-gutter drops its padding-inline just
+   below), which left the footer text hard against the window edge -- the gutter is
+   handed back to the footer alone, so it stays responsive with the rest of the app. */
+[data-studio-main]:has([data-creator-workspace]) > footer {
+  margin-top: 0;
+  padding-inline: var(--page-gutter);
+}
 body:has([data-page="templates"]) .page-gutter > aside { display:none; }
 body:has([data-page="templates"]) .page-gutter > main { width:100%; }
 body:has([data-page="templates"]) .page-gutter { max-width:none; }

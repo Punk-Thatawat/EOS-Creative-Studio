@@ -10,11 +10,10 @@
   max-width: 100%;
   min-width: 0;
   overflow-x: clip;
-  padding-bottom: 10px;
   color: var(--audio-ink);
 }
 
-.featureTabs { display: flex; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; border: 1px solid var(--audio-line); border-radius: 13px 13px 0 0; background: #fff; scrollbar-width: none; }
+.featureTabs { display: flex; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; border: 0; border-bottom: 1px solid var(--audio-line); border-radius: 0; background: #fff; scrollbar-width: none; }
 .featureTabs::-webkit-scrollbar { display: none; }
 .tab, .tabActive { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; margin-bottom: -1px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; padding: 12px 16px; color: #515866; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .tab:hover { color: var(--audio-orange); }
@@ -69,7 +68,6 @@
 .previewActions button:hover { color: var(--audio-orange); }
 .previewActions button:disabled { cursor: not-allowed; opacity: .45; }
 .previewActions .outlineAction { height: 29px; border: 1px solid #e0e2e5; border-radius: 7px; padding: 0 9px; font-weight: 700; }
-.previewActions .iconAction { padding: 4px; }
 .waveform { position: relative; height: 36px; margin: 11px -1px 4px; overflow: hidden; }
 .waveformBars { position: absolute; inset: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; padding: 2px 1px; }
 .waveformBar { display: block; min-width: 1px; flex: 1 1 0; border-radius: 999px; background: linear-gradient(180deg, #e7ebf0 0%, #b8c1cd 100%); opacity: .8; transform: scaleY(.72); transform-origin: center; animation: waveformPulse ease-in-out infinite; animation-play-state: paused; transition: background .2s ease, opacity .2s ease, transform .2s ease; }
@@ -94,8 +92,6 @@
 .scrubber { width: min(240px, 28vw); }
 .volumeSlider { width: 70px; }
 .volumeIcon { flex: none; color: #2d3540; }
-.iconAction { display: inline-grid; flex: none; place-items: center; border: 0; background: transparent; color: #2f3640; cursor: pointer; }
-.iconAction:hover { color: var(--audio-orange); }
 .historyPanel { margin-top: 14px; border: 1px solid var(--audio-line); border-radius: 10px; background: #fff; padding: 13px 15px; }
 .historyPanel .sectionHeading { margin-bottom: 8px; }
 .historyPanel .sectionHeading h2 { display: inline-flex; align-items: center; gap: 5px; }
@@ -108,10 +104,17 @@
 .historyItem, .historyItemActive { display: flex; min-width: 0; align-items: center; gap: 8px; border: 1px solid #e5e7ea; border-radius: 7px; background: #fff; padding: 7px 9px; text-align: left; cursor: pointer; }
 .historyItem:hover { border-color: #f5b08c; background: #fffaf7; }
 .historyItemActive { border-color: var(--audio-orange); background: #fff8f3; box-shadow: inset 0 0 0 1px #ffb283; }
-.historyItemRow .historyItem, .historyItemRowActive .historyItemActive { min-width: 0; flex: 1; border: 0; background: transparent; }
-.historyItemRow .historyItem:hover, .historyItemRowActive .historyItemActive:hover { border: 0; background: transparent; }
+/* `box-shadow: none` as well as `border: 0`: the row already draws the selected
+   ring, and the button's own inset ring showed through on its right edge as a
+   stray divider between the label and the delete button. */
+.historyItemRow .historyItem, .historyItemRowActive .historyItemActive { min-width: 0; flex: 1; border: 0; box-shadow: none; background: transparent; }
+.historyItemRow .historyItem:hover, .historyItemRowActive .historyItemActive:hover { border: 0; box-shadow: none; background: transparent; }
 .historyDelete { display: grid; width: 29px; height: 29px; flex: none; margin-right: 4px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #9aa0a8; cursor: pointer; }
 .historyDelete:hover { background: #ffe9e5; color: #d54c35; }
+/* No focus box on this one: the global button:focus-visible ring drew a 3px
+   orange rectangle around the icon when the confirm dialog handed focus back.
+   The hover tint stands in for it, so keyboard users still see where they are. */
+.historyDelete:focus-visible { outline: none; background: #ffe9e5; color: #d54c35; }
 .historyPlay { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border-radius: 50%; background: #171a20; color: #fff; padding: 0; line-height: 0; }
 .historyItemActive .historyPlay { background: var(--audio-orange); }
 .historyLoading { width: 24px; height: 24px; flex: none; border: 3px solid #ffd6c2; border-top-color: var(--audio-orange); border-right-color: var(--audio-orange); border-radius: 50%; animation: spin .75s linear infinite; }
@@ -314,10 +317,9 @@
 .podcastAddSpeakerCard { min-width: 132px; flex: 0 0 132px; flex-direction: column; justify-content: center; border-style: dashed; color: #5c6470; text-align: center; }
 .podcastAddSpeakerCard svg { color: var(--audio-orange); }.podcastAddSpeakerCard:hover { border-color: var(--audio-orange); color: var(--audio-orange); background: #fffaf7; }
 .podcastLineList { display: grid; gap: 7px; }
-.podcastLineRow { display: grid; grid-template-columns: 17px 34px 40px max-content minmax(160px, 1fr) 49px 27px 27px 27px; min-width: 0; align-items: center; gap: 8px; border: 1px solid #e4e6e9; border-radius: 8px; background: #fff; padding: 7px 8px; }
+.podcastLineRow { display: grid; grid-template-columns: 34px 40px max-content minmax(160px, 1fr) 49px 27px 27px; min-width: 0; align-items: center; gap: 8px; border: 1px solid #e4e6e9; border-radius: 8px; background: #fff; padding: 7px 8px; }
 .podcastLineRowActive { border-color: var(--audio-orange); box-shadow: 0 0 0 1px #ff620b33; background: #fffaf7; }
-.podcastDragHandle, .podcastLineAction, .podcastLineActionDanger { display: grid; width: 27px; height: 27px; place-items: center; border: 0; border-radius: 6px; background: transparent; padding: 0; color: #a0a6ae; cursor: pointer; }
-.podcastDragHandle { width: 17px; cursor: grab; }.podcastDragHandle:active { cursor: grabbing; }
+.podcastLineAction, .podcastLineActionDanger { display: grid; width: 27px; height: 27px; place-items: center; border: 0; border-radius: 6px; background: transparent; padding: 0; color: #a0a6ae; cursor: pointer; }
 .podcastLineAction:hover { background: #f3f4f6; color: #3b434e; }.podcastLineActionDanger:hover:not(:disabled) { background: #fff0ed; color: #cf4d37; }.podcastLineAction:disabled, .podcastLineActionDanger:disabled { cursor: not-allowed; opacity: .38; }
 .podcastLineAvatar { position: relative; width: 34px; height: 34px; overflow: hidden; border-radius: 50%; background: #f4f5f6; }
 .podcastLineRow time { color: #7f8791; font-size: 8px; font-variant-numeric: tabular-nums; }
@@ -360,16 +362,14 @@
   .podcastHeaderActions { width: 100%; justify-content: flex-start; }
   .podcastEpisodeButton { max-width: none; flex: 1 1 100%; justify-content: flex-start; }
   .podcastToolbarButton { flex: 1 1 auto; }
-  .podcastLineRow { grid-template-columns: 17px 34px 38px max-content 48px 27px 27px 27px; grid-template-rows: auto auto; }
-  .podcastDragHandle { grid-column: 1; grid-row: 1 / span 2; }
-  .podcastLineAvatar { grid-column: 2; grid-row: 1; }
-  .podcastLineRow time { grid-column: 3; grid-row: 1; }
-  .podcastSpeakerChip { grid-column: 4; grid-row: 1; justify-self: start; }
-  .podcastLineDuration { grid-column: 5; grid-row: 1; }
-  .podcastLineCopyAction { grid-column: 6; grid-row: 1; }
-  .podcastLineActionDanger { grid-column: 7; grid-row: 1; }
-  .podcastLineMoreAction { grid-column: 8; grid-row: 1; }
-  .podcastLineInput { grid-column: 2 / -1; grid-row: 2; }
+  .podcastLineRow { grid-template-columns: 34px 38px max-content 48px 27px 27px; grid-template-rows: auto auto; }
+  .podcastLineAvatar { grid-column: 1; grid-row: 1; }
+  .podcastLineRow time { grid-column: 2; grid-row: 1; }
+  .podcastSpeakerChip { grid-column: 3; grid-row: 1; justify-self: start; }
+  .podcastLineDuration { grid-column: 4; grid-row: 1; }
+  .podcastLineCopyAction { grid-column: 5; grid-row: 1; }
+  .podcastLineActionDanger { grid-column: 6; grid-row: 1; }
+  .podcastLineInput { grid-column: 1 / -1; grid-row: 2; }
   .podcastAudioPlayer { grid-template-columns: 47px minmax(0, 1fr) 18px; }.podcastVolumeSlider { grid-column: 2 / -1; width: 100%; }.podcastVolumeIcon { grid-column: 1; justify-self: end; }.podcastSettingsCard { display: block; }
 }
 @media (max-width: 639.98px) {
@@ -545,10 +545,36 @@
 .heroBanner img { width: 100%; height: 100%; object-fit: cover; object-position: center 55%; transform: none; }
 @media (max-width: 767.98px) { .heroBanner { height: 115px; min-height: 115px; aspect-ratio: auto; } .heroBanner img { object-position: center; } }
 
-/* The shared creator shell owns the same three tracks as Image creation. */
-.audioGrid { grid-template-columns: minmax(0, .9fr) minmax(0, 1.55fr) minmax(0, .8fr); column-gap: 0; }
-@media (max-width: 1279.98px) { .audioGrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); column-gap: 0; } }
-@media (max-width: 1023.98px) { .audioGrid { grid-template-columns: 1fr; } }
+.audioGrid,
+.alternateLayout { grid-template-columns: var(--creator-workspace-columns); column-gap: 0; align-items: stretch; }
+@media (max-width: 1023.98px) { .audioGrid, .alternateLayout { grid-template-columns: 1fr; } }
+
+.scriptPanel, .previewPanel, .centerColumn, .settingsPanel,
+.alternateFormPanel, .alternateCenterPanel, .alternateSettings {
+  border: 0;
+  border-radius: 0;
+}
+
+.centerColumn { padding-inline: 16px; }
+
+.settingsPanel { grid-row: auto; }
+
+.scriptPanel, .alternateFormPanel { border-right: 1px solid var(--audio-line); }
+.settingsPanel, .alternateSettings { border-left: 1px solid var(--audio-line); }
+
+.settingsPanel, .alternateSettings { border-top: 1px solid var(--audio-line); }
+
+@media (max-width: 1023.98px) {
+  .scriptPanel, .alternateFormPanel { border-right: 0; }
+  .settingsPanel, .alternateSettings { border-left: 0; border-top: 0; }
+
+  .previewPanel, .centerColumn, .alternateCenterPanel {
+    border-top: 1px solid var(--audio-line);
+    border-bottom: 1px solid var(--audio-line);
+  }
+
+  .centerColumn { padding-inline: 14px; }
+}
 
 /* Prompt and dialogue copy should stay visually light while headings retain their emphasis. */
 .promptBox textarea, .altTextField textarea, .podcastLineInput { font-weight: 400; }
