@@ -370,7 +370,7 @@
   .workspaceCard { border-radius: 10px; }
 }
 /* Keep video mode tabs aligned with the Image generator tab pattern. */
-.tabs { border: 1px solid var(--border); border-radius: 13px 13px 0 0; background: #fff; }
+.tabs { border: 1px solid var(--border); border-radius: 0; background: #fff; }
 .tabs button {
   position: relative;
   min-width: 125px;
@@ -2634,14 +2634,14 @@
   .hero { height: 115px; min-height: 115px; aspect-ratio: auto; }
   .hero img { object-position: center; }
 }
-/* Keep every video tab aligned to the same responsive grid tracks. */
-.columns { grid-template-columns: minmax(0, .9fr) minmax(0, 1.55fr) minmax(0, .8fr); gap: 0; }
-@media(max-width:1279.98px) {
-  .columns { grid-template-columns: minmax(0,1fr) minmax(0,1.4fr); }
-}
-@media(min-width:1280px) {
-  .columns { grid-template-columns: minmax(0,.9fr) minmax(0,1.55fr) minmax(0,.8fr); }
-}
+/* Keep every video tab aligned to the same responsive grid tracks as the shell.
+   These restated the ratios with minmax(0, ...) while the tab strip clamps at
+   minmax(280px, ...); the two agreed on a wide shell and drifted apart once the
+   floor bit. The variable carries the breakpoint too, so no ratio repeats here. */
+.columns { grid-template-columns: var(--creator-workspace-columns); gap: 0; }
+/* Same as image creation: the tab strip covers the first two tracks, so the
+   settings column completes the line under it across the last one. */
+.settings { border-top: 1px solid var(--border); }
 @media(max-width:767.98px) {
   .columns { grid-template-columns: minmax(0,1fr); }
 }

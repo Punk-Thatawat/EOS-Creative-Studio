@@ -10,11 +10,10 @@
   max-width: 100%;
   min-width: 0;
   overflow-x: clip;
-  padding-bottom: 10px;
   color: var(--audio-ink);
 }
 
-.featureTabs { display: flex; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; border: 1px solid var(--audio-line); border-radius: 13px 13px 0 0; background: #fff; scrollbar-width: none; }
+.featureTabs { display: flex; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; border: 1px solid var(--audio-line); border-radius: 0; background: #fff; scrollbar-width: none; }
 .featureTabs::-webkit-scrollbar { display: none; }
 .tab, .tabActive { position: relative; display: inline-flex; min-width: 125px; flex: 1; align-items: center; justify-content: center; border: 0; border-right: 1px solid #ece9e6; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; padding: 12px 10px; color: #515866; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .tab:last-child, .tabActive:last-child { border-right: 0; }
@@ -109,10 +108,17 @@
 .historyItem, .historyItemActive { display: flex; min-width: 0; align-items: center; gap: 8px; border: 1px solid #e5e7ea; border-radius: 7px; background: #fff; padding: 7px 9px; text-align: left; cursor: pointer; }
 .historyItem:hover { border-color: #f5b08c; background: #fffaf7; }
 .historyItemActive { border-color: var(--audio-orange); background: #fff8f3; box-shadow: inset 0 0 0 1px #ffb283; }
-.historyItemRow .historyItem, .historyItemRowActive .historyItemActive { min-width: 0; flex: 1; border: 0; background: transparent; }
-.historyItemRow .historyItem:hover, .historyItemRowActive .historyItemActive:hover { border: 0; background: transparent; }
+/* `box-shadow: none` as well as `border: 0`: the row already draws the selected
+   ring, and the button's own inset ring showed through on its right edge as a
+   stray divider between the label and the delete button. */
+.historyItemRow .historyItem, .historyItemRowActive .historyItemActive { min-width: 0; flex: 1; border: 0; box-shadow: none; background: transparent; }
+.historyItemRow .historyItem:hover, .historyItemRowActive .historyItemActive:hover { border: 0; box-shadow: none; background: transparent; }
 .historyDelete { display: grid; width: 29px; height: 29px; flex: none; margin-right: 4px; place-items: center; border: 0; border-radius: 6px; background: transparent; color: #9aa0a8; cursor: pointer; }
 .historyDelete:hover { background: #ffe9e5; color: #d54c35; }
+/* No focus box on this one: the global button:focus-visible ring drew a 3px
+   orange rectangle around the icon when the confirm dialog handed focus back.
+   The hover tint stands in for it, so keyboard users still see where they are. */
+.historyDelete:focus-visible { outline: none; background: #ffe9e5; color: #d54c35; }
 .historyPlay { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border-radius: 50%; background: #171a20; color: #fff; padding: 0; line-height: 0; }
 .historyItemActive .historyPlay { background: var(--audio-orange); }
 .historyLoading { width: 24px; height: 24px; flex: none; border: 3px solid #ffd6c2; border-top-color: var(--audio-orange); border-right-color: var(--audio-orange); border-radius: 50%; animation: spin .75s linear infinite; }
@@ -546,10 +552,36 @@
 .heroBanner img { width: 100%; height: 100%; object-fit: cover; object-position: center 55%; transform: none; }
 @media (max-width: 767.98px) { .heroBanner { height: 115px; min-height: 115px; aspect-ratio: auto; } .heroBanner img { object-position: center; } }
 
-/* The shared creator shell owns the same three tracks as Image creation. */
-.audioGrid { grid-template-columns: minmax(0, .9fr) minmax(0, 1.55fr) minmax(0, .8fr); column-gap: 0; }
-@media (max-width: 1279.98px) { .audioGrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); column-gap: 0; } }
-@media (max-width: 1023.98px) { .audioGrid { grid-template-columns: 1fr; } }
+.audioGrid,
+.alternateLayout { grid-template-columns: var(--creator-workspace-columns); column-gap: 0; align-items: stretch; }
+@media (max-width: 1023.98px) { .audioGrid, .alternateLayout { grid-template-columns: 1fr; } }
+
+.scriptPanel, .previewPanel, .centerColumn, .settingsPanel,
+.alternateFormPanel, .alternateCenterPanel, .alternateSettings {
+  border: 0;
+  border-radius: 0;
+}
+
+.centerColumn { padding-inline: 16px; }
+
+.settingsPanel { grid-row: auto; }
+
+.scriptPanel, .alternateFormPanel { border-right: 1px solid var(--audio-line); }
+.settingsPanel, .alternateSettings { border-left: 1px solid var(--audio-line); }
+
+.settingsPanel, .alternateSettings { border-top: 1px solid var(--audio-line); }
+
+@media (max-width: 1023.98px) {
+  .scriptPanel, .alternateFormPanel { border-right: 0; }
+  .settingsPanel, .alternateSettings { border-left: 0; border-top: 0; }
+
+  .previewPanel, .centerColumn, .alternateCenterPanel {
+    border-top: 1px solid var(--audio-line);
+    border-bottom: 1px solid var(--audio-line);
+  }
+
+  .centerColumn { padding-inline: 14px; }
+}
 
 /* Prompt and dialogue copy should stay visually light while headings retain their emphasis. */
 .promptBox textarea, .altTextField textarea, .podcastLineInput { font-weight: 400; }

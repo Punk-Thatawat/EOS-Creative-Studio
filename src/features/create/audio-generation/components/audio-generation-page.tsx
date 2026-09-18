@@ -48,6 +48,8 @@ import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-la
 import { ImageTutorialButton } from "@/features/create/image-generation/components/image-tutorial-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { Dropdown, type DropdownOption } from "@/components/ui/dropdown";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { createDialogue, createSoundEffects, createTextToSpeech, createTextToSpeechScenes, createVoiceClone, deleteAudioHistory, fetchAudioHistoryAudio, listAudioBackgroundMusic, listAudioHistory, listAudioModels, listAudioVoices, previewVoiceClone, quoteTextToSpeech, quoteTextToSpeechScenes, saveAudioHistory, type AudioBackgroundMusic, type AudioCreditQuote, type AudioHistoryEntry, type AudioModel, type AudioVoice, type SaveAudioHistoryInput, type SoundEffectVariant, type TextToSpeechResponse } from "@/lib/api/audio";
 
 const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
@@ -816,9 +818,9 @@ export function AudioGenerationPage() {
     setSceneGenerationStatus("idle");
   };
   const generationValidationMessage = isSceneMode
-    ? hasIncompleteScene ? "Add text and choose a voice for every scene." : null
-    : !prompt.trim() ? "Add a script before generating."
-      : voiceLoadState === "ready" && !selectedVoice ? "Select a voice before generating." : null;
+    ? hasIncompleteScene ? t("create.audio.validation.completeScenes") : null
+    : !prompt.trim() ? t("create.audio.validation.addScript")
+      : voiceLoadState === "ready" && !selectedVoice ? t("create.audio.validation.selectVoice") : null;
   const creditQuoteRequest = selectedModel && (isSceneMode
     ? !hasIncompleteScene
     : Boolean(prompt.trim() && selectedVoice))
@@ -1099,6 +1101,11 @@ export function AudioGenerationPage() {
     });
   };
 
+  /* Two pieces of state, not one: `open` drives the close animation while the
+     pending item has to outlive it, or the copy blanks out mid-fade. */
+  const [pendingHistoryDelete, setPendingHistoryDelete] = useState<AudioHistoryItem | null>(null);
+  const [historyDeleteOpen, setHistoryDeleteOpen] = useState(false);
+
   const removeHistoryItem = (item: AudioHistoryItem) => {
     const removeFromView = () => {
       if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
@@ -1265,7 +1272,7 @@ export function AudioGenerationPage() {
           <div className={styles.sectionHeading}><h2><History size={13} /> {t("create.audio.generationHistory")}</h2><span className={styles.timelineHint}>{audioHistory.length ? audioHistory.length === 1 ? t("create.audio.resultCountOne") : t("create.audio.resultCountMany", { count: audioHistory.length }) : t("create.audio.noResults")}</span></div>
           {audioHistory.length ? <div className={styles.historyList}>{audioHistory.map((item) => <div key={item.id} className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}>
             <button type="button" className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem} onClick={() => selectHistoryItem(item)} disabled={historyLoadingId === item.id} aria-busy={historyLoadingId === item.id}><span className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>{historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}</span><span className={styles.historyCopy}><strong>{item.label}</strong><small>{item.createdAt}</small></span><span className={styles.historyCurrent}>{item.url === audioUrl ? t("create.audio.historyCurrent") : t("create.audio.historyPlay")}</span></button>
-            <button type="button" className={styles.historyDelete} aria-label={t("create.audio.a11y.deleteItem", { label: item.label })} onClick={() => removeHistoryItem(item)}><Trash2 size={13} /></button>
+            <button type="button" className={styles.historyDelete} aria-label={t("create.audio.a11y.deleteItem", { label: item.label })} onClick={() => { setPendingHistoryDelete(item); setHistoryDeleteOpen(true); }}><Trash2 size={13} /></button>
           </div>)}</div> : <div className={styles.historyEmpty}><History size={15} /><span>{t("create.audio.historyEmpty")}</span></div>}
         </section>
 
@@ -1288,5 +1295,21 @@ export function AudioGenerationPage() {
         </>
       }
     />
+    <Dialog
+      open={historyDeleteOpen}
+      onOpenChange={(next) => { if (!next) setHistoryDeleteOpen(false); }}
+      onOpenChangeComplete={(next) => { if (!next) setPendingHistoryDelete(null); }}
+    >
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t("create.audio.deleteHistory.title")}</DialogTitle>
+          <DialogDescription>{t("create.audio.deleteHistory.body", { label: pendingHistoryDelete?.label ?? "" })}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setHistoryDeleteOpen(false)}>{t("create.audio.deleteHistory.cancel")}</Button>
+          <Button type="button" variant="destructive" size="sm" onClick={() => { if (pendingHistoryDelete) removeHistoryItem(pendingHistoryDelete); setHistoryDeleteOpen(false); }}><Trash2 size={15} /> {t("create.audio.deleteHistory.confirm")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>;
 }
