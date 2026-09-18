@@ -106,6 +106,7 @@ export function PreLoginPage() {
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [authPasswordConfirmation, setAuthPasswordConfirmation] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmationPasswordVisible, setConfirmationPasswordVisible] = useState(false);
@@ -222,7 +223,7 @@ export function PreLoginPage() {
         const result = await registerWithBackend({ email: authEmail, password: authPassword, display_name: authName.trim() || undefined });
         if (result.data.session) {
           clearGenerationProgressStorage();
-          const accessToken = await persistBackendSession(result.data.session);
+          const accessToken = await persistBackendSession(result.data.session, true);
           const backendProfile = await fetchBackendSession(accessToken);
           window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
           window.location.replace(authRedirect);
@@ -250,7 +251,7 @@ export function PreLoginPage() {
       }
       if (!result.data.session) throw new Error(t("auth.validation.sessionMissing"));
       clearGenerationProgressStorage();
-      const accessToken = await persistBackendSession(result.data.session);
+      const accessToken = await persistBackendSession(result.data.session, rememberMe);
       const backendProfile = await fetchBackendSession(accessToken);
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
       window.location.replace(authRedirect);
@@ -273,7 +274,7 @@ export function PreLoginPage() {
         setAuthSubmitting(false);
         setPendingLoginToken(null);
         clearGenerationProgressStorage();
-        const accessToken = await persistBackendSession(result.data.session);
+        const accessToken = await persistBackendSession(result.data.session, rememberMe);
         const backendProfile = await fetchBackendSession(accessToken);
         window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
         window.location.replace(authRedirect);
@@ -290,7 +291,7 @@ export function PreLoginPage() {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [authMode, loginOpen, pendingLoginToken]);
+  }, [authMode, loginOpen, pendingLoginToken, rememberMe]);
 
   const handleResendConfirmation = async () => {
     if (resendCooldown > 0) return;
@@ -429,8 +430,8 @@ export function PreLoginPage() {
       {examples.length > 0 ? <section id="examples" className="examples-section">
         <div className="section-heading"><h2>SEE WHAT YOU CAN CREATE</h2><span>EXPLORE EXAMPLES</span><div className="carousel-actions"><button aria-label="Previous examples" onClick={() => setExampleOffset(Math.max(0, visibleExampleOffset - 1))} disabled={visibleExampleOffset === 0}><ChevronLeft size={18} /></button><button aria-label="Next examples" onClick={() => setExampleOffset(Math.min(maxExampleOffset, visibleExampleOffset + 1))} disabled={visibleExampleOffset >= maxExampleOffset}><ChevronRight size={18} /></button></div></div>
         <div className="examples-swipe-hint" aria-hidden="true">SWIPE TO EXPLORE <ArrowRight size={14} /></div>
-        <div className="example-window" role="region" aria-label="Creative examples"><div className="example-track" style={{ transform: `translateX(-${visibleExampleOffset * 20.5}%)` }}>{examples.map((example, index) => { const featured = index === visibleExampleOffset + 2; const embedUrl = getVideoEmbedUrl(example.video); return <article className={`example-card example-${index}${featured ? " example-featured" : ""}`} key={example.id ?? `${example.label}-${index}`}>
-          <div className="example-placeholder">{embedUrl ? <iframe src={featured ? embedUrl : undefined} title={`${example.label} preview`} className="example-video example-video-embed" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" /> : <video ref={(video) => { showcaseVideoRefs.current[index] = video; }} className="example-video" muted autoPlay={featured} loop playsInline preload={featured ? "metadata" : "none"} data-showcase-active={featured ? "true" : "false"} disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`}><source src={example.video} type={example.mimeType ?? "video/mp4"} /></video>}</div>
+        <div className="example-window" role="region" aria-label="Creative examples"><div className="example-track" style={{ transform: `translateX(-${visibleExampleOffset * 20.5}%)` }}>{examples.map((example, index) => { const featured = index === visibleExampleOffset + 2; const embedUrl = getVideoEmbedUrl(example.video); const embedSrc = embedUrl ? `${embedUrl}${embedUrl.includes("?") ? "&" : "?"}autoplay=1&muted=1` : undefined; return <article className={`example-card example-${index}${featured ? " example-featured" : ""}`} key={example.id ?? `${example.label}-${index}`}>
+          <div className="example-placeholder">{embedUrl ? <iframe src={embedSrc} title={`${example.label} preview`} className="example-video example-video-embed" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" /> : <video ref={(video) => { showcaseVideoRefs.current[index] = video; }} className="example-video" muted autoPlay loop playsInline preload="metadata" data-showcase-active="true" disablePictureInPicture disableRemotePlayback aria-label={`${example.label} preview`}><source src={example.video} type={example.mimeType ?? "video/mp4"} /></video>}</div>
           <div className="example-label">{example.label}</div>
         </article>; })}</div></div>
       </section> : null}
@@ -482,7 +483,7 @@ export function PreLoginPage() {
                 </div>}
                 <AuthField id="modal-password-confirm" label={t("auth.form.confirmPassword")} value={authPasswordConfirmation} onChange={setAuthPasswordConfirmation} type="password" placeholder={t("auth.form.confirmPasswordPlaceholder")} autoComplete="new-password" icon={LockKeyhole} required minLength={8} disabled={authSubmitting} error={authPasswordConfirmation && authPassword !== authPasswordConfirmation ? t("auth.validation.passwordMismatch") : null} showPassword={confirmationPasswordVisible} passwordToggleLabel={confirmationPasswordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setConfirmationPasswordVisible((visible) => !visible)} />
               </>}
-              {authMode === "login" && <><label className="auth-remember"><input type="checkbox" defaultChecked /> {t("auth.form.keepSignedIn")}</label><button type="button" className="auth-forgot-link" onClick={() => switchAuthMode("forgot")}>{t("auth.action.forgotPassword")}</button></>}
+              {authMode === "login" && <><label className="auth-remember"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.currentTarget.checked)} /> {t("auth.form.keepSignedIn")}</label><button type="button" className="auth-forgot-link" onClick={() => switchAuthMode("forgot")}>{t("auth.action.forgotPassword")}</button></>}
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="submit" className="auth-submit" disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={18} className="auth-spin" /> {authMode === "login" ? t("auth.action.signingIn") : t("auth.action.sending")}</> : <>{authMode === "login" ? t("auth.action.login") : authMode === "forgot" ? t("auth.action.resetPassword") : t("auth.action.register")} <ArrowRight size={20} /></>}</button></div>
             </form>

@@ -53,8 +53,8 @@ import { createDialogue, createSoundEffects, createTextToSpeech, createTextToSpe
 const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
 type AudioTab = typeof audioModes[number];
 
-// Keep the main audio workflow visible while the advanced audio tools are being finalized.
-const visibleTabs = audioModes;
+// Keep only the main audio workflow visible while the advanced audio tools are being finalized.
+const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
 
 const audioTabKeys = {
   "Text to Speech": "create.audio.tabs.textToSpeech",
@@ -1184,7 +1184,7 @@ export function AudioGenerationPage() {
       mobileTabs={<MobileModeDropdown
       menuId="audio-mode-menu"
       value={activeTab}
-      options={audioModes.map((label) => ({ value: label, label: t(audioTabKeys[label]), icon: audioModeIcons[label] }))}
+      options={visibleTabs.map((label) => ({ value: label, label: t(audioTabKeys[label]), icon: audioModeIcons[label] }))}
       ariaLabel={t("create.audio.tools")}
       currentModeLabel={t("create.mode.current")}
       switchModeLabel={t("create.mode.switch")}
@@ -1200,7 +1200,7 @@ export function AudioGenerationPage() {
           <ImageTutorialButton feature="textToSpeech" featureName="Text to Speech" />
           <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
         </div>
-        <div className={styles.panelHeading}><InfoTooltip content={t("create.audio.info.script")} size={14} /><h2><span>1</span> {t("create.audio.scriptPrompt")}</h2></div>
+        <div className={styles.panelHeading}><h2><span>1</span> {t("create.audio.scriptPrompt")}</h2><InfoTooltip content={t("create.audio.info.script")} size={14} /></div>
         <div className={styles.promptBox}>
           <textarea aria-label={t("create.audio.a11y.scriptInput")} value={prompt} onChange={(event) => { const value = event.target.value; setPrompt(value); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: value } : scene)); }} maxLength={promptMaxLength} />
           <div className={styles.promptMeta}><span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span><button type="button" onClick={() => { setPrompt(""); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: "" } : scene)); }}>{t("create.audio.clear")} <Trash2 size={13} /></button></div>
