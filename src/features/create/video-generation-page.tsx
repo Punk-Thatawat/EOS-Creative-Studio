@@ -2687,6 +2687,7 @@ export function VideoGenerationPage() {
           {videoModes.map((label) => {
             const tab = videoTabValues[label];
             const isActive = activeVideoTab === tab;
+            const TabIcon = videoModeIcons[label];
             return (
               <button
                 key={label}
@@ -2699,6 +2700,7 @@ export function VideoGenerationPage() {
                   }
                 }}
               >
+                <TabIcon size={16} aria-hidden="true" />
                 {t(videoTabKeys[label])}
               </button>
             );

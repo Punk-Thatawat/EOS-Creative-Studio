@@ -82,6 +82,14 @@
 }
 
 @media (max-width: 767.98px) {
+  /* The strip .tabs wraps is display:none at this width, so nothing in here has
+     to scroll sideways any more -- and overflow-x: auto forces overflow-y to
+     auto with it, which cropped the mode dropdown's 260px menu to a 7px sliver
+     of its own container. */
+  .tabs {
+    overflow: visible;
+  }
+
   .mobileTabs {
     display: block;
     min-width: 0;
