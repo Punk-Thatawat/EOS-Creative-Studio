@@ -28,6 +28,7 @@
 .audioPromptTopActions > * { display: inline-flex; min-width: 0; align-items: center; }
 .audioPromptTopActions > *:last-child { margin-left: auto; }
 .panelHeading, .previewHeader, .sectionHeading, .settingsTitle, .speedHeader, .musicHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panelHeading { justify-content: flex-start; }
 .panelHeadingActions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .panelHeading { margin-bottom: 11px; }
 .panelHeading h2, .previewHeader h2, .sectionHeading h2, .settingsTitle h2 { margin: 0; color: #171b22; font-size: 12px; font-weight: 850; letter-spacing: .025em; }
@@ -159,6 +160,7 @@
 .voicePreviewButtonActive { background: var(--audio-orange); color: #fff; }
 .voicePreviewButtonActive:hover:not(:disabled) { background: #f05d16; color: #fff; }
 .voicePauseGlyph { display: block; width: 7px; height: 9px; border-right: 2px solid currentColor; border-left: 2px solid currentColor; }
+.hiddenAudio { display: none; }
 .voiceCard strong, .voiceCardActive strong { display: block; overflow: hidden; color: #20252d; font-size: 10px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .voiceCard small, .voiceCardActive small { display: block; overflow: hidden; margin-top: 3px; color: #777e87; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .voiceCheck { position: absolute; top: 6px; left: 6px; padding: 2px; border-radius: 50%; background: var(--audio-orange); color: #fff; }

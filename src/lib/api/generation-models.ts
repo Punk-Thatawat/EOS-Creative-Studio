@@ -116,9 +116,31 @@ export type GenerationModelRequestOptions = {
 const defaultGenerationModelRequestTimeoutMs = 15000;
 const generationModelCacheTtlMs = 30_000;
 const generationModelCache = new Map<string, { expiresAt: number; data: GenerationModelOption[] }>();
+const generationModelInFlight = new Map<string, Promise<GenerationModelOption[]>>();
 
 export function clearGenerationModelCache(): void {
   generationModelCache.clear();
+}
+
+function requestWithAbort<T>(request: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return request;
+  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException("The operation was aborted", "AbortError"));
+
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => {
+      cleanup();
+      reject(signal.reason ?? new DOMException("The operation was aborted", "AbortError"));
+    };
+    const cleanup = () => signal.removeEventListener("abort", abort);
+    signal.addEventListener("abort", abort, { once: true });
+    request.then((value) => {
+      cleanup();
+      resolve(value);
+    }, (error) => {
+      cleanup();
+      reject(error);
+    });
+  });
 }
 
 export async function listGenerationModels(
@@ -133,18 +155,32 @@ export async function listGenerationModels(
     return cached.data;
   }
   if (cached) generationModelCache.delete(cacheKey);
+
+  const inFlight = generationModelInFlight.get(cacheKey);
+  if (inFlight) return requestWithAbort(inFlight, options.signal);
+
+  const request = loadGenerationModels(cacheKey, feature, backgroundMode, options.timeoutMs);
+  generationModelInFlight.set(cacheKey, request);
+  request.then(
+    () => generationModelInFlight.delete(cacheKey),
+    () => generationModelInFlight.delete(cacheKey),
+  );
+  return requestWithAbort(request, options.signal);
+}
+
+async function loadGenerationModels(
+  cacheKey: string,
+  feature: string,
+  backgroundMode: AiBackgroundMode | undefined,
+  timeoutMsOption?: number,
+): Promise<GenerationModelOption[]> {
   const controller = new AbortController();
-  const timeoutMs = Math.max(1000, options.timeoutMs ?? defaultGenerationModelRequestTimeoutMs);
+  const timeoutMs = Math.max(1000, timeoutMsOption ?? defaultGenerationModelRequestTimeoutMs);
   let timedOut = false;
   const timeoutId = window.setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, timeoutMs);
-  const abortFromCaller = () => controller.abort();
-  if (options.signal) {
-    if (options.signal.aborted) controller.abort();
-    else options.signal.addEventListener("abort", abortFromCaller, { once: true });
-  }
 
   try {
     const accessToken = await getApiAccessToken();
@@ -165,7 +201,6 @@ export async function listGenerationModels(
     throw error;
   } finally {
     window.clearTimeout(timeoutId);
-    options.signal?.removeEventListener("abort", abortFromCaller);
   }
 }
 

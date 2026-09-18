@@ -16,7 +16,9 @@ type VideoFrameThumbnailProps = {
 /**
  * Turns the first decoded video frame into a small JPEG thumbnail. The visible
  * video remains as a fallback because some provider CDNs do not expose CORS
- * headers required for canvas capture.
+ * headers required for canvas capture. Do not set crossOrigin on the visible
+ * element: a CDN without ACAO would make the media itself fail to decode and
+ * leave the card black before the canvas fallback gets a chance to render.
  */
 export function VideoFrameThumbnail({ src, alt, className, poster, fallback }: VideoFrameThumbnailProps) {
   const containerRef = useRef<HTMLSpanElement>(null);
@@ -36,7 +38,7 @@ export function VideoFrameThumbnail({ src, alt, className, poster, fallback }: V
       if (!entry?.isIntersecting) return;
       setIsNearViewport(true);
       observer.disconnect();
-    }, { rootMargin: "300px 0px" });
+    }, { rootMargin: "120px 0px" });
     observer.observe(container);
     return () => observer.disconnect();
   }, []);
@@ -75,12 +77,23 @@ export function VideoFrameThumbnail({ src, alt, className, poster, fallback }: V
       capture();
     };
 
-    video.addEventListener("loadeddata", loadFirstFrame);
+    const revealFirstFrame = () => {
+      // Some browsers keep a poster-less, paused video black until playback
+      // has started once. Muted playback is allowed without user interaction;
+      // pause immediately after the first decoded frame so cards stay still.
+      void video.play().then(() => {
+        video.pause();
+        video.currentTime = 0;
+        capture();
+      }).catch(loadFirstFrame);
+    };
+
+    video.addEventListener("loadeddata", revealFirstFrame);
     video.addEventListener("seeked", capture);
     video.load();
     return () => {
       active = false;
-      video.removeEventListener("loadeddata", loadFirstFrame);
+      video.removeEventListener("loadeddata", revealFirstFrame);
       video.removeEventListener("seeked", capture);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
@@ -96,8 +109,7 @@ export function VideoFrameThumbnail({ src, alt, className, poster, fallback }: V
       src={src}
       poster={poster}
       className={className}
-      crossOrigin="anonymous"
-      preload="auto"
+      preload="metadata"
       muted
       playsInline
       aria-label={alt}

@@ -195,6 +195,30 @@ export type AdminAudioSettingsPatch = {
   internal?: Partial<AdminAudioProviderSettings["internal"]>;
 };
 
+const audioCatalogCacheTtlMs = 60_000;
+const audioCatalogCache = new Map<string, { expiresAt: number; data: unknown }>();
+const audioCatalogInFlight = new Map<string, Promise<unknown>>();
+
+async function withAudioCatalogCache<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const cached = audioCatalogCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data as T;
+  if (cached) audioCatalogCache.delete(key);
+
+  const inFlight = audioCatalogInFlight.get(key);
+  if (inFlight) return inFlight as Promise<T>;
+
+  const request = load().then((data) => {
+    audioCatalogCache.set(key, { expiresAt: Date.now() + audioCatalogCacheTtlMs, data });
+    return data;
+  });
+  audioCatalogInFlight.set(key, request);
+  request.then(
+    () => audioCatalogInFlight.delete(key),
+    () => audioCatalogInFlight.delete(key),
+  );
+  return request;
+}
+
 async function adminRequest(path: string, init: RequestInit = {}): Promise<unknown> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in as an admin");
@@ -332,55 +356,63 @@ export async function getAudioCreditBalance(): Promise<AudioCreditBalance> {
 }
 
 export async function listAudioVoices(modelId?: string, feature?: AudioFeatureKey): Promise<AudioVoice[]> {
-  const queryParams = new URLSearchParams();
-  if (modelId?.trim()) queryParams.set("modelId", modelId.trim());
-  if (feature) queryParams.set("feature", feature);
-  const query = queryParams.toString() ? `?${queryParams.toString()}` : "";
-  const response = await userAudioRequest(`/audio/voices${query}`, { headers: { Accept: "application/json" } });
-  const payload = await response.json().catch(() => null);
-  const data = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
-  const voices: unknown[] = data && typeof data === "object" && "voices" in data && Array.isArray(data.voices)
-    ? data.voices
-    : Array.isArray(data)
-      ? data
-      : [];
+  const cacheKey = `voices:${modelId?.trim() ?? ""}:${feature ?? ""}`;
+  return withAudioCatalogCache(cacheKey, async () => {
+    const queryParams = new URLSearchParams();
+    if (modelId?.trim()) queryParams.set("modelId", modelId.trim());
+    if (feature) queryParams.set("feature", feature);
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : "";
+    const response = await userAudioRequest(`/audio/voices${query}`, { headers: { Accept: "application/json" } });
+    const payload = await response.json().catch(() => null);
+    const data = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
+    const voices: unknown[] = data && typeof data === "object" && "voices" in data && Array.isArray(data.voices)
+      ? data.voices
+      : Array.isArray(data)
+        ? data
+        : [];
 
-  return voices.map(normalizeAudioVoice).filter((voice): voice is AudioVoice => voice !== null);
+    return voices.map(normalizeAudioVoice).filter((voice): voice is AudioVoice => voice !== null);
+  });
 }
 
 export async function listAudioModels(feature?: AudioFeatureKey): Promise<AudioModel[]> {
-  const query = feature ? `?feature=${encodeURIComponent(feature)}` : "";
-  const response = await userAudioRequest(`/audio/models${query}`, { headers: { Accept: "application/json" } });
-  const payload = await response.json().catch(() => null);
-  const data = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
-  const models: unknown[] = data && typeof data === "object" && "models" in data && Array.isArray(data.models)
-    ? data.models
-    : Array.isArray(data)
-      ? data
-      : [];
-  return models.map(normalizeAudioModel).filter((model): model is AudioModel => model !== null);
+  const cacheKey = `models:${feature ?? ""}`;
+  return withAudioCatalogCache(cacheKey, async () => {
+    const query = feature ? `?feature=${encodeURIComponent(feature)}` : "";
+    const response = await userAudioRequest(`/audio/models${query}`, { headers: { Accept: "application/json" } });
+    const payload = await response.json().catch(() => null);
+    const data = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
+    const models: unknown[] = data && typeof data === "object" && "models" in data && Array.isArray(data.models)
+      ? data.models
+      : Array.isArray(data)
+        ? data
+        : [];
+    return models.map(normalizeAudioModel).filter((model): model is AudioModel => model !== null);
+  });
 }
 
 export async function listAudioBackgroundMusic(): Promise<AudioBackgroundMusic[]> {
-  const response = await userAudioRequest("/audio/background-music", { headers: { Accept: "application/json" } });
-  const payload = await response.json().catch(() => null);
-  const data = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
-  const presets: unknown[] = data && typeof data === "object" && "presets" in data && Array.isArray(data.presets)
-    ? data.presets
-    : Array.isArray(data)
-      ? data
-      : [];
-  return presets.map((value): AudioBackgroundMusic | null => {
-    if (!value || typeof value !== "object") return null;
-    const preset = value as Record<string, unknown>;
-    if (typeof preset.key !== "string" || typeof preset.name !== "string") return null;
-    return {
-      key: preset.key,
-      name: preset.name,
-      description: typeof preset.description === "string" ? preset.description : "",
-      previewUrl: typeof preset.previewUrl === "string" ? preset.previewUrl : null,
-    };
-  }).filter((preset): preset is AudioBackgroundMusic => preset !== null);
+  return withAudioCatalogCache("background-music", async () => {
+    const response = await userAudioRequest("/audio/background-music", { headers: { Accept: "application/json" } });
+    const payload = await response.json().catch(() => null);
+    const data = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
+    const presets: unknown[] = data && typeof data === "object" && "presets" in data && Array.isArray(data.presets)
+      ? data.presets
+      : Array.isArray(data)
+        ? data
+        : [];
+    return presets.map((value): AudioBackgroundMusic | null => {
+      if (!value || typeof value !== "object") return null;
+      const preset = value as Record<string, unknown>;
+      if (typeof preset.key !== "string" || typeof preset.name !== "string") return null;
+      return {
+        key: preset.key,
+        name: preset.name,
+        description: typeof preset.description === "string" ? preset.description : "",
+        previewUrl: typeof preset.previewUrl === "string" ? preset.previewUrl : null,
+      };
+    }).filter((preset): preset is AudioBackgroundMusic => preset !== null);
+  });
 }
 
 export async function createDialogue(input: DialogueInput, signal?: AbortSignal): Promise<TextToSpeechResponse> {
