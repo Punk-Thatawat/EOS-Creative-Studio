@@ -141,9 +141,9 @@ async function backendRequest<T>(path: string, init: RequestInit = {}): Promise<
 }
 
 /** `month` is a calendar month as YYYY-MM. */
-export function fetchUsageDashboard(month: string, trend: UsageTrend, activityLimit = 5, activityOffset = 0): Promise<UsageDashboard> {
+export function fetchUsageDashboard(month: string, trend: UsageTrend, activityLimit = 5, activityOffset = 0, signal?: AbortSignal): Promise<UsageDashboard> {
   const params = new URLSearchParams({ month, trend, activityLimit: String(activityLimit), activityOffset: String(activityOffset) });
-  return backendRequest<UsageDashboard>(`/users/me/usage?${params.toString()}`);
+  return backendRequest<UsageDashboard>(`/users/me/usage?${params.toString()}`, { signal });
 }
 
 export function fetchBilling(): Promise<BillingSnapshot> {

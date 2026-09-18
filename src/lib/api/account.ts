@@ -23,6 +23,10 @@ export type HeaderAccountData = {
   balance: number | string | null;
 };
 
+const HEADER_ACCOUNT_CACHE_TTL_MS = 10_000;
+let cachedAccount: { accessToken: string; value: HeaderAccountData; expiresAt: number } | null = null;
+let pendingAccount: { accessToken: string; request: Promise<HeaderAccountData> } | null = null;
+
 async function getAccessToken(): Promise<string | null> {
   return getApiAccessToken();
 }
@@ -43,24 +47,40 @@ async function getBackendData(path: string, accessToken: string): Promise<Backen
   return payload ?? {};
 }
 
-export async function fetchHeaderAccountData(): Promise<HeaderAccountData> {
+export async function fetchHeaderAccountData(options: { force?: boolean } = {}): Promise<HeaderAccountData> {
   const accessToken = await getAccessToken();
   if (!accessToken) return { displayName: "User", email: "", role: "User", balance: null };
 
-  const [session, credits] = await Promise.all([
+  const now = Date.now();
+  if (!options.force && cachedAccount?.accessToken === accessToken && cachedAccount.expiresAt > now) {
+    return cachedAccount.value;
+  }
+  if (pendingAccount?.accessToken === accessToken) return pendingAccount.request;
+
+  const request = Promise.all([
     getBackendData("/auth/session", accessToken),
     getBackendData("/users/me/credits", accessToken),
-  ]);
-  const user = session.data?.user;
-  const email = user?.email?.trim() ?? "";
-  const displayName = user?.displayName?.trim() || email || "User";
-  const role = user?.role?.trim().toLowerCase();
-  const accountRole = role === "admin" ? "Admin" : role === "owner" ? "Owner" : role === "staff" ? "Staff" : "User";
+  ]).then(([session, credits]) => {
+    const user = session.data?.user;
+    const email = user?.email?.trim() ?? "";
+    const displayName = user?.displayName?.trim() || email || "User";
+    const role = user?.role?.trim().toLowerCase();
+    const accountRole = role === "admin" ? "Admin" : role === "owner" ? "Owner" : role === "staff" ? "Staff" : "User";
+    const value = {
+      displayName,
+      email,
+      role: accountRole,
+      balance: credits.data?.balance ?? null,
+    };
+    cachedAccount = { accessToken, value, expiresAt: Date.now() + HEADER_ACCOUNT_CACHE_TTL_MS };
+    return value;
+  }).finally(() => {
+    if (pendingAccount?.request === request) pendingAccount = null;
+  });
+  pendingAccount = { accessToken, request };
+  return request;
+}
 
-  return {
-    displayName,
-    email,
-    role: accountRole,
-    balance: credits.data?.balance ?? null,
-  };
+export function clearHeaderAccountCache(): void {
+  cachedAccount = null;
 }

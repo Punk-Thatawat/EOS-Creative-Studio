@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { CreateGenerationPage } from "@/features/create/components/create-generation-page";
 import { generationKinds, isGenerationKind } from "@/features/create/config/generation-kinds";
 
 export const generateStaticParams = () => generationKinds.map((kind) => ({ kind }));
 export default async function GenerationPage({ params }: { params: Promise<{ kind: string }> }) {
   const { kind } = await params;
   if (!isGenerationKind(kind)) notFound();
-  return <CreateGenerationPage kind={kind} />;
+  // The parent create layout owns the persistent client workspace so changing
+  // Image / Video / Audio does not unmount and recreate the active editor.
+  return null;
 }
