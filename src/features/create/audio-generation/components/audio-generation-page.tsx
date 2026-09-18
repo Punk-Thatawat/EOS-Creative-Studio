@@ -97,6 +97,7 @@ const waveformBars = Array.from({ length: 88 }, (_, index) => Math.round(24 + Ma
 
 type AudioHistoryItem = Omit<AudioHistoryEntry, "url"> & { url: string; localUrl?: boolean; persisted?: boolean };
 const AUDIO_HISTORY_LIMIT = 10;
+const VOICE_PAGE_SIZE = 6;
 type SaveHistoryCallback = (input: SaveAudioHistoryInput) => Promise<void>;
 type AudioScene = { id: string; title: string; durationSeconds: number; text: string; voice: string };
 type PodcastSpeaker = { id: string; role: string; name: string; voice: string; image: string };
@@ -560,6 +561,7 @@ export function AudioGenerationPage() {
   const playbackFrameRef = useRef<number | null>(null);
   const voiceRowRef = useRef<HTMLDivElement>(null);
   const voiceScrollTargetRef = useRef(0);
+  const voiceScrollUserMovedRef = useRef(false);
   const audioHistoryRef = useRef<AudioHistoryItem[]>([]);
   const historySequenceRef = useRef(0);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
@@ -670,7 +672,7 @@ export function AudioGenerationPage() {
     const maxScrollLeft = Math.max(0, row.scrollWidth - row.clientWidth);
     const currentScrollLeft = Math.min(maxScrollLeft, Math.max(0, row.scrollLeft));
     voiceScrollTargetRef.current = currentScrollLeft;
-    setCanScrollVoicesLeft(currentScrollLeft > 1);
+    setCanScrollVoicesLeft(voiceScrollUserMovedRef.current && currentScrollLeft > 1);
     setCanScrollVoicesRight(maxScrollLeft - currentScrollLeft > 1);
   }, []);
 
@@ -681,8 +683,10 @@ export function AudioGenerationPage() {
     const currentTarget = Math.min(maxScrollLeft, Math.max(0, voiceScrollTargetRef.current));
     const nextTarget = Math.min(maxScrollLeft, Math.max(0, currentTarget + direction * Math.max(row.clientWidth, 180)));
     voiceScrollTargetRef.current = nextTarget;
+    if (direction > 0 && nextTarget > 1) voiceScrollUserMovedRef.current = true;
+    if (direction < 0 && nextTarget <= 1) voiceScrollUserMovedRef.current = false;
     row.scrollTo({ left: nextTarget, behavior: "smooth" });
-    setCanScrollVoicesLeft(nextTarget > 1);
+    setCanScrollVoicesLeft(voiceScrollUserMovedRef.current && nextTarget > 1);
     setCanScrollVoicesRight(maxScrollLeft - nextTarget > 1);
     window.setTimeout(updateVoiceScrollButtons, 450);
   };
@@ -690,6 +694,13 @@ export function AudioGenerationPage() {
   useEffect(() => {
     const row = voiceRowRef.current;
     if (!row) return;
+    // A model switch or async voice refresh can preserve the old horizontal
+    // offset. Always start the newly loaded catalog at page one; the left
+    // control should only become visible after the user moves right.
+    row.scrollLeft = 0;
+    voiceScrollTargetRef.current = 0;
+    voiceScrollUserMovedRef.current = false;
+    setCanScrollVoicesLeft(false);
     updateVoiceScrollButtons();
     row.addEventListener("scroll", updateVoiceScrollButtons, { passive: true });
     const resizeObserver = new ResizeObserver(updateVoiceScrollButtons);
@@ -698,7 +709,7 @@ export function AudioGenerationPage() {
       row.removeEventListener("scroll", updateVoiceScrollButtons);
       resizeObserver.disconnect();
     };
-  }, [availableVoices.length, voiceLoadState, updateVoiceScrollButtons]);
+  }, [availableVoices.length, selectedModel, voiceLoadState, updateVoiceScrollButtons]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = speed;
@@ -777,7 +788,7 @@ export function AudioGenerationPage() {
     };
   }, [isPlaying]);
 
-  const voicePages = Array.from({ length: Math.ceil(availableVoices.length / 10) }, (_, pageIndex) => availableVoices.slice(pageIndex * 10, pageIndex * 10 + 10));
+  const voicePages = Array.from({ length: Math.ceil(availableVoices.length / VOICE_PAGE_SIZE) }, (_, pageIndex) => availableVoices.slice(pageIndex * VOICE_PAGE_SIZE, pageIndex * VOICE_PAGE_SIZE + VOICE_PAGE_SIZE));
   const isSceneMode = activeTab === "Podcast & Dialogue" && audioScenes.length > 0;
   const hasIncompleteScene = audioScenes.some((scene) => !scene.text.trim() || !scene.voice.trim());
   const isGenerating = status === "generating" || sceneGenerationStatus === "generating";
@@ -1225,15 +1236,15 @@ export function AudioGenerationPage() {
         <div className={`${styles.sectionBlock} ${styles.voiceSection}`}>
           <div className={styles.sectionHeading}><h2>{t("create.audio.voiceSpeaker")}</h2></div>
           <div className={styles.voiceCarousel}>
-            <button type="button" className={`${styles.voiceCarouselButton} ${styles.voiceCarouselButtonLeft}`} onClick={() => scrollVoices(-1)} disabled={!canScrollVoicesLeft} aria-label="เลื่อน Voice ไปทางซ้าย" aria-controls="audio-voice-carousel"><ChevronLeft size={16} /></button>
-            <div ref={voiceRowRef} id="audio-voice-carousel" className={styles.voiceRow}>
+            {canScrollVoicesLeft ? <button type="button" className={`${styles.voiceCarouselButton} ${styles.voiceCarouselButtonLeft}`} onClick={() => scrollVoices(-1)} aria-label="เลื่อน Voice ไปทางซ้าย" aria-controls="audio-voice-carousel"><ChevronLeft size={16} /></button> : null}
+            <div ref={voiceRowRef} id="audio-voice-carousel" className={styles.voiceRow} onWheel={() => { voiceScrollUserMovedRef.current = true; }} onTouchMove={() => { voiceScrollUserMovedRef.current = true; }}>
             {voiceLoadState === "loading" ? <div className={styles.voiceState} role="status">{t("create.audio.loadingVoices")}</div> : null}
             {voiceLoadState === "error" ? <div className={styles.voiceStateError} role="alert"><span>{voiceError ?? t("create.audio.voicesError")}</span><button type="button" className={styles.voiceRetry} onClick={() => void loadVoices(selectedModel || undefined)}>{t("create.audio.tryAgain")}</button></div> : null}
             {voiceLoadState === "ready" && availableVoices.length === 0 ? <div className={styles.voiceState}>{t("create.audio.noVoices")}</div> : null}
             {voiceLoadState === "ready" ? voicePages.map((page, pageIndex) => <div className={styles.voicePage} key={`voice-page-${pageIndex}`}>
-              {page.map((voice, index) => <div className={styles.voiceCardWrap} key={voice.key}>
+              {page.map((voice, index) => <div className={`${styles.voiceCardWrap} ${selectedVoice === voice.key ? styles.voiceCardWrapActive : ""}`} key={voice.key}>
                 <button type="button" className={selectedVoice === voice.key ? styles.voiceCardActive : styles.voiceCard} onClick={() => setSelectedVoice(voice.key)} aria-pressed={selectedVoice === voice.key}>
-                  <div className={styles.voiceImage}><Image src={voice.imageUrl || voiceImages[(pageIndex * 10 + index) % voiceImages.length]} alt="" fill unoptimized sizes="60px" /></div><strong>{voice.name}</strong><small>{voice.description || t("create.audio.voiceFallback")}</small>{selectedVoice === voice.key ? <Check size={14} className={styles.voiceCheck} /> : null}
+                  <div className={styles.voiceImage}><Image src={voice.imageUrl || voiceImages[(pageIndex * VOICE_PAGE_SIZE + index) % voiceImages.length]} alt="" fill unoptimized sizes="60px" /></div><strong>{voice.name}</strong><small>{voice.description || t("create.audio.voiceFallback")}</small>{selectedVoice === voice.key ? <Check size={14} className={styles.voiceCheck} /> : null}
                 </button>
                 <button type="button" data-voice-key={voice.key} className={`${styles.voicePreviewButton} ${previewingVoiceKey === voice.key ? styles.voicePreviewButtonActive : ""}`} onClick={handleVoicePreviewClick} disabled={!voice.previewUrl} aria-label={voice.previewUrl ? (previewingVoiceKey === voice.key ? `หยุดตัวอย่างเสียง ${voice.name}` : `ฟังตัวอย่างเสียง ${voice.name}`) : `ยังไม่มีตัวอย่างเสียง ${voice.name}`} title={voice.previewUrl ? "ฟังตัวอย่างเสียง" : "ยังไม่มีตัวอย่างเสียง"}>
                   {previewingVoiceKey === voice.key ? <span className={styles.voicePauseGlyph} /> : <Play size={11} fill="currentColor" />}
@@ -1241,7 +1252,7 @@ export function AudioGenerationPage() {
               </div>)}
             </div>) : null}
             </div>
-            <button type="button" className={`${styles.voiceCarouselButton} ${styles.voiceCarouselButtonRight}`} onClick={() => scrollVoices(1)} disabled={!canScrollVoicesRight} aria-label="เลื่อน Voice ไปทางขวา" aria-controls="audio-voice-carousel"><ChevronRight size={16} /></button>
+            {canScrollVoicesRight ? <button type="button" className={`${styles.voiceCarouselButton} ${styles.voiceCarouselButtonRight}`} onClick={() => scrollVoices(1)} aria-label="เลื่อน Voice ไปทางขวา" aria-controls="audio-voice-carousel"><ChevronRight size={16} /></button> : null}
           </div>
         </div>
 

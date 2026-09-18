@@ -137,13 +137,13 @@
 .linkAction:hover { color: var(--audio-orange); }
 .voiceCarousel { position: relative; min-width: 0; }
 .voiceCarouselButton { position: absolute; z-index: 2; top: 50%; display: grid; width: 29px; height: 29px; place-items: center; border: 1px solid #d9dde2; border-radius: 50%; background: #fff; color: #505861; box-shadow: 0 1px 4px #18212a26; cursor: pointer; transform: translateY(-50%); }
-.voiceCarouselButtonLeft { left: -7px; }
+.voiceCarouselButtonLeft { left: -29px; }
 .voiceCarouselButtonRight { right: -7px; }
 .voiceCarouselButton:hover:not(:disabled) { border-color: var(--audio-orange); background: #fff8f3; color: var(--audio-orange); }
 .voiceCarouselButton:disabled { cursor: default; opacity: .35; }
 .voiceRow { display: flex; min-width: 0; flex: 1; gap: 8px; overflow-x: auto; padding: 1px 15px 3px; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .voiceRow::-webkit-scrollbar { display: none; }
-.voicePage { display: grid; min-width: 100%; flex: 0 0 100%; grid-template-columns: repeat(5, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; scroll-snap-align: start; }
+.voicePage { display: grid; min-width: 100%; flex: 0 0 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; scroll-snap-align: start; }
 .voiceState, .voiceStateError { display: flex; min-height: 100px; flex: 1 0 100%; align-items: center; justify-content: center; border: 1px dashed #dfe2e7; border-radius: 8px; color: #7b818a; font-size: 10px; }
 .voiceStateError { flex-direction: column; gap: 9px; border-color: #f0b4a5; background: #fff8f6; color: #b64f3c; text-align: center; }
 .voiceRetry { border: 1px solid #f0a07d; border-radius: 6px; background: #fff; padding: 5px 10px; color: #c34d17; font: inherit; font-size: 9px; font-weight: 750; cursor: pointer; }
@@ -152,7 +152,8 @@
 .voiceCard, .voiceCardActive { position: relative; width: 100%; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid #e4e6e9; border-radius: 8px; background: #fff; padding: 0 7px 8px; text-align: left; cursor: pointer; }
 .voiceCard, .voiceCardActive { height: 100%; }
 .voiceCard:hover { border-color: #f6b08c; }
-.voiceCardActive { border-color: var(--audio-orange); box-shadow: 0 0 0 1px var(--audio-orange); }
+.voiceCardActive { border-color: transparent; box-shadow: none; }
+.voiceCardWrapActive::after { position: absolute; z-index: 4; inset: 0; border: 2px solid var(--audio-orange); border-radius: 8px; content: ""; pointer-events: none; }
 .voiceImage { position: relative; height: 64px; margin: 0 -7px 7px; overflow: hidden; background: #f4f4f2; }
 .voiceImage img { object-fit: cover; object-position: center center; }
 .voicePreviewButton { position: absolute; z-index: 1; top: 36px; right: 5px; display: grid; width: 24px; height: 24px; place-items: center; border: 2px solid #fff; border-radius: 50%; background: rgba(255, 255, 255, .96); color: #222831; box-shadow: 0 2px 6px #1114; padding: 0; line-height: 0; cursor: pointer; transition: background-color .15s ease, color .15s ease, transform .15s ease; }
@@ -165,7 +166,7 @@
 .hiddenAudio { display: none; }
 .voiceCard strong, .voiceCardActive strong { display: block; overflow: hidden; color: #20252d; font-size: 10px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 .voiceCard small, .voiceCardActive small { display: block; overflow: hidden; margin-top: 3px; color: #777e87; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.voiceCheck { position: absolute; top: 6px; left: 6px; padding: 2px; border-radius: 50%; background: var(--audio-orange); color: #fff; }
+.voiceCheck { position: absolute; z-index: 5; top: 6px; left: 6px; padding: 2px; border-radius: 50%; background: var(--audio-orange); color: #fff; }
 .sceneRow { display: flex; min-width: 0; gap: 8px; overflow-x: auto; padding-bottom: 3px; scrollbar-width: none; }
 .sceneRow::-webkit-scrollbar { display: none; }
 .sceneCard, .sceneCardActive, .addScene { min-width: 0; flex: 0 0 calc((100% - 32px) / 5); height: 83px; border: 1px solid #e0e3e7; border-radius: 8px; background: #fff; cursor: pointer; }

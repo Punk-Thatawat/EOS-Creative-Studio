@@ -101,12 +101,11 @@
   white-space: nowrap;
 }
 .tabs button.active { color: #ed5c2d; border-bottom-color: #f26b38; }
-.columns { display: grid; grid-template-columns: .9fr 1.55fr .8fr; gap: 0; }
-.leftColumn { border-right: 1px solid var(--border); }
+.leftColumn { border-right: 0; }
 .centerColumn { min-width: 0; }
 .panel, .previewPanel, .stripSection, .settings { padding: 16px; }
 .panel+.panel, .stripSection+.stripSection { border-top: 1px solid var(--border); }
-.settings { border-left: 1px solid var(--border); background: #fff; }
+.settings { border-left: 0; background: #fff; }
 .sectionTitle { display: flex; align-items: center; gap: 8px; margin-bottom: 13px; }
 .sectionTitle h2 { margin: 0; font-size: 13px; font-weight: 900; letter-spacing: .02em; }
 .sectionTitle>span:not(.annotation) { margin-left: auto; color: #ef5b20; }
@@ -334,11 +333,8 @@
 .tutorialRow .placeholder { height: 55px; }
 .tutorialRow b { display: block; padding: 6px 8px 0; font-size: 9px; }
 @media(max-width:1279.98px) {
-  .columns { grid-template-columns: 1fr 1.4fr; }
   .settings {
-    grid-column: 1/-1;
     border-left: 0;
-    border-top: 1px solid var(--border);
     display: grid;
     grid-template-columns: repeat(4,1fr);
     gap: 0 14px;
@@ -353,22 +349,22 @@
   .hero h1 { font-size: 40px; }
   .heroArt { width: 40%; height: 120px; }
   .tabs { display: none; }
-  .columns { grid-template-columns: minmax(0,1fr); min-width: 0; }
   .leftColumn, .centerColumn, .settings { min-width: 0; }
   .leftColumn, .settings { border: 0; }
-  .centerColumn { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .centerColumn { border: 0; }
   .settings { display: block; }
   .panel, .previewPanel, .stripSection, .settings { padding: 13px; }
   .tutorialRow { padding-bottom: 8px; }
 }
 /* Keep video mode tabs aligned with the Image generator tab pattern. */
-/* Only the bottom edge: the shell already frames the card, so a full border here
-   laid a second 1px line directly against it and the top, left and right edges
-   read as one 2px band. The bottom stays -- that is the seam under the tabs. */
+/* Keep the original nav seam; the shared shell only fills the empty right
+   track beside this nav. */
 .tabs { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: #fff; }
 .tabs button {
+  min-width: 125px;
+  flex: 1;
   margin-bottom: -1px;
-  padding: 12px 16px;
+  padding: 12px 10px;
   border: 0;
   border-bottom: 3px solid transparent;
   color: #515866;
@@ -378,6 +374,7 @@
 }
 .tabs button:hover { color: #ef5c29; }
 .tabs button.active { border-bottom-color: #f26b38; color: #ef5c29; }
+.tabs button + button { border-left: 1px solid #d7d1cb; }
 .annotation {
   display: inline-block;
   width: 51px;
@@ -409,9 +406,6 @@
 .previewPanel .sectionTitle { position: absolute; z-index: 3; top: -10px; left: -30px; margin: 0; }
 @media(max-width:767.98px) {
   .previewPanel .sectionTitle { top: -8px; left: -16px; }
-}
-@media(min-width:1280px) {
-  .columns { grid-template-columns: .82fr 1.78fr .72fr; }
 }
 .previewPanel { margin-top: 20px; }
 .previewPanel .videoPreview { margin-top: 20px; }
@@ -2617,17 +2611,6 @@
 @media(max-width:767.98px) {
   .hero { height: 115px; min-height: 115px; aspect-ratio: auto; }
   .hero img { object-position: center; }
-}
-/* Keep every video tab aligned to the same responsive grid tracks as the shell.
-   These restated the ratios with minmax(0, ...) while the tab strip clamps at
-   minmax(280px, ...); the two agreed on a wide shell and drifted apart once the
-   floor bit. The variable carries the breakpoint too, so no ratio repeats here. */
-.columns { grid-template-columns: var(--creator-workspace-columns); gap: 0; }
-/* Same as image creation: the tab strip covers the first two tracks, so the
-   settings column completes the line under it across the last one. */
-.settings { border-top: 1px solid var(--border); }
-@media(max-width:767.98px) {
-  .columns { grid-template-columns: minmax(0,1fr); }
 }
 /* Keep prompt text consistent with the Image creation prompt. */
 .promptPanel textarea, .videoPromptTextarea, .sceneModalField textarea { font-size: 16px !important; }

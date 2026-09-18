@@ -2718,13 +2718,15 @@ export function VideoGenerationPage() {
             }
           }}
         />}
-        content={
+        content={activeVideoTab !== "image-to-video" ? (
           <>
-        {visitedVideoTabs.has("text-to-video") ? <div hidden={activeVideoTab !== "text-to-video"}><TextToVideoWorkspace /></div> : null}
-        {visitedVideoTabs.has("people-video") ? <div hidden={activeVideoTab !== "people-video"}><PeopleVideoWorkspace initialVariant={initialPeopleVideoVariant} /></div> : null}
-        {visitedVideoTabs.has("motion-transfer") ? <div hidden={activeVideoTab !== "motion-transfer"}><MotionTransferWorkspace /></div> : null}
-        {visitedVideoTabs.has("extend-video") ? <div hidden={activeVideoTab !== "extend-video"}><ExtendVideoWorkspace /></div> : null}
-        {activeVideoTab === "image-to-video" ? <div className={styles.columns}>
+            {visitedVideoTabs.has("text-to-video") ? <div hidden={activeVideoTab !== "text-to-video"}><TextToVideoWorkspace /></div> : null}
+            {visitedVideoTabs.has("people-video") ? <div hidden={activeVideoTab !== "people-video"}><PeopleVideoWorkspace initialVariant={initialPeopleVideoVariant} /></div> : null}
+            {visitedVideoTabs.has("motion-transfer") ? <div hidden={activeVideoTab !== "motion-transfer"}><MotionTransferWorkspace /></div> : null}
+            {visitedVideoTabs.has("extend-video") ? <div hidden={activeVideoTab !== "extend-video"}><ExtendVideoWorkspace /></div> : null}
+          </>
+        ) : undefined}
+        left={activeVideoTab === "image-to-video" ? (
           <div className={styles.leftColumn}>
             <div className={styles.videoTopActionsPanel}>
               <div className={styles.videoPromptTopActions}>
@@ -2985,6 +2987,8 @@ export function VideoGenerationPage() {
               ) : null}
             </section> : null}
           </div>
+        ) : undefined}
+        preview={activeVideoTab === "image-to-video" ? (
           <div className={styles.centerColumn}>
             <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
                <SectionTitle>{t("create.preview")}</SectionTitle>
@@ -3377,7 +3381,9 @@ export function VideoGenerationPage() {
             </section>
             ) : null}
           </div>
-           <aside className={styles.settings}>
+        ) : undefined}
+        right={activeVideoTab === "image-to-video" ? (
+          <aside className={styles.settings}>
               <SectionTitle number="3">{t("create.video.common.settings")}</SectionTitle>
             <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">
                {t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} />
@@ -3645,9 +3651,7 @@ export function VideoGenerationPage() {
                <p className={styles.generationProgress}>{t("create.video.common.scenesComplete", { completed: generationProgress.completed, total: generationProgress.total })}</p>
             ) : null}
           </aside>
-        </div> : null}
-          </>
-        }
+        ) : undefined}
       />
       {isSceneModalOpen ? (
         <div
