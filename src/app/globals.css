@@ -38,12 +38,12 @@ input[type="file"].hidden { display: none !important; }
      app used 6, 7, 8, 9, 10, 11, 12px and 0.65rem for the same control. */
   --eos-field-radius: 10px;
   /* One focus treatment too. Fields used three different oranges (#f26b38,
-     #ff5800, #ff601f, #ff8b60) and rings of 0, 2, 3 and 4px. It carries no hue
-     now: the border darkens and a neutral wash sits behind it, which keeps the
-     focus visible for keyboard use without tinting the field. The auth and
-     landing surfaces keep their own pink -- they are a different brand face. */
-  --eos-field-focus: #6f6a65;
-  --eos-field-focus-ring: 0 0 0 3px rgb(17 16 15 / 7%);
+     #ff5800, #ff601f, #ff8b60) and rings of 0, 2, 3 and 4px. The border is the
+     brand orange and the glow behind it is gone, so focus reads at a glance
+     without the field looking lit up. The auth and landing surfaces keep their
+     own pink -- they are a different brand face. */
+  --eos-field-focus: #f26b38;
+  --eos-field-focus-ring: none;
   --shadow-sm: 0 2px 10px rgba(68, 49, 36, 0.05);
   --shadow-md: 0 12px 30px rgba(68, 49, 36, 0.09);
   --background: #ffffff;
