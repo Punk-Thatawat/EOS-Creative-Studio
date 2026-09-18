@@ -165,20 +165,6 @@ export async function downloadAsset(assetId: string, workspaceId?: string): Prom
   return requestDownload(`/assets/${encodeURIComponent(assetId)}/download${query}`);
 }
 
-export async function createAssetFolder(name: string, workspaceId?: string): Promise<AssetsApiFilter> {
-  const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
-  return request<AssetsApiFilter>(`/assets/folders${query}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-}
-
-export async function deleteAssetFolder(name: string, workspaceId?: string): Promise<{ name: string; unassignedCount: number }> {
-  const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
-  return request<{ name: string; unassignedCount: number }>(`/assets/folders/${encodeURIComponent(name)}${query}`, { method: "DELETE" });
-}
-
 export async function createAssetTag(name: string, workspaceId?: string): Promise<AssetsApiFilter> {
   const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
   return request<AssetsApiFilter>(`/assets/tags${query}`, {
