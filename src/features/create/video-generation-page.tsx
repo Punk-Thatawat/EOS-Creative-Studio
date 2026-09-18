@@ -65,6 +65,7 @@ import { ImageTutorialButton } from "./image-generation/components/image-tutoria
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import { ClearValuesButton } from "@/features/create/components/clear-values-button";
+import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 
 const videoModes = [
   "Image to Video",
@@ -2665,24 +2666,24 @@ export function VideoGenerationPage() {
   }});
   return (
     <div className={styles.page} data-page="gen-video">
-      <div className={styles.hero}>
+      <div className={`${styles.hero} studio-hero-frame`}>
         <picture>
-          <source media="(max-width: 700px)" srcSet="/generated-assets/create-video-hero-v3-transparent.webp" />
+          <source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/create-video-mobile.webp" />
         <Image
-          src="/generated-assets/create-video-hero-v3-transparent.webp"
+          src="/generated-assets/studio-heroes-v4/create-video-desktop.webp"
           alt={t("create.video.common.createVideoHeroAlt")}
           fill
           sizes="100vw"
         />
         </picture>
       </div>
-      <div className={styles.workspaceCard}>
-        {notice ? (
-          <div className="m-3 rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-700">
+      <CreatorWorkspaceLayout
+        notice={notice ? (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-xs text-green-700">
             {notice}
           </div>
-        ) : null}
-        <nav className={styles.tabs} aria-label={t("create.video.tools")}>
+        ) : undefined}
+        tabs={<nav className={styles.tabs} aria-label={t("create.video.tools")}>
           {videoModes.map((label) => {
             const tab = videoTabValues[label];
             const isActive = activeVideoTab === tab;
@@ -2702,8 +2703,8 @@ export function VideoGenerationPage() {
               </button>
             );
           })}
-        </nav>
-        <MobileModeDropdown
+        </nav>}
+        mobileTabs={<MobileModeDropdown
           menuId="video-mode-menu"
           value={activeVideoTab}
           options={mobileVideoModeOptions.map((option) => ({ ...option, label: t(videoTabKeys[option.label]) }))}
@@ -2716,7 +2717,9 @@ export function VideoGenerationPage() {
               activateVideoTab(tab);
             }
           }}
-        />
+        />}
+        content={
+          <>
         {visitedVideoTabs.has("text-to-video") ? <div hidden={activeVideoTab !== "text-to-video"}><TextToVideoWorkspace /></div> : null}
         {visitedVideoTabs.has("people-video") ? <div hidden={activeVideoTab !== "people-video"}><PeopleVideoWorkspace initialVariant={initialPeopleVideoVariant} /></div> : null}
         {visitedVideoTabs.has("motion-transfer") ? <div hidden={activeVideoTab !== "motion-transfer"}><MotionTransferWorkspace /></div> : null}
@@ -3643,7 +3646,9 @@ export function VideoGenerationPage() {
             ) : null}
           </aside>
         </div> : null}
-      </div>
+          </>
+        }
+      />
       {isSceneModalOpen ? (
         <div
           className={styles.sceneModalBackdrop}

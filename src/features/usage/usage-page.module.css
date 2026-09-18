@@ -7,14 +7,15 @@
 .usagePage button:disabled { cursor:not-allowed; opacity:.5; }
 /* Focus falls through to the app-wide orange ring: this page's magenta one
    read as a stray line beside the tabs and matched nothing else in the UI. */
-.hero { position:relative; isolation:isolate; overflow:hidden; margin:0; width:100%; min-height:260px; display:flex; align-items:center; padding:20px 8px; }
-.heroCopy { position:relative; z-index:1; min-width:0; }
+.hero { position:relative; isolation:isolate; margin:0; display:flex; align-items:center; padding:0 8px; }
+.heroCopy { position:absolute; top:50%; left:0; z-index:2; min-width:0; transform:translateY(-50%); }
 .heroCopy h1 { margin:0; font-family:Impact,"Arial Narrow",var(--font-kanit),sans-serif; font-size:clamp(36px,4.7vw,72px); font-weight:900; line-height:.98; letter-spacing:-1.8px; }
 .heroCopy h1 span { color:#ff5800; }
 .heroCopy p { margin:14px 0 0; font-size:clamp(16px,1.5vw,22px); font-weight:600; }
-.heroImage { display:block; flex:1; min-width:0; width:60%; max-width:740px; height:auto; object-fit:contain; pointer-events:none; }
+.heroPicture { position:absolute; inset:0; display:block; z-index:0; pointer-events:none; }
+.heroImage { display:block; width:100%; height:100%; object-fit:contain; object-position:center; pointer-events:none; }
 @media(min-width:640px) and (max-width:900px) { .heroImage { width:65%; }.heroCopy h1 { font-size:40px; } }
-@media(max-width:639.98px) { .hero { min-height:0; display:grid; grid-template-columns:1fr; gap:0; padding:22px 0 8px; }.heroCopy h1 { font-size:42px; letter-spacing:-1px; }.heroCopy p { margin-top:10px; font-size:17px; }.heroImage { position:static; transform:none; width:100%; height:110px; object-position:right center; } }
+@media(max-width:639.98px) { .hero { display:flex; padding:0 12px; }.heroCopy h1 { font-size:32px; letter-spacing:-1px; }.heroCopy p { margin-top:5px; font-size:14px; }.heroImage { object-position:center; } }
 .srOnly { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .summary { display:grid; grid-template-columns:1fr 1.7fr 1.15fr; align-items:center; gap:24px; padding:18px 8px 24px; border-top:1px solid #eee; border-bottom:3px solid #ff5900; }
 .balance { display:flex; flex-direction:column; gap:3px; }
