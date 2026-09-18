@@ -38,9 +38,11 @@ export function useHeaderAccount() {
         }
         const visibleBalance = toNumericBalance(nextAccount.balance);
         const pendingDeduction = optimisticDeduction.current;
-        setAccount(visibleBalance === null || pendingDeduction <= 0
-          ? nextAccount
-          : { ...nextAccount, balance: Math.max(0, visibleBalance - pendingDeduction) });
+        setAccount(
+          visibleBalance === null || pendingDeduction <= 0
+            ? nextAccount
+            : { ...nextAccount, balance: Math.max(0, visibleBalance - pendingDeduction) },
+        );
       } catch {
         // Keep the current value when the account endpoints are unavailable.
       }
@@ -76,7 +78,9 @@ export function useHeaderAccount() {
   }, []);
 
   useEffect(() => {
-    const refreshSession = () => { void getApiAccessToken(); };
+    const refreshSession = () => {
+      void getApiAccessToken();
+    };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") refreshSession();
     };
@@ -91,9 +95,10 @@ export function useHeaderAccount() {
   }, []);
 
   const numericBalance = toNumericBalance(account.balance);
-  const creditsLabel = numericBalance !== null && Number.isFinite(numericBalance)
-    ? `${numericBalance.toLocaleString("en-US")} Credits`
-    : "— Credits";
+  const creditsLabel =
+    numericBalance !== null && Number.isFinite(numericBalance)
+      ? `${numericBalance.toLocaleString("en-US")} Credits`
+      : "— Credits";
 
   return { ...account, creditsLabel };
 }

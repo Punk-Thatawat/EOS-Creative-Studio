@@ -36,6 +36,7 @@ export function AuthenticatedStudioGuard({ children }: { children: React.ReactNo
     };
   }, [pathname]);
 
-  if (state !== "allowed") return <div className="min-h-screen bg-background" aria-busy="true" aria-label="Checking authentication" />;
+  if (state !== "allowed")
+    return <div className="min-h-screen bg-background" aria-busy="true" aria-label="Checking authentication" />;
   return children;
 }
