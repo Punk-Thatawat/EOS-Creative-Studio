@@ -6,6 +6,8 @@ import {
   Bell,
   Check,
   ChevronRight,
+  Eye,
+  EyeOff,
   Globe2,
   Info,
   KeyRound,
@@ -73,6 +75,8 @@ const settingsKeys = {
   passwordLoginRequired: "settings.passwordLoginRequired",
   passwordManagedByGoogle: "settings.passwordManagedByGoogle",
   passwordChangeFailed: "settings.passwordChangeFailed",
+  showPassword: "auth.a11y.showPassword",
+  hidePassword: "auth.a11y.hidePassword",
   notifications: "settings.notifications",
   notificationsDescription: "settings.notificationsDescription",
   emailUpdates: "settings.emailUpdates",
@@ -174,6 +178,29 @@ function formatSessionDate(value: string | null, locale: Locale) {
   return new Intl.DateTimeFormat(locale === "th" ? "th-TH" : "en-US", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+type PasswordFieldProps = {
+  label: string;
+  value: string;
+  autoComplete: string;
+  minLength?: number;
+  visible: boolean;
+  toggleLabel: string;
+  onToggle: () => void;
+  onChange: (value: string) => void;
+};
+
+function PasswordField({ label, value, autoComplete, minLength, visible, toggleLabel, onToggle, onChange }: PasswordFieldProps) {
+  return (
+    <label>
+      {label}
+      <span className={styles.passwordInputWrap}>
+        <input type={visible ? "text" : "password"} autoComplete={autoComplete} minLength={minLength} required value={value} onChange={(event) => onChange(event.target.value)} />
+        <button type="button" className={styles.passwordToggle} aria-label={toggleLabel} title={toggleLabel} onClick={onToggle}>{visible ? <Eye size={16} aria-hidden="true" /> : <EyeOff size={16} aria-hidden="true" />}</button>
+      </span>
+    </label>
+  );
+}
+
 export function SettingsPageClient() {
   const { locale, setLocale, persistLocale, t: translateKey } = useLocale();
   const [saved, setSaved] = useState(false);
@@ -181,6 +208,7 @@ export function SettingsPageClient() {
   const [activeSection, setActiveSection] = useState<(typeof sectionIds)[number]>("language");
   const [notifications, setNotifications] = useState({ email: true, project: true, security: true });
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
+  const [passwordVisible, setPasswordVisible] = useState({ current: false, next: false, confirm: false });
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [authProvider, setAuthProvider] = useState<"loading" | "email" | "google" | "unknown">("loading");
@@ -376,9 +404,9 @@ export function SettingsPageClient() {
                   <p className={styles.passwordGoogleNote} role="status">{t.authenticationLoading}</p>
                 ) : (
                   <form className={styles.passwordForm} onSubmit={handleChangePassword}>
-                    <label>{t.currentPassword}<input type="password" autoComplete="current-password" required value={passwordForm.current} onChange={(event) => setPasswordForm((current) => ({ ...current, current: event.target.value }))} /></label>
-                    <label>{t.newPassword}<input type="password" autoComplete="new-password" minLength={8} required value={passwordForm.next} onChange={(event) => setPasswordForm((current) => ({ ...current, next: event.target.value }))} /></label>
-                    <label>{t.confirmPassword}<input type="password" autoComplete="new-password" minLength={8} required value={passwordForm.confirm} onChange={(event) => setPasswordForm((current) => ({ ...current, confirm: event.target.value }))} /></label>
+                    <PasswordField label={t.currentPassword} value={passwordForm.current} autoComplete="current-password" visible={passwordVisible.current} toggleLabel={passwordVisible.current ? t.hidePassword : t.showPassword} onToggle={() => setPasswordVisible((visible) => ({ ...visible, current: !visible.current }))} onChange={(value) => setPasswordForm((current) => ({ ...current, current: value }))} />
+                    <PasswordField label={t.newPassword} value={passwordForm.next} autoComplete="new-password" minLength={8} visible={passwordVisible.next} toggleLabel={passwordVisible.next ? t.hidePassword : t.showPassword} onToggle={() => setPasswordVisible((visible) => ({ ...visible, next: !visible.next }))} onChange={(value) => setPasswordForm((current) => ({ ...current, next: value }))} />
+                    <PasswordField label={t.confirmPassword} value={passwordForm.confirm} autoComplete="new-password" minLength={8} visible={passwordVisible.confirm} toggleLabel={passwordVisible.confirm ? t.hidePassword : t.showPassword} onToggle={() => setPasswordVisible((visible) => ({ ...visible, confirm: !visible.confirm }))} onChange={(value) => setPasswordForm((current) => ({ ...current, confirm: value }))} />
                     <Button type="submit" variant="outline" size="sm" className={styles.passwordButton} disabled={passwordSaving}>{passwordSaving ? t.changingPassword : t.changePassword}</Button>
                     {passwordMessage ? <p className={passwordMessage.tone === "success" ? styles.passwordSuccess : styles.passwordError} role="status">{passwordMessage.text}</p> : null}
                   </form>

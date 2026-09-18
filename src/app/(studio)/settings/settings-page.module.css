@@ -91,8 +91,12 @@
 .passwordPanel { margin: 1rem 0; border: 1px solid var(--settings-line); border-radius: 0.85rem; background: var(--settings-soft); padding: 1rem; }
 .passwordForm { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; margin-top: 0.9rem; }
 .passwordForm label { display: grid; gap: 0.35rem; color: #554d47; font-size: 0.68rem; font-weight: 700; }
-.passwordForm input { width: 100%; height: 2.35rem; border: 1px solid var(--settings-line); border-radius: 0.65rem; background: #fff; padding: 0 0.7rem; color: var(--settings-ink); font-size: 0.78rem; outline: none; }
+.passwordInputWrap { position: relative; display: block; }
+/* The right padding is what keeps a long password from sliding under the eye toggle. */
+.passwordForm input { width: 100%; height: 2.35rem; border: 1px solid var(--settings-line); border-radius: 0.65rem; background: #fff; padding: 0 2.35rem 0 0.7rem; color: var(--settings-ink); font-size: 0.78rem; outline: none; }
 .passwordForm input:focus { border-color: #f26b38; box-shadow: 0 0 0 3px rgb(242 107 56 / 12%); }
+.passwordToggle { position: absolute; top: 50%; right: 0.25rem; display: grid; width: 1.9rem; height: 1.9rem; translate: 0 -50%; place-items: center; border-radius: 0.5rem; color: var(--settings-muted); cursor: pointer; transition: 140ms ease; }
+.passwordToggle:hover, .passwordToggle:focus-visible { color: #f26b38; background: #fdece4; outline: none; }
 .passwordButton { grid-column: 1 / -1; justify-self: start; }
 .passwordSuccess, .passwordError { grid-column: 1 / -1; font-size: 0.7rem; line-height: 1.45; }
 .passwordSuccess { color: #37815e; }
@@ -144,7 +148,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .navItem, .languageSwitch button, .toggle, .toggleKnob { transition: none; }
+  .navItem, .languageSwitch button, .toggle, .toggleKnob, .passwordToggle { transition: none; }
 }
 
 /* ==========================================================================
@@ -160,4 +164,17 @@
   .statusPill,
   .infoRow,
   .rowValue { font-size: 0.875rem; }
+}
+
+/* ==========================================================================
+   FINGER-SIZED EYE TOGGLE (WCAG 2.2 / 2.5.8)
+   --------------------------------------------------------------------------
+   Asks "is the pointer a finger?", not "is the screen narrow?", so a touch
+   laptop gets it too. 2.5rem = 40px, which is exactly the height globals.css
+   gives these inputs under the same query -- the toggle fills the field
+   without spilling out of it.
+   ========================================================================== */
+@media (max-width: 1023.98px), (pointer: coarse) {
+  .passwordToggle { width: 2.5rem; height: 2.5rem; right: 0.15rem; }
+  .passwordForm input { padding-right: 2.8rem; }
 }
