@@ -17,11 +17,9 @@ import {
   CloudUpload,
   Copy,
   Download,
-  GripVertical,
   History,
   FileAudio,
   LockKeyhole,
-  Maximize2,
   Mic2,
   MoreHorizontal,
   Pause,
@@ -275,7 +273,6 @@ function PodcastDialogueLayout({ onHistorySaved, scenesTimeline }: { onHistorySa
       <section className={styles.podcastSection} aria-label={t("create.audio.podcast.a11y.dialogue")}>
         <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.dialogue")}</h2><span>{t("create.audio.podcast.lineCount", { count: lines.length })} · {formatSceneSeconds(totalDuration)}</span></div>
         <div className={styles.podcastLineList}>{lines.map((line, index) => { const speaker = speakers.find((item) => item.id === line.speakerId) ?? speakers[0]!; const start = lines.slice(0, index).reduce((total, item) => total + item.durationSeconds, 0); return <div className={`${styles.podcastLineRow} ${index === 0 ? styles.podcastLineRowActive : ""}`} key={line.id}>
-          <button type="button" className={styles.podcastDragHandle} aria-label={t("create.audio.podcast.a11y.reorderLine", { index: index + 1 })}><GripVertical size={15} /></button>
           <span className={styles.podcastLineAvatar}><Image src={speaker.image} alt="" fill unoptimized sizes="34px" /></span>
           <time>{formatSceneSeconds(start)}</time>
           <span className={styles.podcastSpeakerChip} data-tone={podcastSpeakerTones[speakers.findIndex((item) => item.id === speaker.id) % podcastSpeakerTones.length]}>{speaker.role}</span>
@@ -283,13 +280,12 @@ function PodcastDialogueLayout({ onHistorySaved, scenesTimeline }: { onHistorySa
           <input className={styles.podcastLineDuration} type="number" min="0.5" max="120" step="0.1" value={line.durationSeconds} onChange={(event) => updateLine(line.id, { durationSeconds: Math.max(0.5, Number(event.target.value) || 0.5) })} aria-label={t("create.audio.podcast.a11y.lineDuration", { index: index + 1 })} />
           <button type="button" className={`${styles.podcastLineAction} ${styles.podcastLineCopyAction}`} onClick={() => duplicateLine(line)} aria-label={t("create.audio.podcast.a11y.duplicateLine", { index: index + 1 })}><Copy size={15} /></button>
           <button type="button" className={styles.podcastLineActionDanger} onClick={() => removeLine(line.id)} disabled={lines.length <= 1} aria-label={t("create.audio.podcast.a11y.deleteLine", { index: index + 1 })}><Trash2 size={15} /></button>
-          <button type="button" className={`${styles.podcastLineAction} ${styles.podcastLineMoreAction}`} aria-label={t("create.audio.podcast.a11y.moreLine", { index: index + 1 })}><MoreHorizontal size={15} /></button>
         </div>; })}</div>
         <button type="button" className={styles.podcastAddLine} onClick={addLine}><Plus size={15} /> {t("create.audio.podcast.addNextLine")}</button>
       </section>
 
       <section className={styles.podcastPreviewCard} aria-label={t("create.audio.podcast.a11y.preview")}>
-        <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.audioPreview")} <span className={styles.podcastBeta}>Beta</span></h2><div className={styles.podcastPreviewActions}><button type="button" className={styles.podcastToolbarButton} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button><button type="button" className={styles.podcastLineAction} aria-label={t("create.audio.a11y.fullscreen")}><Maximize2 size={15} /></button></div></div>
+        <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.audioPreview")} <span className={styles.podcastBeta}>Beta</span></h2><div className={styles.podcastPreviewActions}><button type="button" className={styles.podcastToolbarButton} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button></div></div>
         <div className={styles.podcastAudioPlayer}><button type="button" className={styles.podcastPlayButton} onClick={() => void togglePreview()} disabled={status === "generating"}><span>{isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}</span></button><div className={styles.podcastWaveformWrap}><PreviewWaveform audioUrl={audioUrl} progress={previewProgress} isPlaying={isPlaying} /><div className={styles.podcastAudioMeta}><span>{formatSceneSeconds(previewCurrentTime)} / {formatSceneSeconds(previewDuration || totalDuration)}</span><input type="range" min="0" max="100" value={previewProgress} onChange={(event) => { const nextProgress = Number(event.target.value); setPreviewProgress(nextProgress); if (previewAudioRef.current && previewDuration) previewAudioRef.current.currentTime = nextProgress / 100 * previewDuration; }} aria-label={t("create.audio.a11y.audioProgress")} disabled={!audioUrl} /></div></div><Volume2 size={16} className={styles.podcastVolumeIcon} /><input className={styles.podcastVolumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (previewAudioRef.current) previewAudioRef.current.volume = nextVolume / 100; }} aria-label={t("create.audio.a11y.volume")} /><audio ref={previewAudioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { setPreviewDuration(event.currentTarget.duration); event.currentTarget.volume = volume / 100; }} onTimeUpdate={(event) => { const current = event.currentTarget.currentTime; const duration = event.currentTarget.duration || previewDuration; setPreviewCurrentTime(current); setPreviewProgress(duration ? current / duration * 100 : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => { setIsPlaying(false); setPreviewProgress(100); }} /></div>
         {status === "error" || error ? <p className={styles.podcastError} role="alert">{error}</p> : null}
       </section>
@@ -1252,7 +1248,7 @@ export function AudioGenerationPage() {
         <audio ref={voicePreviewAudioRef} className={styles.hiddenAudio} preload="none" onEnded={() => setPreviewingVoiceKey(null)} onError={() => setPreviewingVoiceKey(null)} aria-hidden="true" />
 
         {audioUrl ? <div className={styles.previewPanel}>
-           <div className={styles.previewHeader}><h2>{t("create.audio.preview")}</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button><button type="button" className={styles.iconAction} aria-label={t("create.audio.a11y.morePreviewActions")}><MoreHorizontal size={17} /></button></div></div>
+           <div className={styles.previewHeader}><h2>{t("create.audio.preview")}</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button></div></div>
            <PreviewWaveform audioUrl={audioUrl} progress={progress} isPlaying={isPlaying} />
            <div className={styles.playerRow}>
              <button type="button" className={styles.playButton} onClick={togglePlayback} aria-label={t(isPlaying ? "create.audio.a11y.pause" : "create.audio.a11y.play")} disabled={!audioUrl}>{isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}</button>
@@ -1262,7 +1258,7 @@ export function AudioGenerationPage() {
              <input className={styles.scrubber} type="range" min="0" max="100" value={progress} onChange={(event) => { const nextProgress = Number(event.target.value); const audioDuration = durationRef.current || duration; setProgress(nextProgress); if (audioRef.current && audioDuration) audioRef.current.currentTime = (nextProgress / 100) * audioDuration; }} aria-label={t("create.audio.a11y.audioProgress")} disabled={!audioUrl} />
              <Volume2 size={17} className={styles.volumeIcon} />
              <input className={styles.volumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (audioRef.current) audioRef.current.volume = nextVolume / 100; }} aria-label={t("create.audio.a11y.volume")} />
-             <button type="button" className={styles.iconAction} aria-label={t("create.audio.a11y.fullscreen")}><Maximize2 size={16} /></button>
+             
            </div>
            <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { syncAudioDuration(event.currentTarget); event.currentTarget.volume = volume / 100; event.currentTarget.playbackRate = speed; }} onDurationChange={(event) => syncAudioDuration(event.currentTarget)} onTimeUpdate={(event) => { const nextTime = event.currentTarget.currentTime; const nextDuration = durationRef.current || (Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); if (nextDuration > 0 && durationRef.current !== nextDuration) { durationRef.current = nextDuration; setDuration(nextDuration); } setCurrentTime(nextTime); setProgress(nextDuration ? Math.min(100, (nextTime / nextDuration) * 100) : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={(event) => { const endDuration = durationRef.current || event.currentTarget.duration; setIsPlaying(false); if (Number.isFinite(endDuration) && endDuration > 0) { durationRef.current = endDuration; setDuration(endDuration); setCurrentTime(endDuration); } setProgress(100); }} />
            {errorMessage ? <p className={styles.securityNote} role="alert">{errorMessage}</p> : null}

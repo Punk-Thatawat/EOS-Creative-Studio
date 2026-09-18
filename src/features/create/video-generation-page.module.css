@@ -87,13 +87,6 @@
 .artBlob, .artBlobTwo { position: absolute; border-radius: 50%; filter: blur(5px); }
 .artBlob { width: 52%; height: 150%; background: #f51591; left: 10%; transform: rotate(25deg); }
 .artBlobTwo { width: 44%; height: 160%; background: #ff7b18; right: 5%; transform: rotate(-24deg); }
-.workspaceCard {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #fff;
-  overflow: hidden;
-  box-shadow: 0 4px 18px #42301a0b;
-}
 .tabs { display: flex; overflow: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tabs button {
@@ -367,10 +360,12 @@
   .settings { display: block; }
   .panel, .previewPanel, .stripSection, .settings { padding: 13px; }
   .tutorialRow { padding-bottom: 8px; }
-  .workspaceCard { border-radius: 10px; }
 }
 /* Keep video mode tabs aligned with the Image generator tab pattern. */
-.tabs { border: 1px solid var(--border); border-radius: 0; background: #fff; }
+/* Only the bottom edge: the shell already frames the card, so a full border here
+   laid a second 1px line directly against it and the top, left and right edges
+   read as one 2px band. The bottom stays -- that is the seam under the tabs. */
+.tabs { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: #fff; }
 .tabs button {
   position: relative;
   min-width: 125px;
