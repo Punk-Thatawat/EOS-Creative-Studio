@@ -40,7 +40,9 @@
 .assets-page .asset-card-actions > button { width:30px; height:34px; }
 .assets-page .assets-list .asset-card-media { width:150px; height:100px; border-radius:11px 0 0 11px; }
 .assets-page .assets-search-row { display:none; }
-.assets-page :is(button,summary,input):focus-visible { outline:2px solid #ff601f; outline-offset:3px; }
+.assets-page :is(button,summary):focus-visible { outline:2px solid #ff601f; outline-offset:3px; }
+/* The wrapper shows the focus instead, so the ring follows the rounded edge. */
+.assets-page .assets-inline-search input:focus-visible { outline:none; }
 @media(max-width:1279.98px) {
  .assets-page .assets-grid { gap:14px; }
 }
