@@ -104,6 +104,15 @@ const SETTINGS_CACHE_TTL_MS = 60_000;
 let cachedAuthProvider: { value: "email" | "google" | "unknown"; cachedAt: number } | null = null;
 let cachedSessions: { value: BackendSessionSummary[]; cachedAt: number } | null = null;
 
+type AuthProviderState = "loading" | "email" | "google" | "unknown";
+
+/** The cached provider while it is still inside the TTL, else null. */
+function freshCachedAuthProvider(): "email" | "google" | "unknown" | null {
+  if (!cachedAuthProvider) return null;
+  const isFresh = Date.now() - cachedAuthProvider.cachedAt < SETTINGS_CACHE_TTL_MS;
+  return isFresh ? cachedAuthProvider.value : null;
+}
+
 async function syncLocale(locale: Locale) {
   const token = await getApiAccessToken();
   if (!token) return false;
@@ -211,7 +220,12 @@ export function SettingsPageClient() {
   const [passwordVisible, setPasswordVisible] = useState({ current: false, next: false, confirm: false });
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
-  const [authProvider, setAuthProvider] = useState<"loading" | "email" | "google" | "unknown">("loading");
+  // Seeded from the cache instead of being set from inside the effect. On a
+  // revisit within the TTL the answer is already known, so starting at
+  // "loading" only bought a second render and a flash of the loading note.
+  // The cache is written client-side in the effect below, so the server always
+  // reads it empty and renders "loading" -- which is what the client hydrates against.
+  const [authProvider, setAuthProvider] = useState<AuthProviderState>(() => freshCachedAuthProvider() ?? "loading");
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [sessions, setSessions] = useState<BackendSessionSummary[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -224,10 +238,7 @@ export function SettingsPageClient() {
   );
 
   useEffect(() => {
-    if (cachedAuthProvider && Date.now() - cachedAuthProvider.cachedAt < SETTINGS_CACHE_TTL_MS) {
-      setAuthProvider(cachedAuthProvider.value);
-      return undefined;
-    }
+    if (freshCachedAuthProvider()) return undefined; // already seeded above
     let active = true;
     void getApiAccessToken()
       .then((accessToken) => accessToken ? fetchBackendAuthProvider(accessToken) : null)
