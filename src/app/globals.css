@@ -127,7 +127,7 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
    writes the value on its own, without the variable. */
 html:lang(th) { --eos-label-tracking: normal; }
 
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid rgba(242, 107, 56, 0.35);
   outline-offset: 2px;
 }
@@ -212,9 +212,6 @@ input:not([type]), input[type="text"], input[type="search"], input[type="email"]
 .assets-view-toggle button + button { border-left: 1px solid #e5e6eb; }
 .assets-view-toggle button.is-active { color: #151624; background: #f2f3f7; }
 .assets-search-row { display: none; }
-.assets-inline-search { display: flex; width: 230px; align-items: center; gap: 8px; color: #999baa; }
-.assets-inline-search input { width: 100%; padding: 4px 0; color: #141526; border: 0; outline: 0; background: transparent; font-size: 11px; }
-.assets-inline-search input::placeholder { color: #9b9da7; }
 .assets-content-grid { display: grid; grid-template-columns: 235px minmax(0, 1fr); gap: 20px; margin-top: 14px; }
 .assets-sidebar-panel { position: relative; min-width: 0; padding: 10px 13px 13px; border: 1px solid #ececf0; border-radius: 11px; background: #fff; box-shadow: 0 3px 12px rgba(19, 18, 33, .025); }
 .assets-panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 0 9px; }
@@ -978,5 +975,37 @@ body:has(.audio-studio-page) .page-gutter > main { width: 100%; }
 @media (max-width: 767.98px) {
   body:has([data-mobile-action-dock]) .page-gutter {
     padding-bottom: calc(17rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Shared frame for the primary hero on every studio page. Keep the viewport
+   stable while routing between pages; the artwork itself can change without
+   making the content below jump. */
+.studio-hero-frame {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  min-height: 220px;
+  overflow: hidden;
+}
+
+.studio-hero-frame picture,
+.studio-hero-frame picture img,
+.studio-hero-frame > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.studio-hero-frame picture img,
+.studio-hero-frame > img {
+  object-fit: cover;
+  object-position: center;
+}
+
+@media (max-width: 767.98px) {
+  .studio-hero-frame {
+    height: 115px;
+    min-height: 115px;
   }
 }

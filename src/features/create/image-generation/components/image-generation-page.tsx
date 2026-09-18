@@ -16,6 +16,7 @@ import { ClearValuesButton } from "@/features/create/components/clear-values-but
 import { getKnownImageUploadConstraints } from "@/lib/media/upload-validation";
 import { textToImagePromptMaxLength } from "../config";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 
 const imageTabByRoute = {
   "text-to-image": "Text to Image",
@@ -156,10 +157,10 @@ export function ImageGenerationPage() {
   const generateCurrentTab = isTextToImageTab ? generateTextToImage : isImageToImageTab ? generateImageToImage : isStyleTransferTab ? generateStyleTransfer : isBackgroundTab ? generateBackground : isUpscaleTab ? generateUpscale : generateExtend;
 
   return <div className={cx("gen-image-page")} data-page="gen-image">
-    <section className={cx("gen-image-hero")}><picture className={cx("gen-hero-picture")}><source media="(max-width: 700px)" srcSet="/generated-assets/gen-image-hero-v3-transparent.webp" /><Image src="/generated-assets/gen-image-hero-v3-transparent.webp" alt={t("create.image.heroArtwork")} width={2170} height={725} priority className={cx("gen-hero-artwork")} /></picture></section>
-    <ImageGenerationTabs activeTab={state.activeTab} onTabChange={(nextTab) => { setPreviewDisplayMode("current"); state.setActiveTab(nextTab); if (requestedTab) router.replace("/create/image", { scroll: false }); }} />
-    <div className={cx("gen-workspace")}>
-      <PromptPanel
+    <section className={cx("studio-hero-frame", "gen-image-hero")}><picture className={cx("gen-hero-picture")}><source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/create-image-mobile.webp" /><Image src="/generated-assets/studio-heroes-v4/create-image-desktop.webp" alt={t("create.image.heroArtwork")} width={2400} height={435} priority className={cx("gen-hero-artwork")} sizes="100vw" /></picture></section>
+    <CreatorWorkspaceLayout
+      tabs={<ImageGenerationTabs activeTab={state.activeTab} onTabChange={(nextTab) => { setPreviewDisplayMode("current"); state.setActiveTab(nextTab); if (requestedTab) router.replace("/create/image", { scroll: false }); }} />}
+      left={<PromptPanel
         activeTab={state.activeTab}
         tutorialButton={<ImageTutorialButton feature={activeTutorialFeature} featureName={state.activeTab} mode={activeTutorialMode} />}
         clearButton={<ClearValuesButton onClick={() => { state.clearAllValues(); setPreviewDisplayMode("current"); }} disabled={anyTabIsGenerating} />}
@@ -270,8 +271,8 @@ export function ImageGenerationPage() {
         onExtendPromptChange={state.setExtendPrompt}
         onExtendDirectionChange={state.setExtendDirection}
         onExtendAmountChange={state.setExtendAmount}
-      />
-      <PreviewPanel
+      />}
+      preview={<PreviewPanel
         key={state.activeTab}
         activeTab={state.activeTab}
         generated={activeGenerated}
@@ -306,8 +307,8 @@ export function ImageGenerationPage() {
         onRecentSelect={state.selectRecentGeneration}
         onVariationSelect={state.selectVariation}
         onRefreshRecent={() => void state.refreshRecentGenerations()}
-      />
-      <SettingsPanel
+      />}
+      right={<SettingsPanel
         activeTab={state.activeTab}
         canGenerate={canGenerate}
         count={state.count}
@@ -347,7 +348,7 @@ export function ImageGenerationPage() {
         onResolutionChange={state.setResolution}
          onRatioChange={state.selectRatio}
          onModelParamChange={state.setModelParam}
-       />
-    </div>
+       />}
+    />
   </div>;
 }

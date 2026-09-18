@@ -1,5 +1,6 @@
 "use client";
 import { TopupPackages } from './topup-packages';
+import { SearchInput } from "@/components/ui/search-input";
 
 import {
   Suspense,
@@ -2021,13 +2022,7 @@ function AdminCreditsContent() {
                       <span className="mb-1 block text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                         Search
                       </span>
-                      <input
-                        aria-label="Search models"
-                        value={modelSearch}
-                        onChange={(event) => setModelSearch(event.target.value)}
-                        placeholder="Model or provider"
-                        className="h-8 w-full rounded-lg border border-border bg-[#fcfaf8] px-2 text-xs font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground focus:border-primary focus:ring-3 focus:ring-primary/10"
-                      />
+                      <SearchInput size="compact" aria-label="Search models" value={modelSearch} onValueChange={setModelSearch} placeholder="Model or provider" />
                     </label>
                     <Button
                       type="button"

@@ -2,9 +2,6 @@
 @media(max-width:1279.98px){.columns{grid-template-columns:1fr 1.4fr}.settings{grid-column:1/-1;border-left:0;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(4,1fr);gap:0 14px}.settings>.sectionTitle,.settings>.generate,.settings>.privateNote,.settings>.estimate{grid-column:1/-1}.settings>.sectionTitle{margin-bottom:0}.settingBlock{margin-top:12px}}
 @media(max-width:767.98px){.headerActions{display:none}.hero{height:145px}.hero h1{font-size:40px}.heroArt{width:40%;height:120px}.tabs{display:none}.columns{grid-template-columns:minmax(0,1fr);min-width:0}.leftColumn,.centerColumn,.settings{min-width:0}.leftColumn,.settings{border:0}.centerColumn{border-top:1px solid var(--border);border-bottom:1px solid var(--border)}.settings{display:block}.panel,.previewPanel,.stripSection,.settings{padding:13px}.tutorialRow{padding-bottom:8px}.workspaceCard{border-radius:10px}}
 
-.hero{position:relative;isolation:isolate;height:auto;aspect-ratio:5.5 / 1;margin:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff;border:0;border-bottom:0;pointer-events:none}.hero img{position:absolute!important;inset:0;z-index:0;display:block;width:100%;height:100%;object-fit:cover;object-position:center 18%;pointer-events:none}
-@media(max-width:767.98px){.hero{height:auto;aspect-ratio:5.5 / 1;margin-top:0}.hero img{object-fit:cover;object-position:center 18%}}
-
 /* Keep video mode tabs aligned with the Image generator tab pattern. */
 .tabs{border:1px solid var(--border);border-radius:13px 13px 0 0;background:#fff}
 .tabs button{position:relative;min-width:125px;margin-top:3px;padding:12px 10px;border-right:1px solid #ece9e6;border-bottom:3px solid transparent;color:#515866;background:transparent;font-weight:600;cursor:pointer}
@@ -218,24 +215,16 @@
 .videoPreviewMediaFrame :global(.video-modal-player),.videoPreviewMediaFrame>img,.videoPreviewMediaFrame>video{position:absolute;inset:0;width:100%;height:100%;max-height:none;aspect-ratio:auto;object-fit:cover!important;object-position:center;background:#000}
 .videoPromptAnnotation{display:block;flex:0 0 145px;width:145px;height:36px;background:url('/generated-assets/be-descriptive-th.png') center/contain no-repeat}
 .videoPromptAnnotation:not(.videoPromptAnnotationThai){background-image:url('/generated-assets/be-descriptive.png')}.videoPromptAnnotationThai{background-image:url('/generated-assets/be-descriptive-th.png')}
-@media(max-width:767.98px){.hero{height:auto;aspect-ratio:2 / 1;background:transparent}.hero img{object-fit:cover;object-position:center}}
-
-/* The desktop banner has its own transparent 3:1 artwork; mobile keeps its compact hero. */
-.hero { aspect-ratio: 3 / 1; background: transparent; }
-.hero picture { position: absolute; inset: 0; display: block; }
-.hero img { object-fit: cover; object-position: center; }
-@media(max-width:767.98px){.hero{aspect-ratio:2 / 1}}
-
 /* Keep the video hero compact on every viewport. */
-.hero { height: min(220px, 18vw); min-height: 0; aspect-ratio: auto; }
-.hero picture { display: block; width: 100%; height: 100%; }
-.hero img { width: 100%; height: 100%; object-fit: cover; object-position: center 55%; }
-@media(max-width:767.98px){.hero{height:96px;aspect-ratio:auto}.hero img{object-position:center}}
+.hero { position: relative; isolation: isolate; height: 220px; min-height: 220px; aspect-ratio: auto; margin: 0 0 14px; border-bottom: 0; background: transparent; }
+.hero picture { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.hero img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+@media(max-width:767.98px){.hero{height:115px;min-height:115px;aspect-ratio:auto}.hero img{object-position:center}}
 
 /* Keep every video tab aligned to the same responsive grid tracks. */
-.columns { grid-template-columns: minmax(0, .9fr) minmax(0, 1.55fr) minmax(0, .8fr); }
+.columns { grid-template-columns: minmax(0, .9fr) minmax(0, 1.55fr) minmax(0, .8fr); gap: 0; }
 @media(max-width:1279.98px){.columns{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}}
-@media(min-width:1280px){.columns{grid-template-columns:minmax(0,.82fr) minmax(0,1.78fr) minmax(0,.72fr)}}
+@media(min-width:1280px){.columns{grid-template-columns:minmax(0,.9fr) minmax(0,1.55fr) minmax(0,.8fr)}}
 @media(max-width:767.98px){.columns{grid-template-columns:minmax(0,1fr)}}
 
 /* Keep prompt text consistent with the Image creation prompt. */
