@@ -4,7 +4,8 @@
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  border: 0 !important;
+  border: 1px solid var(--creator-workspace-border);
+  border-bottom: 0;
   border-radius: 0;
   background: #fff;
 }
@@ -20,7 +21,6 @@
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  position: relative;
 }
 
 .tabs::-webkit-scrollbar {
@@ -30,22 +30,6 @@
 .tabs > * {
   grid-column: 1 / 3;
   min-width: 0;
-}
-
-/* Keep the visual separators between the desktop tool tabs. */
-.tabs > * > :global(button + button) {
-  border-left: 1px solid #d7d1cb !important;
-}
-
-/* The desktop tab nav spans the first two tracks. Continue its existing
-   bottom rule through the empty right-hand track without replacing the nav's
-   own line. */
-.tabs::after {
-  content: "";
-  grid-column: 3;
-  grid-row: 1;
-  align-self: end;
-  border-bottom: 1px solid var(--creator-workspace-border);
 }
 
 .mobileTabs {
@@ -78,10 +62,6 @@
 }
 
 @media (max-width: 1279.98px) {
-  .tabs::after {
-    display: none;
-  }
-
   .columns {
     grid-template-columns: var(--creator-workspace-columns);
   }
@@ -102,10 +82,6 @@
 }
 
 @media (max-width: 767.98px) {
-  .tabs::after {
-    display: none;
-  }
-
   /* The strip .tabs wraps is display:none at this width, so nothing in here has
      to scroll sideways any more -- and overflow-x: auto forces overflow-y to
      auto with it, which cropped the mode dropdown's 260px menu to a 7px sliver
