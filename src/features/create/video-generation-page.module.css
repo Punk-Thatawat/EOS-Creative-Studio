@@ -87,19 +87,12 @@
 .artBlob, .artBlobTwo { position: absolute; border-radius: 50%; filter: blur(5px); }
 .artBlob { width: 52%; height: 150%; background: #f51591; left: 10%; transform: rotate(25deg); }
 .artBlobTwo { width: 44%; height: 160%; background: #ff7b18; right: 5%; transform: rotate(-24deg); }
-.workspaceCard {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: #fff;
-  overflow: hidden;
-  box-shadow: 0 4px 18px #42301a0b;
-}
 .tabs { display: flex; overflow: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tabs button {
-  flex: 1;
-  min-width: 110px;
-  padding: 13px 9px;
+  flex: 0 0 auto;
+  margin-bottom: -1px;
+  padding: 13px 16px;
   border: 0;
   border-bottom: 3px solid transparent;
   background: #fff;
@@ -367,33 +360,24 @@
   .settings { display: block; }
   .panel, .previewPanel, .stripSection, .settings { padding: 13px; }
   .tutorialRow { padding-bottom: 8px; }
-  .workspaceCard { border-radius: 10px; }
 }
 /* Keep video mode tabs aligned with the Image generator tab pattern. */
-.tabs { border: 1px solid var(--border); border-radius: 13px 13px 0 0; background: #fff; }
+/* Only the bottom edge: the shell already frames the card, so a full border here
+   laid a second 1px line directly against it and the top, left and right edges
+   read as one 2px band. The bottom stays -- that is the seam under the tabs. */
+.tabs { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: #fff; }
 .tabs button {
-  position: relative;
-  min-width: 125px;
-  margin-top: 3px;
-  padding: 12px 10px;
-  border-right: 1px solid #ece9e6;
+  margin-bottom: -1px;
+  padding: 12px 16px;
+  border: 0;
   border-bottom: 3px solid transparent;
   color: #515866;
   background: transparent;
   font-weight: 600;
   cursor: pointer;
 }
-.tabs button:last-child { border-right: 0; }
-.tabs button.active {
-  margin-top: 0;
-  border: 1px solid #e5e1de;
-  border-bottom: 3px solid #f26b38;
-  border-radius: 10px 10px 0 0;
-  color: #ef5c29;
-  background: #fff;
-  box-shadow: 0 -1px 5px rgba(58,42,30,.04);
-}
-.tabs button:has(+ button.active) { border-right: 0; }
+.tabs button:hover { color: #ef5c29; }
+.tabs button.active { border-bottom-color: #f26b38; color: #ef5c29; }
 .annotation {
   display: inline-block;
   width: 51px;
@@ -2634,14 +2618,14 @@
   .hero { height: 115px; min-height: 115px; aspect-ratio: auto; }
   .hero img { object-position: center; }
 }
-/* Keep every video tab aligned to the same responsive grid tracks. */
-.columns { grid-template-columns: minmax(0, .9fr) minmax(0, 1.55fr) minmax(0, .8fr); gap: 0; }
-@media(max-width:1279.98px) {
-  .columns { grid-template-columns: minmax(0,1fr) minmax(0,1.4fr); }
-}
-@media(min-width:1280px) {
-  .columns { grid-template-columns: minmax(0,.9fr) minmax(0,1.55fr) minmax(0,.8fr); }
-}
+/* Keep every video tab aligned to the same responsive grid tracks as the shell.
+   These restated the ratios with minmax(0, ...) while the tab strip clamps at
+   minmax(280px, ...); the two agreed on a wide shell and drifted apart once the
+   floor bit. The variable carries the breakpoint too, so no ratio repeats here. */
+.columns { grid-template-columns: var(--creator-workspace-columns); gap: 0; }
+/* Same as image creation: the tab strip covers the first two tracks, so the
+   settings column completes the line under it across the last one. */
+.settings { border-top: 1px solid var(--border); }
 @media(max-width:767.98px) {
   .columns { grid-template-columns: minmax(0,1fr); }
 }

@@ -17,11 +17,9 @@ import {
   CloudUpload,
   Copy,
   Download,
-  GripVertical,
   History,
   FileAudio,
   LockKeyhole,
-  Maximize2,
   Mic2,
   MoreHorizontal,
   Pause,
@@ -48,13 +46,15 @@ import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-la
 import { ImageTutorialButton } from "@/features/create/image-generation/components/image-tutorial-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { Dropdown, type DropdownOption } from "@/components/ui/dropdown";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { createDialogue, createSoundEffects, createTextToSpeech, createTextToSpeechScenes, createVoiceClone, deleteAudioHistory, fetchAudioHistoryAudio, listAudioBackgroundMusic, listAudioHistory, listAudioModels, listAudioVoices, previewVoiceClone, quoteTextToSpeech, quoteTextToSpeechScenes, saveAudioHistory, type AudioBackgroundMusic, type AudioCreditQuote, type AudioHistoryEntry, type AudioModel, type AudioVoice, type SaveAudioHistoryInput, type SoundEffectVariant, type TextToSpeechResponse } from "@/lib/api/audio";
 
 const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
 type AudioTab = typeof audioModes[number];
 
-// Keep the main audio workflow visible while the advanced audio tools are being finalized.
-const visibleTabs = audioModes;
+// Keep only the main audio workflow visible while the advanced audio tools are being finalized.
+const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
 
 const audioTabKeys = {
   "Text to Speech": "create.audio.tabs.textToSpeech",
@@ -273,7 +273,6 @@ function PodcastDialogueLayout({ onHistorySaved, scenesTimeline }: { onHistorySa
       <section className={styles.podcastSection} aria-label={t("create.audio.podcast.a11y.dialogue")}>
         <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.dialogue")}</h2><span>{t("create.audio.podcast.lineCount", { count: lines.length })} · {formatSceneSeconds(totalDuration)}</span></div>
         <div className={styles.podcastLineList}>{lines.map((line, index) => { const speaker = speakers.find((item) => item.id === line.speakerId) ?? speakers[0]!; const start = lines.slice(0, index).reduce((total, item) => total + item.durationSeconds, 0); return <div className={`${styles.podcastLineRow} ${index === 0 ? styles.podcastLineRowActive : ""}`} key={line.id}>
-          <button type="button" className={styles.podcastDragHandle} aria-label={t("create.audio.podcast.a11y.reorderLine", { index: index + 1 })}><GripVertical size={15} /></button>
           <span className={styles.podcastLineAvatar}><Image src={speaker.image} alt="" fill unoptimized sizes="34px" /></span>
           <time>{formatSceneSeconds(start)}</time>
           <span className={styles.podcastSpeakerChip} data-tone={podcastSpeakerTones[speakers.findIndex((item) => item.id === speaker.id) % podcastSpeakerTones.length]}>{speaker.role}</span>
@@ -281,13 +280,12 @@ function PodcastDialogueLayout({ onHistorySaved, scenesTimeline }: { onHistorySa
           <input className={styles.podcastLineDuration} type="number" min="0.5" max="120" step="0.1" value={line.durationSeconds} onChange={(event) => updateLine(line.id, { durationSeconds: Math.max(0.5, Number(event.target.value) || 0.5) })} aria-label={t("create.audio.podcast.a11y.lineDuration", { index: index + 1 })} />
           <button type="button" className={`${styles.podcastLineAction} ${styles.podcastLineCopyAction}`} onClick={() => duplicateLine(line)} aria-label={t("create.audio.podcast.a11y.duplicateLine", { index: index + 1 })}><Copy size={15} /></button>
           <button type="button" className={styles.podcastLineActionDanger} onClick={() => removeLine(line.id)} disabled={lines.length <= 1} aria-label={t("create.audio.podcast.a11y.deleteLine", { index: index + 1 })}><Trash2 size={15} /></button>
-          <button type="button" className={`${styles.podcastLineAction} ${styles.podcastLineMoreAction}`} aria-label={t("create.audio.podcast.a11y.moreLine", { index: index + 1 })}><MoreHorizontal size={15} /></button>
         </div>; })}</div>
         <button type="button" className={styles.podcastAddLine} onClick={addLine}><Plus size={15} /> {t("create.audio.podcast.addNextLine")}</button>
       </section>
 
       <section className={styles.podcastPreviewCard} aria-label={t("create.audio.podcast.a11y.preview")}>
-        <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.audioPreview")} <span className={styles.podcastBeta}>Beta</span></h2><div className={styles.podcastPreviewActions}><button type="button" className={styles.podcastToolbarButton} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button><button type="button" className={styles.podcastLineAction} aria-label={t("create.audio.a11y.fullscreen")}><Maximize2 size={15} /></button></div></div>
+        <div className={styles.podcastSectionHeader}><h2>{t("create.audio.podcast.audioPreview")} <span className={styles.podcastBeta}>Beta</span></h2><div className={styles.podcastPreviewActions}><button type="button" className={styles.podcastToolbarButton} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button></div></div>
         <div className={styles.podcastAudioPlayer}><button type="button" className={styles.podcastPlayButton} onClick={() => void togglePreview()} disabled={status === "generating"}><span>{isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}</span></button><div className={styles.podcastWaveformWrap}><PreviewWaveform audioUrl={audioUrl} progress={previewProgress} isPlaying={isPlaying} /><div className={styles.podcastAudioMeta}><span>{formatSceneSeconds(previewCurrentTime)} / {formatSceneSeconds(previewDuration || totalDuration)}</span><input type="range" min="0" max="100" value={previewProgress} onChange={(event) => { const nextProgress = Number(event.target.value); setPreviewProgress(nextProgress); if (previewAudioRef.current && previewDuration) previewAudioRef.current.currentTime = nextProgress / 100 * previewDuration; }} aria-label={t("create.audio.a11y.audioProgress")} disabled={!audioUrl} /></div></div><Volume2 size={16} className={styles.podcastVolumeIcon} /><input className={styles.podcastVolumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (previewAudioRef.current) previewAudioRef.current.volume = nextVolume / 100; }} aria-label={t("create.audio.a11y.volume")} /><audio ref={previewAudioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { setPreviewDuration(event.currentTarget.duration); event.currentTarget.volume = volume / 100; }} onTimeUpdate={(event) => { const current = event.currentTarget.currentTime; const duration = event.currentTarget.duration || previewDuration; setPreviewCurrentTime(current); setPreviewProgress(duration ? current / duration * 100 : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={() => { setIsPlaying(false); setPreviewProgress(100); }} /></div>
         {status === "error" || error ? <p className={styles.podcastError} role="alert">{error}</p> : null}
       </section>
@@ -816,9 +814,9 @@ export function AudioGenerationPage() {
     setSceneGenerationStatus("idle");
   };
   const generationValidationMessage = isSceneMode
-    ? hasIncompleteScene ? "Add text and choose a voice for every scene." : null
-    : !prompt.trim() ? "Add a script before generating."
-      : voiceLoadState === "ready" && !selectedVoice ? "Select a voice before generating." : null;
+    ? hasIncompleteScene ? t("create.audio.validation.completeScenes") : null
+    : !prompt.trim() ? t("create.audio.validation.addScript")
+      : voiceLoadState === "ready" && !selectedVoice ? t("create.audio.validation.selectVoice") : null;
   const creditQuoteRequest = selectedModel && (isSceneMode
     ? !hasIncompleteScene
     : Boolean(prompt.trim() && selectedVoice))
@@ -1099,6 +1097,11 @@ export function AudioGenerationPage() {
     });
   };
 
+  /* Two pieces of state, not one: `open` drives the close animation while the
+     pending item has to outlive it, or the copy blanks out mid-fade. */
+  const [pendingHistoryDelete, setPendingHistoryDelete] = useState<AudioHistoryItem | null>(null);
+  const [historyDeleteOpen, setHistoryDeleteOpen] = useState(false);
+
   const removeHistoryItem = (item: AudioHistoryItem) => {
     const removeFromView = () => {
       if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
@@ -1184,7 +1187,7 @@ export function AudioGenerationPage() {
       mobileTabs={<MobileModeDropdown
       menuId="audio-mode-menu"
       value={activeTab}
-      options={audioModes.map((label) => ({ value: label, label: t(audioTabKeys[label]), icon: audioModeIcons[label] }))}
+      options={visibleTabs.map((label) => ({ value: label, label: t(audioTabKeys[label]), icon: audioModeIcons[label] }))}
       ariaLabel={t("create.audio.tools")}
       currentModeLabel={t("create.mode.current")}
       switchModeLabel={t("create.mode.switch")}
@@ -1200,7 +1203,7 @@ export function AudioGenerationPage() {
           <ImageTutorialButton feature="textToSpeech" featureName="Text to Speech" />
           <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
         </div>
-        <div className={styles.panelHeading}><InfoTooltip content={t("create.audio.info.script")} size={14} /><h2><span>1</span> {t("create.audio.scriptPrompt")}</h2></div>
+        <div className={styles.panelHeading}><h2><span>1</span> {t("create.audio.scriptPrompt")}</h2><InfoTooltip content={t("create.audio.info.script")} size={14} /></div>
         <div className={styles.promptBox}>
           <textarea aria-label={t("create.audio.a11y.scriptInput")} value={prompt} onChange={(event) => { const value = event.target.value; setPrompt(value); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: value } : scene)); }} maxLength={promptMaxLength} />
           <div className={styles.promptMeta}><span>{prompt.length.toLocaleString()} / {promptMaxLength.toLocaleString()}</span><button type="button" onClick={() => { setPrompt(""); setAudioScenes((current) => current.map((scene) => scene.id === "01" ? { ...scene, text: "" } : scene)); }}>{t("create.audio.clear")} <Trash2 size={13} /></button></div>
@@ -1245,7 +1248,7 @@ export function AudioGenerationPage() {
         <audio ref={voicePreviewAudioRef} className={styles.hiddenAudio} preload="none" onEnded={() => setPreviewingVoiceKey(null)} onError={() => setPreviewingVoiceKey(null)} aria-hidden="true" />
 
         {audioUrl ? <div className={styles.previewPanel}>
-           <div className={styles.previewHeader}><h2>{t("create.audio.preview")}</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button><button type="button" className={styles.iconAction} aria-label={t("create.audio.a11y.morePreviewActions")}><MoreHorizontal size={17} /></button></div></div>
+           <div className={styles.previewHeader}><h2>{t("create.audio.preview")}</h2><div className={styles.previewActions}><button type="button" className={styles.outlineAction} onClick={downloadAudio} disabled={!audioUrl}><Download size={15} /> {t("create.audio.download")}</button></div></div>
            <PreviewWaveform audioUrl={audioUrl} progress={progress} isPlaying={isPlaying} />
            <div className={styles.playerRow}>
              <button type="button" className={styles.playButton} onClick={togglePlayback} aria-label={t(isPlaying ? "create.audio.a11y.pause" : "create.audio.a11y.play")} disabled={!audioUrl}>{isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}</button>
@@ -1255,7 +1258,6 @@ export function AudioGenerationPage() {
              <input className={styles.scrubber} type="range" min="0" max="100" value={progress} onChange={(event) => { const nextProgress = Number(event.target.value); const audioDuration = durationRef.current || duration; setProgress(nextProgress); if (audioRef.current && audioDuration) audioRef.current.currentTime = (nextProgress / 100) * audioDuration; }} aria-label={t("create.audio.a11y.audioProgress")} disabled={!audioUrl} />
              <Volume2 size={17} className={styles.volumeIcon} />
              <input className={styles.volumeSlider} type="range" min="0" max="100" value={volume} onChange={(event) => { const nextVolume = Number(event.target.value); setVolume(nextVolume); if (audioRef.current) audioRef.current.volume = nextVolume / 100; }} aria-label={t("create.audio.a11y.volume")} />
-             <button type="button" className={styles.iconAction} aria-label={t("create.audio.a11y.fullscreen")}><Maximize2 size={16} /></button>
            </div>
            <audio ref={audioRef} src={audioUrl ?? undefined} preload="metadata" onLoadedMetadata={(event) => { syncAudioDuration(event.currentTarget); event.currentTarget.volume = volume / 100; event.currentTarget.playbackRate = speed; }} onDurationChange={(event) => syncAudioDuration(event.currentTarget)} onTimeUpdate={(event) => { const nextTime = event.currentTarget.currentTime; const nextDuration = durationRef.current || (Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0); if (nextDuration > 0 && durationRef.current !== nextDuration) { durationRef.current = nextDuration; setDuration(nextDuration); } setCurrentTime(nextTime); setProgress(nextDuration ? Math.min(100, (nextTime / nextDuration) * 100) : 0); }} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} onEnded={(event) => { const endDuration = durationRef.current || event.currentTarget.duration; setIsPlaying(false); if (Number.isFinite(endDuration) && endDuration > 0) { durationRef.current = endDuration; setDuration(endDuration); setCurrentTime(endDuration); } setProgress(100); }} />
            {errorMessage ? <p className={styles.securityNote} role="alert">{errorMessage}</p> : null}
@@ -1265,7 +1267,7 @@ export function AudioGenerationPage() {
           <div className={styles.sectionHeading}><h2><History size={13} /> {t("create.audio.generationHistory")}</h2><span className={styles.timelineHint}>{audioHistory.length ? audioHistory.length === 1 ? t("create.audio.resultCountOne") : t("create.audio.resultCountMany", { count: audioHistory.length }) : t("create.audio.noResults")}</span></div>
           {audioHistory.length ? <div className={styles.historyList}>{audioHistory.map((item) => <div key={item.id} className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}>
             <button type="button" className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem} onClick={() => selectHistoryItem(item)} disabled={historyLoadingId === item.id} aria-busy={historyLoadingId === item.id}><span className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>{historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}</span><span className={styles.historyCopy}><strong>{item.label}</strong><small>{item.createdAt}</small></span><span className={styles.historyCurrent}>{item.url === audioUrl ? t("create.audio.historyCurrent") : t("create.audio.historyPlay")}</span></button>
-            <button type="button" className={styles.historyDelete} aria-label={t("create.audio.a11y.deleteItem", { label: item.label })} onClick={() => removeHistoryItem(item)}><Trash2 size={13} /></button>
+            <button type="button" className={styles.historyDelete} aria-label={t("create.audio.a11y.deleteItem", { label: item.label })} onClick={() => { setPendingHistoryDelete(item); setHistoryDeleteOpen(true); }}><Trash2 size={13} /></button>
           </div>)}</div> : <div className={styles.historyEmpty}><History size={15} /><span>{t("create.audio.historyEmpty")}</span></div>}
         </section>
 
@@ -1288,5 +1290,21 @@ export function AudioGenerationPage() {
         </>
       }
     />
+    <Dialog
+      open={historyDeleteOpen}
+      onOpenChange={(next) => { if (!next) setHistoryDeleteOpen(false); }}
+      onOpenChangeComplete={(next) => { if (!next) setPendingHistoryDelete(null); }}
+    >
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t("create.audio.deleteHistory.title")}</DialogTitle>
+          <DialogDescription>{t("create.audio.deleteHistory.body", { label: pendingHistoryDelete?.label ?? "" })}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setHistoryDeleteOpen(false)}>{t("create.audio.deleteHistory.cancel")}</Button>
+          <Button type="button" variant="destructive" size="sm" onClick={() => { if (pendingHistoryDelete) removeHistoryItem(pendingHistoryDelete); setHistoryDeleteOpen(false); }}><Trash2 size={15} /> {t("create.audio.deleteHistory.confirm")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>;
 }

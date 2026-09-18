@@ -27,7 +27,7 @@ export function CreatorWorkspaceLayout({
   const hasColumns = left !== undefined || preview !== undefined || right !== undefined;
 
   return (
-    <section className={cn(styles.shell, className)}>
+    <section className={cn(styles.shell, className)} data-creator-workspace>
       {notice ? <div className={styles.notice}>{notice}</div> : null}
       <div className={styles.tabs}>{tabs}</div>
       {mobileTabs ? <div className={styles.mobileTabs}>{mobileTabs}</div> : null}
