@@ -1,0 +1,13 @@
+# Build output and dependencies
+.next/
+out/
+build/
+node_modules/
+next-env.d.ts
+
+# Generated or vendored
+package-lock.json
+public/
+
+# Not Prettier's to reflow
+*.md

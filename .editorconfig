@@ -1,0 +1,23 @@
+# Baseline whitespace rules for every editor, applied before Prettier runs
+# and to the files Prettier does not handle.
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Markdown uses trailing spaces as a line break, so they are left alone.
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{json,jsonc,yml,yaml}]
+indent_size = 2
+
+[*.{bat,cmd}]
+end_of_line = crlf
