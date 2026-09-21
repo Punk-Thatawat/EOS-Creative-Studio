@@ -27,7 +27,7 @@ export function StudioHeader() {
       <header
         className={`eos-studio-header sticky top-0 ${isAccountMenuOpen ? "z-[100] shadow-md" : isSticky ? "z-50 shadow-sm" : "z-30"} flex h-16 items-center justify-between border-b border-[#ece7e3] bg-white px-3 sm:h-[80px] sm:px-6 lg:px-8`}
       >
-        <div className="mr-3 lg:hidden">
+        <div className="mr-3 xl:hidden">
           <MobileNavigation />
         </div>
         <div className="ml-auto flex min-w-0 max-w-full items-center gap-1 sm:gap-3">
