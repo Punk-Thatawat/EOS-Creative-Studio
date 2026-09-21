@@ -84,8 +84,8 @@ import {
 const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
 type AudioTab = (typeof audioModes)[number];
 
-// Keep only the main audio workflow visible while the advanced audio tools are being finalized.
-const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
+// All audio workflows are available from the main Voice page.
+const visibleTabs: readonly AudioTab[] = audioModes;
 
 const audioTabKeys = {
   "Text to Speech": "create.audio.tabs.textToSpeech",
