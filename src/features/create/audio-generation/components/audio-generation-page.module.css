@@ -155,9 +155,9 @@
 .voiceCard:hover { border-color: #f6b08c; }
 .voiceCardActive { border-color: transparent; box-shadow: none; }
 .voiceCardWrapActive::after { position: absolute; z-index: 4; inset: 0; border: 2px solid var(--audio-orange); border-radius: 8px; content: ""; pointer-events: none; }
-.voiceImage { position: relative; height: 64px; margin: 0 -7px 7px; overflow: hidden; background: #f4f4f2; }
+.voiceImage { position: relative; height: 96px; margin: 0 -7px 7px; overflow: hidden; background: #f4f4f2; }
 .voiceImage img { object-fit: cover; object-position: center center; }
-.voicePreviewButton { position: absolute; z-index: 1; top: 36px; right: 5px; display: grid; width: 24px; height: 24px; place-items: center; border: 2px solid #fff; border-radius: 50%; background: rgba(255, 255, 255, .96); color: #222831; box-shadow: 0 2px 6px #1114; padding: 0; line-height: 0; cursor: pointer; transition: background-color .15s ease, color .15s ease, transform .15s ease; }
+.voicePreviewButton { position: absolute; z-index: 1; top: calc(50% - 12px); right: 5px; display: grid; width: 24px; height: 24px; place-items: center; border: 2px solid #fff; border-radius: 50%; background: rgba(255, 255, 255, .96); color: #222831; box-shadow: 0 2px 6px #1114; padding: 0; line-height: 0; cursor: pointer; transition: background-color .15s ease, color .15s ease, transform .15s ease; }
 .voicePreviewButton:hover { transform: scale(1.06); }
 .voicePreviewButton:hover:not(:disabled) { background: #fff1e9; color: var(--audio-orange); }
 .voicePreviewButton:disabled { cursor: default; opacity: .48; }
