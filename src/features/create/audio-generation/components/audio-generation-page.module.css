@@ -55,6 +55,14 @@
 .tab:hover {
   color: var(--audio-orange);
 }
+/* A lone tab keeps its own width. The strip stretches its tabs to fill, which
+   is right for five of them and wrong for one: a single tab grew to the full
+   card and centred its label, reading as a page heading rather than a tab. */
+.tab:only-child,
+.tabActive:only-child {
+  flex: 0 0 auto;
+}
+
 .tabActive {
   border-bottom-color: #f26b38;
   color: #ef5c29;
