@@ -1191,9 +1191,13 @@ export function AudioGenerationPage() {
 
     <CreatorWorkspaceLayout
       tabs={<nav className={styles.featureTabs} aria-label={t("create.audio.tools")}>
-      {visibleTabs.map((label) => <button key={label} type="button" className={activeTab === label ? styles.tabActive : styles.tab} onClick={() => setActiveTab(label)} aria-pressed={activeTab === label}>
-        {t(audioTabKeys[label])}
-      </button>)}
+      {visibleTabs.map((label) => {
+        const TabIcon = audioModeIcons[label];
+        return <button key={label} type="button" className={activeTab === label ? styles.tabActive : styles.tab} onClick={() => setActiveTab(label)} aria-pressed={activeTab === label}>
+          <TabIcon size={16} aria-hidden="true" />
+          {t(audioTabKeys[label])}
+        </button>;
+      })}
       </nav>}
       mobileTabs={<MobileModeDropdown
       menuId="audio-mode-menu"

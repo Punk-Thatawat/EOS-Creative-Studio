@@ -976,7 +976,10 @@ body:has(.audio-studio-page) .page-gutter > main { width: 100%; }
   }
 }
 
-@media (max-width: 1023.98px) {
+/* Matches the bar's own md:hidden. From 768px up the header's drawer trigger is
+   the navigation, so the bar is gone and the page must not keep reserving a
+   6rem strip of empty space for it. */
+@media (max-width: 767.98px) {
   body:has([data-mobile-bottom-navigation]) .page-gutter {
     padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   }

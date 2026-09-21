@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronUp, Clock3, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { listGenerationHistory, resumeGeneration, type GenerationHistoryItem, type GenerationProgress, type PendingGeneration } from "@/lib/api/generations";
+import {
+  listGenerationHistory,
+  resumeGeneration,
+  type GenerationHistoryItem,
+  type GenerationProgress,
+  type PendingGeneration,
+} from "@/lib/api/generations";
 import { emitGenerationCompleted } from "@/lib/generation-progress-events";
 import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 import { getDismissedProgressStorageKey, getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
@@ -27,18 +33,78 @@ const generationLabelKeys: Record<string, TranslationKey> = {
 };
 
 const generationFeatureOptions = [
-  { feature: "text-to-image", key: "eos.generation.pending", label: "Text to Image", tab: "text-to-image", kind: "image" },
-  { feature: "image-to-image", key: "eos.generation.pending.image-to-image", label: "Image to Image", tab: "image-to-image", kind: "image" },
-  { feature: "style-transfer", key: "eos.generation.pending.style-transfer", label: "Style Transfer", tab: "style-transfer", kind: "image" },
-  { feature: "background-removal", key: "eos.generation.pending.background-removal", label: "Background", tab: "background-removal", kind: "image" },
+  {
+    feature: "text-to-image",
+    key: "eos.generation.pending",
+    label: "Text to Image",
+    tab: "text-to-image",
+    kind: "image",
+  },
+  {
+    feature: "image-to-image",
+    key: "eos.generation.pending.image-to-image",
+    label: "Image to Image",
+    tab: "image-to-image",
+    kind: "image",
+  },
+  {
+    feature: "style-transfer",
+    key: "eos.generation.pending.style-transfer",
+    label: "Style Transfer",
+    tab: "style-transfer",
+    kind: "image",
+  },
+  {
+    feature: "background-removal",
+    key: "eos.generation.pending.background-removal",
+    label: "Background",
+    tab: "background-removal",
+    kind: "image",
+  },
   { feature: "upscale", key: "eos.generation.pending.upscale", label: "Upscale", tab: "upscale", kind: "image" },
-  { feature: "extend-image", key: "eos.generation.pending.extend-image", label: "Extend Image", tab: "extend-image", kind: "image" },
-  { feature: "image-to-video", key: "eos.generation.pending.image-to-video", label: "Image to Video", tab: "image-to-video", kind: "video" },
-  { feature: "text-to-video", key: "eos.generation.pending.text-to-video", label: "Text to Video", tab: "text-to-video", kind: "video" },
-  { feature: "people-video", key: "eos.generation.pending.people-video", label: "People Video", tab: "people-video", kind: "video" },
-  { feature: "motion-transfer", key: "eos.generation.pending.motion-transfer", label: "Motion Transfer", tab: "motion-transfer", kind: "video" },
+  {
+    feature: "extend-image",
+    key: "eos.generation.pending.extend-image",
+    label: "Extend Image",
+    tab: "extend-image",
+    kind: "image",
+  },
+  {
+    feature: "image-to-video",
+    key: "eos.generation.pending.image-to-video",
+    label: "Image to Video",
+    tab: "image-to-video",
+    kind: "video",
+  },
+  {
+    feature: "text-to-video",
+    key: "eos.generation.pending.text-to-video",
+    label: "Text to Video",
+    tab: "text-to-video",
+    kind: "video",
+  },
+  {
+    feature: "people-video",
+    key: "eos.generation.pending.people-video",
+    label: "People Video",
+    tab: "people-video",
+    kind: "video",
+  },
+  {
+    feature: "motion-transfer",
+    key: "eos.generation.pending.motion-transfer",
+    label: "Motion Transfer",
+    tab: "motion-transfer",
+    kind: "video",
+  },
   { feature: "lipsync", key: "eos.generation.pending.lipsync", label: "Lipsync", tab: "lipsync", kind: "video" },
-  { feature: "extend-video", key: "eos.generation.pending.extend-video", label: "Extend Video", tab: "extend-video", kind: "video" },
+  {
+    feature: "extend-video",
+    key: "eos.generation.pending.extend-video",
+    label: "Extend Video",
+    tab: "extend-video",
+    kind: "video",
+  },
 ] as const;
 
 type ActivePendingGeneration = {
@@ -51,13 +117,15 @@ type ActivePendingGeneration = {
 };
 
 function featureConfig(feature?: string) {
-  return generationFeatureOptions.find((item) => item.feature === feature) ?? {
-    feature: feature ?? "image-generation",
-    key: `eos.generation.pending.${feature ?? "image-generation"}`,
-    label: "Image Generation",
-    tab: feature ?? "text-to-image",
-    kind: "image",
-  };
+  return (
+    generationFeatureOptions.find((item) => item.feature === feature) ?? {
+      feature: feature ?? "image-generation",
+      key: `eos.generation.pending.${feature ?? "image-generation"}`,
+      label: "Image Generation",
+      tab: feature ?? "text-to-image",
+      kind: "image",
+    }
+  );
 }
 
 function toPendingGeneration(generation: GenerationHistoryItem): ActivePendingGeneration | null {
@@ -103,25 +171,32 @@ function readActivePendingGenerations(): ActivePendingGeneration[] {
       const parsed = JSON.parse(raw) as Partial<PendingGeneration>;
       if (parsed.status !== "queued" && parsed.status !== "processing" && parsed.status !== "completed") return [];
       if (typeof parsed.generationId !== "string" || typeof parsed.pollUrl !== "string") return [];
-      return [{
-        key,
-        feature,
-        label,
-        tab: feature,
-        kind,
-        pending: {
-          generationId: parsed.generationId,
-          pollUrl: parsed.pollUrl,
-          workspaceId: typeof parsed.workspaceId === "string" ? parsed.workspaceId : "",
-          provider: typeof parsed.provider === "string" ? parsed.provider : "",
-          model: typeof parsed.model === "string" ? parsed.model : "",
-          status: parsed.status,
-          totalCount: typeof parsed.totalCount === "number" ? parsed.totalCount : 1,
-          completedCount: typeof parsed.completedCount === "number" ? parsed.completedCount : Array.isArray(parsed.output) ? parsed.output.length : 0,
-          output: Array.isArray(parsed.output) ? parsed.output as PendingGeneration["output"] : [],
+      return [
+        {
+          key,
+          feature,
+          label,
+          tab: feature,
           kind,
+          pending: {
+            generationId: parsed.generationId,
+            pollUrl: parsed.pollUrl,
+            workspaceId: typeof parsed.workspaceId === "string" ? parsed.workspaceId : "",
+            provider: typeof parsed.provider === "string" ? parsed.provider : "",
+            model: typeof parsed.model === "string" ? parsed.model : "",
+            status: parsed.status,
+            totalCount: typeof parsed.totalCount === "number" ? parsed.totalCount : 1,
+            completedCount:
+              typeof parsed.completedCount === "number"
+                ? parsed.completedCount
+                : Array.isArray(parsed.output)
+                  ? parsed.output.length
+                  : 0,
+            output: Array.isArray(parsed.output) ? (parsed.output as PendingGeneration["output"]) : [],
+            kind,
+          },
         },
-      }];
+      ];
     } catch {
       window.sessionStorage.removeItem(key);
       return [];
@@ -129,8 +204,9 @@ function readActivePendingGenerations(): ActivePendingGeneration[] {
   });
 
   const dismissed = readDismissedGenerationIds();
-  return mergeActiveGenerations(readPersistedProgress(), sessionActive)
-    .filter((item) => !dismissed.has(item.pending.generationId));
+  return mergeActiveGenerations(readPersistedProgress(), sessionActive).filter(
+    (item) => !dismissed.has(item.pending.generationId),
+  );
 }
 
 function mergeActiveGenerations(...groups: ActivePendingGeneration[][]): ActivePendingGeneration[] {
@@ -145,15 +221,17 @@ function isPersistableProgress(value: unknown): value is ActivePendingGeneration
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<ActivePendingGeneration>;
   const pending = item.pending as Partial<PendingGeneration> | undefined;
-  return typeof item.key === "string"
-    && typeof item.feature === "string"
-    && typeof item.label === "string"
-    && typeof item.tab === "string"
-    && (item.kind === "image" || item.kind === "video")
-    && typeof pending?.generationId === "string"
-    && typeof pending.pollUrl === "string"
-    && (pending.status === "queued" || pending.status === "processing" || pending.status === "completed")
-    && Array.isArray(pending.output);
+  return (
+    typeof item.key === "string" &&
+    typeof item.feature === "string" &&
+    typeof item.label === "string" &&
+    typeof item.tab === "string" &&
+    (item.kind === "image" || item.kind === "video") &&
+    typeof pending?.generationId === "string" &&
+    typeof pending.pollUrl === "string" &&
+    (pending.status === "queued" || pending.status === "processing" || pending.status === "completed") &&
+    Array.isArray(pending.output)
+  );
 }
 
 function isStoryboardParentProgress(item: ActivePendingGeneration): boolean {
@@ -161,9 +239,6 @@ function isStoryboardParentProgress(item: ActivePendingGeneration): boolean {
 }
 
 function isPersistedStoryboardSceneProgress(item: ActivePendingGeneration): boolean {
-  // Storyboard scenes use the generic generation status URL. The storyboard
-  // parent uses the dedicated storyboard status URL and is the only card we
-  // want to show for this workflow.
   return item.feature === "image-to-video" && !isStoryboardParentProgress(item);
 }
 
@@ -282,30 +357,39 @@ function persistProgress(item: ActivePendingGeneration, progress: GenerationProg
     },
   };
 
-  window.sessionStorage.setItem(item.key, JSON.stringify({
-    ...item.pending,
-    generationId: progress.generationId,
-    pollUrl: progress.pollUrl ?? item.pending.pollUrl,
-    workspaceId: progress.workspaceId ?? item.pending.workspaceId,
-    provider: progress.provider ?? item.pending.provider,
-    model: progress.model ?? item.pending.model,
-    status: progress.status,
-    totalCount: progress.totalCount,
-    completedCount: progress.completedCount,
-    output: progress.output,
-  } satisfies PendingGeneration));
+  window.sessionStorage.setItem(
+    item.key,
+    JSON.stringify({
+      ...item.pending,
+      generationId: progress.generationId,
+      pollUrl: progress.pollUrl ?? item.pending.pollUrl,
+      workspaceId: progress.workspaceId ?? item.pending.workspaceId,
+      provider: progress.provider ?? item.pending.provider,
+      model: progress.model ?? item.pending.model,
+      status: progress.status,
+      totalCount: progress.totalCount,
+      completedCount: progress.completedCount,
+      output: progress.output,
+    } satisfies PendingGeneration),
+  );
   upsertPersistedProgress(updatedItem);
 }
 
 async function loadActiveGenerations(): Promise<ActivePendingGeneration[]> {
-  const responses = await Promise.allSettled(generationFeatureOptions.map(({ feature }) => listGenerationHistory(undefined, feature)));
+  const responses = await Promise.allSettled(
+    generationFeatureOptions.map(({ feature }) => listGenerationHistory(undefined, feature)),
+  );
   return mergeActiveGenerations(
     ...responses
-      .filter((response): response is PromiseFulfilledResult<GenerationHistoryItem[]> => response.status === "fulfilled")
-      .map((response) => response.value.flatMap((generation) => {
-        const active = toPendingGeneration(generation);
-        return active ? [active] : [];
-      })),
+      .filter(
+        (response): response is PromiseFulfilledResult<GenerationHistoryItem[]> => response.status === "fulfilled",
+      )
+      .map((response) =>
+        response.value.flatMap((generation) => {
+          const active = toPendingGeneration(generation);
+          return active ? [active] : [];
+        }),
+      ),
   );
 }
 
@@ -316,9 +400,6 @@ export function GenerationProgressFloating() {
   const pathname = hydrated ? pathnameFromRouter : "";
   const isImageCreatePage = pathname === "/create/image";
   const router = useRouter();
-  // Keep the server render and the first client render identical. Browser
-  // storage is hydrated by the effects below after React has completed the
-  // hydration comparison.
   const [active, setActive] = useState<ActivePendingGeneration[]>([]);
   const [isCenterOpen, setIsCenterOpen] = useState(false);
   const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
@@ -348,7 +429,19 @@ export function GenerationProgressFloating() {
 
   useEffect(() => {
     const handleGenerationStarted = (event: Event) => {
-      const detail = (event as CustomEvent<{ feature?: string; generationId?: string; pollUrl?: string; workspaceId?: string; provider?: string; model?: string; status?: "queued" | "processing"; totalCount?: number; completedCount?: number }>).detail;
+      const detail = (
+        event as CustomEvent<{
+          feature?: string;
+          generationId?: string;
+          pollUrl?: string;
+          workspaceId?: string;
+          provider?: string;
+          model?: string;
+          status?: "queued" | "processing";
+          totalCount?: number;
+          completedCount?: number;
+        }>
+      ).detail;
       if (!detail?.feature || !detail.generationId || !detail.pollUrl) return;
       setIsOverlayDismissed(false);
       dismissedGenerationIdsRef.current.delete(detail.generationId);
@@ -366,7 +459,14 @@ export function GenerationProgressFloating() {
         output: [],
         kind: config.kind,
       };
-      const startedItem = { key: config.key, feature: config.feature, label: config.label, tab: config.tab, kind: config.kind, pending } satisfies ActivePendingGeneration;
+      const startedItem = {
+        key: config.key,
+        feature: config.feature,
+        label: config.label,
+        tab: config.tab,
+        kind: config.kind,
+        pending,
+      } satisfies ActivePendingGeneration;
       upsertPersistedProgress(startedItem);
       setActive((current) => mergeActiveGenerations(current, [startedItem]));
     };
@@ -433,43 +533,51 @@ export function GenerationProgressFloating() {
 
         const controller = new AbortController();
         pollingMap.set(generationId, controller);
-        void resumeGeneration(item.pending, (progress) => {
-          if (disposed) return;
-          if (dismissedGenerationIdsRef.current.has(generationId) || readDismissedGenerationIds().has(generationId)) return;
-          if (progress.status === "completed" && !completedGenerationIdsRef.current.has(generationId)) {
-            completedGenerationIdsRef.current.add(generationId);
-            emitGenerationCompleted({ feature: item.feature, generationId });
-          }
-          persistProgress(item, progress);
-          setActive((current) => {
-            if (dismissedGenerationIdsRef.current.has(generationId)) return current;
-            const currentIndex = current.findIndex((entry) => entry.pending.generationId === generationId);
-            const refreshed = readActivePendingGenerations();
-            if (progress.status === "failed" || progress.status === "cancelled") return current.filter((entry) => entry.pending.generationId !== generationId);
-            const updated: ActivePendingGeneration = {
-              ...item,
-              pending: {
-                ...item.pending,
-                status: progress.status === "completed" ? "completed" : progress.status,
-                totalCount: progress.totalCount,
-                completedCount: progress.completedCount,
-                output: progress.output,
-                kind: item.kind,
-              },
-            };
-            const next = [...current];
-            if (currentIndex >= 0) next[currentIndex] = updated;
-            else next.push(updated);
-            return mergeActiveGenerations(next, refreshed);
+        void resumeGeneration(
+          item.pending,
+          (progress) => {
+            if (disposed) return;
+            if (dismissedGenerationIdsRef.current.has(generationId) || readDismissedGenerationIds().has(generationId))
+              return;
+            if (progress.status === "completed" && !completedGenerationIdsRef.current.has(generationId)) {
+              completedGenerationIdsRef.current.add(generationId);
+              emitGenerationCompleted({ feature: item.feature, generationId });
+            }
+            persistProgress(item, progress);
+            setActive((current) => {
+              if (dismissedGenerationIdsRef.current.has(generationId)) return current;
+              const currentIndex = current.findIndex((entry) => entry.pending.generationId === generationId);
+              const refreshed = readActivePendingGenerations();
+              if (progress.status === "failed" || progress.status === "cancelled")
+                return current.filter((entry) => entry.pending.generationId !== generationId);
+              const updated: ActivePendingGeneration = {
+                ...item,
+                pending: {
+                  ...item.pending,
+                  status: progress.status === "completed" ? "completed" : progress.status,
+                  totalCount: progress.totalCount,
+                  completedCount: progress.completedCount,
+                  output: progress.output,
+                  kind: item.kind,
+                },
+              };
+              const next = [...current];
+              if (currentIndex >= 0) next[currentIndex] = updated;
+              else next.push(updated);
+              return mergeActiveGenerations(next, refreshed);
+            });
+          },
+          controller.signal,
+        )
+          .catch(() => {
+            if (!disposed && !controller.signal.aborted) {
+              window.sessionStorage.removeItem(item.key);
+              setActive((current) => current.filter((entry) => entry.pending.generationId !== generationId));
+            }
+          })
+          .finally(() => {
+            if (pollingMap.get(generationId) === controller) pollingMap.delete(generationId);
           });
-        }, controller.signal).catch(() => {
-          if (!disposed && !controller.signal.aborted) {
-            window.sessionStorage.removeItem(item.key);
-            setActive((current) => current.filter((entry) => entry.pending.generationId !== generationId));
-          }
-        }).finally(() => {
-          if (pollingMap.get(generationId) === controller) pollingMap.delete(generationId);
-        });
       }
     };
 
@@ -534,58 +642,195 @@ export function GenerationProgressFloating() {
       router.push(`${kind === "video" ? "/create/video" : "/create/image"}?tab=${encodeURIComponent(tab)}`);
     };
 
-    return <div className={styles.itemShell} key={generationId}>
-      <button type="button" className={styles.item} onClick={handleCardClick} aria-label={t("shell.generation.openItem", { label: localizedLabel })} title={t("shell.generation.openItemTitle", { label: localizedLabel, studio: kind === "video" ? t("shell.nav.video") : t("shell.nav.image") })}>
-        <div className={styles.itemHeading}>
-          <span className={styles.itemLabel}><i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />{localizedLabel}</span>
-          <b className={`${styles.status} ${statusClass}`}>{isCompleted ? t("shell.generation.completed") : isQueued ? t("shell.generation.waitingStatus") : t("shell.generation.processingStatus")}</b>
-        </div>
-        <div className={styles.track} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percentage} aria-label={`${localizedLabel}: ${percentage}%`}>
-          <span className={`${styles.bar} ${percentage === 0 ? styles.barIndeterminate : ""}`} style={{ width: `${visiblePercentage}%` }} />
-        </div>
-        <div className={styles.meta}>
-          <span>{t("shell.generation.ready", { completed, total, unit: kind === "video" ? (total === 1 ? t("shell.generation.videoUnit") : t("shell.generation.videosUnit")) : (total === 1 ? t("shell.generation.imageUnit") : t("shell.generation.imagesUnit")) })}</span>
-          <span className={styles.eta}>{isCompleted ? <><CheckCircle2 size={12} /> <strong>{t("shell.generation.completedStatus")}</strong></> : <><Clock3 size={12} /> <strong>{isQueued ? t("shell.generation.waitingStatus") : t("shell.generation.processingStatus")}</strong></>}</span>
-        </div>
-      </button>
-      {isCompleted && <button type="button" className={styles.dismiss} onClick={() => handleDismiss(item)} aria-label={t("shell.generation.dismissItem", { label: localizedLabel })} title={t("shell.generation.dismissItemTitle")}><X size={13} /></button>}
-    </div>;
+    return (
+      <div className={styles.itemShell} key={generationId}>
+        <button
+          type="button"
+          className={styles.item}
+          onClick={handleCardClick}
+          aria-label={t("shell.generation.openItem", { label: localizedLabel })}
+          title={t("shell.generation.openItemTitle", {
+            label: localizedLabel,
+            studio: kind === "video" ? t("shell.nav.video") : t("shell.nav.image"),
+          })}
+        >
+          <div className={styles.itemHeading}>
+            <span className={styles.itemLabel}>
+              <i className={`${styles.dot} ${isCompleted ? styles.dotCompleted : ""}`} />
+              {localizedLabel}
+            </span>
+            <b className={`${styles.status} ${statusClass}`}>
+              {isCompleted
+                ? t("shell.generation.completed")
+                : isQueued
+                  ? t("shell.generation.waitingStatus")
+                  : t("shell.generation.processingStatus")}
+            </b>
+          </div>
+          <div
+            className={styles.track}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percentage}
+            aria-label={`${localizedLabel}: ${percentage}%`}
+          >
+            <span
+              className={`${styles.bar} ${percentage === 0 ? styles.barIndeterminate : ""}`}
+              style={{ width: `${visiblePercentage}%` }}
+            />
+          </div>
+          <div className={styles.meta}>
+            <span>
+              {t("shell.generation.ready", {
+                completed,
+                total,
+                unit:
+                  kind === "video"
+                    ? total === 1
+                      ? t("shell.generation.videoUnit")
+                      : t("shell.generation.videosUnit")
+                    : total === 1
+                      ? t("shell.generation.imageUnit")
+                      : t("shell.generation.imagesUnit"),
+              })}
+            </span>
+            <span className={styles.eta}>
+              {isCompleted ? (
+                <>
+                  <CheckCircle2 size={12} /> <strong>{t("shell.generation.completedStatus")}</strong>
+                </>
+              ) : (
+                <>
+                  <Clock3 size={12} />{" "}
+                  <strong>
+                    {isQueued ? t("shell.generation.waitingStatus") : t("shell.generation.processingStatus")}
+                  </strong>
+                </>
+              )}
+            </span>
+          </div>
+        </button>
+        {isCompleted && (
+          <button
+            type="button"
+            className={styles.dismiss}
+            onClick={() => handleDismiss(item)}
+            aria-label={t("shell.generation.dismissItem", { label: localizedLabel })}
+            title={t("shell.generation.dismissItemTitle")}
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+    );
   };
 
-  return <div className={styles.wrapper} data-expanded={isCenterOpen} onKeyDown={(event) => { if (event.key === "Escape" && isCenterOpen) { event.stopPropagation(); closeCenter(); } }}>
-    {isCenterOpen && <section id="generation-center-panel" className={styles.center} aria-label={t("shell.generation.center")}>
-      <div className={styles.centerHeader}>
-        <div>
-          <span className={styles.centerTitle}><i className={`${styles.dot} ${inProgress.length > 0 ? "" : styles.dotCompleted}`} />{t("shell.generation.center")}</span>
-          <small>{active.length} {active.length === 1 ? t("shell.generation.generation") : t("shell.generation.generations")}</small>
-        </div>
-        <div className={styles.centerActions}>
-          <button type="button" className={styles.panelToggle} onClick={closeAllCenter} aria-label={t("shell.generation.closeAll")} title={t("shell.generation.closeAll")}><X size={17} /></button>
-          <button ref={collapseRef} type="button" className={styles.panelToggle} onClick={closeCenter} aria-label={t("shell.generation.collapse")} title={t("shell.generation.collapse")}><ChevronDown size={18} /></button>
-        </div>
-      </div>
-      {inProgress.length > 0 && <section className={styles.group} aria-labelledby="generation-center-progress">
-        <h3 id="generation-center-progress"><span className={styles.groupLabel}>{t("shell.generation.inProgress")}</span><span className={styles.groupCount}>{inProgress.length}</span></h3>
-        {inProgress.map(renderGenerationItem)}
-      </section>}
-      {completedItems.length > 0 && <section className={styles.group} aria-labelledby="generation-center-completed">
-        <h3 id="generation-center-completed">
-          <span className={styles.groupLabel}>{t("shell.generation.completed")}</span>
-          <span className={styles.groupHeaderActions}>
-            <button type="button" className={styles.clearCompleted} onClick={handleClearCompleted}>{t("shell.generation.clearCompleted")}</button>
-            <span className={styles.groupCount}>{completedItems.length}</span>
+  return (
+    <div
+      className={styles.wrapper}
+      data-expanded={isCenterOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && isCenterOpen) {
+          event.stopPropagation();
+          closeCenter();
+        }
+      }}
+    >
+      {isCenterOpen && (
+        <section id="generation-center-panel" className={styles.center} aria-label={t("shell.generation.center")}>
+          <div className={styles.centerHeader}>
+            <div>
+              <span className={styles.centerTitle}>
+                <i className={`${styles.dot} ${inProgress.length > 0 ? "" : styles.dotCompleted}`} />
+                {t("shell.generation.center")}
+              </span>
+              <small>
+                {active.length}{" "}
+                {active.length === 1 ? t("shell.generation.generation") : t("shell.generation.generations")}
+              </small>
+            </div>
+            <div className={styles.centerActions}>
+              <button
+                type="button"
+                className={styles.panelToggle}
+                onClick={closeAllCenter}
+                aria-label={t("shell.generation.closeAll")}
+                title={t("shell.generation.closeAll")}
+              >
+                <X size={17} />
+              </button>
+              <button
+                ref={collapseRef}
+                type="button"
+                className={styles.panelToggle}
+                onClick={closeCenter}
+                aria-label={t("shell.generation.collapse")}
+                title={t("shell.generation.collapse")}
+              >
+                <ChevronDown size={18} />
+              </button>
+            </div>
+          </div>
+          {inProgress.length > 0 && (
+            <section className={styles.group} aria-labelledby="generation-center-progress">
+              <h3 id="generation-center-progress">
+                <span className={styles.groupLabel}>{t("shell.generation.inProgress")}</span>
+                <span className={styles.groupCount}>{inProgress.length}</span>
+              </h3>
+              {inProgress.map(renderGenerationItem)}
+            </section>
+          )}
+          {completedItems.length > 0 && (
+            <section className={styles.group} aria-labelledby="generation-center-completed">
+              <h3 id="generation-center-completed">
+                <span className={styles.groupLabel}>{t("shell.generation.completed")}</span>
+                <span className={styles.groupHeaderActions}>
+                  <button type="button" className={styles.clearCompleted} onClick={handleClearCompleted}>
+                    {t("shell.generation.clearCompleted")}
+                  </button>
+                  <span className={styles.groupCount}>{completedItems.length}</span>
+                </span>
+              </h3>
+              {completedItems.map(renderGenerationItem)}
+            </section>
+          )}
+        </section>
+      )}
+      <div className={styles.launcherRow}>
+        <button
+          ref={launcherRef}
+          type="button"
+          className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`}
+          onClick={() => setIsCenterOpen((open) => !open)}
+          aria-expanded={isCenterOpen}
+          aria-controls={isCenterOpen ? "generation-center-panel" : undefined}
+          aria-label={t("shell.generation.open")}
+          title={t("shell.generation.open")}
+        >
+          <i className={`${styles.dot} ${inProgress.length === 0 ? styles.dotCompleted : ""}`} />
+          <span className={styles.launcherCopy}>
+            <strong aria-live="polite">
+              {inProgress.length > 0
+                ? `กำลังสร้าง ${inProgress.length} งาน`
+                : `สร้างเสร็จแล้ว ${completedItems.length} งาน`}
+            </strong>
+            <small>แตะเพื่อดูรายละเอียด</small>
           </span>
-        </h3>
-        {completedItems.map(renderGenerationItem)}
-      </section>}
-    </section>}
-    <div className={styles.launcherRow}>
-      <button ref={launcherRef} type="button" className={`${styles.launcher} ${inProgress.length > 0 ? styles.launcherActive : styles.launcherComplete}`} onClick={() => setIsCenterOpen((open) => !open)} aria-expanded={isCenterOpen} aria-controls={isCenterOpen ? "generation-center-panel" : undefined} aria-label={t("shell.generation.open")} title={t("shell.generation.open")}>
-        <i className={`${styles.dot} ${inProgress.length === 0 ? styles.dotCompleted : ""}`} />
-        <span className={styles.launcherCopy}><strong aria-live="polite">{inProgress.length > 0 ? `กำลังสร้าง ${inProgress.length} งาน` : `สร้างเสร็จแล้ว ${completedItems.length} งาน`}</strong><small>แตะเพื่อดูรายละเอียด</small></span>
-        {isCenterOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
-      </button>
-      {inProgress.length === 0 && completedItems.length > 0 ? <button type="button" className={styles.launcherDismiss} onClick={handleClearCompleted} aria-label={t("shell.generation.clearCompleted")} title={t("shell.generation.clearCompleted")}><X size={15} /></button> : null}
+          {isCenterOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+        </button>
+        {inProgress.length === 0 && completedItems.length > 0 ? (
+          <button
+            type="button"
+            className={styles.launcherDismiss}
+            onClick={handleClearCompleted}
+            aria-label={t("shell.generation.clearCompleted")}
+            title={t("shell.generation.clearCompleted")}
+          >
+            <X size={15} />
+          </button>
+        ) : null}
+      </div>
     </div>
-  </div>;
+  );
 }

@@ -35,7 +35,10 @@ export function ImageGenerationTabs({ activeTab, onTabChange }: { activeTab: Ima
   };
 
   return <>
-    <nav className={cx("gen-tabs", "gen-desktop-tabs")} aria-label={t("create.image.tools")}>{imageGenerationTabs.map((tab) => <button type="button" key={tab} onClick={() => onTabChange(tab)} className={activeTab === tab ? cx("is-active") : undefined}>{t(imageTabKeys[tab])}</button>)}</nav>
+    <nav className={cx("gen-tabs", "gen-desktop-tabs")} aria-label={t("create.image.tools")}>{imageGenerationTabs.map((tab) => {
+      const TabIcon = imageTabIcons[tab];
+      return <button type="button" key={tab} onClick={() => onTabChange(tab)} className={activeTab === tab ? cx("is-active") : undefined}><TabIcon size={16} aria-hidden="true" />{t(imageTabKeys[tab])}</button>;
+    })}</nav>
     <nav className={cx("gen-mobile-mode-switcher", isModeMenuOpen && "is-open")} aria-label={t("create.image.tools")}>
       <button type="button" className={cx("gen-mobile-mode-current")} aria-expanded={isModeMenuOpen} aria-controls="gen-mobile-mode-menu" aria-label={t("create.image.mode.switch")} onClick={() => setIsModeMenuOpen((open) => !open)}>
         <span className={cx("gen-mobile-mode-icon")}><ActiveIcon size={25} strokeWidth={2.2} aria-hidden="true" /></span>
