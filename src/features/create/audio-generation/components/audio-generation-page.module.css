@@ -715,6 +715,15 @@
 .historyItemActive .historyCurrent {
   color: var(--audio-orange);
 }
+.savedVoiceStatus {
+  max-width: 62px;
+  overflow: hidden;
+  font-size: 6.5px;
+  line-height: 1.3;
+  text-align: right;
+  white-space: normal;
+  text-overflow: ellipsis;
+}
 
 .sectionBlock {
   margin-top: 0;
@@ -1641,6 +1650,11 @@
   border-color: #f5a178;
   color: var(--audio-orange);
 }
+.altPrimaryButton:disabled,
+.altSecondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 .dialogueList {
   display: grid;
   gap: 9px;
@@ -1941,6 +1955,10 @@
 }
 .altRoundButton:hover {
   background: var(--audio-orange);
+}
+.altRoundButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 .altFormatGrid {
   display: grid;

@@ -94,10 +94,12 @@ export type VoiceCloneInput = {
   character?: string;
   consentConfirmed: boolean;
   files: File[];
+  referenceText?: string;
 };
 
 export type VoiceCloneResponse = { voiceId: string; requiresVerification: boolean; name: string };
-export type VoiceListResponse = { voices: Array<Record<string, unknown>>; nextPageToken?: string | null };
+export type VoiceCloneListItem = { id: string; voiceId: string; name: string; character?: string; description?: string; createdAt: string };
+export type VoiceListResponse = { voices: VoiceCloneListItem[]; nextPageToken?: string | null };
 export type SoundEffectsInput = {
   description: string;
   category?: string;
@@ -430,7 +432,8 @@ export async function createVoiceClone(input: VoiceCloneInput): Promise<VoiceClo
   form.append("consentConfirmed", String(input.consentConfirmed));
   if (input.description) form.append("description", input.description);
   if (input.character) form.append("character", input.character);
-  input.files.forEach((file) => form.append("files[]", file, file.name));
+  if (input.referenceText) form.append("referenceText", input.referenceText);
+  input.files.forEach((file) => form.append("files", file, file.name));
   const response = await userAudioRequest("/audio/voice-clones", { method: "POST", body: form });
   const payload = await response.json() as { data?: VoiceCloneResponse };
   if (!payload.data) throw new Error("Voice clone was not created");
@@ -448,7 +451,21 @@ export async function deleteVoiceClone(voiceId: string): Promise<void> {
   await userAudioRequest(`/audio/voice-clones/${encodeURIComponent(voiceId)}`, { method: "DELETE" });
 }
 
-export async function previewVoiceClone(voiceId: string, input: { text: string; outputFormat: "mp3" | "wav" | "ogg"; languageCode: string; modelId?: string }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
+export type VoiceCloneQuote = { provider: "wavespeed"; model: string; creditCost: number; pricingSource: "provider" | "fallback" };
+
+export async function quoteVoiceClone(text: string, signal?: AbortSignal): Promise<VoiceCloneQuote> {
+  const response = await userAudioRequest("/audio/voice-clones/quote", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: JSON.stringify({ text }),
+    signal,
+  });
+  const payload = await response.json().catch(() => null) as { data?: VoiceCloneQuote } | null;
+  if (!payload?.data) throw new Error("Voice clone pricing unavailable");
+  return payload.data;
+}
+
+export async function previewVoiceClone(voiceId: string, input: { text: string; outputFormat: "mp3" | "wav" | "ogg"; speed?: number }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
   return userAudioBlobRequest(`/audio/voice-clones/${encodeURIComponent(voiceId)}/preview`, {
     method: "POST",
     headers: { Accept: input.outputFormat === "mp3" ? "audio/mpeg" : input.outputFormat === "wav" ? "audio/wav" : "audio/ogg" },
