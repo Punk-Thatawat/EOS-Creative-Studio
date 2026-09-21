@@ -58,6 +58,31 @@ function persistRememberedEmail(email: string, remember: boolean): void {
   }
 }
 
+type BrowserPasswordCredential = Credential & { id: string; password: string };
+type BrowserPasswordCredentialConstructor = new (init: { id: string; password: string }) => BrowserPasswordCredential;
+
+async function getBrowserLoginCredential(): Promise<BrowserPasswordCredential | null> {
+  if (typeof window === "undefined" || !navigator.credentials?.get) return null;
+  try {
+    const credential = await navigator.credentials.get({ password: true, mediation: "silent" } as unknown as CredentialRequestOptions);
+    if (!credential || typeof (credential as Partial<BrowserPasswordCredential>).id !== "string" || typeof (credential as Partial<BrowserPasswordCredential>).password !== "string") return null;
+    return credential as BrowserPasswordCredential;
+  } catch {
+    return null;
+  }
+}
+
+function storeBrowserLoginCredential(email: string, password: string): void {
+  if (typeof window === "undefined" || !email || !password || !navigator.credentials?.store) return;
+  const PasswordCredential = (window as Window & { PasswordCredential?: BrowserPasswordCredentialConstructor }).PasswordCredential;
+  if (!PasswordCredential) return;
+  try {
+    void navigator.credentials.store(new PasswordCredential({ id: email, password })).catch(() => undefined);
+  } catch {
+    // Password Manager support is optional and browser-controlled.
+  }
+}
+
 type AuthMode = "login" | "register" | "confirmation" | "forgot";
 
 type AuthFieldProps = {
@@ -210,6 +235,11 @@ export function PreLoginPage() {
     setGoogleLoginLoading(false);
     setGoogleLoginError(null);
     setLoginOpen(true);
+    void getBrowserLoginCredential().then((credential) => {
+      if (!credential) return;
+      setAuthEmail(credential.id);
+      setAuthPassword(credential.password);
+    });
   };
 
   const closeLogin = () => {
@@ -256,6 +286,7 @@ export function PreLoginPage() {
         const result = await registerWithBackend({ email: authEmail, password: authPassword, display_name: authName.trim() || undefined });
         if (result.data.session) {
           clearGenerationProgressStorage();
+          storeBrowserLoginCredential(authEmail.trim(), authPassword);
           const accessToken = await persistBackendSession(result.data.session);
           const backendProfile = await fetchBackendSession(accessToken);
           window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
@@ -286,6 +317,7 @@ export function PreLoginPage() {
       }
       if (!result.data.session) throw new Error(t("auth.validation.sessionMissing"));
       clearGenerationProgressStorage();
+      storeBrowserLoginCredential(loginEmail, authPassword);
       const accessToken = await persistBackendSession(result.data.session);
       const backendProfile = await fetchBackendSession(accessToken);
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
@@ -309,6 +341,7 @@ export function PreLoginPage() {
         setAuthSubmitting(false);
         setPendingLoginToken(null);
         clearGenerationProgressStorage();
+        storeBrowserLoginCredential(authEmail.trim(), authPassword);
         const accessToken = await persistBackendSession(result.data.session);
         const backendProfile = await fetchBackendSession(accessToken);
         window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
@@ -326,7 +359,7 @@ export function PreLoginPage() {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [authMode, loginOpen, pendingLoginToken]);
+  }, [authMode, authEmail, authPassword, loginOpen, pendingLoginToken]);
 
   const handleResendConfirmation = async () => {
     if (resendCooldown > 0) return;
@@ -432,6 +465,11 @@ export function PreLoginPage() {
       setAuthEmail(rememberedEmail);
       setRememberEmail(Boolean(rememberedEmail));
       setLoginOpen(true);
+      void getBrowserLoginCredential().then((credential) => {
+        if (!credential) return;
+        setAuthEmail(credential.id);
+        setAuthPassword(credential.password);
+      });
       window.history.replaceState(null, "", window.location.pathname);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -510,7 +548,7 @@ export function PreLoginPage() {
             {authError && <p className="auth-error" role="alert">{authError}</p>}
             <button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button>
           </div> : authMode === "forgot" && authMessage ? <div className="auth-confirmation-state"><div className="auth-confirmation-icon"><MailCheck size={29} /></div><p>{authMessage}</p><p className="auth-provider-note">{t("auth.reset.googleNote")}</p><button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button></div> : <>
-            <form onSubmit={handleEmailAuth} noValidate>
+            <form onSubmit={handleEmailAuth} autoComplete="on" noValidate>
               {authMode === "register" && <AuthField id="modal-name" label={t("auth.form.name")} optional optionalLabel={t("auth.form.optional")} value={authName} onChange={setAuthName} type="text" placeholder={t("auth.form.namePlaceholder")} autoComplete="name" icon={UserRound} disabled={authSubmitting} />}
               <AuthField id="modal-email" name={authMode === "login" ? "username" : "email"} label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete={authMode === "login" ? "username" : authMode === "register" ? "email" : "off"} icon={Mail} required disabled={authSubmitting} error={authEmailError} />
               {authMode !== "forgot" && <AuthField id="modal-password" name="password" label={t("auth.form.password")} value={authPassword} onChange={setAuthPassword} type="password" placeholder={t("auth.form.passwordPlaceholder")} autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? t("auth.form.passwordMinHint") : t("auth.form.privateHint")} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} passwordToggleLabel={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />}
