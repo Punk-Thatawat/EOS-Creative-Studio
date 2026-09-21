@@ -1593,7 +1593,7 @@ function AdminCreditsContent() {
     <SidebarProvider>
       <div className="min-h-screen w-full min-w-0 bg-background">
         <SidebarNavigation />
-        <div className="min-w-0 lg:pl-[var(--sidebar-width)]">
+        <div className="min-w-0 xl:pl-[var(--sidebar-width)]">
           <StudioHeader />
           <main data-no-translate className="page-gutter mx-auto w-full max-w-[1600px] py-5 lg:py-8">
             <TopupPackages />

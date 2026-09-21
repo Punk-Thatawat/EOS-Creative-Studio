@@ -36,7 +36,7 @@ export function MobileBottomNavigation() {
     : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
   return (
-    <nav data-mobile-bottom-navigation className="fixed inset-x-0 bottom-0 z-[45] border-t border-[#e8e2de] bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_18px_rgba(54,38,27,0.08)] backdrop-blur md:hidden" aria-label={locale === "th" ? "เมนูหลักด้านล่าง" : "Mobile primary navigation"}>
+    <nav data-mobile-bottom-navigation className="fixed inset-x-0 bottom-0 z-[45] border-t border-[#e8e2de] bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_18px_rgba(54,38,27,0.08)] backdrop-blur xl:hidden" aria-label={locale === "th" ? "เมนูหลักด้านล่าง" : "Mobile primary navigation"}>
       <div className="mx-auto flex h-16 max-w-lg items-stretch justify-around gap-1 px-2">
         {items.map((item) => {
           const active = isActive(item);

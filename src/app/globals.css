@@ -615,7 +615,7 @@ body:has([data-page="usage"]) .page-gutter > main { width: 100%; }
 body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0; padding-right: 24px; padding-bottom: 0; padding-left: 24px; }
 @media (max-width: 1023px) { body:has([data-page="usage"]) .page-gutter { padding-inline: 24px; } }
 @media (max-width: 700px) { body:has([data-page="usage"]) .page-gutter { padding-inline: 10px; } }
-@media (max-width: 1023.98px) { body:has([data-page="gen-image"]) .lg\:pl-\[var\(--sidebar-width\)\] { padding-left: 0; } }
+@media (max-width: 1279.98px) { body:has([data-page="gen-image"]) .xl\:pl-\[var\(--sidebar-width\)\] { padding-left: 0; } }
 @media (max-width: 700px) { body:has([data-page="gen-image"]) .page-gutter { padding-inline: 10px; } }
 .login-button { flex:0 0 250px; min-width:250px; white-space:nowrap; }
 /* !important clears the page-wide 16px readability floor, which inflated this
@@ -976,10 +976,10 @@ body:has(.audio-studio-page) .page-gutter > main { width: 100%; }
   }
 }
 
-/* Matches the bar's own md:hidden. From 768px up the header's drawer trigger is
-   the navigation, so the bar is gone and the page must not keep reserving a
-   6rem strip of empty space for it. */
-@media (max-width: 767.98px) {
+/* Matches the bar's own xl:hidden. The sidebar only appears at 1280px, so below
+   that the drawer trigger and this bar are the navigation, and the page has to
+   keep a 6rem strip clear for the bar. */
+@media (max-width: 1279.98px) {
   body:has([data-mobile-bottom-navigation]) .page-gutter {
     padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   }

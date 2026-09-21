@@ -1352,7 +1352,7 @@ function AdminModelRoutesContent() {
     <SidebarProvider>
       <div className="min-h-screen w-full min-w-0 bg-background">
         <SidebarNavigation />
-        <div className="min-w-0 lg:pl-[var(--sidebar-width)]">
+        <div className="min-w-0 xl:pl-[var(--sidebar-width)]">
           <StudioHeader />
           <main className="page-gutter mx-auto w-full max-w-[1600px] py-5 lg:py-8">
             <div className="min-h-[calc(100vh-120px)] overflow-x-clip rounded-3xl bg-[#faf8f6] px-4 pb-20 sm:px-6 lg:px-8 lg:pb-24">
