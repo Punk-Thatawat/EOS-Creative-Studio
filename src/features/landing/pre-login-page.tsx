@@ -62,6 +62,7 @@ type AuthMode = "login" | "register" | "confirmation" | "forgot";
 
 type AuthFieldProps = {
   id: string;
+  name?: string;
   label: string;
   value: string;
   placeholder: string;
@@ -81,7 +82,7 @@ type AuthFieldProps = {
   onChange: (value: string) => void;
 };
 
-function AuthField({ id, label, value, placeholder, type, autoComplete, icon: Icon, disabled, required, minLength, hint, optional, optionalLabel, error, showPassword, passwordToggleLabel, onTogglePassword, onChange }: AuthFieldProps) {
+function AuthField({ id, name, label, value, placeholder, type, autoComplete, icon: Icon, disabled, required, minLength, hint, optional, optionalLabel, error, showPassword, passwordToggleLabel, onTogglePassword, onChange }: AuthFieldProps) {
   const inputType = type === "password" && showPassword ? "text" : type;
   const descriptionId = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
 
@@ -93,7 +94,7 @@ function AuthField({ id, label, value, placeholder, type, autoComplete, icon: Ic
       </label>
       <div className="auth-input-wrap">
         <Icon className="auth-input-icon" size={17} aria-hidden="true" />
-        <input id={id} value={value} onChange={(event) => onChange(event.target.value)} type={inputType} placeholder={placeholder} autoComplete={autoComplete} autoCapitalize={type === "email" ? "none" : undefined} spellCheck={type === "email" ? false : undefined} required={required} minLength={minLength} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={descriptionId} />
+        <input id={id} name={name ?? id} value={value} onChange={(event) => onChange(event.target.value)} type={inputType} placeholder={placeholder} autoComplete={autoComplete} autoCapitalize={type === "email" ? "none" : undefined} spellCheck={type === "email" ? false : undefined} required={required} minLength={minLength} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={descriptionId} />
         {type === "password" && onTogglePassword ? <button type="button" className="auth-password-toggle" aria-label={passwordToggleLabel} onClick={onTogglePassword} disabled={disabled}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button> : null}
       </div>
       {error ? <p id={`${id}-error`} className="auth-field-error"><CircleAlert size={13} aria-hidden="true" />{error}</p> : null}
@@ -511,8 +512,8 @@ export function PreLoginPage() {
           </div> : authMode === "forgot" && authMessage ? <div className="auth-confirmation-state"><div className="auth-confirmation-icon"><MailCheck size={29} /></div><p>{authMessage}</p><p className="auth-provider-note">{t("auth.reset.googleNote")}</p><button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button></div> : <>
             <form onSubmit={handleEmailAuth} noValidate>
               {authMode === "register" && <AuthField id="modal-name" label={t("auth.form.name")} optional optionalLabel={t("auth.form.optional")} value={authName} onChange={setAuthName} type="text" placeholder={t("auth.form.namePlaceholder")} autoComplete="name" icon={UserRound} disabled={authSubmitting} />}
-              <AuthField id="modal-email" label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete={authMode === "register" ? "email" : "off"} icon={Mail} required disabled={authSubmitting} error={authEmailError} />
-              {authMode !== "forgot" && <AuthField id="modal-password" label={t("auth.form.password")} value={authPassword} onChange={setAuthPassword} type="password" placeholder={t("auth.form.passwordPlaceholder")} autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? t("auth.form.passwordMinHint") : t("auth.form.privateHint")} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} passwordToggleLabel={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />}
+              <AuthField id="modal-email" name={authMode === "login" ? "username" : "email"} label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete={authMode === "login" ? "username" : authMode === "register" ? "email" : "off"} icon={Mail} required disabled={authSubmitting} error={authEmailError} />
+              {authMode !== "forgot" && <AuthField id="modal-password" name="password" label={t("auth.form.password")} value={authPassword} onChange={setAuthPassword} type="password" placeholder={t("auth.form.passwordPlaceholder")} autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? t("auth.form.passwordMinHint") : t("auth.form.privateHint")} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} passwordToggleLabel={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />}
               {authMode === "register" && <>
                 {authPassword && <div className="auth-password-strength" aria-label={t("auth.a11y.passwordStrength", { strength: t(getPasswordStrength(authPassword).labelKey) })}>
                   <div className="auth-strength-bars" aria-hidden="true">{[1, 2, 3, 4].map((bar) => <span key={bar} className={bar <= getPasswordStrength(authPassword).score ? "is-filled" : ""} />)}</div>
