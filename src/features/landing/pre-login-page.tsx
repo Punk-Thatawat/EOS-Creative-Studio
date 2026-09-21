@@ -26,6 +26,7 @@ const tools = [
 type ShowcaseExample = { id?: string; label: string; video: string; mimeType?: string };
 
 const introVideoShownDateKey = "eos-intro-video-shown-date-v1";
+const rememberedEmailStorageKey = "eos.auth.remembered-email";
 const resendConfirmationCooldownSeconds = 30;
 
 const getLocalDateKey = () => {
@@ -36,6 +37,25 @@ const getLocalDateKey = () => {
 function resolveSafeLoginRedirect(value: string | null | undefined): string {
   if (!value) return "/home";
   return value.startsWith("/") && !value.startsWith("//") ? value : "/home";
+}
+
+function getRememberedEmail(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(rememberedEmailStorageKey) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function persistRememberedEmail(email: string, remember: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (remember && email) window.localStorage.setItem(rememberedEmailStorageKey, email);
+    else window.localStorage.removeItem(rememberedEmailStorageKey);
+  } catch {
+    // Storage may be unavailable in private browsing or restricted contexts.
+  }
 }
 
 type AuthMode = "login" | "register" | "confirmation" | "forgot";
@@ -106,7 +126,7 @@ export function PreLoginPage() {
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(true);
+  const [rememberEmail, setRememberEmail] = useState(false);
   const [authPasswordConfirmation, setAuthPasswordConfirmation] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmationPasswordVisible, setConfirmationPasswordVisible] = useState(false);
@@ -173,8 +193,14 @@ export function PreLoginPage() {
   };
 
   const openLogin = () => {
+    const rememberedEmail = getRememberedEmail();
     setAuthMode("login");
     setAuthRedirect("/home");
+    setAuthName("");
+    setAuthEmail(rememberedEmail);
+    setAuthPassword("");
+    setAuthPasswordConfirmation("");
+    setRememberEmail(Boolean(rememberedEmail));
     setPasswordVisible(false);
     setConfirmationPasswordVisible(false);
     setAuthError(null);
@@ -186,7 +212,13 @@ export function PreLoginPage() {
   };
 
   const closeLogin = () => {
+    const rememberedEmail = getRememberedEmail();
     setLoginOpen(false);
+    setAuthName("");
+    setAuthEmail(rememberedEmail);
+    setAuthPassword("");
+    setAuthPasswordConfirmation("");
+    setRememberEmail(Boolean(rememberedEmail));
     setPasswordVisible(false);
     setConfirmationPasswordVisible(false);
     setAuthSubmitting(false);
@@ -223,7 +255,7 @@ export function PreLoginPage() {
         const result = await registerWithBackend({ email: authEmail, password: authPassword, display_name: authName.trim() || undefined });
         if (result.data.session) {
           clearGenerationProgressStorage();
-          const accessToken = await persistBackendSession(result.data.session, true);
+          const accessToken = await persistBackendSession(result.data.session);
           const backendProfile = await fetchBackendSession(accessToken);
           window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
           window.location.replace(authRedirect);
@@ -242,16 +274,18 @@ export function PreLoginPage() {
         return;
       }
 
-      const result = await loginWithBackend(authEmail, authPassword);
+      const loginEmail = authEmail.trim();
+      persistRememberedEmail(loginEmail, rememberEmail);
+      const result = await loginWithBackend(loginEmail, authPassword);
       if (result.data.emailConfirmationRequired && !result.data.session) {
         setAuthMode("confirmation");
-        setAuthMessage(t("auth.confirmation.loginRequired", { email: authEmail }));
+        setAuthMessage(t("auth.confirmation.loginRequired", { email: loginEmail }));
         setPendingLoginToken(result.data.pendingLoginToken ?? null);
         return;
       }
       if (!result.data.session) throw new Error(t("auth.validation.sessionMissing"));
       clearGenerationProgressStorage();
-      const accessToken = await persistBackendSession(result.data.session, rememberMe);
+      const accessToken = await persistBackendSession(result.data.session);
       const backendProfile = await fetchBackendSession(accessToken);
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
       window.location.replace(authRedirect);
@@ -274,7 +308,7 @@ export function PreLoginPage() {
         setAuthSubmitting(false);
         setPendingLoginToken(null);
         clearGenerationProgressStorage();
-        const accessToken = await persistBackendSession(result.data.session, rememberMe);
+        const accessToken = await persistBackendSession(result.data.session);
         const backendProfile = await fetchBackendSession(accessToken);
         window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
         window.location.replace(authRedirect);
@@ -291,7 +325,7 @@ export function PreLoginPage() {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [authMode, loginOpen, pendingLoginToken, rememberMe]);
+  }, [authMode, loginOpen, pendingLoginToken]);
 
   const handleResendConfirmation = async () => {
     if (resendCooldown > 0) return;
@@ -393,6 +427,9 @@ export function PreLoginPage() {
         window.sessionStorage.removeItem("eos.auth.login-error");
       }
       if (sessionExpired) setAuthError(t("auth.error.sessionExpired"));
+      const rememberedEmail = getRememberedEmail();
+      setAuthEmail(rememberedEmail);
+      setRememberEmail(Boolean(rememberedEmail));
       setLoginOpen(true);
       window.history.replaceState(null, "", window.location.pathname);
     }, 0);
@@ -474,7 +511,7 @@ export function PreLoginPage() {
           </div> : authMode === "forgot" && authMessage ? <div className="auth-confirmation-state"><div className="auth-confirmation-icon"><MailCheck size={29} /></div><p>{authMessage}</p><p className="auth-provider-note">{t("auth.reset.googleNote")}</p><button type="button" className="auth-back-link" onClick={() => switchAuthMode("login")}>{t("auth.action.backToLogin")}</button></div> : <>
             <form onSubmit={handleEmailAuth} noValidate>
               {authMode === "register" && <AuthField id="modal-name" label={t("auth.form.name")} optional optionalLabel={t("auth.form.optional")} value={authName} onChange={setAuthName} type="text" placeholder={t("auth.form.namePlaceholder")} autoComplete="name" icon={UserRound} disabled={authSubmitting} />}
-              <AuthField id="modal-email" label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete="email" icon={Mail} required disabled={authSubmitting} error={authEmailError} />
+              <AuthField id="modal-email" label={t("auth.form.email")} value={authEmail} onChange={setAuthEmail} type="email" placeholder={t("auth.form.emailPlaceholder")} autoComplete={authMode === "register" ? "email" : "off"} icon={Mail} required disabled={authSubmitting} error={authEmailError} />
               {authMode !== "forgot" && <AuthField id="modal-password" label={t("auth.form.password")} value={authPassword} onChange={setAuthPassword} type="password" placeholder={t("auth.form.passwordPlaceholder")} autoComplete={authMode === "login" ? "current-password" : "new-password"} icon={LockKeyhole} hint={authMode === "register" ? t("auth.form.passwordMinHint") : t("auth.form.privateHint")} minLength={authMode === "register" ? 8 : undefined} required disabled={authSubmitting} error={authPasswordError} showPassword={passwordVisible} passwordToggleLabel={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setPasswordVisible((visible) => !visible)} />}
               {authMode === "register" && <>
                 {authPassword && <div className="auth-password-strength" aria-label={t("auth.a11y.passwordStrength", { strength: t(getPasswordStrength(authPassword).labelKey) })}>
@@ -483,7 +520,7 @@ export function PreLoginPage() {
                 </div>}
                 <AuthField id="modal-password-confirm" label={t("auth.form.confirmPassword")} value={authPasswordConfirmation} onChange={setAuthPasswordConfirmation} type="password" placeholder={t("auth.form.confirmPasswordPlaceholder")} autoComplete="new-password" icon={LockKeyhole} required minLength={8} disabled={authSubmitting} error={authPasswordConfirmation && authPassword !== authPasswordConfirmation ? t("auth.validation.passwordMismatch") : null} showPassword={confirmationPasswordVisible} passwordToggleLabel={confirmationPasswordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setConfirmationPasswordVisible((visible) => !visible)} />
               </>}
-              {authMode === "login" && <><label className="auth-remember"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.currentTarget.checked)} /> {t("auth.form.keepSignedIn")}</label><button type="button" className="auth-forgot-link" onClick={() => switchAuthMode("forgot")}>{t("auth.action.forgotPassword")}</button></>}
+              {authMode === "login" && <><label className="auth-remember"><input type="checkbox" checked={rememberEmail} onChange={(event) => { const checked = event.currentTarget.checked; setRememberEmail(checked); if (!checked) persistRememberedEmail("", false); }} /> {t("auth.form.rememberMe")}</label><button type="button" className="auth-forgot-link" onClick={() => switchAuthMode("forgot")}>{t("auth.action.forgotPassword")}</button></>}
               {authError && <p className="auth-error" role="alert">{authError}</p>}
               <div className="auth-submit-wrap"><Image src="/generated-assets/login-button-brush.webp" alt="" fill sizes="430px" className="auth-brush-desktop" /><Image src="/generated-assets/login-button-brush-mobile.webp" alt="" fill sizes="430px" className="auth-brush-mobile" /><button type="submit" className="auth-submit" disabled={authSubmitting}>{authSubmitting ? <><LoaderCircle size={18} className="auth-spin" /> {authMode === "login" ? t("auth.action.signingIn") : t("auth.action.sending")}</> : <>{authMode === "login" ? t("auth.action.login") : authMode === "forgot" ? t("auth.action.resetPassword") : t("auth.action.register")} <ArrowRight size={20} /></>}</button></div>
             </form>
