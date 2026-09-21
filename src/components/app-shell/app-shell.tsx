@@ -14,7 +14,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <SidebarProvider>
       <div className={`${isHome ? "eos-home-page overflow-x-clip " : ""}min-h-screen w-full min-w-0 bg-background`}>
         <SidebarNavigation />
-        <div className="w-full min-w-0 lg:pl-[var(--sidebar-width)]">
+        <div className="w-full min-w-0 xl:pl-[var(--sidebar-width)]">
           <StudioHeader />
           <div
             className={`page-gutter mx-auto flex w-full min-w-0 ${isHome ? "max-w-[1760px] gap-5 py-4 lg:gap-6 lg:py-6" : "max-w-[1600px] py-5 lg:py-8"}`}
