@@ -159,7 +159,11 @@ input:not([type]), input[type="text"], input[type="search"], input[type="email"]
   :root { --page-gutter: 24px; }
 }
 
-@media (min-width: 1024px) {
+/* 1280px, matching the sidebar: 1024 was the old rail breakpoint, and leaving
+   the widest gutter behind meant a tablet with no rail still gave up 64px to
+   the margins. Tablets keep the 24px step; 32px is for layouts that carry the
+   rail. */
+@media (min-width: 1280px) {
   :root { --page-gutter: 32px; }
 }
 
@@ -981,7 +985,10 @@ body:has(.audio-studio-page) .page-gutter > main { width: 100%; }
    keep a 6rem strip clear for the bar. */
 @media (max-width: 1279.98px) {
   body:has([data-mobile-bottom-navigation]) .page-gutter {
-    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+    /* The bar measures 65px, so 6rem left a 48px band of empty page above it.
+       5rem clears the bar with 16px to spare and reads as breathing room
+       rather than a gap. */
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
   }
 }
 
