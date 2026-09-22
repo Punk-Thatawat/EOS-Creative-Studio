@@ -16,7 +16,6 @@ import {
   Copy,
   Download,
   History,
-  FileAudio,
   LockKeyhole,
   Mic2,
   MoreHorizontal,
@@ -55,6 +54,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   createDialogue,
+  cleanupAudio,
   createSoundEffects,
   createTextToSpeech,
   createTextToSpeechScenes,
@@ -85,8 +85,10 @@ const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Soun
 type AudioTab = (typeof audioModes)[number];
 const MIN_PODCAST_SPEAKERS = 2;
 
-// All audio workflows are available from the main Voice page.
-const visibleTabs: readonly AudioTab[] = audioModes;
+// Hotfix: expose only Text to Speech until the remaining audio workflows are ready.
+// Keep the other modes in the implementation so they can be enabled again without
+// changing the tab state or content branching below.
+const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
 const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
 
 const audioTabKeys = {
@@ -307,6 +309,88 @@ function PreviewWaveform({
       {audioUrl ? (
         <span className={styles.waveformPlayhead} style={{ left: `${safeProgress}%` }} aria-hidden="true" />
       ) : null}
+    </div>
+  );
+}
+
+function CleanupAudioPlayer({ src, label }: { src: string | null; label: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(78);
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  useEffect(() => {
+    audioRef.current?.pause();
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+  }, [src]);
+
+  const togglePlayback = async () => {
+    if (!audioRef.current || !src) return;
+    if (audioRef.current.paused) {
+      await audioRef.current.play().catch(() => undefined);
+    } else {
+      audioRef.current.pause();
+    }
+  };
+
+  return (
+    <div className={styles.cleanupPlayer} aria-label={label}>
+      <button type="button" className={styles.podcastPlayButton} onClick={() => void togglePlayback()} disabled={!src} aria-label={isPlaying ? "หยุดเสียงชั่วคราว" : "เล่นเสียง"}>
+        {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+      </button>
+      <div className={styles.podcastWaveformWrap}>
+        <PreviewWaveform audioUrl={src} progress={progress} isPlaying={isPlaying} />
+        <div className={styles.podcastAudioMeta}>
+          <span>{formatSceneSeconds(currentTime)} / {formatSceneSeconds(duration)}</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={progress}
+            onChange={(event) => {
+              const nextProgress = Number(event.target.value);
+              if (audioRef.current && duration > 0) audioRef.current.currentTime = (nextProgress / 100) * duration;
+            }}
+            aria-label="ตำแหน่งเสียง"
+            disabled={!src || duration <= 0}
+          />
+        </div>
+      </div>
+      <Volume2 size={16} className={styles.podcastVolumeIcon} aria-hidden="true" />
+      <input
+        className={styles.podcastVolumeSlider}
+        type="range"
+        min="0"
+        max="100"
+        value={volume}
+        onChange={(event) => {
+          const nextVolume = Number(event.target.value);
+          setVolume(nextVolume);
+          if (audioRef.current) audioRef.current.volume = nextVolume / 100;
+        }}
+        aria-label="ระดับเสียง"
+      />
+      <audio
+        ref={audioRef}
+        className={styles.podcastNativeAudio}
+        src={src ?? undefined}
+        preload="metadata"
+        onLoadedMetadata={(event) => {
+          setDuration(event.currentTarget.duration);
+          event.currentTarget.volume = volume / 100;
+        }}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => {
+          setIsPlaying(false);
+          setCurrentTime(duration);
+        }}
+      />
     </div>
   );
 }
@@ -889,6 +973,8 @@ function PodcastDialogueLayout({
           <div className={styles.podcastLineList}>
             {lines.map((line, index) => {
               const speaker = speakers.find((item) => item.id === line.speakerId) ?? speakers[0]!;
+              const speakerIndex = Math.max(0, speakers.findIndex((item) => item.id === speaker.id));
+              const speakerTone = podcastSpeakerTones[speakerIndex % podcastSpeakerTones.length];
               const start = lines.slice(0, index).reduce((total, item) => total + estimatePodcastLineSeconds(item.text), 0);
               return (
                 <div
@@ -899,19 +985,31 @@ function PodcastDialogueLayout({
                     {!voicesLoading && speaker.image ? <Image src={speaker.image} alt="" fill unoptimized sizes="34px" /> : null}
                   </span>
                   <time>{formatSceneSeconds(start)}</time>
-                  <select
-                    className={styles.podcastSpeakerSelect}
-                    data-tone={
-                      podcastSpeakerTones[
-                        speakers.findIndex((item) => item.id === speaker.id) % podcastSpeakerTones.length
-                      ]
-                    }
-                    value={line.speakerId}
-                    onChange={(event) => updateLine(line.id, { speakerId: event.target.value })}
-                    aria-label={`เลือกผู้พูดสำหรับบรรทัดที่ ${index + 1}`}
-                  >
-                    {speakers.map((option) => <option key={option.id} value={option.id}>{option.role}</option>)}
-                  </select>
+                  <div className={styles.podcastLineSpeakerDropdown} data-tone={speakerTone}>
+                    <Dropdown
+                      value={line.speakerId}
+                      options={speakers.map((option, optionIndex) => ({
+                        value: option.id,
+                        label: (
+                          <span className={styles.podcastLineSpeakerLabel}>
+                            <span
+                              className={styles.podcastSpeakerDot}
+                              data-tone={podcastSpeakerTones[optionIndex % podcastSpeakerTones.length]}
+                              aria-hidden="true"
+                            />
+                            {option.role}
+                          </span>
+                        ),
+                      }))}
+                      onChange={(value) => updateLine(line.id, { speakerId: value })}
+                      ariaLabel={`เลือกผู้พูดสำหรับบรรทัดที่ ${index + 1}`}
+                      className={styles.podcastLineSpeakerDropdownControl}
+                      triggerClassName={styles.podcastLineSpeakerTrigger}
+                      menuClassName={styles.podcastLineSpeakerMenu}
+                      optionClassName={styles.podcastLineSpeakerOption}
+                      menuPosition="fixed"
+                    />
+                  </div>
                   <input
                     className={styles.podcastLineInput}
                     value={line.text}
@@ -1234,34 +1332,24 @@ function PodcastDialogueLayout({
           ) : null}
         </div>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
-          <div className={styles.podcastEstimate}>
-            <div>
-              <span>{t("create.audio.podcast.estimatedDuration")}</span>
-              <strong>{formatSceneSeconds(totalDuration)}</strong>
-            </div>
-            <div>
-              <span>{t("create.audio.podcast.estimatedCredits")}</span>
+          <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}>
+            <div className={styles.creditEstimateHeader}>
               <strong>
-                {creditEstimateLoading
-                  ? "กำลังคำนวณ…"
-                  : creditEstimate
-                    ? t("create.audio.podcast.creditsApprox", { count: creditEstimate.creditCost })
-                    : "—"}
+                {t("create.audio.estimatedCredits")} <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} />
               </strong>
+              <b>
+                {creditEstimateLoading
+                  ? t("create.audio.calculating")
+                  : creditEstimate
+                    ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditEstimate.creditCost) })
+                    : "—"}
+              </b>
             </div>
-            <small>
-              {creditEstimateError
-                ? "คำนวณเครดิตไม่สำเร็จ"
-                : creditEstimate
-                  ? t("create.audio.podcast.creditsAvailable", {
-                      count: creditEstimate.textCharacters.toLocaleString(locale === "th" ? "th-TH" : "en-US"),
-                    })
-                  : "กรอกบทสนทนาเพื่อคำนวณเครดิต"}
-            </small>
+            <p className={styles.creditEstimateCount}>{t("create.audio.audioCount")}</p>
           </div>
           <button
             type="button"
-            className={styles.podcastGenerateButton}
+            className={styles.generateButton}
             onClick={() => void handleGenerate()}
             disabled={
               status === "generating" ||
@@ -1271,11 +1359,11 @@ function PodcastDialogueLayout({
               !creditEstimate
             }
           >
-            {status === "generating" ? t("create.audio.podcast.generating") : t("create.audio.podcast.generate")}{" "}
-            <Sparkles size={16} />
+            {status === "generating" ? t("create.audio.generating") : t("create.audio.generateAudio")}{" "}
+            <Sparkles size={17} />
           </button>
           <p className={styles.podcastSecurityNote}>
-            <LockKeyhole size={11} /> {t("create.audio.podcast.securityNote")}
+            <LockKeyhole size={11} /> {t("create.audio.privateSecure")}
           </p>
         </div>
       </aside>
@@ -1970,143 +2058,227 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   );
 }
 
+function formatAudioFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function AudioCleanupLayout() {
   const { t } = useLocale();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [cleanedUrl, setCleanedUrl] = useState<string | null>(null);
+  const [durationSeconds, setDurationSeconds] = useState(0);
+  const [status, setStatus] = useState<"empty" | "ready" | "processing" | "done">("empty");
+  const [error, setError] = useState<string | null>(null);
+  const [options, setOptions] = useState({
+    noiseReduction: true,
+    voiceClarity: true,
+    removeReverb: false,
+    normalizeLoudness: true,
+    preserveTone: true,
+  });
+  const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
+
+  useEffect(() => {
+    if (!file) {
+      setSourceUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setSourceUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  useEffect(() => {
+    return () => {
+      if (cleanedUrl) URL.revokeObjectURL(cleanedUrl);
+    };
+  }, [cleanedUrl]);
+
+  const setSelectedFile = (nextFile: File | undefined) => {
+    if (!nextFile) return;
+    if (!nextFile.type.startsWith("audio/")) {
+      setError(t("create.audio.cleanup.audioOnly"));
+      return;
+    }
+    if (nextFile.size > 50 * 1024 * 1024) {
+      setError(t("create.audio.cleanup.fileTooLarge"));
+      return;
+    }
+    setFile(nextFile);
+    setCleanedUrl(null);
+    setDurationSeconds(0);
+    setStatus("ready");
+    setError(null);
+
+    const preview = document.createElement("audio");
+    const previewUrl = URL.createObjectURL(nextFile);
+    preview.preload = "metadata";
+    preview.onloadedmetadata = () => {
+      setDurationSeconds(Number.isFinite(preview.duration) ? preview.duration : 0);
+      URL.revokeObjectURL(previewUrl);
+    };
+    preview.onerror = () => URL.revokeObjectURL(previewUrl);
+    preview.src = previewUrl;
+  };
+
+  const handleCleanup = async () => {
+    if (!file) {
+      setError(t("create.audio.cleanup.selectFile"));
+      return;
+    }
+    if (!options.noiseReduction && !options.voiceClarity && !options.removeReverb && !options.normalizeLoudness) {
+      setError(t("create.audio.cleanup.selectTool"));
+      return;
+    }
+    setStatus("processing");
+    setError(null);
+    try {
+      const result = await cleanupAudio({ audio: file, ...options, outputFormat });
+      setCleanedUrl(URL.createObjectURL(result.blob));
+      setStatus("done");
+    } catch (cleanupError) {
+      setStatus("ready");
+      setError(cleanupError instanceof Error ? cleanupError.message : t("create.audio.cleanup.processError"));
+    }
+  };
+
+  const toggleOption = (key: keyof typeof options) => {
+    setOptions((current) => ({ ...current, [key]: !current[key] }));
+    setCleanedUrl(null);
+    if (status === "done") setStatus("ready");
+  };
+
+  const formattedDuration = durationSeconds > 0 ? formatSceneSeconds(durationSeconds) : "—";
+  const optionRows = [
+    { key: "noiseReduction" as const, label: t("create.audio.cleanup.noiseReduction"), hint: t("create.audio.cleanup.noiseReductionHint"), provider: "ElevenLabs" },
+    { key: "voiceClarity" as const, label: t("create.audio.cleanup.voiceClarity"), hint: t("create.audio.cleanup.voiceClarityHint"), provider: "ElevenLabs" },
+    { key: "removeReverb" as const, label: t("create.audio.cleanup.removeReverb"), hint: t("create.audio.cleanup.removeReverbHint"), provider: t("create.audio.cleanup.internalProcessor") },
+    { key: "normalizeLoudness" as const, label: t("create.audio.cleanup.normalizeLoudness"), hint: t("create.audio.cleanup.normalizeLoudnessHint"), provider: t("create.audio.cleanup.internalProcessor") },
+  ];
+
   return (
-    <div className={styles.alternateLayout}>
-      <section className={`${styles.alternatePanel} ${styles.alternateFormPanel}`}>
+    <div className={`${styles.alternateLayout} ${styles.cleanupLayout}`}>
+      <section className={`${styles.alternatePanel} ${styles.alternateFormPanel} ${styles.cleanupSourcePanel}`}>
         <AlternateHeading
           eyebrow={t("create.audio.cleanup.eyebrow")}
           title={t("create.audio.cleanup.title")}
           description={t("create.audio.cleanup.description")}
           icon={<Waves size={24} />}
         />
-        <button disabled type="button" className={`${styles.cleanupUpload} ${styles.cleanupUploadReady}`}>
-          <span className={styles.cleanupFileIcon}>
-            <FileAudio size={21} />
-          </span>
-          <span>
-            <strong>interview-recording.wav</strong>
-            <small>WAV · 00:42 · 18.4 MB</small>
-          </span>
-          <Check size={17} />
+        <input
+          ref={inputRef}
+          className={styles.cleanupHiddenInput}
+          type="file"
+          accept="audio/*"
+          onChange={(event) => {
+            setSelectedFile(event.target.files?.[0]);
+            event.currentTarget.value = "";
+          }}
+        />
+        <button
+          type="button"
+          className={`${styles.cleanupDropzone} ${file ? styles.cleanupDropzoneReady : ""}`}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            setSelectedFile(event.dataTransfer.files?.[0]);
+          }}
+        >
+          <span className={styles.cleanupFileIcon}><CloudUpload size={21} /></span>
+          {file ? (
+            <span className={styles.cleanupFileCopy}>
+              <strong>{file.name}</strong>
+              <small>{file.type.split("/")[1]?.toUpperCase() ?? "AUDIO"} · {formattedDuration} · {formatAudioFileSize(file.size)}</small>
+            </span>
+          ) : (
+            <span className={styles.cleanupFileCopy}>
+              <strong>{t("create.audio.cleanup.uploadTitle")}</strong>
+              <small>{t("create.audio.cleanup.uploadHint")}</small>
+            </span>
+          )}
+          {file ? <Check size={17} /> : <Plus size={18} />}
         </button>
-        <div className={styles.altFieldGroup}>
-          <span className={styles.altFieldLabel}>{t("create.audio.cleanup.tools")}</span>
-          <div className={styles.cleanupToolList}>
-            <label>
-              <input disabled type="checkbox" defaultChecked />
-              <span>
-                <strong>{t("create.audio.cleanup.noiseReduction")}</strong>
-                <small>{t("create.audio.cleanup.noiseReductionHint")}</small>
-              </span>
-            </label>
-            <label>
-              <input disabled type="checkbox" defaultChecked />
-              <span>
-                <strong>{t("create.audio.cleanup.voiceClarity")}</strong>
-                <small>{t("create.audio.cleanup.voiceClarityHint")}</small>
-              </span>
-            </label>
-            <label>
-              <input disabled type="checkbox" />
-              <span>
-                <strong>{t("create.audio.cleanup.removeReverb")}</strong>
-                <small>{t("create.audio.cleanup.removeReverbHint")}</small>
-              </span>
-            </label>
-          </div>
-        </div>
-        <button disabled type="button" className={styles.altUploadButton}>
-          <CloudUpload size={17} /> {t("create.audio.cleanup.replaceFile")}
-        </button>
+        {file ? (
+          <button type="button" className={styles.cleanupReplaceButton} onClick={() => inputRef.current?.click()}>
+            <RotateCcw size={14} /> {t("create.audio.cleanup.replaceFile")}
+          </button>
+        ) : null}
+        <div className={styles.cleanupSourceNote}><LockKeyhole size={12} /> {t("create.audio.cleanup.privateNote")}</div>
+        {error ? <p className={styles.cleanupError} role="alert">{error}</p> : null}
       </section>
 
-      <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel}`}>
+      <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel} ${styles.cleanupPreviewPanel}`}>
         <div className={styles.altPanelHeader}>
           <div>
             <span className={styles.altEyebrow}>{t("create.audio.cleanup.previewEyebrow")}</span>
             <h2>{t("create.audio.cleanup.beforeAfter")}</h2>
           </div>
-          <span className={styles.altStatus}>
-            <span /> {t("create.audio.cleanup.comingSoon")}
+          <span className={`${styles.cleanupStatus} ${status === "done" ? styles.cleanupStatusReady : ""}`}>
+            <span /> {status === "processing" ? t("create.audio.cleanup.processing") : status === "done" ? t("create.audio.cleanup.ready") : t("create.audio.cleanup.previewWaiting")}
           </span>
         </div>
-        <div className={styles.mockNotice}>
-          <LockKeyhole size={13} />
-          <span>{t("create.audio.cleanup.comingSoonNotice")}</span>
-        </div>
-        <div className={styles.cleanupCompare}>
-          <div>
-            <span>{t("create.audio.cleanup.original")}</span>
-            <AltWaveform label={t("create.audio.cleanup.roomNoise")} />
+        <div className={styles.cleanupPreviewGrid}>
+          <div className={styles.cleanupPreviewCard}>
+            <div className={styles.cleanupPreviewLabel}><span>{t("create.audio.cleanup.original")}</span><small>{file ? formattedDuration : "—"}</small></div>
+            <CleanupAudioPlayer src={sourceUrl} label={t("create.audio.cleanup.original")} />
           </div>
-          <div>
-            <span>{t("create.audio.cleanup.cleaned")}</span>
-            <AltWaveform label={t("create.audio.cleanup.clarityLabel")} />
+          <div className={`${styles.cleanupPreviewCard} ${styles.cleanupPreviewCardAfter}`}>
+            <div className={styles.cleanupPreviewLabel}><span>{t("create.audio.cleanup.cleaned")}</span><small>{cleanedUrl ? outputFormat.toUpperCase() : "—"}</small></div>
+            <CleanupAudioPlayer src={cleanedUrl} label={t("create.audio.cleanup.cleaned")} />
           </div>
         </div>
-        <div className={styles.cleanupStats}>
-          <div>
-            <strong>−18 dB</strong>
-            <small>{t("create.audio.cleanup.noiseFloor")}</small>
+        {cleanedUrl ? (
+          <div className={styles.cleanupResultActions}>
+            <span><Check size={14} /> {t("create.audio.cleanup.resultReady")}</span>
+            <a className={styles.cleanupDownloadButton} href={cleanedUrl} download={`cleaned-audio.${outputFormat}`}><Download size={14} /> {t("create.audio.cleanup.download")}</a>
           </div>
-          <div>
-            <strong>+24%</strong>
-            <small>{t("create.audio.cleanup.speechClarity")}</small>
-          </div>
-          <div>
-            <strong>−2.4 LUFS</strong>
-            <small>{t("create.audio.cleanup.loudnessChange")}</small>
-          </div>
-        </div>
-        <div className={styles.altActionRow}>
-          <button disabled type="button" className={styles.altPrimaryButton}>
-            <Play size={15} fill="currentColor" /> {t("create.audio.cleanup.previewCleaned")}
-          </button>
-          <button disabled type="button" className={styles.altSecondaryButton}>
-            {t("create.audio.cleanup.compare")}
-          </button>
-        </div>
+        ) : (
+          <div className={styles.cleanupPreviewHint}><WandSparkles size={14} /> {t("create.audio.cleanup.previewHint")}</div>
+        )}
       </section>
 
-      <aside className={styles.alternateSettings}>
+      <aside className={`${styles.alternateSettings} ${styles.cleanupSettingsPanel}`}>
         <div className={styles.altPanelHeader}>
-          <h2>{t("create.audio.cleanup.settings")}</h2>
+          <div><span className={styles.altEyebrow}>{t("create.audio.cleanup.tools")}</span><h2>{t("create.audio.cleanup.settings")}</h2></div>
           <Settings2 size={20} />
         </div>
-        <div className={styles.altSettingBlock}>
-          <div className={styles.altSettingHeading}>
-            <span>{t("create.audio.cleanup.noiseReductionLevel")}</span>
-            <b>68%</b>
-          </div>
-          <input disabled className={styles.altRange} type="range" min="0" max="100" defaultValue="68" />
+        <div className={styles.cleanupToolList}>
+          {optionRows.map((option) => (
+            <label className={`${styles.cleanupToolCard} ${options[option.key] ? styles.cleanupToolCardActive : ""}`} key={option.key}>
+              <input type="checkbox" checked={options[option.key]} onChange={() => toggleOption(option.key)} />
+              <span className={styles.cleanupToolCopy}><strong>{option.label}</strong><small>{option.hint}</small></span>
+              <em>{option.provider}</em>
+            </label>
+          ))}
         </div>
-        <div className={styles.altSettingBlock}>
-          <div className={styles.altSettingHeading}>
-            <span>{t("create.audio.cleanup.voicePresence")}</span>
-            <b>76%</b>
-          </div>
-          <input disabled className={styles.altRange} type="range" min="0" max="100" defaultValue="76" />
-        </div>
-        <label className={styles.altToggleRow}>
-          <span>{t("create.audio.cleanup.preserveTone")}</span>
-          <button disabled type="button" className={styles.altToggleOn}>
-            <i />
-          </button>
+        <label className={styles.cleanupToneToggle}>
+          <span><strong>{t("create.audio.cleanup.preserveTone")}</strong><small>{t("create.audio.cleanup.preserveToneHint")}</small></span>
+          <input type="checkbox" checked={options.preserveTone} onChange={() => toggleOption("preserveTone")} />
         </label>
-        <label className={styles.altField}>
+        <label className={styles.cleanupFormatField}>
           <span>{t("create.audio.cleanup.outputFormat")}</span>
-          <select disabled defaultValue="MP3">
-            <option>MP3</option>
-            <option>WAV</option>
-            <option>OGG</option>
+          <select value={outputFormat} onChange={(event) => setOutputFormat(event.target.value as typeof outputFormat)}>
+            <option value="mp3">MP3</option>
+            <option value="wav">WAV</option>
+            <option value="ogg">OGG</option>
           </select>
         </label>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
-          <button disabled type="button" className={styles.altGenerateButton}>
-            {t("create.audio.cleanup.clean")} <Sparkles size={16} />
+          <div className={styles.creditEstimate}>
+            <div className={styles.creditEstimateHeader}>
+              <strong>{t("create.audio.estimatedCredits")} <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} /></strong>
+              <b>—</b>
+            </div>
+            <p className={styles.creditEstimateCount}>{file ? t("create.audio.audioCount") : t("create.audio.cleanup.waiting")}</p>
+          </div>
+          <button type="button" className={styles.generateButton} disabled={!file || status === "processing"} onClick={() => void handleCleanup()}>
+            {status === "processing" ? t("create.audio.cleanup.processingAction") : t("create.audio.cleanup.clean")} <Sparkles size={17} />
           </button>
+          <p className={styles.securityNote}><LockKeyhole size={11} /> {t("create.audio.privateSecure")}</p>
         </div>
       </aside>
     </div>

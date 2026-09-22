@@ -92,6 +92,16 @@ export type DialogueInput = {
   idempotencyKey?: string;
 };
 
+export type AudioCleanupInput = {
+  audio: File;
+  noiseReduction: boolean;
+  voiceClarity: boolean;
+  removeReverb: boolean;
+  normalizeLoudness: boolean;
+  preserveTone: boolean;
+  outputFormat: "mp3" | "wav" | "ogg";
+};
+
 export type VoiceCloneInput = {
   name: string;
   description?: string;
@@ -433,6 +443,23 @@ export async function createDialogue(input: DialogueInput, signal?: AbortSignal)
     method: "POST",
     headers: { Accept: input.outputFormat === "mp3" ? "audio/mpeg" : input.outputFormat === "wav" ? "audio/wav" : "audio/ogg" },
     body: JSON.stringify(input),
+    signal,
+  });
+}
+
+export async function cleanupAudio(input: AudioCleanupInput, signal?: AbortSignal): Promise<TextToSpeechResponse> {
+  const form = new FormData();
+  form.append("audio", input.audio, input.audio.name);
+  form.append("noiseReduction", String(input.noiseReduction));
+  form.append("voiceClarity", String(input.voiceClarity));
+  form.append("removeReverb", String(input.removeReverb));
+  form.append("normalizeLoudness", String(input.normalizeLoudness));
+  form.append("preserveTone", String(input.preserveTone));
+  form.append("outputFormat", input.outputFormat);
+  return userAudioBlobRequest("/audio/cleanup", {
+    method: "POST",
+    headers: { Accept: input.outputFormat === "mp3" ? "audio/mpeg" : input.outputFormat === "wav" ? "audio/wav" : "audio/ogg" },
+    body: form,
     signal,
   });
 }
