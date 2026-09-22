@@ -8,12 +8,10 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNo
 import {
   AudioLines,
   AudioWaveform,
-  Bookmark,
   Check,
   Clapperboard,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   CloudUpload,
   Copy,
   Download,
@@ -67,7 +65,9 @@ import {
   listAudioHistory,
   listAudioModels,
   listAudioVoices,
+  previewAudioVoice,
   previewVoiceClone,
+  quoteDialogue,
   quoteTextToSpeech,
   quoteTextToSpeechScenes,
   saveAudioHistory,
@@ -83,9 +83,11 @@ import {
 
 const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
 type AudioTab = (typeof audioModes)[number];
+const MIN_PODCAST_SPEAKERS = 2;
 
 // All audio workflows are available from the main Voice page.
 const visibleTabs: readonly AudioTab[] = audioModes;
+const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
 
 const audioTabKeys = {
   "Text to Speech": "create.audio.tabs.textToSpeech",
@@ -131,10 +133,11 @@ const waveformBars = Array.from({ length: 88 }, (_, index) =>
 type AudioHistoryItem = Omit<AudioHistoryEntry, "url"> & { url: string; localUrl?: boolean; persisted?: boolean };
 const AUDIO_HISTORY_LIMIT = 10;
 const VOICE_PAGE_SIZE = 8;
-type SaveHistoryCallback = (input: SaveAudioHistoryInput) => Promise<void>;
+type SaveHistoryCallback = (input: SaveAudioHistoryInput) => Promise<AudioHistoryEntry | null>;
 type AudioScene = { id: string; title: string; durationSeconds: number; text: string; voice: string };
 type PodcastSpeaker = { id: string; role: string; name: string; voice: string; image: string };
-type PodcastLine = { id: string; speakerId: string; text: string; durationSeconds: number };
+type PodcastSpeakerDraft = Pick<PodcastSpeaker, "role" | "name" | "voice">;
+type PodcastLine = { id: string; speakerId: string; text: string };
 
 const DEFAULT_AUDIO_PROMPT =
   "ขอแนะนำ EOS Creative Studio — แพลตฟอร์มครบวงจรสำหรับสร้างสรรค์ สื่อสาร และสร้างความประทับใจ ตั้งแต่ภาพที่โดดเด่นไปจนถึงเสียงที่ทรงพลัง เราช่วยให้ไอเดียของคุณส่งถึงใจและเชื่อมต่อได้ลึกกว่าเดิม";
@@ -153,25 +156,21 @@ const defaultPodcastLines: PodcastLine[] = [
     id: "line-1",
     speakerId: "host",
     text: "สวัสดีครับทุกคน ยินดีต้อนรับเข้าสู่พอดแคสต์เปิดโลก AI สำหรับครีเอเตอร์ครับ",
-    durationSeconds: 3.2,
   },
   {
     id: "line-2",
     speakerId: "guest-1",
     text: "สวัสดีค่ะ วันนี้เราจะมาคุยกันเรื่อง AI ที่ช่วยให้การทำงานคอนเทนต์ง่ายขึ้นค่ะ",
-    durationSeconds: 4.6,
   },
   {
     id: "line-3",
     speakerId: "guest-2",
     text: "ใช่ครับ โดยเฉพาะเครื่องมือที่ช่วยสร้างเสียงและพอดแคสต์อัตโนมัติ",
-    durationSeconds: 4.1,
   },
   {
     id: "line-4",
     speakerId: "co-host",
     text: "เดี๋ยวเรามาเริ่มกันที่พื้นฐานกันก่อนเลยดีกว่าว่า AI ทำงานยังไงบ้างนะคะ",
-    durationSeconds: 4.8,
   },
 ];
 
@@ -184,13 +183,24 @@ function formatCreditAmount(value: number): string {
   return value.toLocaleString("th-TH", { maximumFractionDigits: 2 });
 }
 
-function createAudioIdempotencyKey(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+function formatAudioHistoryDate(value: string, locale: "th" | "en"): string {
+  const raw = value.trim();
+  // Locally-created entries intentionally use a time-only label until they
+  // are persisted. Keep that compact display instead of parsing it as a date.
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(raw)) return raw;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(locale === "th" ? "th-TH" : "en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
-function sceneTimeRange(items: AudioScene[], index: number): string {
-  const start = items.slice(0, index).reduce((total, scene) => total + scene.durationSeconds, 0);
-  return `${formatSceneSeconds(start)} – ${formatSceneSeconds(start + items[index]!.durationSeconds)}`;
+function createAudioIdempotencyKey(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function FieldLabel({ children, hint }: { children: ReactNode; hint?: string }) {
@@ -230,6 +240,35 @@ function SelectField({
         triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
       />
     </label>
+  );
+}
+
+function PodcastConfirmationDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description: string;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={styles.podcastConfirmDialog}>
+        <DialogHeader className={styles.podcastConfirmHeader}>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter className={styles.podcastConfirmFooter}>
+          <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>ยกเลิก</Button>
+          <Button type="button" variant="destructive" className={styles.podcastConfirmDeleteButton} onClick={onConfirm}>ลบ</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -306,12 +345,10 @@ function AltWaveform({ label = "LIVE PREVIEW" }: { label?: string }) {
 
 function PodcastDialogueLayout({
   onHistorySaved,
-  scenesTimeline,
 }: {
   onHistorySaved?: SaveHistoryCallback;
-  scenesTimeline: ReactNode;
 }) {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const [speakers, setSpeakers] = useState(defaultPodcastSpeakers);
   const [lines, setLines] = useState(defaultPodcastLines);
   const [activeSpeakerId, setActiveSpeakerId] = useState(defaultPodcastSpeakers[0]!.id);
@@ -319,36 +356,212 @@ function PodcastDialogueLayout({
   const [language, setLanguage] = useState("Thai (ไทย)");
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [speed, setSpeed] = useState(1);
-  const [backgroundMusic, setBackgroundMusic] = useState(true);
+  const [backgroundMusic, setBackgroundMusic] = useState(false);
+  const [backgroundMusicPreset, setBackgroundMusicPreset] = useState("");
+  const [backgroundMusicPresets, setBackgroundMusicPresets] = useState<AudioBackgroundMusic[]>([]);
+  const [backgroundMusicLoading, setBackgroundMusicLoading] = useState(true);
   const [normalizeAudio, setNormalizeAudio] = useState(true);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [podcastHistory, setPodcastHistory] = useState<AudioHistoryItem[]>([]);
+  const [podcastHistoryLoadingId, setPodcastHistoryLoadingId] = useState<string | null>(null);
+  const [pendingPodcastHistoryDelete, setPendingPodcastHistoryDelete] = useState<AudioHistoryItem | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
   const [previewCurrentTime, setPreviewCurrentTime] = useState(0);
   const [previewDuration, setPreviewDuration] = useState(0);
   const [volume, setVolume] = useState(72);
+  const [creditEstimate, setCreditEstimate] = useState<AudioCreditQuote | null>(null);
+  const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
+  const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
+  const [availableVoices, setAvailableVoices] = useState<AudioVoice[]>([]);
+  const [voicesLoading, setVoicesLoading] = useState(true);
+  const [voicesError, setVoicesError] = useState<string | null>(null);
+  const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
+  const [previewLoadingVoiceKey, setPreviewLoadingVoiceKey] = useState<string | null>(null);
+  const [voicePreviewError, setVoicePreviewError] = useState<string | null>(null);
+  const [speakerDialogOpen, setSpeakerDialogOpen] = useState(false);
+  const [speakerDeleteConfirmOpen, setSpeakerDeleteConfirmOpen] = useState(false);
+  const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null);
+  const [speakerDraft, setSpeakerDraft] = useState<PodcastSpeakerDraft>({ role: "", name: "", voice: "" });
+  const [speakerFormError, setSpeakerFormError] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement>(null);
+  const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const voicePreviewObjectUrlsRef = useRef<string[]>([]);
+  const podcastHistoryRef = useRef<AudioHistoryItem[]>([]);
 
-  const totalDuration = lines.reduce((total, line) => total + line.durationSeconds, 0);
+  const totalDuration = lines.reduce((total, line) => total + estimatePodcastLineSeconds(line.text), 0);
+  // Keep the visible count identical to the trimmed text sent in episodeScript
+  // and count Unicode characters rather than UTF-16 code units.
+  const dialogueCharacterCount = lines.reduce((total, line) => total + Array.from(line.text.trim()).length, 0);
+  const dialogueCharacterLimit = 2000;
   const episodeScript = lines
     .map(
       (line) => `${speakers.find((speaker) => speaker.id === line.speakerId)?.role ?? "Speaker"}: ${line.text.trim()}`,
     )
     .filter((line) => line.split(": ")[1]?.trim())
     .join("\n");
-  const estimatedCredits = Math.max(1, Math.ceil(episodeScript.length / 18));
-
   useEffect(
     () => () => {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
+      voicePreviewAudioRef.current?.pause();
     },
     [audioUrl],
   );
 
+  useEffect(() => () => {
+    voicePreviewAudioRef.current?.pause();
+    voicePreviewObjectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void listAudioHistory({ feature: "dialogue", limit: AUDIO_HISTORY_LIMIT })
+      .then((items) => {
+        if (!active) return;
+        const history = items.map((item) => ({
+          ...item,
+          url: item.url ?? item.audioUrl ?? item.downloadUrl ?? "",
+          localUrl: false,
+          persisted: true,
+        }));
+        podcastHistoryRef.current = history;
+        setPodcastHistory(history);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      podcastHistoryRef.current.filter((item) => item.localUrl && item.url).forEach((item) => URL.revokeObjectURL(item.url));
+    };
+  }, []);
+
+  const podcastCreditQuoteInput = episodeScript.trim() && speakers.length >= MIN_PODCAST_SPEAKERS
+    ? {
+        script: episodeScript,
+        speakers: speakers.map(({ role, voice }) => ({ name: role, voice })),
+        conversationStyle: speakingStyle,
+        languageCode: language.startsWith("Thai") ? "th" : "en",
+        emotion: 0.64,
+        pauseSeconds: 0.4,
+        autoDirect: true,
+        outputFormat,
+        backgroundMusicEnabled: backgroundMusic,
+        ...(backgroundMusicPreset ? { backgroundMusicKey: backgroundMusicPreset } : {}),
+        normalizeAudio,
+      }
+    : null;
+  const podcastCreditQuoteKey = JSON.stringify(podcastCreditQuoteInput);
+
+  useEffect(() => {
+    let active = true;
+    if (podcastCreditQuoteKey === "null") {
+      setCreditEstimate(null);
+      setCreditEstimateError(null);
+      setCreditEstimateLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+    setCreditEstimateLoading(true);
+    setCreditEstimateError(null);
+    const timer = window.setTimeout(() => {
+      const request = JSON.parse(podcastCreditQuoteKey) as Parameters<typeof quoteDialogue>[0];
+      void quoteDialogue(request)
+        .then((quote) => {
+          if (!active) return;
+          setCreditEstimate(quote);
+        })
+        .catch((cause: unknown) => {
+          if (!active) return;
+          setCreditEstimate(null);
+          setCreditEstimateError(cause instanceof Error ? cause.message : "Pricing unavailable");
+        })
+        .finally(() => {
+          if (active) setCreditEstimateLoading(false);
+        });
+    }, 350);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [podcastCreditQuoteKey]);
+
+  useEffect(() => {
+    let active = true;
+    setVoicesLoading(true);
+    setVoicesError(null);
+    void listAudioVoices(undefined, "podcastDialogue")
+      .then((voices) => {
+        if (!active) return;
+        const hydratedVoices = voices.map((voice) => ({ ...voice }));
+        setAvailableVoices(hydratedVoices);
+        setSpeakers((current) => current.map((speaker, index) => {
+          const configuredVoice = hydratedVoices.find((voice) => voice.key === speaker.voice || voice.name === speaker.voice);
+          const nextVoice = configuredVoice ?? hydratedVoices[index % hydratedVoices.length];
+          return nextVoice
+            ? { ...speaker, voice: nextVoice.key, image: nextVoice.imageUrl ?? "" }
+            : { ...speaker, image: "" };
+        }));
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        setVoicesError(cause instanceof Error ? cause.message : "โหลดรายการเสียงไม่สำเร็จ");
+        setSpeakers((current) => current.map((speaker) => ({ ...speaker, image: "" })));
+      })
+      .finally(() => {
+        if (active) setVoicesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setBackgroundMusicLoading(true);
+    void listAudioBackgroundMusic()
+      .then((presets) => {
+        if (!active) return;
+        setBackgroundMusicPresets(presets);
+        setBackgroundMusicPreset((current) => presets.some((preset) => preset.key === current) ? current : presets[0]?.key ?? "");
+      })
+      .catch(() => {
+        if (!active) return;
+        setBackgroundMusicPresets([]);
+        setBackgroundMusicPreset("");
+      })
+      .finally(() => {
+        if (active) setBackgroundMusicLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleGenerate = async () => {
     if (!episodeScript.trim()) return;
+    if (speakers.length < MIN_PODCAST_SPEAKERS) {
+      setError("Podcast ต้องมีผู้พูดอย่างน้อย 2 คน");
+      setStatus("error");
+      return;
+    }
+    if (dialogueCharacterCount > dialogueCharacterLimit) {
+      setError(`บทสนทนายาวเกิน ${dialogueCharacterLimit.toLocaleString()} ตัวอักษร กรุณาแบ่งเป็นตอนย่อยก่อนสร้าง`);
+      setStatus("error");
+      return;
+    }
+    // Do not keep showing the previous result while a new episode is being
+    // generated. The preview should appear only when this generation finishes.
+    previewAudioRef.current?.pause();
+    setIsPlaying(false);
+    setAudioUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return null;
+    });
+    setPreviewProgress(0);
+    setPreviewCurrentTime(0);
+    setPreviewDuration(0);
     setStatus("generating");
     setError(null);
     try {
@@ -361,13 +574,17 @@ function PodcastDialogueLayout({
         pauseSeconds: 0.4,
         autoDirect: true,
         outputFormat,
+        backgroundMusicEnabled: backgroundMusic,
+        ...(backgroundMusicPreset ? { backgroundMusicKey: backgroundMusicPreset } : {}),
+        normalizeAudio,
+        idempotencyKey: createAudioIdempotencyKey(),
       });
       const nextUrl = URL.createObjectURL(result.blob);
       setAudioUrl((previous) => {
         if (previous) URL.revokeObjectURL(previous);
         return nextUrl;
       });
-      void onHistorySaved?.({
+      const savedHistory = await onHistorySaved?.({
         audio: result.blob,
         feature: "dialogue",
         label: "Podcast Episode 01",
@@ -377,10 +594,22 @@ function PodcastDialogueLayout({
           speakerCount: `${speakers.length} Speakers`,
           language,
           backgroundMusic,
+          backgroundMusicPreset,
           normalizeAudio,
           speed,
         },
       });
+      if (savedHistory) {
+        const historyItem: AudioHistoryItem = {
+          ...savedHistory,
+          url: savedHistory.url ?? savedHistory.audioUrl ?? savedHistory.downloadUrl ?? "",
+          localUrl: false,
+          persisted: true,
+        };
+        const nextHistory = [historyItem, ...podcastHistoryRef.current].slice(0, AUDIO_HISTORY_LIMIT);
+        podcastHistoryRef.current = nextHistory;
+        setPodcastHistory(nextHistory);
+      }
       setStatus("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Podcast generation failed");
@@ -388,17 +617,72 @@ function PodcastDialogueLayout({
     }
   };
 
-  const addSpeaker = () => {
+  const openSpeakerDialog = (speaker?: PodcastSpeaker) => {
     const nextNumber = speakers.length + 1;
+    const fallbackVoice = availableVoices[nextNumber % Math.max(1, availableVoices.length)]?.key
+      ?? (nextNumber % 2 === 0 ? t("create.audio.podcast.voiceMaleBold") : t("create.audio.podcast.voiceFemaleWarm"));
+    setEditingSpeakerId(speaker?.id ?? null);
+    setSpeakerDraft(speaker
+      ? { role: speaker.role, name: speaker.name, voice: speaker.voice }
+      : {
+        role: t("create.audio.podcast.roleGuest", { index: nextNumber - 1 }),
+        name: t("create.audio.podcast.newSpeaker", { index: nextNumber }),
+        voice: fallbackVoice,
+      });
+    setSpeakerFormError(null);
+    setSpeakerDialogOpen(true);
+  };
+
+  const saveSpeaker = () => {
+    const role = speakerDraft.role.trim();
+    const name = speakerDraft.name.trim();
+    const voice = speakerDraft.voice.trim();
+    if (!role || !name || !voice) {
+      setSpeakerFormError("กรุณากรอกบทบาท ชื่อ และเลือกเสียงให้ครบ");
+      return;
+    }
+    const selectedVoice = availableVoices.find((item) => item.key === voice || item.name === voice);
+    const image = selectedVoice?.imageUrl ?? "";
     const nextSpeaker: PodcastSpeaker = {
-      id: `speaker-${nextNumber}`,
-      role: t("create.audio.podcast.roleGuest", { index: nextNumber - 1 }),
-      name: t("create.audio.podcast.newSpeaker", { index: nextNumber }),
-      voice: nextNumber % 2 === 0 ? t("create.audio.podcast.voiceMaleBold") : t("create.audio.podcast.voiceFemaleWarm"),
-      image: voiceImages[(nextNumber - 1) % voiceImages.length],
+      id: editingSpeakerId ?? `speaker-${Date.now()}`,
+      role,
+      name,
+      voice: selectedVoice?.key ?? voice,
+      image,
     };
-    setSpeakers((current) => [...current, nextSpeaker]);
+    setSpeakers((current) => editingSpeakerId
+      ? current.map((item) => item.id === editingSpeakerId ? nextSpeaker : item)
+      : [...current, nextSpeaker]);
     setActiveSpeakerId(nextSpeaker.id);
+    setSpeakerDialogOpen(false);
+    setSpeakerFormError(null);
+  };
+
+  const requestRemoveSpeaker = () => {
+    if (!editingSpeakerId) return;
+    if (speakers.length <= MIN_PODCAST_SPEAKERS) {
+      setSpeakerFormError("Podcast ต้องมีผู้พูดอย่างน้อย 2 คน");
+      return;
+    }
+    setSpeakerDeleteConfirmOpen(true);
+  };
+
+  const confirmRemoveSpeaker = () => {
+    if (!editingSpeakerId) return;
+    const nextSpeakers = speakers.filter((speaker) => speaker.id !== editingSpeakerId);
+    const fallbackSpeaker = nextSpeakers[0];
+    if (!fallbackSpeaker) {
+      setSpeakerDeleteConfirmOpen(false);
+      return;
+    }
+    setSpeakers(nextSpeakers);
+    setLines((current) => current.map((line) => (
+      line.speakerId === editingSpeakerId ? { ...line, speakerId: fallbackSpeaker.id } : line
+    )));
+    setActiveSpeakerId((current) => current === editingSpeakerId ? fallbackSpeaker.id : current);
+    setSpeakerDeleteConfirmOpen(false);
+    setSpeakerDialogOpen(false);
+    setSpeakerFormError(null);
   };
 
   const addLine = () =>
@@ -408,7 +692,6 @@ function PodcastDialogueLayout({
         id: `line-${Date.now()}`,
         speakerId: activeSpeakerId || speakers[0]!.id,
         text: "เพิ่มบทพูดสำหรับบรรทัดนี้",
-        durationSeconds: 4,
       },
     ]);
   const updateLine = (id: string, changes: Partial<PodcastLine>) =>
@@ -421,6 +704,39 @@ function PodcastDialogueLayout({
     });
   const removeLine = (id: string) =>
     setLines((current) => (current.length > 1 ? current.filter((line) => line.id !== id) : current));
+  const toggleVoicePreview = async (voice: AudioVoice) => {
+    const audio = voicePreviewAudioRef.current ?? new Audio();
+    voicePreviewAudioRef.current = audio;
+    if (previewingVoiceKey === voice.key && !audio.paused) {
+      audio.pause();
+      setPreviewingVoiceKey(null);
+      return;
+    }
+    audio.pause();
+    setVoicePreviewError(null);
+    setPreviewLoadingVoiceKey(voice.key);
+    try {
+      let previewUrl = voice.previewUrl;
+      if (!previewUrl) {
+        const result = await previewAudioVoice(voice.key, {
+          text: "สวัสดีค่ะ นี่คือตัวอย่างเสียงสำหรับพอดแคสต์ของ EOS Creative Studio",
+        });
+        previewUrl = URL.createObjectURL(result.blob);
+        voicePreviewObjectUrlsRef.current.push(previewUrl);
+        setAvailableVoices((current) => current.map((item) => item.key === voice.key ? { ...item, previewUrl } : item));
+      }
+      audio.src = previewUrl;
+      audio.onended = () => setPreviewingVoiceKey(null);
+      setPreviewingVoiceKey(voice.key);
+      await audio.play();
+    } catch (cause) {
+      setPreviewingVoiceKey(null);
+      setVoicePreviewError(cause instanceof Error ? cause.message : "ฟังตัวอย่างเสียงไม่สำเร็จ");
+    } finally {
+      setPreviewLoadingVoiceKey(null);
+    }
+  };
+  const draftVoice = availableVoices.find((voice) => voice.key === speakerDraft.voice || voice.name === speakerDraft.voice);
   const togglePreview = async () => {
     if (!audioUrl) {
       await handleGenerate();
@@ -439,6 +755,70 @@ function PodcastDialogueLayout({
     link.click();
   };
 
+  const playPodcastHistory = async (item: AudioHistoryItem) => {
+    const audio = previewAudioRef.current;
+    if (item.url && item.url === audioUrl && audio) {
+      if (audio.paused) await audio.play().catch(() => undefined);
+      else audio.pause();
+      return;
+    }
+    setPodcastHistoryLoadingId(item.id);
+    setError(null);
+    try {
+      let nextUrl = item.url;
+      if (!nextUrl) {
+        const result = await fetchAudioHistoryAudio(item.id);
+        nextUrl = URL.createObjectURL(result.blob);
+        const nextHistory = podcastHistoryRef.current.map((historyItem) =>
+          historyItem.id === item.id ? { ...historyItem, url: nextUrl, localUrl: true } : historyItem,
+        );
+        podcastHistoryRef.current = nextHistory;
+        setPodcastHistory(nextHistory);
+      }
+      setAudioUrl(nextUrl);
+      setPreviewProgress(0);
+      setPreviewCurrentTime(0);
+      setPreviewDuration(0);
+      setStatus("ready");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to load saved podcast");
+    } finally {
+      setPodcastHistoryLoadingId(null);
+    }
+  };
+
+  const removePodcastHistory = (item: AudioHistoryItem) => {
+    setPendingPodcastHistoryDelete(item);
+  };
+
+  const confirmRemovePodcastHistory = () => {
+    const item = pendingPodcastHistoryDelete;
+    if (!item) return;
+    setPendingPodcastHistoryDelete(null);
+    const removeFromView = () => {
+      if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
+      const nextHistory = podcastHistoryRef.current.filter((historyItem) => historyItem.id !== item.id);
+      podcastHistoryRef.current = nextHistory;
+      setPodcastHistory(nextHistory);
+      if (item.url && item.url === audioUrl) {
+        previewAudioRef.current?.pause();
+        setAudioUrl(null);
+        setPreviewProgress(0);
+        setPreviewCurrentTime(0);
+        setPreviewDuration(0);
+        setIsPlaying(false);
+        setStatus("idle");
+      }
+    };
+    if (!item.persisted) {
+      removeFromView();
+      return;
+    }
+    void deleteAudioHistory(item.id).then(removeFromView).catch((cause: unknown) => {
+      setError(cause instanceof Error ? cause.message : "Unable to delete saved podcast");
+    });
+  };
+
   return (
     <div className={styles.podcastLayout}>
       <main className={styles.podcastMainColumn}>
@@ -453,20 +833,6 @@ function PodcastDialogueLayout({
               <p>{t("create.audio.podcast.subtitle")}</p>
             </div>
           </div>
-          <div className={styles.podcastHeaderActions}>
-            <button type="button" className={styles.podcastEpisodeButton}>
-              Ep.01 เปิดโลก AI สำหรับครีเอเตอร์ <Pencil size={12} />
-            </button>
-            <button type="button" className={styles.podcastToolbarButton}>
-              <CloudUpload size={15} /> {t("create.audio.podcast.importScript")}
-            </button>
-            <button type="button" className={styles.podcastToolbarButton}>
-              <Sparkles size={15} /> {t("create.audio.podcast.aiAssist")}
-            </button>
-            <button type="button" className={styles.podcastToolbarButton}>
-              <Bookmark size={15} /> {t("create.audio.podcast.saveDraft")}
-            </button>
-          </div>
         </section>
 
         <section className={styles.podcastSection} aria-label={t("create.audio.podcast.a11y.speakers")}>
@@ -476,25 +842,37 @@ function PodcastDialogueLayout({
           </div>
           <div className={styles.podcastSpeakerRow}>
             {speakers.map((speaker, index) => (
-              <button
-                type="button"
-                key={speaker.id}
-                className={`${styles.podcastSpeakerCard} ${activeSpeakerId === speaker.id ? styles.podcastSpeakerCardActive : ""}`}
-                onClick={() => setActiveSpeakerId(speaker.id)}
-                aria-pressed={activeSpeakerId === speaker.id}
-              >
-                <span className={styles.podcastSpeakerAvatar}>
-                  <Image src={speaker.image} alt="" fill unoptimized sizes="54px" />
-                </span>
-                <span className={styles.podcastSpeakerCopy}>
-                  <small>{speaker.role}</small>
-                  <strong>{speaker.name}</strong>
-                  <em>{speaker.voice}</em>
-                </span>
-                <i data-tone={podcastSpeakerTones[index % podcastSpeakerTones.length]} />
-              </button>
+              <div className={styles.podcastSpeakerCardWrap} key={speaker.id}>
+                <button
+                  type="button"
+                  className={`${styles.podcastSpeakerCard} ${activeSpeakerId === speaker.id ? styles.podcastSpeakerCardActive : ""}`}
+                  onClick={() => setActiveSpeakerId(speaker.id)}
+                  aria-pressed={activeSpeakerId === speaker.id}
+                >
+                  <span className={styles.podcastSpeakerAvatar}>
+                    {!voicesLoading && speaker.image ? <Image src={speaker.image} alt="" fill unoptimized sizes="54px" /> : null}
+                  </span>
+                  <span className={styles.podcastSpeakerCopy}>
+                    <small>{speaker.role}</small>
+                    <strong>{speaker.name}</strong>
+                    <em>{availableVoices.find((voice) => voice.key === speaker.voice || voice.name === speaker.voice)?.name ?? speaker.voice}</em>
+                  </span>
+                  <i data-tone={podcastSpeakerTones[index % podcastSpeakerTones.length]} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.podcastSpeakerEditButton}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openSpeakerDialog(speaker);
+                  }}
+                  aria-label={`แก้ไขผู้พูด ${speaker.name}`}
+                >
+                  <Pencil size={11} />
+                </button>
+              </div>
             ))}
-            <button type="button" className={styles.podcastAddSpeakerCard} onClick={addSpeaker}>
+            <button type="button" className={styles.podcastAddSpeakerCard} onClick={() => openSpeakerDialog()}>
               <Plus size={18} />
               <span>{t("create.audio.podcast.addSpeaker")}</span>
             </button>
@@ -505,49 +883,40 @@ function PodcastDialogueLayout({
           <div className={styles.podcastSectionHeader}>
             <h2>{t("create.audio.podcast.dialogue")}</h2>
             <span>
-              {t("create.audio.podcast.lineCount", { count: lines.length })} · {formatSceneSeconds(totalDuration)}
+              {t("create.audio.podcast.lineCount", { count: lines.length })} · {formatSceneSeconds(totalDuration)} · {dialogueCharacterCount.toLocaleString()} / {dialogueCharacterLimit.toLocaleString()} ตัวอักษร
             </span>
           </div>
           <div className={styles.podcastLineList}>
             {lines.map((line, index) => {
               const speaker = speakers.find((item) => item.id === line.speakerId) ?? speakers[0]!;
-              const start = lines.slice(0, index).reduce((total, item) => total + item.durationSeconds, 0);
+              const start = lines.slice(0, index).reduce((total, item) => total + estimatePodcastLineSeconds(item.text), 0);
               return (
                 <div
                   className={`${styles.podcastLineRow} ${index === 0 ? styles.podcastLineRowActive : ""}`}
                   key={line.id}
                 >
                   <span className={styles.podcastLineAvatar}>
-                    <Image src={speaker.image} alt="" fill unoptimized sizes="34px" />
+                    {!voicesLoading && speaker.image ? <Image src={speaker.image} alt="" fill unoptimized sizes="34px" /> : null}
                   </span>
                   <time>{formatSceneSeconds(start)}</time>
-                  <span
-                    className={styles.podcastSpeakerChip}
+                  <select
+                    className={styles.podcastSpeakerSelect}
                     data-tone={
                       podcastSpeakerTones[
                         speakers.findIndex((item) => item.id === speaker.id) % podcastSpeakerTones.length
                       ]
                     }
+                    value={line.speakerId}
+                    onChange={(event) => updateLine(line.id, { speakerId: event.target.value })}
+                    aria-label={`เลือกผู้พูดสำหรับบรรทัดที่ ${index + 1}`}
                   >
-                    {speaker.role}
-                  </span>
+                    {speakers.map((option) => <option key={option.id} value={option.id}>{option.role}</option>)}
+                  </select>
                   <input
                     className={styles.podcastLineInput}
                     value={line.text}
                     onChange={(event) => updateLine(line.id, { text: event.target.value })}
                     aria-label={t("create.audio.podcast.a11y.line", { index: index + 1 })}
-                  />
-                  <input
-                    className={styles.podcastLineDuration}
-                    type="number"
-                    min="0.5"
-                    max="120"
-                    step="0.1"
-                    value={line.durationSeconds}
-                    onChange={(event) =>
-                      updateLine(line.id, { durationSeconds: Math.max(0.5, Number(event.target.value) || 0.5) })
-                    }
-                    aria-label={t("create.audio.podcast.a11y.lineDuration", { index: index + 1 })}
                   />
                   <button
                     type="button"
@@ -573,14 +942,25 @@ function PodcastDialogueLayout({
           <button type="button" className={styles.podcastAddLine} onClick={addLine}>
             <Plus size={15} /> {t("create.audio.podcast.addNextLine")}
           </button>
+          {dialogueCharacterCount > dialogueCharacterLimit ? (
+            <p className={styles.podcastCharacterWarning} role="alert">
+              บทสนทนายาวเกิน {dialogueCharacterLimit.toLocaleString()} ตัวอักษร กรุณาแบ่งเป็นตอนย่อยก่อนสร้าง
+            </p>
+          ) : null}
         </section>
 
-        <section className={styles.podcastPreviewCard} aria-label={t("create.audio.podcast.a11y.preview")}>
+        {(status === "ready" && audioUrl) || status === "error" ? (
+          <section className={styles.podcastPreviewCard} aria-label={t("create.audio.podcast.a11y.preview")}>
           <div className={styles.podcastSectionHeader}>
             <h2>
               {t("create.audio.podcast.audioPreview")} <span className={styles.podcastBeta}>Beta</span>
             </h2>
             <div className={styles.podcastPreviewActions}>
+              {status === "error" ? (
+                <button type="button" className={styles.podcastToolbarButton} onClick={() => void handleGenerate()}>
+                  <RotateCcw size={15} /> ลองอีกครั้ง
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={styles.podcastToolbarButton}
@@ -596,7 +976,6 @@ function PodcastDialogueLayout({
               type="button"
               className={styles.podcastPlayButton}
               onClick={() => void togglePreview()}
-              disabled={status === "generating"}
             >
               <span>
                 {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
@@ -665,8 +1044,69 @@ function PodcastDialogueLayout({
               {error}
             </p>
           ) : null}
+          </section>
+        ) : null}
+
+        <section className={styles.historyPanel} aria-label={t("create.audio.a11y.historyPanel")}>
+          <div className={styles.sectionHeading}>
+            <h2>
+              <History size={13} /> {t("create.audio.generationHistory")}
+            </h2>
+            <span className={styles.timelineHint}>
+              {podcastHistory.length
+                ? podcastHistory.length === 1
+                  ? t("create.audio.resultCountOne")
+                  : t("create.audio.resultCountMany", { count: podcastHistory.length })
+                : t("create.audio.noResults")}
+            </span>
+          </div>
+          {podcastHistory.length ? (
+            <div className={styles.historyList}>
+              {podcastHistory.map((item) => (
+                <div
+                  key={item.id}
+                  className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}
+                >
+                  <button
+                    type="button"
+                    className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem}
+                    onClick={() => void playPodcastHistory(item)}
+                    disabled={podcastHistoryLoadingId === item.id}
+                    aria-busy={podcastHistoryLoadingId === item.id}
+                  >
+                    <span className={podcastHistoryLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>
+                      {podcastHistoryLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? (
+                        <Pause size={13} fill="currentColor" />
+                      ) : (
+                        <Play size={13} fill="currentColor" />
+                      )}
+                    </span>
+                    <span className={styles.historyCopy}>
+                      <strong>{item.label}</strong>
+                      <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
+                    </span>
+                    <span className={styles.historyCurrent}>
+                      {item.url === audioUrl ? t("create.audio.historyCurrent") : t("create.audio.historyPlay")}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.historyDelete}
+                    aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
+                    onClick={() => removePodcastHistory(item)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.historyEmpty}>
+              <History size={15} />
+              <span>{t("create.audio.historyEmpty")}</span>
+            </div>
+          )}
         </section>
-        {scenesTimeline}
       </main>
 
       <aside className={styles.podcastSettingsCard} aria-label={t("create.audio.podcast.a11y.settings")}>
@@ -689,27 +1129,40 @@ function PodcastDialogueLayout({
             ))}
           </div>
         </div>
-        <label className={styles.podcastSelectField}>
+        <div className={styles.podcastSelectField}>
           <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.language")}</span>
-          <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-            <option>Thai (ไทย)</option>
-            <option>English (US)</option>
-            <option>English (UK)</option>
-          </select>
-          <ChevronDown size={14} />
-        </label>
-        <label className={styles.podcastSelectField}>
+          <Dropdown
+            value={language}
+            options={[
+              { value: "Thai (ไทย)", label: "Thai (ไทย)" },
+              { value: "English (US)", label: "English (US)" },
+              { value: "English (UK)", label: "English (UK)" },
+            ]}
+            onChange={setLanguage}
+            ariaLabel={t("create.audio.podcast.language")}
+            className={styles.podcastDropdown}
+            triggerClassName={styles.podcastDropdownTrigger}
+            menuClassName={styles.podcastDropdownMenu}
+            optionClassName={styles.podcastDropdownOption}
+          />
+        </div>
+        <div className={styles.podcastSelectField}>
           <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.speakingStyle")}</span>
-          <select
+          <Dropdown
             value={speakingStyle}
-            onChange={(event) => setSpeakingStyle(event.target.value as typeof speakingStyle)}
-          >
-            <option value="Interview">{t("create.audio.podcast.styleConversational")}</option>
-            <option value="Roundtable">{t("create.audio.podcast.styleRoundtable")}</option>
-            <option value="Storytelling">{t("create.audio.podcast.styleStorytelling")}</option>
-          </select>
-          <ChevronDown size={14} />
-        </label>
+            options={[
+              { value: "Interview", label: t("create.audio.podcast.styleConversational") },
+              { value: "Roundtable", label: t("create.audio.podcast.styleRoundtable") },
+              { value: "Storytelling", label: t("create.audio.podcast.styleStorytelling") },
+            ]}
+            onChange={(value) => setSpeakingStyle(value as typeof speakingStyle)}
+            ariaLabel={t("create.audio.podcast.speakingStyle")}
+            className={styles.podcastDropdown}
+            triggerClassName={styles.podcastDropdownTrigger}
+            menuClassName={styles.podcastDropdownMenu}
+            optionClassName={styles.podcastDropdownOption}
+          />
+        </div>
         <div className={styles.podcastSettingGroup}>
           <div className={styles.podcastSpeedHeader}>
             <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.pacing")}</span>
@@ -734,20 +1187,6 @@ function PodcastDialogueLayout({
         <div className={styles.podcastToggleGroup}>
           <label>
             <span>
-              <strong>{t("create.audio.podcast.backgroundMusic")}</strong>
-              <small>เพิ่มเพลงประกอบระหว่างบทพูด</small>
-            </span>
-            <button
-              type="button"
-              className={backgroundMusic ? styles.podcastToggleOn : styles.podcastToggleOff}
-              onClick={() => setBackgroundMusic((current) => !current)}
-              aria-pressed={backgroundMusic}
-            >
-              <i />
-            </button>
-          </label>
-          <label>
-            <span>
               <strong>{t("create.audio.podcast.normalizeAudio")}</strong>
               <small>ปรับระดับเสียงให้สม่ำเสมอ</small>
             </span>
@@ -760,6 +1199,39 @@ function PodcastDialogueLayout({
               <i />
             </button>
           </label>
+          <label>
+            <span>
+              <strong>{t("create.audio.podcast.backgroundMusic")}</strong>
+              <small>เพิ่มเพลงประกอบระหว่างบทพูด</small>
+            </span>
+            <button
+              type="button"
+              className={backgroundMusic ? styles.podcastToggleOn : styles.podcastToggleOff}
+              onClick={() => setBackgroundMusic((current) => !current)}
+              aria-pressed={backgroundMusic}
+              disabled={backgroundMusicLoading || backgroundMusicPresets.length === 0}
+            >
+              <i />
+            </button>
+          </label>
+          {backgroundMusic ? (
+            <div className={styles.podcastMusicSelectField}>
+              <span className={styles.podcastFieldLabel}>เพลงประกอบ</span>
+              <Dropdown
+                value={backgroundMusicPreset}
+                options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))}
+                onChange={setBackgroundMusicPreset}
+                ariaLabel="เพลงประกอบ"
+                disabled={backgroundMusicLoading || backgroundMusicPresets.length === 0}
+                loading={backgroundMusicLoading}
+                placeholder={backgroundMusicLoading ? "กำลังโหลดเพลง…" : "ยังไม่มีเพลงที่ใช้งานได้"}
+                className={styles.podcastDropdown}
+                triggerClassName={styles.podcastMusicDropdownTrigger}
+                menuClassName={styles.podcastDropdownMenu}
+                optionClassName={styles.podcastDropdownOption}
+              />
+            </div>
+          ) : null}
         </div>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
           <div className={styles.podcastEstimate}>
@@ -769,15 +1241,35 @@ function PodcastDialogueLayout({
             </div>
             <div>
               <span>{t("create.audio.podcast.estimatedCredits")}</span>
-              <strong>{t("create.audio.podcast.creditsApprox", { count: estimatedCredits })}</strong>
+              <strong>
+                {creditEstimateLoading
+                  ? "กำลังคำนวณ…"
+                  : creditEstimate
+                    ? t("create.audio.podcast.creditsApprox", { count: creditEstimate.creditCost })
+                    : "—"}
+              </strong>
             </div>
-            <small>{t("create.audio.podcast.creditsAvailable", { count: estimatedCredits })}</small>
+            <small>
+              {creditEstimateError
+                ? "คำนวณเครดิตไม่สำเร็จ"
+                : creditEstimate
+                  ? t("create.audio.podcast.creditsAvailable", {
+                      count: creditEstimate.textCharacters.toLocaleString(locale === "th" ? "th-TH" : "en-US"),
+                    })
+                  : "กรอกบทสนทนาเพื่อคำนวณเครดิต"}
+            </small>
           </div>
           <button
             type="button"
             className={styles.podcastGenerateButton}
             onClick={() => void handleGenerate()}
-            disabled={status === "generating" || !episodeScript.trim()}
+            disabled={
+              status === "generating" ||
+              speakers.length < MIN_PODCAST_SPEAKERS ||
+              !episodeScript.trim() ||
+              creditEstimateLoading ||
+              !creditEstimate
+            }
           >
             {status === "generating" ? t("create.audio.podcast.generating") : t("create.audio.podcast.generate")}{" "}
             <Sparkles size={16} />
@@ -787,8 +1279,115 @@ function PodcastDialogueLayout({
           </p>
         </div>
       </aside>
+      <Dialog
+        open={speakerDialogOpen}
+        onOpenChange={(open) => {
+          setSpeakerDialogOpen(open);
+          if (!open) setSpeakerFormError(null);
+        }}
+      >
+        <DialogContent className={styles.podcastSpeakerDialog}>
+          <DialogHeader className={styles.podcastSpeakerDialogHeader}>
+            <DialogTitle>{editingSpeakerId ? "แก้ไขผู้พูด" : "เพิ่มผู้พูด"}</DialogTitle>
+            <DialogDescription>กำหนดบทบาท ชื่อ และเสียงสำหรับบทสนทนา</DialogDescription>
+          </DialogHeader>
+          <div className={styles.podcastSpeakerForm}>
+            <label>
+              <span>บทบาท / ประเภทผู้พูด</span>
+              <input
+                value={speakerDraft.role}
+                onChange={(event) => setSpeakerDraft((current) => ({ ...current, role: event.target.value }))}
+                placeholder="เช่น แขกรับเชิญ, ผู้เชี่ยวชาญ"
+                maxLength={80}
+                autoFocus
+              />
+            </label>
+            <label>
+              <span>ชื่อผู้พูด</span>
+              <input
+                value={speakerDraft.name}
+                onChange={(event) => setSpeakerDraft((current) => ({ ...current, name: event.target.value }))}
+                placeholder="เช่น คุณสมชาย"
+                maxLength={80}
+              />
+            </label>
+            <div>
+              <span>เสียง</span>
+              <Dropdown
+                value={speakerDraft.voice}
+                options={availableVoices.map((voice) => ({ value: voice.key, label: voice.name }))}
+                onChange={(value) => setSpeakerDraft((current) => ({ ...current, voice: value }))}
+                ariaLabel="เสียงผู้พูด"
+                disabled={voicesLoading || availableVoices.length === 0}
+                loading={voicesLoading}
+                placeholder={voicesLoading ? "กำลังโหลดเสียง…" : "ยังไม่มีเสียงให้เลือก"}
+                className={styles.podcastSpeakerDialogDropdown}
+                triggerClassName={styles.podcastSpeakerDialogDropdownTrigger}
+                menuClassName={styles.podcastDropdownMenu}
+                optionClassName={styles.podcastDropdownOption}
+                menuPosition="fixed"
+              />
+            </div>
+            <div className={styles.podcastSpeakerDialogPreview}>
+              <span className={styles.podcastSpeakerDialogVoiceImage}>
+                {draftVoice?.imageUrl ? <Image src={draftVoice.imageUrl} alt="" fill unoptimized sizes="34px" /> : null}
+              </span>
+              <span className={styles.podcastSpeakerDialogVoiceCopy}>
+                <strong>{draftVoice?.name ?? "ยังไม่ได้เลือกเสียง"}</strong>
+                <small>{draftVoice?.description || "เลือกเสียงเพื่อฟังตัวอย่าง"}</small>
+              </span>
+              <button
+                type="button"
+                className={styles.podcastVoicePreviewButton}
+                onClick={() => draftVoice && void toggleVoicePreview(draftVoice)}
+                disabled={!draftVoice || voicesLoading || previewLoadingVoiceKey === draftVoice?.key}
+              >
+                {previewingVoiceKey === draftVoice?.key ? <Pause size={14} /> : <Play size={14} fill="currentColor" />}
+                {previewLoadingVoiceKey === draftVoice?.key ? "กำลังโหลด" : previewingVoiceKey === draftVoice?.key ? "หยุด" : "Preview"}
+              </button>
+            </div>
+            {voicePreviewError ? <p className={styles.podcastSpeakerFormError} role="alert">{voicePreviewError}</p> : null}
+            {speakerFormError ? <p className={styles.podcastSpeakerFormError} role="alert">{speakerFormError}</p> : null}
+          </div>
+          <DialogFooter className={styles.podcastSpeakerDialogFooter}>
+            {editingSpeakerId ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className={styles.podcastSpeakerDialogDeleteButton}
+                onClick={requestRemoveSpeaker}
+              >
+                <Trash2 size={14} /> ลบผู้พูด
+              </Button>
+            ) : null}
+            <Button type="button" variant="ghost" onClick={() => setSpeakerDialogOpen(false)}>ยกเลิก</Button>
+            <Button type="button" className={styles.podcastSpeakerDialogSaveButton} onClick={saveSpeaker}>บันทึกผู้พูด</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <PodcastConfirmationDialog
+        open={speakerDeleteConfirmOpen}
+        onOpenChange={setSpeakerDeleteConfirmOpen}
+        title="ลบผู้พูดนี้หรือไม่?"
+        description={`ผู้พูด “${speakerDraft.name || speakerDraft.role}” จะถูกลบออกจากบทสนทนา และบรรทัดของผู้พูดนี้จะย้ายไปยังผู้พูดคนแรก`}
+        onConfirm={confirmRemoveSpeaker}
+      />
+      <PodcastConfirmationDialog
+        open={Boolean(pendingPodcastHistoryDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingPodcastHistoryDelete(null);
+        }}
+        title="ลบประวัติการสร้างหรือไม่?"
+        description={`“${pendingPodcastHistoryDelete?.label ?? "รายการนี้"}” จะถูกลบออกจากประวัติการสร้างและกู้คืนไม่ได้`}
+        onConfirm={confirmRemovePodcastHistory}
+      />
     </div>
   );
+}
+
+function estimatePodcastLineSeconds(text: string): number {
+  return Math.max(1, Math.round((text.trim().length / 18) * 10) / 10);
 }
 
 function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
@@ -1515,7 +2114,7 @@ function AudioCleanupLayout() {
 }
 
 export function AudioGenerationPage() {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const [activeTab, setActiveTab] = useState<AudioTab>("Text to Speech");
   const [prompt, setPrompt] = useState(DEFAULT_AUDIO_PROMPT);
   const [tone, setTone] = useState<"Energetic" | "Friendly" | "Premium" | "Dramatic" | "">("");
@@ -1566,6 +2165,24 @@ export function AudioGenerationPage() {
   const audioHistoryRef = useRef<AudioHistoryItem[]>([]);
   const historySequenceRef = useRef(0);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const savedTab = window.localStorage.getItem(AUDIO_TAB_STORAGE_KEY);
+      if (savedTab && visibleTabs.includes(savedTab as AudioTab)) setActiveTab(savedTab as AudioTab);
+    } catch {
+      // Ignore storage restrictions and keep the default tab.
+    }
+  }, []);
+
+  const changeActiveTab = (tab: AudioTab) => {
+    setActiveTab(tab);
+    try {
+      window.localStorage.setItem(AUDIO_TAB_STORAGE_KEY, tab);
+    } catch {
+      // Ignore storage restrictions; the tab still changes for this session.
+    }
+  };
 
   useTemplatePrompt("audio", (value) => {
     setPrompt(value);
@@ -1984,7 +2601,7 @@ export function AudioGenerationPage() {
     setAudioHistory(limitedHistory);
   };
 
-  const persistGeneratedAudio = async (input: SaveAudioHistoryInput): Promise<void> => {
+  const persistGeneratedAudio = async (input: SaveAudioHistoryInput): Promise<AudioHistoryEntry | null> => {
     try {
       const saved = await saveAudioHistory(input);
       appendHistory({
@@ -1993,8 +2610,10 @@ export function AudioGenerationPage() {
         localUrl: false,
         persisted: true,
       });
+      return saved;
     } catch {
       // Generation preview remains available when persistent history storage is unavailable.
+      return null;
     }
   };
 
@@ -2242,56 +2861,6 @@ export function AudioGenerationPage() {
     audioRef.current.currentTime = Math.max(0, Math.min(audioDuration, audioRef.current.currentTime + amount));
   };
 
-  const scenesTimeline = (
-    <section className={styles.podcastScenesBlock} aria-label={t("create.audio.scenes.a11y.panel")}>
-      <div className={styles.sectionHeading}>
-        <div className={styles.sceneHeadingCopy}>
-          <h2>{t("create.audio.scenes.title")}</h2>
-          <small>{t("create.audio.scenes.subtitle")}</small>
-        </div>
-        <span className={styles.timelineHint}>
-          {t("create.audio.scenes.summary", {
-            count: audioScenes.length,
-            total: formatSceneSeconds(audioScenes.reduce((total, scene) => total + scene.durationSeconds, 0)),
-          })}
-        </span>
-      </div>
-      <div className={styles.sceneRow}>
-        {audioScenes.map((scene, index) => (
-          <button
-            type="button"
-            key={scene.id}
-            className={selectedSceneId === scene.id ? styles.sceneCardActive : styles.sceneCard}
-            onClick={() => setSelectedSceneId(scene.id)}
-            aria-pressed={selectedSceneId === scene.id}
-          >
-            <Image
-              src={
-                availableVoices.find((voice) => voice.key === scene.voice)?.imageUrl ||
-                voiceImages[index % voiceImages.length]
-              }
-              alt=""
-              width={42}
-              height={50}
-              unoptimized
-            />
-            <span className={styles.sceneCopy}>
-              <strong>
-                <em>{scene.id}</em> {scene.title}
-              </strong>
-              <small>{sceneTimeRange(audioScenes, index)}</small>
-            </span>
-            <span className={styles.miniWave} aria-hidden="true" />
-          </button>
-        ))}
-        <button type="button" className={styles.addScene} onClick={addAudioScene} disabled={audioScenes.length >= 20}>
-          <Plus size={17} />
-          {t("create.audio.scenes.addScene")}
-        </button>
-      </div>
-    </section>
-  );
-
   useTemplateSettings("audio", {
     ready: modelLoadState === "ready" && voiceLoadState === "ready",
     model: selectedModel,
@@ -2345,7 +2914,7 @@ export function AudioGenerationPage() {
                   key={label}
                   type="button"
                   className={activeTab === label ? styles.tabActive : styles.tab}
-                  onClick={() => setActiveTab(label)}
+                  onClick={() => changeActiveTab(label)}
                   aria-pressed={activeTab === label}
                 >
                   <TabIcon size={16} aria-hidden="true" />
@@ -2368,7 +2937,7 @@ export function AudioGenerationPage() {
             currentModeLabel={t("create.mode.current")}
             switchModeLabel={t("create.mode.switch")}
             otherModesLabel={t("create.mode.other")}
-            onChange={setActiveTab}
+            onChange={changeActiveTab}
           />
         }
         content={
@@ -2751,7 +3320,7 @@ export function AudioGenerationPage() {
                               </span>
                               <span className={styles.historyCopy}>
                                 <strong>{item.label}</strong>
-                                <small>{item.createdAt}</small>
+                                <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
                               </span>
                               <span className={styles.historyCurrent}>
                                 {item.url === audioUrl
@@ -2921,7 +3490,7 @@ export function AudioGenerationPage() {
                 </aside>
               </div>
             ) : activeTab === "Podcast & Dialogue" ? (
-              <PodcastDialogueLayout onHistorySaved={persistGeneratedAudio} scenesTimeline={scenesTimeline} />
+              <PodcastDialogueLayout onHistorySaved={persistGeneratedAudio} />
             ) : activeTab === "Voice Clone" ? (
               <VoiceCloneLayout onHistorySaved={persistGeneratedAudio} />
             ) : activeTab === "Sound Effects" ? (

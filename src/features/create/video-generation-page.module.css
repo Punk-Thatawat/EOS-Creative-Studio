@@ -193,6 +193,22 @@
   border-left: 0;
   background: #fff;
 }
+
+/* Secondary video tabs render the same three-panel workspace as Image to Video.
+   Their JSX owns the columns, so keep that inner grid on the shared workspace
+   tracks instead of letting the three panels flow as ordinary block content. */
+.columns {
+  display: grid;
+  grid-template-columns: var(--creator-workspace-columns);
+  min-width: 0;
+  align-items: stretch;
+}
+.columns > .leftColumn {
+  border-right: 1px solid var(--border);
+}
+.columns > .settings {
+  border-left: 1px solid var(--border);
+}
 .sectionTitle {
   display: flex;
   align-items: center;
@@ -679,6 +695,14 @@
   font-size: 9px;
 }
 @media (max-width: 1279.98px) {
+  .columns {
+    grid-template-columns: var(--creator-workspace-columns);
+  }
+  .columns > .settings {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
   .settings {
     border-left: 0;
     display: grid;
@@ -723,6 +747,13 @@
   .leftColumn,
   .settings {
     border: 0;
+  }
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .columns > .settings {
+    grid-column: auto;
+    border-top: 0;
   }
   .centerColumn {
     border: 0;

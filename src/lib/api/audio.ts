@@ -86,6 +86,10 @@ export type DialogueInput = {
   autoDirect: boolean;
   modelId?: string;
   outputFormat: "mp3" | "wav" | "ogg";
+  backgroundMusicEnabled?: boolean;
+  backgroundMusicKey?: string;
+  normalizeAudio?: boolean;
+  idempotencyKey?: string;
 };
 
 export type VoiceCloneInput = {
@@ -375,6 +379,15 @@ export async function listAudioVoices(modelId?: string, feature?: AudioFeatureKe
   });
 }
 
+export async function previewAudioVoice(voiceId: string, input: { text?: string; modelId?: string } = {}, signal?: AbortSignal): Promise<TextToSpeechResponse> {
+  return userAudioBlobRequest(`/audio/voices/${encodeURIComponent(voiceId)}/preview`, {
+    method: "POST",
+    headers: { Accept: "audio/mpeg" },
+    body: JSON.stringify(input),
+    signal,
+  });
+}
+
 export async function listAudioModels(feature?: AudioFeatureKey): Promise<AudioModel[]> {
   const cacheKey = `models:${feature ?? ""}`;
   return withAudioCatalogCache(cacheKey, async () => {
@@ -422,6 +435,19 @@ export async function createDialogue(input: DialogueInput, signal?: AbortSignal)
     body: JSON.stringify(input),
     signal,
   });
+}
+
+export async function quoteDialogue(input: Omit<DialogueInput, "idempotencyKey">, signal?: AbortSignal): Promise<AudioCreditQuote> {
+  const response = await userAudioRequest("/audio/dialogue/quote", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const payload = await response.json().catch(() => null) as { data?: AudioCreditQuote } | AudioCreditQuote | null;
+  if (payload && typeof payload === "object" && "data" in payload && payload.data) return payload.data;
+  if (payload && typeof payload === "object" && "creditCost" in payload) return payload as AudioCreditQuote;
+  throw new Error("Audio pricing unavailable");
 }
 
 export async function createVoiceClone(input: VoiceCloneInput): Promise<VoiceCloneResponse> {
