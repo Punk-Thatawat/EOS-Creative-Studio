@@ -803,7 +803,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
   const { t } = useLocale();
   const [sampleReady, setSampleReady] = useState(false);
   const [sampleFile, setSampleFile] = useState<File | null>(null);
-  const [voiceName, setVoiceName] = useState("EOS Narrator");
+  const [voiceName, setVoiceName] = useState("");
   const [character, setCharacter] = useState("Natural");
   const [consent, setConsent] = useState(true);
   const [voiceId, setVoiceId] = useState<string | null>(null);
@@ -850,16 +850,10 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     try {
       const result = await listVoiceClones();
       setSavedVoices(result.voices);
-      const first = result.voices[0];
-      if (!voiceId && first) {
-        setVoiceId(first.voiceId);
-        setVoiceName(first.name);
-        if (first.character) setCharacter(first.character);
-      }
     } catch {
       // Saved-voices list is a convenience; ignore load failures silently.
     }
-  }, [voiceId]);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void refreshSavedVoices(), 0);
@@ -1031,6 +1025,13 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
   };
 
   const handleSelectSavedVoice = (item: VoiceCloneListItem) => {
+    if (voiceId === item.voiceId) {
+      setVoiceId(null);
+      setVoiceName("");
+      setStatus("idle");
+      setError(null);
+      return;
+    }
     setVoiceId(item.voiceId);
     setVoiceName(item.name);
     if (item.character) setCharacter(item.character);
