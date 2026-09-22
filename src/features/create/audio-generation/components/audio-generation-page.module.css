@@ -2172,24 +2172,26 @@
 
 .podcastLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 272px;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  padding-top: 24px;
   align-items: start;
 }
+
 .podcastMainColumn {
   display: grid;
   min-width: 0;
-  gap: 14px;
+  gap: 20px;
 }
 .podcastHeaderSection {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 4px 0 2px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 4px 0 8px;
 }
 .podcastTitleGroup {
   display: flex;
+  width: 100%;
   min-width: 0;
   align-items: flex-start;
   gap: 12px;
@@ -2220,9 +2222,11 @@
 }
 .podcastHeaderActions {
   display: flex;
+  width: 100%;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 7px;
+  padding-left: 16px;
 }
 .podcastEpisodeButton,
 .podcastToolbarButton {
@@ -2243,7 +2247,7 @@
   cursor: pointer;
 }
 .podcastEpisodeButton {
-  max-width: 190px;
+  max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -2313,10 +2317,46 @@
 .podcastSpeakerCard {
   min-width: 145px;
 }
+.podcastSpeakerCardWrap {
+  position: relative;
+  display: flex;
+  min-width: 145px;
+  flex: 1 1 150px;
+}
+.podcastSpeakerCardWrap .podcastSpeakerCard {
+  width: 100%;
+  min-width: 0;
+}
 .podcastSpeakerCard:hover,
 .podcastSpeakerCardActive {
   border-color: var(--audio-orange);
   box-shadow: 0 0 0 1px var(--audio-orange);
+}
+.podcastSpeakerEditButton {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid #e4e6e9;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 92%);
+  color: #7c848e;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.podcastSpeakerCardWrap:hover .podcastSpeakerEditButton,
+.podcastSpeakerCardWrap:focus-within .podcastSpeakerEditButton,
+.podcastSpeakerCardActive + .podcastSpeakerEditButton {
+  opacity: 1;
+}
+.podcastSpeakerEditButton:hover {
+  border-color: var(--audio-orange);
+  color: var(--audio-orange);
 }
 .podcastSpeakerAvatar {
   position: relative;
@@ -2380,6 +2420,163 @@
 .podcastSpeakerCard > i[data-tone="pink"] {
   background: var(--audio-pink);
 }
+.podcastVoicePreviewButton {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #ffd0bb;
+  border-radius: 7px;
+  background: #fff8f3;
+  padding: 0 10px;
+  color: var(--audio-orange);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.podcastVoicePreviewButton:hover:not(:disabled) {
+  border-color: var(--audio-orange);
+  background: #fff0e7;
+}
+.podcastVoicePreviewButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.podcastSpeakerDialog {
+  max-width: 470px;
+}
+.podcastSpeakerDialogHeader {
+  padding-bottom: 14px;
+}
+.podcastSpeakerForm {
+  display: grid;
+  gap: 14px;
+  padding: 0 20px 20px;
+}
+.podcastSpeakerForm > label {
+  display: grid;
+  gap: 6px;
+}
+.podcastSpeakerForm > label > span {
+  color: #3b434d;
+  font-size: 11px;
+  font-weight: 750;
+}
+.podcastSpeakerForm input,
+.podcastSpeakerForm select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #dfe2e7;
+  border-radius: 8px;
+  outline: 0;
+  background: #fff;
+  padding: 0 11px;
+  color: #313944;
+  font: inherit;
+  font-size: 11px;
+}
+.podcastSpeakerForm input::placeholder {
+  color: #a1a8b1;
+}
+.podcastSpeakerForm input:focus,
+.podcastSpeakerForm select:focus {
+  border-color: var(--eos-field-focus);
+  box-shadow: var(--eos-field-focus-ring);
+}
+.podcastSpeakerForm select:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.podcastSpeakerDialogPreview {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #f1e3dc;
+  border-radius: 8px;
+  background: #fffaf7;
+  padding: 5px 6px 5px 10px;
+  color: #7b838d;
+  font-size: 9px;
+}
+.podcastSpeakerDialogPreview > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.podcastSpeakerDialogVoiceImage {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #f0f2f5;
+}
+.podcastSpeakerDialogVoiceImage img {
+  object-fit: cover;
+}
+.podcastSpeakerDialogVoiceCopy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal !important;
+}
+.podcastSpeakerDialogVoiceCopy strong,
+.podcastSpeakerDialogVoiceCopy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.podcastSpeakerDialogVoiceCopy strong {
+  color: #3b434d;
+  font-size: 10px;
+}
+.podcastSpeakerDialogVoiceCopy small {
+  color: #858b95;
+  font-size: 8px;
+}
+.podcastSpeakerFormError {
+  margin: -2px 0 0;
+  color: #c4432f;
+  font-size: 10px;
+}
+.podcastSpeakerDialogFooter {
+  padding-top: 14px;
+}
+.podcastSpeakerDialogDeleteButton {
+  margin-right: auto;
+}
+.podcastSpeakerDialogSaveButton {
+  background: #ff620b !important;
+  color: #fff !important;
+}
+.podcastSpeakerDialogSaveButton:hover {
+  background: #e85a0b !important;
+}
+.podcastConfirmDialog {
+  max-width: 390px;
+}
+.podcastConfirmHeader {
+  padding-bottom: 10px;
+}
+.podcastConfirmFooter {
+  gap: 8px;
+}
+.podcastConfirmDeleteButton {
+  background: #e05245 !important;
+  color: #fff !important;
+}
+.podcastConfirmDeleteButton:hover {
+  background: #c94136 !important;
+}
 .podcastAddSpeakerCard {
   min-width: 132px;
   flex: 0 0 132px;
@@ -2403,7 +2600,7 @@
 }
 .podcastLineRow {
   display: grid;
-  grid-template-columns: 34px 40px max-content minmax(160px, 1fr) 49px 27px 27px;
+  grid-template-columns: 34px 40px max-content minmax(160px, 1fr) 27px 27px;
   min-width: 0;
   align-items: center;
   gap: 8px;
@@ -2483,8 +2680,40 @@
 .podcastSpeakerChip[data-tone="pink"] {
   background: var(--audio-pink);
 }
-.podcastLineInput,
-.podcastLineDuration {
+.podcastSpeakerSelect {
+  width: 100%;
+  min-width: 0;
+  height: 27px;
+  appearance: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 0 7px;
+  color: #fff;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.podcastSpeakerSelect[data-tone="orange"] {
+  background: #ff7a2b;
+}
+.podcastSpeakerSelect[data-tone="blue"] {
+  background: #2f80ed;
+}
+.podcastSpeakerSelect[data-tone="green"] {
+  background: #3bb273;
+}
+.podcastSpeakerSelect[data-tone="purple"] {
+  background: #9b63d8;
+}
+.podcastSpeakerSelect[data-tone="pink"] {
+  background: var(--audio-pink);
+}
+.podcastSpeakerSelect:focus {
+  outline: 2px solid #ffb58f;
+  outline-offset: 1px;
+}
+.podcastLineInput {
   width: 100%;
   height: 32px;
   min-width: 0;
@@ -2497,11 +2726,7 @@
   font: inherit;
   font-size: 9px;
 }
-.podcastLineDuration {
-  text-align: right;
-}
-.podcastLineInput:focus,
-.podcastLineDuration:focus {
+.podcastLineInput:focus {
   border-color: var(--eos-field-focus);
   box-shadow: var(--eos-field-focus-ring);
 }
@@ -2528,6 +2753,8 @@
   color: var(--audio-orange);
 }
 .podcastPreviewCard {
+  width: calc(100% - 12px);
+  margin-left: 12px;
   padding: 15px;
 }
 .podcastPreviewActions {
@@ -2622,6 +2849,19 @@
   background: #fff;
   padding: 16px;
 }
+.podcastCharacterWarning {
+  margin: 9px 0 0;
+  color: #c24d38;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+@media (min-width: 1280px) {
+  .podcastSettingsCard {
+    position: sticky;
+    top: 16px;
+  }
+}
 .podcastSettingsHeader {
   display: flex;
   align-items: center;
@@ -2671,34 +2911,40 @@
   color: #d95814;
 }
 .podcastSelectField {
-  position: relative;
   display: block;
   margin-top: 17px;
 }
-.podcastSelectField select {
-  display: block;
+.podcastDropdown,
+.podcastSpeakerDialogDropdown {
   width: 100%;
+}
+.podcastDropdownTrigger,
+.podcastMusicDropdownTrigger,
+.podcastSpeakerDialogDropdownTrigger {
+  min-height: 37px;
   height: 37px;
-  appearance: none;
-  border: 1px solid #dfe2e7;
   border-radius: var(--eos-field-radius);
-  outline: 0;
-  background: #fff;
-  padding: 0 32px 0 10px;
-  color: #323741;
-  font: inherit;
+  padding: 0 10px;
   font-size: 10px;
+  font-weight: 400;
 }
-.podcastSelectField select:focus {
-  border-color: var(--eos-field-focus);
-  box-shadow: var(--eos-field-focus-ring);
+.podcastMusicDropdownTrigger {
+  min-height: 34px;
+  height: 34px;
 }
-.podcastSelectField > svg {
-  position: absolute;
-  right: 10px;
-  bottom: 11px;
-  color: #78808a;
-  pointer-events: none;
+.podcastSpeakerDialogDropdownTrigger {
+  min-height: 38px;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.podcastDropdownMenu {
+  max-height: 190px;
+}
+.podcastDropdownOption {
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: 400;
 }
 .podcastSpeedHeader {
   display: flex;
@@ -2739,6 +2985,14 @@
   min-width: 0;
   flex-direction: column;
   gap: 3px;
+}
+.podcastMusicSelectField {
+  display: block !important;
+  margin-top: -4px;
+  padding-top: 2px;
+}
+.podcastMusicSelectField .podcastFieldLabel {
+  margin-bottom: 6px;
 }
 .podcastToggleGroup strong {
   color: #323944;
@@ -2873,12 +3127,17 @@
   }
 }
 @media (max-width: 767.98px) {
+  .podcastLayout {
+    padding-top: 16px;
+  }
   .podcastHeaderSection {
+    display: flex;
     flex-direction: column;
   }
   .podcastHeaderActions {
     width: 100%;
     justify-content: flex-start;
+    padding-left: 0;
   }
   .podcastEpisodeButton {
     max-width: none;
@@ -2889,7 +3148,7 @@
     flex: 1 1 auto;
   }
   .podcastLineRow {
-    grid-template-columns: 34px 38px max-content 48px 27px 27px;
+    grid-template-columns: 34px 38px max-content 27px 27px;
     grid-template-rows: auto auto;
   }
   .podcastLineAvatar {
@@ -2905,16 +3164,12 @@
     grid-row: 1;
     justify-self: start;
   }
-  .podcastLineDuration {
+  .podcastLineCopyAction {
     grid-column: 4;
     grid-row: 1;
   }
-  .podcastLineCopyAction {
-    grid-column: 5;
-    grid-row: 1;
-  }
   .podcastLineActionDanger {
-    grid-column: 6;
+    grid-column: 5;
     grid-row: 1;
   }
   .podcastLineInput {
@@ -2940,6 +3195,10 @@
   .podcastSection,
   .podcastPreviewCard {
     padding: 12px;
+  }
+  .podcastPreviewCard {
+    width: 100%;
+    margin-left: 0;
   }
   .podcastTitleGroup h1 {
     font-size: 19px;
@@ -3477,6 +3736,44 @@
   }
   .mobileActionDock .podcastEstimate small {
     font-size: 12px !important;
+  }
+  .mobileActionDock .podcastEstimate {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 12px;
+  }
+  .mobileActionDock .podcastEstimate > div:nth-child(2) {
+    text-align: right;
+  }
+  .mobileActionDock .podcastEstimate small {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobileActionDock .podcastSecurityNote {
+    display: none;
+  }
+  .mobileActionDock .podcastEstimate {
+    gap: 0 8px;
+  }
+  .mobileActionDock .podcastEstimate small {
+    font-size: 8px !important;
+    line-height: 1;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .podcastSpeakerRow {
+    padding-bottom: 0;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .podcastSpeakerRow::-webkit-scrollbar {
+    display: none;
+  }
+  .podcastSpeakerCardWrap {
+    flex: 0 0 145px;
   }
 }
 
