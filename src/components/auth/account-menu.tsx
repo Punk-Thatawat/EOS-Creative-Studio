@@ -24,6 +24,8 @@ export function AccountMenu({
   onOpenChange,
 }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [rendered, setRendered] = useState(false);
+  const [visible, setVisible] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { locale } = useLocale();
@@ -57,6 +59,25 @@ export function AccountMenu({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, onOpenChange]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const mountTimer = window.setTimeout(() => setRendered(true), 0);
+      return () => window.clearTimeout(mountTimer);
+    }
+    const hideTimer = window.setTimeout(() => setVisible(false), 0);
+    const unmountTimer = window.setTimeout(() => setRendered(false), 150);
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(unmountTimer);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!rendered) return;
+    const raf = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(raf);
+  }, [rendered]);
 
   const handleLogout = async () => {
     setError(null);
@@ -100,9 +121,9 @@ export function AccountMenu({
         <ChevronDown className="hidden text-muted-foreground sm:block" size={14} />
       </button>
 
-      {isOpen ? (
+      {rendered ? (
         <div
-          className="absolute right-0 top-[calc(100%+0.5rem)] z-[70] min-w-48 rounded-xl border border-border bg-white p-1.5 shadow-lg"
+          className={`absolute right-0 top-[calc(100%+0.5rem)] z-[70] min-w-48 origin-top-right rounded-xl border border-border bg-white p-1.5 shadow-lg transition-[opacity,transform] duration-150 ease-out ${visible ? "translate-y-0 scale-100 opacity-100" : "-translate-y-1 scale-95 opacity-0"}`}
           role="menu"
           aria-label={text.account.actions}
         >

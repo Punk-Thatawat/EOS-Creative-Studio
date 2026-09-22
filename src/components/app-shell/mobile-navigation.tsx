@@ -30,6 +30,8 @@ export function MobileNavigation() {
   const { locale } = useLocale();
   const pathname = hydrated ? pathnameFromRouter : "";
   const [open, setOpen] = useState(false);
+  const [rendered, setRendered] = useState(false);
+  const [visible, setVisible] = useState(false);
   const isAdminRoute = pathname.startsWith("/admin");
 
   useEffect(() => {
@@ -39,7 +41,26 @@ export function MobileNavigation() {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (open) {
+      const mountTimer = window.setTimeout(() => setRendered(true), 0);
+      return () => window.clearTimeout(mountTimer);
+    }
+    const hideTimer = window.setTimeout(() => setVisible(false), 0);
+    const unmountTimer = window.setTimeout(() => setRendered(false), 260);
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearTimeout(unmountTimer);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!rendered) return;
+    const raf = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(raf);
+  }, [rendered]);
+
+  useEffect(() => {
+    if (!rendered) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -50,7 +71,7 @@ export function MobileNavigation() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [rendered]);
 
 
   return (
@@ -58,10 +79,19 @@ export function MobileNavigation() {
       <button type="button" className="flex size-11 items-center justify-center rounded-xl border border-border bg-white text-foreground shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-muted xl:hidden" aria-label={locale === "th" ? "เปิดเมนูนำทาง" : "Open navigation menu"} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(true)}>
         <Menu size={21} strokeWidth={2.4} />
       </button>
-      {open ? (
+      {rendered ? (
         <div className="fixed inset-0 z-[60] xl:hidden">
-          <button type="button" className="absolute inset-0 bg-[#201d1b]/40" aria-label="Close navigation menu" onClick={() => setOpen(false)} />
-          <nav id="mobile-navigation" className="absolute inset-y-0 left-0 flex w-[min(280px,calc(100vw-24px))] flex-col overflow-y-auto bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-md)]" aria-label="Mobile navigation">
+          <button
+            type="button"
+            className={`absolute inset-0 bg-[#201d1b]/40 transition-opacity duration-[260ms] ease-out ${visible ? "opacity-100" : "opacity-0"}`}
+            aria-label="Close navigation menu"
+            onClick={() => setOpen(false)}
+          />
+          <nav
+            id="mobile-navigation"
+            className={`absolute inset-y-0 left-0 flex w-[min(280px,calc(100vw-24px))] flex-col overflow-y-auto bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-md)] transition-transform duration-[260ms] ease-out ${visible ? "translate-x-0" : "-translate-x-full"}`}
+            aria-label="Mobile navigation"
+          >
             <div className="mb-8 flex items-center justify-between">
               <EosLogo href="/home" />
               <button type="button" className="rounded-lg p-2 text-muted-foreground hover:bg-surface-muted" aria-label={locale === "th" ? "ปิดเมนูนำทาง" : "Close navigation menu"} onClick={() => setOpen(false)}>

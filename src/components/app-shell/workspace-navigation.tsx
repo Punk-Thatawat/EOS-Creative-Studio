@@ -49,6 +49,7 @@ export function WorkspaceNavigation({ pathname, onNavigate }: { pathname: string
   const navigationUnlockTimeoutRef = useRef<number | null>(null);
   const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
   const isCreateRoute = pathname.startsWith("/create/");
+  const [createOpen, setCreateOpen] = useState(isCreateRoute);
 
   useEffect(() => {
     navigationLockRef.current = null;
@@ -88,12 +89,25 @@ export function WorkspaceNavigation({ pathname, onNavigate }: { pathname: string
   };
   return <div className="space-y-1" data-workspace-navigation>
     {renderItem(workspaceItems[0])}
-    <details open={isCreateRoute} className="group">
-      <summary className={`${mainClass} cursor-pointer list-none [&::-webkit-details-marker]:hidden ${isCreateRoute ? activeClass : idleClass}`}><WandSparkles size={18} strokeWidth={isCreateRoute ? 2.5 : 2} /><span>{text.nav.create}</span><ChevronDown size={15} className="ml-auto transition-transform group-open:rotate-180" /></summary>
-      <div className="ml-5 mt-1 space-y-1 border-l border-[#f1d7cc] pl-2">
-        {createItems.map((item) => { const active = isActive(item.href); const preparePage = () => { if (!active) preloadCreatePage(item.kind); }; return <Link key={item.href} href={item.href} onMouseEnter={preparePage} onFocus={preparePage} onClick={(event) => { preloadCreatePage(item.kind); handleNavigationClick(event, item.href); }} aria-current={active ? "page" : undefined} className={`flex min-h-10 select-none items-center gap-2 rounded-[9px] px-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary ${active ? "bg-[#fff0e9] text-primary" : idleClass}`}><item.icon size={16} strokeWidth={active ? 2.4 : 2} /><span>{text.nav[item.href] ?? item.label}</span><NavigationLinkStatus /></Link>; })}
+    <div>
+      <button
+        type="button"
+        className={`${mainClass} w-full cursor-pointer ${isCreateRoute ? activeClass : idleClass}`}
+        onClick={() => setCreateOpen((current) => !current)}
+        aria-expanded={createOpen}
+      >
+        <WandSparkles size={18} strokeWidth={isCreateRoute ? 2.5 : 2} />
+        <span>{text.nav.create}</span>
+        <ChevronDown size={15} className={`ml-auto transition-transform duration-200 ${createOpen ? "rotate-180" : ""}`} />
+      </button>
+      <div className="grid transition-[grid-template-rows] duration-200 ease-out" style={{ gridTemplateRows: createOpen ? "1fr" : "0fr" }}>
+        <div className="overflow-hidden">
+          <div className="ml-5 mt-1 space-y-1 border-l border-[#f1d7cc] pl-2">
+            {createItems.map((item) => { const active = isActive(item.href); const preparePage = () => { if (!active) preloadCreatePage(item.kind); }; return <Link key={item.href} href={item.href} onMouseEnter={preparePage} onFocus={preparePage} onClick={(event) => { preloadCreatePage(item.kind); handleNavigationClick(event, item.href); }} aria-current={active ? "page" : undefined} className={`flex min-h-10 select-none items-center gap-2 rounded-[9px] px-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary ${active ? "bg-[#fff0e9] text-primary" : idleClass}`}><item.icon size={16} strokeWidth={active ? 2.4 : 2} /><span>{text.nav[item.href] ?? item.label}</span><NavigationLinkStatus /></Link>; })}
+          </div>
+        </div>
       </div>
-    </details>
+    </div>
     {workspaceItems.slice(1).map(renderItem)}
   </div>;
 }
