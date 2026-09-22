@@ -21,7 +21,6 @@ import {
   FileAudio,
   LockKeyhole,
   Mic2,
-  MoreHorizontal,
   Pause,
   Pencil,
   Play,
@@ -60,6 +59,7 @@ import {
   createSoundEffects,
   createTextToSpeech,
   createTextToSpeechScenes,
+  createVideoSoundEffect,
   createVoiceClone,
   deleteAudioHistory,
   deleteVoiceClone,
@@ -70,6 +70,7 @@ import {
   listAudioVoices,
   listVoiceClones,
   previewVoiceClone,
+  quoteSoundEffects,
   quoteTextToSpeech,
   quoteTextToSpeechScenes,
   quoteVoiceClone,
@@ -80,6 +81,7 @@ import {
   type AudioModel,
   type AudioVoice,
   type SaveAudioHistoryInput,
+  type SoundEffectsQuote,
   type SoundEffectVariant,
   type TextToSpeechResponse,
   type VoiceCloneListItem,
@@ -148,6 +150,10 @@ const defaultAudioScenes: AudioScene[] = [
 ];
 const VOICE_CLONE_MODEL_ID = "wavespeed-ai/omnivoice/voice-clone";
 const VOICE_CLONE_MODEL_OPTIONS: DropdownOption[] = [{ value: VOICE_CLONE_MODEL_ID, label: "WaveSpeed · OmniVoice" }];
+const SFX_MODEL_OPTIONS: DropdownOption[] = [
+  { value: "text", label: "WaveSpeed · Sonilo Text-to-SFX" },
+  { value: "video", label: "WaveSpeed · Sonilo Video-to-SFX" },
+];
 
 const podcastSpeakerTones = ["orange", "blue", "green", "purple", "pink"] as const;
 const defaultPodcastSpeakers: PodcastSpeaker[] = [
@@ -1370,6 +1376,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
             options={VOICE_CLONE_MODEL_OPTIONS}
             onChange={() => {}}
             ariaLabel={t("create.audio.clone.model")}
+            menuPosition="fixed"
           />
         </label>
         <div className={styles.altSettingBlock}>
@@ -1465,19 +1472,30 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
 
 function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
   const { t } = useLocale();
+  const [sourceMode, setSourceMode] = useState<"text" | "video">("text");
   const [effectType, setEffectType] = useState("Cinematic");
-  const [description, setDescription] = useState(
-    "A cinematic whoosh that rises quickly, hits with a soft impact, and fades into a deep room tone.",
-  );
-  const [duration, setDuration] = useState(4);
+  const [description, setDescription] = useState(() => t("create.audio.sfx.defaultDescription"));
+  const [effectDuration, setEffectDuration] = useState(4);
   const [variationCount, setVariationCount] = useState(4);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoDescription, setVideoDescription] = useState("");
+  const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [variants, setVariants] = useState<SoundEffectVariant[]>([]);
   const [audioUrls, setAudioUrls] = useState<Record<number, string>>({});
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [playbackDuration, setPlaybackDuration] = useState(0);
+  const [volume, setVolume] = useState(80);
+  const [creditQuote, setCreditQuote] = useState<SoundEffectsQuote | null>(null);
+  const [creditQuoteLoading, setCreditQuoteLoading] = useState(false);
   const audioUrlsRef = useRef<Record<number, string>>({});
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const durationRef = useRef(0);
 
   useEffect(
     () => () => {
@@ -1487,40 +1505,92 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
     [],
   );
 
+  useEffect(() => {
+    let active = true;
+    if (sourceMode !== "text") {
+      const resetTimer = window.setTimeout(() => {
+        if (!active) return;
+        setCreditQuote(null);
+        setCreditQuoteLoading(false);
+      }, 0);
+      return () => {
+        active = false;
+        window.clearTimeout(resetTimer);
+      };
+    }
+    const timer = window.setTimeout(() => {
+      setCreditQuoteLoading(true);
+      void quoteSoundEffects({ durationSeconds: effectDuration, variationCount })
+        .then((quote) => {
+          if (active) setCreditQuote(quote);
+        })
+        .catch(() => {
+          if (active) setCreditQuote(null);
+        })
+        .finally(() => {
+          if (active) setCreditQuoteLoading(false);
+        });
+    }, 400);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [sourceMode, effectDuration, variationCount]);
+
   const handleGenerate = async () => {
     setStatus("generating");
     setError(null);
     try {
-      const nextVariants = await createSoundEffects({
-        description,
-        category: effectType,
-        durationSeconds: duration,
-        variationCount,
-        intensity: 0.72,
-        promptInfluence: 0.48,
-        loop: false,
-        normalizeLoudness: true,
-        outputFormat: "mp3",
-      });
-      const nextUrls: Record<number, string> = {};
-      nextVariants.forEach((variant) => {
-        const binary = Uint8Array.from(atob(variant.audioBase64), (character) => character.charCodeAt(0));
-        const blob = new Blob([binary.buffer as ArrayBuffer], { type: variant.contentType });
-        nextUrls[variant.index] = URL.createObjectURL(blob);
+      let nextVariants: SoundEffectVariant[];
+      let nextUrls: Record<number, string> = {};
+      if (sourceMode === "video") {
+        if (!videoFile) {
+          setError(t("create.audio.sfx.error.noVideo"));
+          setStatus("error");
+          return;
+        }
+        const result = await createVideoSoundEffect({ video: videoFile, description: videoDescription.trim() || undefined, outputFormat });
+        nextUrls = { 1: URL.createObjectURL(result.blob) };
+        nextVariants = [{ index: 1, audioBase64: "", contentType: result.contentType, outputFormat }];
         void onHistorySaved?.({
-          audio: blob,
+          audio: result.blob,
           feature: "sound-effects",
-          label: `${effectType} variation ${variant.index}`,
-          outputFormat: "mp3",
-          metadata: { description, durationSeconds: duration, variation: variant.index },
+          label: t("create.audio.sfx.videoLabel"),
+          outputFormat,
+          metadata: { videoDescription, source: "video" },
         });
-      });
+      } else {
+        nextVariants = await createSoundEffects({
+          description,
+          category: effectType,
+          durationSeconds: effectDuration,
+          variationCount,
+          outputFormat,
+        });
+        nextVariants.forEach((variant) => {
+          const binary = Uint8Array.from(atob(variant.audioBase64), (character) => character.charCodeAt(0));
+          const blob = new Blob([binary.buffer as ArrayBuffer], { type: variant.contentType });
+          nextUrls[variant.index] = URL.createObjectURL(blob);
+          void onHistorySaved?.({
+            audio: blob,
+            feature: "sound-effects",
+            label: `${effectType} variation ${variant.index}`,
+            outputFormat,
+            metadata: { description, durationSeconds: effectDuration, variation: variant.index },
+          });
+        });
+      }
       previewAudioRef.current?.pause();
       Object.values(audioUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
       audioUrlsRef.current = nextUrls;
       setVariants(nextVariants);
       setAudioUrls(nextUrls);
       setSelectedIndex(nextVariants[0]?.index ?? 0);
+      durationRef.current = 0;
+      setPlaybackDuration(0);
+      setCurrentTime(0);
+      setProgress(0);
+      setIsPlaying(false);
       setStatus("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Sound effect generation failed");
@@ -1528,12 +1598,42 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
     }
   };
 
+  const togglePlayback = () => {
+    const audio = previewAudioRef.current;
+    if (!selectedUrl || !audio) return;
+    if (audio.paused)
+      void audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false));
+    else {
+      audio.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const seekBy = (amount: number) => {
+    if (!previewAudioRef.current) return;
+    const audioDuration = durationRef.current || playbackDuration;
+    previewAudioRef.current.currentTime = Math.max(0, Math.min(audioDuration, previewAudioRef.current.currentTime + amount));
+  };
+
+  const syncPlaybackDuration = (audio: HTMLAudioElement) => {
+    const nextDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+    if (!nextDuration) return;
+    durationRef.current = nextDuration;
+    setPlaybackDuration(nextDuration);
+    const nextTime = Number.isFinite(audio.currentTime) ? Math.min(audio.currentTime, nextDuration) : 0;
+    setCurrentTime(nextTime);
+    setProgress(Math.min(100, (nextTime / nextDuration) * 100));
+  };
+
   const selectedUrl = audioUrls[selectedIndex];
   const downloadSelected = () => {
     if (!selectedUrl) return;
     const link = document.createElement("a");
     link.href = selectedUrl;
-    link.download = `sound-effect-${selectedIndex}.mp3`;
+    link.download = `sound-effect-${selectedIndex}.${outputFormat}`;
     link.click();
   };
 
@@ -1546,64 +1646,120 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
           description={t("create.audio.sfx.description")}
           icon={<AudioLines size={24} />}
         />
-        <label className={styles.altTextField}>
-          <span>{t("create.audio.sfx.soundDescription")}</span>
-          <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} />
-        </label>
-        <div className={styles.altFieldGroup}>
-          <span className={styles.altFieldLabel}>{t("create.audio.sfx.effectCategory")}</span>
+        <div className={`${styles.altFieldGroup} ${styles.sfxSourceGroup}`}>
+          <span className={styles.altFieldLabel}>{t("create.audio.sfx.source")}</span>
           <div className={styles.altChoiceRow}>
-            {(
-              [
-                ["Cinematic", "create.audio.sfx.categoryCinematic"],
-                ["Nature", "create.audio.sfx.categoryNature"],
-                ["UI / Tech", "create.audio.sfx.categoryUi"],
-                ["Impact", "create.audio.sfx.categoryImpact"],
-              ] as const
-            ).map(([item, labelKey]) => (
-              <button
-                type="button"
-                key={item}
-                className={effectType === item ? styles.altChoiceActive : styles.altChoice}
-                onClick={() => setEffectType(item)}
-              >
-                {t(labelKey)}
-              </button>
-            ))}
+            <button
+              type="button"
+              className={sourceMode === "text" ? styles.altChoiceActive : styles.altChoice}
+              onClick={() => setSourceMode("text")}
+            >
+              {t("create.audio.sfx.fromText")}
+            </button>
+            <button
+              type="button"
+              className={sourceMode === "video" ? styles.altChoiceActive : styles.altChoice}
+              onClick={() => setSourceMode("video")}
+            >
+              {t("create.audio.sfx.fromVideo")}
+            </button>
           </div>
         </div>
-        <div className={styles.altTwoFields}>
-          <label className={styles.altField}>
-            <span>{t("create.audio.sfx.duration")}</span>
-            <select value={String(duration)} onChange={(event) => setDuration(Number(event.target.value))}>
-              {[2, 4, 8].map((seconds) => (
-                <option key={seconds} value={String(seconds)}>
-                  {t("create.audio.sfx.seconds", { count: String(seconds).padStart(2, "0") })}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={styles.altField}>
-            <span>{t("create.audio.sfx.variations")}</span>
-            <select value={String(variationCount)} onChange={(event) => setVariationCount(Number(event.target.value))}>
-              {[2, 4, 6].map((amount) => (
-                <option key={amount} value={String(amount)}>
-                  {t("create.audio.sfx.variationOptions", { count: amount })}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <button disabled type="button" className={styles.altUploadButton}>
-          <CloudUpload size={17} /> {t("create.audio.sfx.useReference")}
-        </button>
+        {sourceMode === "text" ? (
+          <>
+            <label className={styles.altTextField}>
+              <span>{t("create.audio.sfx.soundDescription")}</span>
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2000} />
+            </label>
+            <div className={styles.altFieldGroup}>
+              <span className={styles.altFieldLabel}>{t("create.audio.sfx.effectCategory")}</span>
+              <div className={styles.altChoiceRow}>
+                {(
+                  [
+                    ["Cinematic", "create.audio.sfx.categoryCinematic"],
+                    ["Nature", "create.audio.sfx.categoryNature"],
+                    ["UI / Tech", "create.audio.sfx.categoryUi"],
+                    ["Impact", "create.audio.sfx.categoryImpact"],
+                  ] as const
+                ).map(([item, labelKey]) => (
+                  <button
+                    type="button"
+                    key={item}
+                    className={effectType === item ? styles.altChoiceActive : styles.altChoice}
+                    onClick={() => setEffectType(item)}
+                  >
+                    {t(labelKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.altTwoFields}>
+              <label className={styles.altField}>
+                <span>{t("create.audio.sfx.duration")}</span>
+                <Dropdown
+                  value={String(effectDuration)}
+                  onChange={(value) => setEffectDuration(Number(value))}
+                  ariaLabel={t("create.audio.sfx.duration")}
+                  menuPosition="fixed"
+                  options={[2, 4, 8].map((seconds) => ({
+                    value: String(seconds),
+                    label: t("create.audio.sfx.seconds", { count: String(seconds).padStart(2, "0") }),
+                  }))}
+                />
+              </label>
+              <label className={styles.altField}>
+                <span>{t("create.audio.sfx.variations")}</span>
+                <Dropdown
+                  value={String(variationCount)}
+                  onChange={(value) => setVariationCount(Number(value))}
+                  ariaLabel={t("create.audio.sfx.variations")}
+                  menuPosition="fixed"
+                  options={[1, 2, 4].map((amount) => ({
+                    value: String(amount),
+                    label: t("create.audio.sfx.variationOptions", { count: amount }),
+                  }))}
+                />
+              </label>
+            </div>
+          </>
+        ) : (
+          <>
+            <input
+              ref={videoInputRef}
+              hidden
+              type="file"
+              accept="video/mp4,video/quicktime,video/webm,video/x-m4v,image/gif,video/*"
+              onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              className={`${styles.cloneDropzone} ${videoFile ? styles.cloneDropzoneReady : ""}`}
+              onClick={() => videoInputRef.current?.click()}
+            >
+              <span className={styles.cloneIcon}>
+                <CloudUpload size={23} />
+              </span>
+              <strong>{videoFile ? t("create.audio.sfx.videoReady") : t("create.audio.sfx.dropVideo")}</strong>
+              <small>{videoFile ? videoFile.name : t("create.audio.sfx.videoHint")}</small>
+            </button>
+            <label className={styles.altTextField}>
+              <span>{t("create.audio.sfx.videoDescription")}</span>
+              <textarea
+                value={videoDescription}
+                onChange={(event) => setVideoDescription(event.target.value)}
+                maxLength={2000}
+                placeholder={t("create.audio.sfx.videoDescriptionPlaceholder")}
+              />
+            </label>
+          </>
+        )}
       </section>
 
       <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel}`}>
         <div className={styles.altPanelHeader}>
           <div>
             <span className={styles.altEyebrow}>
-              {t("create.audio.sfx.variationsLabel", { count: variants.length || variationCount })}
+              {t("create.audio.sfx.variationsLabel", { count: variants.length || (sourceMode === "video" ? 1 : variationCount) })}
             </span>
             <h2>{t("create.audio.sfx.soundPreview")}</h2>
           </div>
@@ -1611,63 +1767,129 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
             <span /> {status === "generating" ? t("create.audio.sfx.generatingStatus") : t("create.audio.sfx.ready")}
           </span>
         </div>
-        <div className={styles.mockNotice}>
-          <LockKeyhole size={13} />
-          <span>
-            {status === "generating"
-              ? t("create.audio.sfx.generatingNotice")
-              : (error ?? t("create.audio.sfx.pendingNotice"))}
-          </span>
-        </div>
-        <AltWaveform label={t("create.audio.sfx.waveformLabel")} />
-        {selectedUrl ? (
-          <audio ref={previewAudioRef} controls src={selectedUrl} preload="metadata" style={{ width: "100%" }} />
+        {status === "error" && error ? (
+          <p className={styles.podcastError} role="alert">
+            {error}
+          </p>
         ) : null}
-        <div className={styles.effectPlayer}>
-          <button
-            type="button"
-            className={styles.altRoundButton}
-            onClick={() => {
-              if (!selectedUrl) {
-                void handleGenerate();
-                return;
-              }
-              const audio = previewAudioRef.current;
-              if (!audio) return;
-              if (audio.paused) void audio.play();
-              else audio.pause();
-            }}
-            disabled={status === "generating"}
-          >
-            <Play size={18} fill="currentColor" />
-          </button>
-          <div>
-            <strong>
-              {selectedIndex
-                ? t("create.audio.sfx.effectNumber", { index: selectedIndex })
-                : t("create.audio.sfx.emptyEffect")}
-            </strong>
-            <small>
-              {duration.toString().padStart(2, "0")}s · {effectType} · MP3
-            </small>
+        {selectedUrl ? (
+          <>
+            <PreviewWaveform audioUrl={selectedUrl} progress={progress} isPlaying={isPlaying} />
+            <div className={styles.playerRow}>
+              <button
+                type="button"
+                className={styles.playButton}
+                onClick={togglePlayback}
+                aria-label={t(isPlaying ? "create.audio.a11y.pause" : "create.audio.a11y.play")}
+              >
+                {isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}
+              </button>
+              <button
+                type="button"
+                className={styles.skipButton}
+                onClick={() => seekBy(-10)}
+                aria-label={t("create.audio.a11y.rewind10")}
+              >
+                <RotateCcw size={17} />
+                <small>10</small>
+              </button>
+              <button
+                type="button"
+                className={styles.skipButton}
+                onClick={() => seekBy(10)}
+                aria-label={t("create.audio.a11y.forward10")}
+              >
+                <RotateCw size={17} />
+                <small>10</small>
+              </button>
+              <span className={styles.timeLabel}>
+                {formatSceneSeconds(currentTime)} / {formatSceneSeconds(playbackDuration)}
+              </span>
+              <input
+                className={styles.scrubber}
+                type="range"
+                min="0"
+                max="100"
+                value={progress}
+                onChange={(event) => {
+                  const nextProgress = Number(event.target.value);
+                  const audioDuration = durationRef.current || playbackDuration;
+                  setProgress(nextProgress);
+                  if (previewAudioRef.current && audioDuration)
+                    previewAudioRef.current.currentTime = (nextProgress / 100) * audioDuration;
+                }}
+                aria-label={t("create.audio.a11y.audioProgress")}
+              />
+              <Volume2 size={17} className={styles.volumeIcon} />
+              <input
+                className={styles.volumeSlider}
+                type="range"
+                min="0"
+                max="100"
+                value={volume}
+                onChange={(event) => {
+                  const nextVolume = Number(event.target.value);
+                  setVolume(nextVolume);
+                  if (previewAudioRef.current) previewAudioRef.current.volume = nextVolume / 100;
+                }}
+                aria-label={t("create.audio.a11y.volume")}
+              />
+            </div>
+            <audio
+              ref={previewAudioRef}
+              src={selectedUrl}
+              preload="metadata"
+              onLoadedMetadata={(event) => {
+                syncPlaybackDuration(event.currentTarget);
+                event.currentTarget.volume = volume / 100;
+              }}
+              onDurationChange={(event) => syncPlaybackDuration(event.currentTarget)}
+              onTimeUpdate={(event) => {
+                const nextTime = event.currentTarget.currentTime;
+                const nextDuration =
+                  durationRef.current ||
+                  (Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0);
+                if (nextDuration > 0 && durationRef.current !== nextDuration) {
+                  durationRef.current = nextDuration;
+                  setPlaybackDuration(nextDuration);
+                }
+                setCurrentTime(nextTime);
+                setProgress(nextDuration ? Math.min(100, (nextTime / nextDuration) * 100) : 0);
+              }}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={(event) => {
+                const endDuration = durationRef.current || event.currentTarget.duration;
+                setIsPlaying(false);
+                if (Number.isFinite(endDuration) && endDuration > 0) {
+                  durationRef.current = endDuration;
+                  setPlaybackDuration(endDuration);
+                  setCurrentTime(endDuration);
+                }
+                setProgress(100);
+              }}
+            />
+          </>
+        ) : (
+          <AltWaveform label={t("create.audio.sfx.waveformLabel")} />
+        )}
+        {sourceMode === "text" ? (
+          <div className={styles.effectVariationGrid}>
+            {variants.map((variant) => (
+              <button
+                type="button"
+                key={variant.index}
+                className={selectedIndex === variant.index ? styles.effectCardActive : styles.effectCard}
+                onClick={() => setSelectedIndex(variant.index)}
+              >
+                <span className={styles.effectMiniWave} />
+                <strong>{t("create.audio.sfx.variationNumber", { index: variant.index })}</strong>
+                <small>{effectDuration.toString().padStart(2, "0")}s</small>
+                <Play size={12} fill="currentColor" />
+              </button>
+            ))}
           </div>
-          <MoreHorizontal size={17} />
-        </div>
-        <div className={styles.effectVariationGrid}>
-          {variants.map((variant) => (
-            <button
-              type="button"
-              key={variant.index}
-              className={selectedIndex === variant.index ? styles.effectCardActive : styles.effectCard}
-              onClick={() => setSelectedIndex(variant.index)}
-            >
-              <span className={styles.effectMiniWave} />
-              <strong>{t("create.audio.sfx.variationNumber", { index: variant.index })}</strong>
-              <small>{duration.toString().padStart(2, "0")}s</small>
-              <Play size={12} fill="currentColor" />
-            </button>
-          ))}
-        </div>
+        ) : null}
         <div className={styles.altActionRow}>
           <button type="button" className={styles.altPrimaryButton} onClick={downloadSelected} disabled={!selectedUrl}>
             <Download size={15} /> {t("create.audio.sfx.downloadSelected")}
@@ -1688,52 +1910,58 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
           <h2>{t("create.audio.sfx.settings")}</h2>
           <Settings2 size={20} />
         </div>
-        <div className={styles.altSettingBlock}>
-          <div className={styles.altSettingHeading}>
-            <span>{t("create.audio.sfx.intensity")}</span>
-            <b>72%</b>
-          </div>
-          <input className={styles.altRange} type="range" min="0" max="100" defaultValue="72" />
-        </div>
-        <div className={styles.altSettingBlock}>
-          <div className={styles.altSettingHeading}>
-            <span>{t("create.audio.sfx.variation")}</span>
-            <b>{t("create.audio.sfx.balanced")}</b>
-          </div>
-          <input className={styles.altRange} type="range" min="0" max="100" defaultValue="52" />
-        </div>
-        <label className={styles.altToggleRow}>
-          <span>{t("create.audio.sfx.seamlessLoop")}</span>
-          <button disabled type="button" className={styles.altToggleOff}>
-            <i />
-          </button>
-        </label>
-        <label className={styles.altToggleRow}>
-          <span>{t("create.audio.sfx.normalizeLoudness")}</span>
-          <button disabled type="button" className={styles.altToggleOn}>
-            <i />
-          </button>
+        <label className={styles.altField}>
+          <span>{t("create.audio.sfx.model")}</span>
+          <Dropdown
+            value={sourceMode}
+            options={SFX_MODEL_OPTIONS}
+            onChange={(value) => setSourceMode(value as "text" | "video")}
+            ariaLabel={t("create.audio.sfx.model")}
+            menuPosition="fixed"
+          />
         </label>
         <div className={styles.altSettingBlock}>
           <span className={styles.altFieldLabel}>{t("create.audio.sfx.outputFormat")}</span>
           <div className={styles.altFormatGrid}>
-            <button disabled type="button" className={styles.altFormat}>
-              WAV
-            </button>
-            <button disabled type="button" className={styles.altFormatActive}>
-              MP3
-            </button>
-            <button disabled type="button" className={styles.altFormat}>
-              OGG
-            </button>
+            {(["mp3", "wav", "ogg"] as const).map((format) => (
+              <button
+                type="button"
+                key={format}
+                className={outputFormat === format ? styles.altFormatActive : styles.altFormat}
+                onClick={() => setOutputFormat(format)}
+              >
+                {format.toUpperCase()}
+              </button>
+            ))}
           </div>
         </div>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
+          <div className={styles.creditEstimate}>
+            <div className={styles.creditEstimateHeader}>
+              <strong>
+                {t("create.audio.estimatedCredits")} <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} />
+              </strong>
+              <b>
+                {sourceMode === "video"
+                  ? "—"
+                  : creditQuoteLoading
+                    ? t("create.audio.calculating")
+                    : creditQuote
+                      ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditQuote.creditCost) })
+                      : "—"}
+              </b>
+            </div>
+            <p className={styles.creditEstimateCount}>
+              {sourceMode === "video"
+                ? t("create.audio.sfx.videoLabel")
+                : t("create.audio.sfx.variationsLabel", { count: variationCount })}
+            </p>
+          </div>
           <button
             type="button"
             className={styles.altGenerateButton}
             onClick={() => void handleGenerate()}
-            disabled={status === "generating" || !description.trim()}
+            disabled={status === "generating" || (sourceMode === "video" ? !videoFile : !description.trim())}
           >
             {status === "generating" ? t("create.audio.sfx.generatingButton") : t("create.audio.sfx.generate")}{" "}
             <Sparkles size={16} />

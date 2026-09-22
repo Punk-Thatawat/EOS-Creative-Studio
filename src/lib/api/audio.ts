@@ -105,10 +105,6 @@ export type SoundEffectsInput = {
   category?: string;
   durationSeconds: number;
   variationCount: number;
-  intensity: number;
-  promptInfluence: number;
-  loop: boolean;
-  normalizeLoudness: boolean;
   outputFormat: "mp3" | "wav" | "ogg";
 };
 export type SoundEffectVariant = { index: number; audioBase64: string; contentType: string; outputFormat: "mp3" | "wav" | "ogg" };
@@ -479,6 +475,33 @@ export async function createSoundEffects(input: SoundEffectsInput, signal?: Abor
   const payload = await response.json() as { data?: { variations?: SoundEffectVariant[] } };
   if (!payload.data?.variations) throw new Error("Sound effects were not generated");
   return payload.data.variations;
+}
+
+export async function createVideoSoundEffect(input: { video: File; description?: string; outputFormat: "mp3" | "wav" | "ogg" }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
+  const form = new FormData();
+  form.append("video", input.video, input.video.name);
+  if (input.description) form.append("description", input.description);
+  form.append("outputFormat", input.outputFormat);
+  return userAudioBlobRequest("/audio/sound-effects/video", {
+    method: "POST",
+    headers: { Accept: input.outputFormat === "mp3" ? "audio/mpeg" : input.outputFormat === "wav" ? "audio/wav" : "audio/ogg" },
+    body: form,
+    signal,
+  });
+}
+
+export type SoundEffectsQuote = { provider: "wavespeed"; model: string; creditCost: number; pricingSource: "provider" | "fallback" };
+
+export async function quoteSoundEffects(input: { durationSeconds: number; variationCount: number }, signal?: AbortSignal): Promise<SoundEffectsQuote> {
+  const response = await userAudioRequest("/audio/sound-effects/quote", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const payload = await response.json().catch(() => null) as { data?: SoundEffectsQuote } | null;
+  if (!payload?.data) throw new Error("Sound effects pricing unavailable");
+  return payload.data;
 }
 
 export async function listAudioHistory(input: { feature?: AudioHistoryFeature; limit?: number } = {}): Promise<AudioHistoryEntry[]> {

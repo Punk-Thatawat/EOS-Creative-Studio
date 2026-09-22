@@ -1450,6 +1450,9 @@
   display: block;
   min-width: 0;
 }
+.altTextField {
+  margin-top: 18px;
+}
 .altTextField > span,
 .altField > span,
 .altFieldLabel {
@@ -1496,6 +1499,9 @@
 }
 .altFieldGroup {
   margin-top: 18px;
+}
+.sfxSourceGroup {
+  margin-bottom: 18px;
 }
 .altChoiceRow {
   display: flex;
@@ -1837,9 +1843,11 @@
   border: 2px dashed #e6a6cb;
   border-radius: 11px;
   background: #fffafd;
+  padding: 16px 20px;
   color: #515964;
   font: inherit;
   cursor: pointer;
+  text-align: center;
   transition:
     border-color 0.18s ease,
     background-color 0.18s ease,
