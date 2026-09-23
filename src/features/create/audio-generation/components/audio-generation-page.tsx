@@ -2891,6 +2891,8 @@ export function AudioGenerationPage() {
   const [activeTab, setActiveTab] = useState<AudioTab>("Text to Speech");
   const [prompt, setPrompt] = useState(DEFAULT_AUDIO_PROMPT);
   const [tone, setTone] = useState<"Energetic" | "Friendly" | "Premium" | "Dramatic" | "">("");
+  const [voiceMode, setVoiceMode] = useState<"tone" | "cloned">("tone");
+  const [savedVoices, setSavedVoices] = useState<VoiceCloneListItem[]>([]);
   const [language, setLanguage] = useState("Thai");
   const [pronunciation, setPronunciation] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
@@ -2904,6 +2906,8 @@ export function AudioGenerationPage() {
   const [canScrollVoicesRight, setCanScrollVoicesRight] = useState(false);
   const [format, setFormat] = useState("MP3");
   const [speed, setSpeed] = useState(0.95);
+  const [pitch, setPitch] = useState(0);
+  const [synthVolume, setSynthVolume] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -3073,6 +3077,21 @@ export function AudioGenerationPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, loadVoices, selectedModel]);
 
+  const refreshSavedVoices = useCallback(async () => {
+    try {
+      const result = await listVoiceClones();
+      setSavedVoices(result.voices);
+    } catch {
+      // Saved-voices list is a convenience; ignore load failures silently.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "Text to Speech") return undefined;
+    const timer = window.setTimeout(() => void refreshSavedVoices(), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, refreshSavedVoices]);
+
   useEffect(() => {
     if (!availableVoices.length) return;
     // Voice metadata arrives asynchronously; reconcile persisted scene voices
@@ -3229,12 +3248,15 @@ export function AudioGenerationPage() {
     voicePreviewAudioRef.current?.pause();
     setPrompt("");
     setTone("");
+    setVoiceMode("tone");
     setLanguage("Thai");
     setPronunciation("");
     setSelectedModel(availableModels.find((model) => model.isActive)?.key ?? availableModels[0]?.key ?? "");
     setSelectedVoice(availableVoices[0]?.key ?? "");
     setFormat("MP3");
     setSpeed(0.95);
+    setPitch(0);
+    setSynthVolume(1);
     setBackgroundMusic(false);
     setBackgroundMusicPreset(backgroundMusicPresets[0]?.key ?? "");
     setAudioScenes(defaultAudioScenes.map((scene) => ({ ...scene, text: "", voice: availableVoices[0]?.key ?? "" })));
@@ -3436,8 +3458,10 @@ export function AudioGenerationPage() {
         modelId: selectedModel,
         outputFormat: format.toLowerCase() as "mp3" | "wav" | "ogg",
         languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
-        ...(tone ? { tone } : {}),
+        ...(voiceMode === "tone" && tone ? { tone } : {}),
         speed,
+        pitch,
+        volume: synthVolume,
         pronunciationHint: pronunciation.trim() || undefined,
         backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
         backgroundMusicKey: backgroundMusicPreset || undefined,
@@ -3483,8 +3507,10 @@ export function AudioGenerationPage() {
         modelId: selectedModel,
         outputFormat: format.toLowerCase() as "mp3" | "wav" | "ogg",
         languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
-        ...(tone ? { tone } : {}),
+        ...(voiceMode === "tone" && tone ? { tone } : {}),
         speed,
+        pitch,
+        volume: synthVolume,
         pronunciationHint: pronunciation.trim() || undefined,
         pauseSeconds: 0.25,
         backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
@@ -3760,21 +3786,78 @@ export function AudioGenerationPage() {
                   </div>
 
                   <div className={styles.inputSection}>
-                    <FieldLabel hint={t("create.audio.toneHint")}>{t("create.audio.tone")}</FieldLabel>
-                    <div className={styles.chipRow}>
-                      {tones.map(({ label, icon: ToneIcon }) => (
-                        <button
-                          type="button"
-                          key={label}
-                          className={tone === label ? styles.toneActive : styles.toneButton}
-                          onClick={() => setTone((current) => (current === label ? "" : label))}
-                          aria-pressed={tone === label}
-                        >
-                          <ToneIcon size={12} />
-                          {t(toneKeys[label])}
+                    <SelectField
+                      label={t("create.audio.voiceMode.label")}
+                      value={voiceMode}
+                      onChange={(value) => setVoiceMode(value as "tone" | "cloned")}
+                      options={[
+                        { value: "tone", label: t("create.audio.voiceMode.tone") },
+                        { value: "cloned", label: t("create.audio.voiceMode.cloned") },
+                      ]}
+                    />
+
+                    {voiceMode === "tone" ? (
+                      <div className={styles.chipRow}>
+                        {tones.map(({ label, icon: ToneIcon }) => (
+                          <button
+                            type="button"
+                            key={label}
+                            className={tone === label ? styles.toneActive : styles.toneButton}
+                            onClick={() => setTone((current) => (current === label ? "" : label))}
+                            aria-pressed={tone === label}
+                          >
+                            <ToneIcon size={12} />
+                            {t(toneKeys[label])}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {voiceMode === "cloned" ? (
+                      <>
+                        {savedVoices.length ? (
+                          <div className={styles.historyList}>
+                            {savedVoices.map((item) => (
+                              <div
+                                key={item.id}
+                                className={selectedVoice === item.providerVoiceId ? styles.historyItemRowActive : styles.historyItemRow}
+                              >
+                                <button
+                                  type="button"
+                                  className={selectedVoice === item.providerVoiceId ? styles.historyItemActive : styles.historyItem}
+                                  onClick={() => item.providerVoiceId && setSelectedVoice(item.providerVoiceId)}
+                                  disabled={!item.providerVoiceId}
+                                >
+                                  <span className={styles.historyPlay}>
+                                    <Mic2 size={13} />
+                                  </span>
+                                  <span className={styles.historyCopy}>
+                                    <strong>{item.name}</strong>
+                                    <small>{item.character || t("create.audio.clone.characterNatural")}</small>
+                                  </span>
+                                  <span className={styles.historyCurrent}>
+                                    {!item.providerVoiceId
+                                      ? t("create.audio.voiceMode.notReady")
+                                      : selectedVoice === item.providerVoiceId
+                                        ? t("create.audio.clone.voiceSelected")
+                                        : t("create.audio.clone.selectVoice")}
+                                  </span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className={styles.historyEmpty}>
+                            <Mic2 size={15} />
+                            <span>{t("create.audio.noResults")}</span>
+                          </div>
+                        )}
+                        <button type="button" className={styles.voiceCloneLink} onClick={() => setActiveTab("Voice Clone")}>
+                          {t("create.audio.voiceMode.cloneNewLink")}
                         </button>
-                      ))}
-                    </div>
+                      </>
+                    ) : null}
+
                   </div>
 
                   <div className={styles.twoColumnFields}>
@@ -4179,6 +4262,46 @@ export function AudioGenerationPage() {
                       <span>0.5x</span>
                       <span>1x</span>
                       <span>2x</span>
+                    </div>
+                  </div>
+                  <div className={styles.settingBlock}>
+                    <div className={styles.speedHeader}>
+                      <FieldLabel>{t("create.audio.pitch")}</FieldLabel>
+                      <strong>{pitch}</strong>
+                    </div>
+                    <input
+                      className={styles.speedSlider}
+                      type="range"
+                      min="-12"
+                      max="12"
+                      step="1"
+                      value={pitch}
+                      onChange={(event) => setPitch(Number(event.target.value))}
+                    />
+                    <div className={styles.rangeLabels}>
+                      <span>-12</span>
+                      <span>0</span>
+                      <span>12</span>
+                    </div>
+                  </div>
+                  <div className={styles.settingBlock}>
+                    <div className={styles.speedHeader}>
+                      <FieldLabel>{t("create.audio.synthVolume")}</FieldLabel>
+                      <strong>{synthVolume.toFixed(1)}x</strong>
+                    </div>
+                    <input
+                      className={styles.speedSlider}
+                      type="range"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value={synthVolume}
+                      onChange={(event) => setSynthVolume(Number(event.target.value))}
+                    />
+                    <div className={styles.rangeLabels}>
+                      <span>0</span>
+                      <span>1x</span>
+                      <span>10x</span>
                     </div>
                   </div>
                   <div className={styles.settingBlock}>

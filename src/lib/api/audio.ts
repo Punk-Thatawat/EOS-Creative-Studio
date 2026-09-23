@@ -12,6 +12,8 @@ export type TextToSpeechInput = {
   languageCode: string;
   tone?: "Energetic" | "Friendly" | "Premium" | "Dramatic";
   speed: number;
+  pitch?: number;
+  volume?: number;
   pronunciationHint?: string;
   backgroundMusicEnabled?: boolean;
   backgroundMusicKey?: string;
@@ -26,6 +28,8 @@ export type TextToSpeechScenesInput = {
   languageCode: string;
   tone?: "Energetic" | "Friendly" | "Premium" | "Dramatic";
   speed: number;
+  pitch?: number;
+  volume?: number;
   pronunciationHint?: string;
   pauseSeconds?: number;
   backgroundMusicEnabled?: boolean;
@@ -112,7 +116,7 @@ export type VoiceCloneInput = {
 };
 
 export type VoiceCloneResponse = { voiceId: string; requiresVerification: boolean; name: string };
-export type VoiceCloneListItem = { id: string; voiceId: string; name: string; character?: string; description?: string; createdAt: string };
+export type VoiceCloneListItem = { id: string; voiceId: string; name: string; character?: string; description?: string; createdAt: string; providerVoiceId?: string };
 export type VoiceListResponse = { voices: VoiceCloneListItem[]; nextPageToken?: string | null };
 export type SoundEffectsInput = {
   description: string;
