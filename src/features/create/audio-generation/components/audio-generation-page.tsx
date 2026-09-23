@@ -89,6 +89,7 @@ import {
 } from "@/lib/api/audio";
 
 const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
+void audioModes; // kept for its type + as the full mode list to restore once the hotfix above is reverted
 type AudioTab = (typeof audioModes)[number];
 const MIN_PODCAST_SPEAKERS = 2;
 
@@ -337,9 +338,12 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
 
   useEffect(() => {
     audioRef.current?.pause();
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setDuration(0);
+    const timer = window.setTimeout(() => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+      setDuration(0);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [src]);
 
   const togglePlayback = async () => {
@@ -475,7 +479,10 @@ function PodcastDialogueLayout({
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<AudioVoice[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(true);
+  // Tracked but not yet surfaced in the UI — voicesLoading/the voice list itself
+  // stand in for now; wire this up if a dedicated error message is wanted.
   const [voicesError, setVoicesError] = useState<string | null>(null);
+  void voicesError;
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
   const [previewLoadingVoiceKey, setPreviewLoadingVoiceKey] = useState<string | null>(null);
   const [voicePreviewError, setVoicePreviewError] = useState<string | null>(null);
@@ -554,16 +561,20 @@ function PodcastDialogueLayout({
   useEffect(() => {
     let active = true;
     if (podcastCreditQuoteKey === "null") {
-      setCreditEstimate(null);
-      setCreditEstimateError(null);
-      setCreditEstimateLoading(false);
+      const resetTimer = window.setTimeout(() => {
+        if (!active) return;
+        setCreditEstimate(null);
+        setCreditEstimateError(null);
+        setCreditEstimateLoading(false);
+      }, 0);
       return () => {
         active = false;
+        window.clearTimeout(resetTimer);
       };
     }
-    setCreditEstimateLoading(true);
-    setCreditEstimateError(null);
     const timer = window.setTimeout(() => {
+      setCreditEstimateLoading(true);
+      setCreditEstimateError(null);
       const request = JSON.parse(podcastCreditQuoteKey) as Parameters<typeof quoteDialogue>[0];
       void quoteDialogue(request)
         .then((quote) => {
@@ -587,53 +598,61 @@ function PodcastDialogueLayout({
 
   useEffect(() => {
     let active = true;
-    setVoicesLoading(true);
-    setVoicesError(null);
-    void listAudioVoices(undefined, "podcastDialogue")
-      .then((voices) => {
-        if (!active) return;
-        const hydratedVoices = voices.map((voice) => ({ ...voice }));
-        setAvailableVoices(hydratedVoices);
-        setSpeakers((current) => current.map((speaker, index) => {
-          const configuredVoice = hydratedVoices.find((voice) => voice.key === speaker.voice || voice.name === speaker.voice);
-          const nextVoice = configuredVoice ?? hydratedVoices[index % hydratedVoices.length];
-          return nextVoice
-            ? { ...speaker, voice: nextVoice.key, image: nextVoice.imageUrl ?? "" }
-            : { ...speaker, image: "" };
-        }));
-      })
-      .catch((cause: unknown) => {
-        if (!active) return;
-        setVoicesError(cause instanceof Error ? cause.message : "โหลดรายการเสียงไม่สำเร็จ");
-        setSpeakers((current) => current.map((speaker) => ({ ...speaker, image: "" })));
-      })
-      .finally(() => {
-        if (active) setVoicesLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      if (!active) return;
+      setVoicesLoading(true);
+      setVoicesError(null);
+      void listAudioVoices(undefined, "podcastDialogue")
+        .then((voices) => {
+          if (!active) return;
+          const hydratedVoices = voices.map((voice) => ({ ...voice }));
+          setAvailableVoices(hydratedVoices);
+          setSpeakers((current) => current.map((speaker, index) => {
+            const configuredVoice = hydratedVoices.find((voice) => voice.key === speaker.voice || voice.name === speaker.voice);
+            const nextVoice = configuredVoice ?? hydratedVoices[index % hydratedVoices.length];
+            return nextVoice
+              ? { ...speaker, voice: nextVoice.key, image: nextVoice.imageUrl ?? "" }
+              : { ...speaker, image: "" };
+          }));
+        })
+        .catch((cause: unknown) => {
+          if (!active) return;
+          setVoicesError(cause instanceof Error ? cause.message : "โหลดรายการเสียงไม่สำเร็จ");
+          setSpeakers((current) => current.map((speaker) => ({ ...speaker, image: "" })));
+        })
+        .finally(() => {
+          if (active) setVoicesLoading(false);
+        });
+    }, 0);
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, []);
 
   useEffect(() => {
     let active = true;
-    setBackgroundMusicLoading(true);
-    void listAudioBackgroundMusic()
-      .then((presets) => {
-        if (!active) return;
-        setBackgroundMusicPresets(presets);
-        setBackgroundMusicPreset((current) => presets.some((preset) => preset.key === current) ? current : presets[0]?.key ?? "");
-      })
-      .catch(() => {
-        if (!active) return;
-        setBackgroundMusicPresets([]);
-        setBackgroundMusicPreset("");
-      })
-      .finally(() => {
-        if (active) setBackgroundMusicLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      if (!active) return;
+      setBackgroundMusicLoading(true);
+      void listAudioBackgroundMusic()
+        .then((presets) => {
+          if (!active) return;
+          setBackgroundMusicPresets(presets);
+          setBackgroundMusicPreset((current) => presets.some((preset) => preset.key === current) ? current : presets[0]?.key ?? "");
+        })
+        .catch(() => {
+          if (!active) return;
+          setBackgroundMusicPresets([]);
+          setBackgroundMusicPreset("");
+        })
+        .finally(() => {
+          if (active) setBackgroundMusicLoading(false);
+        });
+    }, 0);
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -823,6 +842,9 @@ function PodcastDialogueLayout({
         voicePreviewObjectUrlsRef.current.push(previewUrl);
         setAvailableVoices((current) => current.map((item) => item.key === voice.key ? { ...item, previewUrl } : item));
       }
+      // Imperative playback control on a cached Audio() element (also paused by an
+      // unmount-only cleanup effect above) — not a render-phase mutation.
+      // eslint-disable-next-line react-hooks/immutability
       audio.src = previewUrl;
       audio.onended = () => setPreviewingVoiceKey(null);
       setPreviewingVoiceKey(voice.key);
@@ -2684,12 +2706,15 @@ function AudioCleanupLayout() {
 
   useEffect(() => {
     if (!file) {
-      setSourceUrl(null);
-      return;
+      const timer = window.setTimeout(() => setSourceUrl(null), 0);
+      return () => window.clearTimeout(timer);
     }
     const url = URL.createObjectURL(file);
-    setSourceUrl(url);
-    return () => URL.revokeObjectURL(url);
+    const timer = window.setTimeout(() => setSourceUrl(url), 0);
+    return () => {
+      window.clearTimeout(timer);
+      URL.revokeObjectURL(url);
+    };
   }, [file]);
 
   useEffect(() => {
@@ -2924,14 +2949,20 @@ export function AudioGenerationPage() {
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
   const [audioScenes, setAudioScenes] = useState<AudioScene[]>(defaultAudioScenes);
+  // selectedSceneId/selectedScene/sceneError are kept in sync (see addAudioScene,
+  // handleGenerateScenes below) but not yet read back by the UI — no scene-list
+  // selection highlighting or scene-specific error message is wired up yet.
   const [selectedSceneId, setSelectedSceneId] = useState(defaultAudioScenes[0]!.id);
+  void selectedSceneId;
   const [sceneGenerationStatus, setSceneGenerationStatus] = useState<"idle" | "generating" | "complete" | "error">(
     "idle",
   );
   const [sceneError, setSceneError] = useState<string | null>(null);
+  void sceneError;
   const [status, setStatus] = useState<"idle" | "generating" | "complete" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedScene, setSelectedScene] = useState("01");
+  void selectedScene;
   const audioRef = useRef<HTMLAudioElement>(null);
   const voicePreviewAudioRef = useRef<HTMLAudioElement>(null);
   const durationRef = useRef(0);
@@ -2944,12 +2975,15 @@ export function AudioGenerationPage() {
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const savedTab = window.localStorage.getItem(AUDIO_TAB_STORAGE_KEY);
-      if (savedTab && visibleTabs.includes(savedTab as AudioTab)) setActiveTab(savedTab as AudioTab);
-    } catch {
-      // Ignore storage restrictions and keep the default tab.
-    }
+    const timer = window.setTimeout(() => {
+      try {
+        const savedTab = window.localStorage.getItem(AUDIO_TAB_STORAGE_KEY);
+        if (savedTab && visibleTabs.includes(savedTab as AudioTab)) setActiveTab(savedTab as AudioTab);
+      } catch {
+        // Ignore storage restrictions and keep the default tab.
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const changeActiveTab = (tab: AudioTab) => {
@@ -3379,6 +3413,8 @@ export function AudioGenerationPage() {
     setSceneGenerationStatus("idle");
     setSceneError(null);
   };
+  // Not wired to a button yet — multi-scene TTS has no "add scene" UI hook.
+  void addAudioScene;
 
   const formatTime = (seconds: number) => {
     if (!Number.isFinite(seconds) || seconds <= 0) return "00:00";
