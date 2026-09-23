@@ -2,6 +2,11 @@
 import { useTemplateSettings } from "@/features/templates/use-template-settings";
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 import { promptMaxLength } from "@/lib/prompt-limits";
+import {
+  emitGenerationRequestFailed,
+  emitGenerationRequestFinished,
+  emitGenerationSubmitting,
+} from "@/lib/generation-progress-events";
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
@@ -217,6 +222,20 @@ function formatAudioHistoryDate(value: string, locale: "th" | "en"): string {
 
 function createAudioIdempotencyKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function startAudioProgress(feature: string): string {
+  const requestId = createAudioIdempotencyKey();
+  emitGenerationSubmitting({ feature, requestId });
+  return requestId;
+}
+
+function finishAudioProgress(feature: string, requestId: string): void {
+  emitGenerationRequestFinished({ feature, requestId });
+}
+
+function failAudioProgress(feature: string, requestId: string): void {
+  emitGenerationRequestFailed({ feature, requestId });
 }
 
 function FieldLabel({ children, hint }: { children: ReactNode; hint?: string }) {
@@ -662,6 +681,7 @@ function PodcastDialogueLayout({
     setPreviewDuration(0);
     setStatus("generating");
     setError(null);
+    const requestId = startAudioProgress("audio-podcast");
     try {
       const result = await createDialogue({
         script: episodeScript,
@@ -709,7 +729,9 @@ function PodcastDialogueLayout({
         setPodcastHistory(nextHistory);
       }
       setStatus("ready");
+      finishAudioProgress("audio-podcast", requestId);
     } catch (cause) {
+      failAudioProgress("audio-podcast", requestId);
       setError(cause instanceof Error ? cause.message : "Podcast generation failed");
       setStatus("error");
     }
@@ -1623,6 +1645,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     }
     setStatus("creating");
     setError(null);
+    const requestId = startAudioProgress("audio-voice-clone");
     try {
       const result = await createVoiceClone({
         name: voiceName,
@@ -1634,7 +1657,9 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
       setVoiceId(result.voiceId);
       setStatus("ready");
       void refreshSavedVoices();
+      finishAudioProgress("audio-voice-clone", requestId);
     } catch (cause) {
+      failAudioProgress("audio-voice-clone", requestId);
       setError(cause instanceof Error ? translateError(cause.message) : t("create.audio.clone.error.createFailed"));
       setStatus("error");
     }
@@ -1648,6 +1673,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     }
     setStatus("previewing");
     setError(null);
+    const requestId = startAudioProgress("audio-voice-clone");
     try {
       const result = await previewVoiceClone(voiceId, {
         text: testPhrase,
@@ -1673,7 +1699,9 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
         metadata: { character },
       });
       setStatus("ready");
+      finishAudioProgress("audio-voice-clone", requestId);
     } catch (cause) {
+      failAudioProgress("audio-voice-clone", requestId);
       setError(cause instanceof Error ? translateError(cause.message) : t("create.audio.clone.error.previewFailed"));
       setStatus("error");
     }
@@ -2225,18 +2253,20 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   }, [sourceMode, effectDuration, variationCount]);
 
   const handleGenerate = async () => {
+    const inputVideoFile = videoFile;
+    if (sourceMode === "video" && !inputVideoFile) {
+      setError(t("create.audio.sfx.error.noVideo"));
+      setStatus("error");
+      return;
+    }
+    const requestId = startAudioProgress("audio-sound-effects");
     setStatus("generating");
     setError(null);
     try {
       let nextVariants: SoundEffectVariant[];
       let nextUrls: Record<number, string> = {};
       if (sourceMode === "video") {
-        if (!videoFile) {
-          setError(t("create.audio.sfx.error.noVideo"));
-          setStatus("error");
-          return;
-        }
-        const result = await createVideoSoundEffect({ video: videoFile, description: videoDescription.trim() || undefined, outputFormat });
+        const result = await createVideoSoundEffect({ video: inputVideoFile!, description: videoDescription.trim() || undefined, outputFormat });
         nextUrls = { 1: URL.createObjectURL(result.blob) };
         nextVariants = [{ index: 1, audioBase64: "", contentType: result.contentType, outputFormat }];
         void onHistorySaved?.({
@@ -2279,7 +2309,9 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       setProgress(0);
       setIsPlaying(false);
       setStatus("ready");
+      finishAudioProgress("audio-sound-effects", requestId);
     } catch (cause) {
+      failAudioProgress("audio-sound-effects", requestId);
       setError(cause instanceof Error ? cause.message : "Sound effect generation failed");
       setStatus("error");
     }
@@ -3429,6 +3461,7 @@ export function AudioGenerationPage() {
   const handleGenerate = async () => {
     setStatus("generating");
     setErrorMessage(null);
+    const requestId = startAudioProgress("audio-text-to-speech");
     try {
       const result = await createTextToSpeech({
         text: prompt,
@@ -3445,7 +3478,9 @@ export function AudioGenerationPage() {
       });
       setGeneratedAudioResult(result, `Generation ${historySequenceRef.current + 1}`, selectedVoice);
       setStatus("complete");
+      finishAudioProgress("audio-text-to-speech", requestId);
     } catch (error) {
+      failAudioProgress("audio-text-to-speech", requestId);
       setStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Audio generation failed");
     }
@@ -3477,6 +3512,7 @@ export function AudioGenerationPage() {
     setStatus("generating");
     setSceneError(null);
     setErrorMessage(null);
+    const requestId = startAudioProgress("audio-scenes");
     try {
       const result = await createTextToSpeechScenes({
         scenes: scenesToGenerate.map(({ title, text, voice }) => ({ title, text, voice })),
@@ -3496,7 +3532,9 @@ export function AudioGenerationPage() {
       });
       setSceneGenerationStatus("complete");
       setStatus("complete");
+      finishAudioProgress("audio-scenes", requestId);
     } catch (error) {
+      failAudioProgress("audio-scenes", requestId);
       setSceneGenerationStatus("error");
       setStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Scene generation failed");
