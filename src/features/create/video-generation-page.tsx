@@ -53,7 +53,7 @@ import { MobileModeDropdown } from "./components/mobile-mode-dropdown";
 import { VideoPreviewLiveBadge, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
-import { emitGenerationStarted, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
 import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 import { getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import { listGenerationHistory } from "@/lib/api/generations";
@@ -2489,6 +2489,8 @@ export function VideoGenerationPage() {
     setPreviewView("latest");
     setContinuationInfo(null);
     setGenerationStatus("uploading");
+    const requestId = crypto.randomUUID();
+    emitGenerationSubmitting({ feature: "image-to-video", requestId });
     try {
       const uploadedImages: Array<string | undefined> = [];
       const uploadedReferenceImages: string[] = [];
@@ -2565,7 +2567,7 @@ export function VideoGenerationPage() {
       setNotice(t("create.video.common.submittingVideo"));
       const created = await createVideoStoryboard(request);
       if (!created.storyboardId) throw new Error("Video generation did not return a storyboard ID");
-      emitGenerationStarted({ feature: "image-to-video", generationId: created.storyboardId, pollUrl: created.pollUrl ?? `/api/v1/generations/video/image-to-video/${encodeURIComponent(created.storyboardId)}/status`, workspaceId: workspaceId ?? undefined, model: selectedModel, status: "queued", totalCount: created.totalScenes ?? scenes.length, completedCount: created.completedScenes ?? 0 });
+      emitGenerationStarted({ feature: "image-to-video", requestId, generationId: created.storyboardId, pollUrl: created.pollUrl ?? `/api/v1/generations/video/image-to-video/${encodeURIComponent(created.storyboardId)}/status`, workspaceId: workspaceId ?? undefined, model: selectedModel, status: "queued", totalCount: created.totalScenes ?? scenes.length, completedCount: created.completedScenes ?? 0 });
       const returnedCreditCost = Number(created.totalCreditCost);
       const quotedVideoCreditCost = Number(creditEstimate);
       // The create response may only contain the first scene for continuous
@@ -2643,6 +2645,7 @@ export function VideoGenerationPage() {
           : [completedHistoryItem, ...current]);
       });
     } catch (error: unknown) {
+      emitGenerationRequestFailed({ feature: "image-to-video", requestId });
       const message = formatGenerationError(error, "Unable to generate video");
       setGenerationStatus("failed");
       setGenerationError(message);

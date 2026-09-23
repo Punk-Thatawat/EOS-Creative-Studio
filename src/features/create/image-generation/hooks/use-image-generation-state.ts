@@ -10,6 +10,12 @@ import { uploadImageAsset, uploadMaskAsset } from "@/lib/api/storage";
 import type { PendingImageSlot, PendingImageUpload } from "@/lib/media/deferred-upload";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { getAccountScopedStorageKey } from "@/lib/generation-progress-storage";
+import {
+  emitGenerationRequestFailed,
+  emitGenerationRequestFinished,
+  emitGenerationStarted,
+  emitGenerationSubmitting,
+} from "@/lib/generation-progress-events";
 import { useImageCreditEstimate } from "./use-image-credit-estimate";
 import {
   imageCountOptions,
@@ -152,6 +158,22 @@ function featureKeyForTab(tab: ImageGenerationTab): string {
     case "Upscale": return "upscale";
     case "Extend Image": return "extend-image";
   }
+}
+
+function emitTrackedImageProgress(feature: string, requestId: string, progress: GenerationProgress): void {
+  if (progress.status !== "queued" && progress.status !== "processing") return;
+  emitGenerationStarted({
+    feature,
+    requestId,
+    generationId: progress.generationId,
+    pollUrl: progress.pollUrl ?? `/api/v1/generations/${encodeURIComponent(progress.generationId)}/status`,
+    workspaceId: progress.workspaceId,
+    provider: progress.provider,
+    model: progress.model,
+    status: progress.status,
+    totalCount: progress.totalCount,
+    completedCount: progress.completedCount,
+  });
 }
 
 function supportsBackgroundMode(model: GenerationModelOption, mode: BackgroundMode, hasMask = false): boolean {
@@ -2098,6 +2120,8 @@ export function useImageGenerationState() {
     refreshRecentGenerations,
     generateImage: async () => {
       if (activeTab !== "Text to Image" || isGenerating || !prompt.trim() || prompt.length > textToImagePromptMaxLength) return;
+      const requestId = crypto.randomUUID();
+      emitGenerationSubmitting({ feature: "text-to-image", requestId });
       generationRunRef.current = true;
       setPendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("text-to-image"));
@@ -2119,6 +2143,7 @@ export function useImageGenerationState() {
       try {
         const handleProgress = (progress: GenerationProgress) => {
           applyGenerationProgress(progress);
+          emitTrackedImageProgress("text-to-image", requestId, progress);
           if (progress.status === "failed" || progress.status === "cancelled") terminalStatus = progress.status;
         };
         const result = await createTextToImage({ prompt, promptOptimizerEnabled, ...(style ? { style } : {}), ...(selectedModelCapabilities?.aspectRatioParameter ? {} : { ratio: effectiveRatio }), resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count: effectiveCount, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedModel ? { model: selectedModel } : {}), idempotencyKey: crypto.randomUUID() }, handleProgress, abortController.signal);
@@ -2130,6 +2155,7 @@ export function useImageGenerationState() {
         await loadRecentGenerations(result.data.workspaceId);
         setRecentGenerationUrls((currentUrls) => Array.from(new Set([...urls, ...currentUrls])));
       } catch (error) {
+        emitGenerationRequestFailed({ feature: "text-to-image", requestId });
         if (abortController.signal.aborted || generationCancelRequestedRef.current) {
           setGenerationStatus("cancelled");
         } else {
@@ -2137,12 +2163,15 @@ export function useImageGenerationState() {
           setGenerationError(formatGenerationError(error, "Image generation failed"));
         }
       } finally {
+        emitGenerationRequestFinished({ feature: "text-to-image", requestId });
         if (generationAbortRef.current === abortController) generationAbortRef.current = null;
         setIsGenerating(false);
       }
     },
     extendImage: async () => {
       if (activeTab !== "Extend Image" || extendIsGenerating || !extendSourceImage || !extendSupportsInput) return;
+      const requestId = crypto.randomUUID();
+      emitGenerationSubmitting({ feature: "extend-image", requestId });
       extendRunRef.current = true;
       setExtendPendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("extend-image"));
@@ -2179,7 +2208,10 @@ export function useImageGenerationState() {
           ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}),
           ...(selectedExtendModel ? { model: selectedExtendModel } : {}),
           idempotencyKey: crypto.randomUUID(),
-        }, applyExtendProgress, abortController.signal);
+        }, (progress) => {
+          applyExtendProgress(progress);
+          emitTrackedImageProgress("extend-image", requestId, progress);
+        }, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
@@ -2190,6 +2222,7 @@ export function useImageGenerationState() {
         await loadRecentGenerations(result.data.workspaceId, "extend-image");
         setRecentGenerationUrls((currentUrls) => Array.from(new Set([...urls, ...currentUrls])));
       } catch (error) {
+        emitGenerationRequestFailed({ feature: "extend-image", requestId });
         if (abortController.signal.aborted || extendCancelRequestedRef.current) {
           setExtendStatus("cancelled");
         } else {
@@ -2199,12 +2232,15 @@ export function useImageGenerationState() {
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("extend-image"));
         setExtendPendingGeneration(null);
       } finally {
+        emitGenerationRequestFinished({ feature: "extend-image", requestId });
         if (extendAbortRef.current === abortController) extendAbortRef.current = null;
         setExtendIsGenerating(false);
       }
     },
     generateUpscale: async () => {
       if (activeTab !== "Upscale" || upscaleIsGenerating || !upscaleSourceImage) return;
+      const requestId = crypto.randomUUID();
+      emitGenerationSubmitting({ feature: "upscale", requestId });
       upscaleRunRef.current = true;
       setUpscalePendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("upscale"));
@@ -2234,7 +2270,10 @@ export function useImageGenerationState() {
           ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}),
           ...(selectedUpscaleModel ? { model: selectedUpscaleModel } : {}),
           idempotencyKey: crypto.randomUUID(),
-        }, applyUpscaleProgress, abortController.signal);
+        }, (progress) => {
+          applyUpscaleProgress(progress);
+          emitTrackedImageProgress("upscale", requestId, progress);
+        }, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
@@ -2245,6 +2284,7 @@ export function useImageGenerationState() {
         await loadRecentGenerations(result.data.workspaceId, "upscale");
         setRecentGenerationUrls((currentUrls) => Array.from(new Set([...urls, ...currentUrls])));
       } catch (error) {
+        emitGenerationRequestFailed({ feature: "upscale", requestId });
         if (abortController.signal.aborted || upscaleCancelRequestedRef.current) {
           setUpscaleStatus("cancelled");
         } else {
@@ -2254,12 +2294,15 @@ export function useImageGenerationState() {
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("upscale"));
         setUpscalePendingGeneration(null);
       } finally {
+        emitGenerationRequestFinished({ feature: "upscale", requestId });
         if (upscaleAbortRef.current === abortController) upscaleAbortRef.current = null;
         setUpscaleIsGenerating(false);
       }
     },
     transformImage: async () => {
       if (activeTab !== "Image to Image" || imageToImageIsGenerating || !imageToImageSourceImage || !imageToImagePrompt.trim()) return;
+      const requestId = crypto.randomUUID();
+      emitGenerationSubmitting({ feature: "image-to-image", requestId });
       imageToImageRunRef.current = true;
       setImageToImagePendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("image-to-image"));
@@ -2280,7 +2323,10 @@ export function useImageGenerationState() {
         const uploadedSourceImage = uploadedSourceImages[0];
         if (!uploadedSourceImage) throw new Error("Please choose a reference image before transforming.");
         setImageToImageSourceImagesAndPersist(uploadedSourceImages);
-        const result = await createImageToImage({ workspaceId, sourceImage: uploadedSourceImage, ...(uploadedSourceImages.length > 0 ? { sourceImages: uploadedSourceImages } : {}), prompt: imageToImagePrompt, promptOptimizerEnabled, ...(style ? { style } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, applyImageToImageProgress, abortController.signal);
+        const result = await createImageToImage({ workspaceId, sourceImage: uploadedSourceImage, ...(uploadedSourceImages.length > 0 ? { sourceImages: uploadedSourceImages } : {}), prompt: imageToImagePrompt, promptOptimizerEnabled, ...(style ? { style } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, (progress) => {
+          applyImageToImageProgress(progress);
+          emitTrackedImageProgress("image-to-image", requestId, progress);
+        }, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
@@ -2291,6 +2337,7 @@ export function useImageGenerationState() {
         await loadRecentGenerations(result.data.workspaceId, "image-to-image");
         setRecentGenerationUrls((currentUrls) => Array.from(new Set([...urls, ...currentUrls])));
       } catch (error) {
+        emitGenerationRequestFailed({ feature: "image-to-image", requestId });
         if (abortController.signal.aborted || imageToImageCancelRequestedRef.current) {
           setImageToImageStatus("cancelled");
         } else {
@@ -2300,6 +2347,7 @@ export function useImageGenerationState() {
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("image-to-image"));
         setImageToImagePendingGeneration(null);
       } finally {
+        emitGenerationRequestFinished({ feature: "image-to-image", requestId });
         if (imageToImageAbortRef.current === abortController) imageToImageAbortRef.current = null;
         setImageToImageIsGenerating(false);
       }
@@ -2307,6 +2355,8 @@ export function useImageGenerationState() {
     generateStyleTransfer: async () => {
       const hasStyleInstruction = (styleSourceMode === "preset" && Boolean(styleTransferPreset)) || (styleSourceMode === "reference" && Boolean(styleReferenceImage)) || Boolean(styleTransferPrompt.trim());
       if (activeTab !== "AI Style Transfer" || styleTransferIsGenerating || !styleTransferSourceImage || !styleTransferSupportsInput || !hasStyleInstruction) return;
+      const requestId = crypto.randomUUID();
+      emitGenerationSubmitting({ feature: "style-transfer", requestId });
       styleTransferRunRef.current = true;
       setStyleTransferPendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("style-transfer"));
@@ -2347,7 +2397,10 @@ export function useImageGenerationState() {
           ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}),
           ...(selectedStyleTransferModel ? { model: selectedStyleTransferModel } : {}),
           idempotencyKey: crypto.randomUUID(),
-        }, applyStyleTransferProgress, abortController.signal);
+        }, (progress) => {
+          applyStyleTransferProgress(progress);
+          emitTrackedImageProgress("style-transfer", requestId, progress);
+        }, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
         window.sessionStorage.setItem("eos.generation.workspace-id", result.data.workspaceId);
@@ -2358,6 +2411,7 @@ export function useImageGenerationState() {
         await loadRecentGenerations(result.data.workspaceId, "style-transfer");
         setRecentGenerationUrls((currentUrls) => Array.from(new Set([...urls, ...currentUrls])));
       } catch (error) {
+        emitGenerationRequestFailed({ feature: "style-transfer", requestId });
         if (abortController.signal.aborted || styleTransferCancelRequestedRef.current) {
           setStyleTransferStatus("cancelled");
         } else {
@@ -2367,6 +2421,7 @@ export function useImageGenerationState() {
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("style-transfer"));
         setStyleTransferPendingGeneration(null);
       } finally {
+        emitGenerationRequestFinished({ feature: "style-transfer", requestId });
         if (styleTransferAbortRef.current === abortController) styleTransferAbortRef.current = null;
         setStyleTransferIsGenerating(false);
       }
@@ -2374,6 +2429,8 @@ export function useImageGenerationState() {
     generateBackground: async () => {
       const hasModeInstruction = backgroundMode === "remove" || backgroundMode === "solid" || (backgroundSupportsPrompt && Boolean(backgroundPrompt.trim())) || Boolean(backgroundReferenceImage);
       if (activeTab !== "AI Background" || backgroundIsGenerating || !backgroundSourceImage || !backgroundSupportsInput || !hasModeInstruction) return;
+      const requestId = crypto.randomUUID();
+      emitGenerationSubmitting({ feature: "background-removal", requestId });
       backgroundRunRef.current = true;
       setBackgroundPendingGeneration(null);
       window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
@@ -2424,7 +2481,10 @@ export function useImageGenerationState() {
           ...(requestMode !== "remove" && Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}),
           ...(activeSelectedModel ? { model: activeSelectedModel } : {}),
           idempotencyKey: crypto.randomUUID(),
-        }, applyBackgroundProgress, abortController.signal);
+        }, (progress) => {
+          applyBackgroundProgress(progress);
+          emitTrackedImageProgress("background-removal", requestId, progress);
+        }, abortController.signal);
         const rawUrls = result.data.output.map((output) => output.url).filter(Boolean);
         const urls = isLocalSolidBackground
           ? await Promise.all(rawUrls.map(async (url) => uploadImageAsset(await createSolidBackgroundFile(url, backgroundColor, effectiveOutputFormat), { purpose: "content", feature: "background-removal", workspaceId: result.data.workspaceId })))
@@ -2447,6 +2507,7 @@ export function useImageGenerationState() {
         await loadRecentGenerations(result.data.workspaceId, "background-removal");
         setRecentGenerationUrls((currentUrls) => Array.from(new Set([...urls, ...currentUrls])));
       } catch (error) {
+        emitGenerationRequestFailed({ feature: "background-removal", requestId });
         if (abortController.signal.aborted || backgroundCancelRequestedRef.current) {
           setBackgroundStatus("cancelled");
         } else {
@@ -2455,6 +2516,7 @@ export function useImageGenerationState() {
         }
         window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature("background-removal"));
       } finally {
+        emitGenerationRequestFinished({ feature: "background-removal", requestId });
         if (backgroundAbortRef.current === abortController) backgroundAbortRef.current = null;
         setBackgroundIsGenerating(false);
       }

@@ -55,6 +55,8 @@ const en = {
   "shell.generation.videosUnit": "videos",
   "shell.generation.imageUnit": "image",
   "shell.generation.imagesUnit": "images",
+  "shell.generation.audioUnit": "audio",
+  "shell.generation.audiosUnit": "audio",
 
   "settings.eyebrow": "WORKSPACE",
   "settings.title": "Settings",
@@ -1188,6 +1190,8 @@ const th: Record<keyof typeof en, string> = {
   "shell.generation.videosUnit": "วิดีโอ",
   "shell.generation.imageUnit": "รูปภาพ",
   "shell.generation.imagesUnit": "รูปภาพ",
+  "shell.generation.audioUnit": "เสียง",
+  "shell.generation.audiosUnit": "เสียง",
 
   "settings.eyebrow": "เวิร์กสเปซ",
   "settings.title": "ตั้งค่า",

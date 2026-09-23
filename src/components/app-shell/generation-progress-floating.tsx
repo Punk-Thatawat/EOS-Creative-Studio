@@ -10,7 +10,11 @@ import {
   type GenerationProgress,
   type PendingGeneration,
 } from "@/lib/api/generations";
-import { emitGenerationCompleted } from "@/lib/generation-progress-events";
+import {
+  emitGenerationCompleted,
+  GENERATION_REQUEST_FAILED_EVENT,
+  GENERATION_REQUEST_FINISHED_EVENT,
+} from "@/lib/generation-progress-events";
 import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 import { getDismissedProgressStorageKey, getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import { useHydrated } from "@/components/app-shell/use-hydrated";
@@ -30,6 +34,12 @@ const generationLabelKeys: Record<string, TranslationKey> = {
   "motion-transfer": "create.video.tabs.motionTransfer",
   lipsync: "create.video.tabs.lipsync",
   "extend-video": "create.video.tabs.extendVideo",
+  "audio-text-to-speech": "create.audio.tabs.textToSpeech",
+  "audio-scenes": "create.audio.tabs.textToSpeech",
+  "audio-podcast": "create.audio.tabs.podcastDialogue",
+  "audio-voice-clone": "create.audio.tabs.voiceClone",
+  "audio-sound-effects": "create.audio.tabs.soundEffects",
+  "audio-cleanup": "create.audio.tabs.audioCleanup",
 };
 
 const generationFeatureOptions = [
@@ -105,6 +115,12 @@ const generationFeatureOptions = [
     tab: "extend-video",
     kind: "video",
   },
+  { feature: "audio-text-to-speech", key: "eos.generation.pending.audio-text-to-speech", label: "Text to Speech", tab: "Text to Speech", kind: "audio" },
+  { feature: "audio-scenes", key: "eos.generation.pending.audio-scenes", label: "Text to Speech", tab: "Text to Speech", kind: "audio" },
+  { feature: "audio-podcast", key: "eos.generation.pending.audio-podcast", label: "Podcast & Dialogue", tab: "Podcast & Dialogue", kind: "audio" },
+  { feature: "audio-voice-clone", key: "eos.generation.pending.audio-voice-clone", label: "Voice Clone", tab: "Voice Clone", kind: "audio" },
+  { feature: "audio-sound-effects", key: "eos.generation.pending.audio-sound-effects", label: "Sound Effects", tab: "Sound Effects", kind: "audio" },
+  { feature: "audio-cleanup", key: "eos.generation.pending.audio-cleanup", label: "Audio Cleanup", tab: "Audio Cleanup", kind: "audio" },
 ] as const;
 
 type ActivePendingGeneration = {
@@ -112,7 +128,9 @@ type ActivePendingGeneration = {
   feature: string;
   label: string;
   tab: string;
-  kind: "image" | "video";
+  kind: "image" | "video" | "audio";
+  requestId?: string;
+  isSubmitting?: boolean;
   pending: PendingGeneration;
 };
 
@@ -156,7 +174,7 @@ function toPendingGeneration(generation: GenerationHistoryItem): ActivePendingGe
       totalCount: generation.totalCount ?? Math.max(1, generation.output?.length ?? 1),
       completedCount: generation.completedCount ?? generation.output?.length ?? 0,
       output: generation.output ?? [],
-      kind: config.kind,
+      kind: config.kind === "audio" ? "image" : config.kind,
     },
   };
 }
@@ -193,7 +211,7 @@ function readActivePendingGenerations(): ActivePendingGeneration[] {
                   ? parsed.output.length
                   : 0,
             output: Array.isArray(parsed.output) ? (parsed.output as PendingGeneration["output"]) : [],
-            kind,
+            kind: kind === "audio" ? "image" : kind,
           },
         },
       ];
@@ -212,7 +230,15 @@ function readActivePendingGenerations(): ActivePendingGeneration[] {
 function mergeActiveGenerations(...groups: ActivePendingGeneration[][]): ActivePendingGeneration[] {
   const byId = new Map<string, ActivePendingGeneration>();
   for (const group of groups) {
-    for (const item of group) byId.set(item.pending.generationId, item);
+    for (const item of group) {
+      const key = item.requestId ?? item.pending.generationId;
+      const previous = Array.from(byId.entries()).find(([, current]) =>
+        (Boolean(item.requestId) && current.requestId === item.requestId) ||
+        current.pending.generationId === item.pending.generationId,
+      );
+      if (previous) byId.delete(previous[0]);
+      byId.set(key, item);
+    }
   }
   return Array.from(byId.values());
 }
@@ -227,6 +253,7 @@ function isPersistableProgress(value: unknown): value is ActivePendingGeneration
     typeof item.label === "string" &&
     typeof item.tab === "string" &&
     (item.kind === "image" || item.kind === "video") &&
+    !item.isSubmitting &&
     typeof pending?.generationId === "string" &&
     typeof pending.pollUrl === "string" &&
     (pending.status === "queued" || pending.status === "processing" || pending.status === "completed") &&
@@ -307,6 +334,7 @@ function clearDismissedGeneration(generationId: string): void {
 }
 
 function upsertPersistedProgress(item: ActivePendingGeneration): void {
+  if (item.isSubmitting) return;
   const current = readPersistedProgress();
   const next = mergeActiveGenerations(current, [item]);
   if (JSON.stringify(current) !== JSON.stringify(next)) writePersistedProgress(next);
@@ -434,6 +462,7 @@ export function GenerationProgressFloating() {
           feature?: string;
           generationId?: string;
           pollUrl?: string;
+          requestId?: string;
           workspaceId?: string;
           provider?: string;
           model?: string;
@@ -442,22 +471,25 @@ export function GenerationProgressFloating() {
           completedCount?: number;
         }>
       ).detail;
-      if (!detail?.feature || !detail.generationId || !detail.pollUrl) return;
+      if (!detail?.feature || (!detail.generationId && !detail.requestId)) return;
       setIsOverlayDismissed(false);
-      dismissedGenerationIdsRef.current.delete(detail.generationId);
-      clearDismissedGeneration(detail.generationId);
+      const requestId = detail.requestId;
+      const generationId = detail.generationId ?? `pending:${requestId}`;
+      const isSubmitting = !detail.generationId || !detail.pollUrl;
+      dismissedGenerationIdsRef.current.delete(generationId);
+      clearDismissedGeneration(generationId);
       const config = featureConfig(detail.feature);
       const pending: PendingGeneration = {
-        generationId: detail.generationId,
-        pollUrl: detail.pollUrl,
+        generationId,
+        pollUrl: detail.pollUrl ?? "",
         workspaceId: detail.workspaceId ?? "",
         provider: detail.provider ?? "",
         model: detail.model ?? "",
-        status: detail.status ?? "queued",
+        status: detail.status ?? (config.kind === "audio" ? "processing" : "queued"),
         totalCount: detail.totalCount ?? 1,
         completedCount: detail.completedCount ?? 0,
         output: [],
-        kind: config.kind,
+        kind: config.kind === "audio" ? "image" : config.kind,
       };
       const startedItem = {
         key: config.key,
@@ -465,13 +497,34 @@ export function GenerationProgressFloating() {
         label: config.label,
         tab: config.tab,
         kind: config.kind,
+        ...(requestId ? { requestId } : {}),
+        isSubmitting,
         pending,
       } satisfies ActivePendingGeneration;
       upsertPersistedProgress(startedItem);
       setActive((current) => mergeActiveGenerations(current, [startedItem]));
     };
+    const handleGenerationRequestFailed = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: string }>).detail;
+      if (!detail?.requestId) return;
+      setActive((current) => current.filter((item) => item.requestId !== detail.requestId));
+    };
+    const handleGenerationRequestFinished = (event: Event) => {
+      const detail = (event as CustomEvent<{ requestId?: string }>).detail;
+      if (!detail?.requestId) return;
+      setActive((current) => current.filter((item) => item.requestId !== detail.requestId || !item.isSubmitting));
+    };
+    const handleGenerationSubmitting = (event: Event) => handleGenerationStarted(event);
     window.addEventListener("eos:generation-started", handleGenerationStarted);
-    return () => window.removeEventListener("eos:generation-started", handleGenerationStarted);
+    window.addEventListener("eos:generation-submitting", handleGenerationSubmitting);
+    window.addEventListener(GENERATION_REQUEST_FAILED_EVENT, handleGenerationRequestFailed);
+    window.addEventListener(GENERATION_REQUEST_FINISHED_EVENT, handleGenerationRequestFinished);
+    return () => {
+      window.removeEventListener("eos:generation-started", handleGenerationStarted);
+      window.removeEventListener("eos:generation-submitting", handleGenerationSubmitting);
+      window.removeEventListener(GENERATION_REQUEST_FAILED_EVENT, handleGenerationRequestFailed);
+      window.removeEventListener(GENERATION_REQUEST_FINISHED_EVENT, handleGenerationRequestFinished);
+    };
   }, []);
 
   useEffect(() => {
@@ -527,6 +580,7 @@ export function GenerationProgressFloating() {
 
       for (const item of next) {
         const generationId = item.pending.generationId;
+        if (item.isSubmitting) continue;
         if (item.pending.status === "completed") continue;
         if (isImageCreatePage && hasSessionPendingGeneration(generationId)) continue;
         if (pollingMap.has(generationId)) continue;
@@ -558,7 +612,7 @@ export function GenerationProgressFloating() {
                   totalCount: progress.totalCount,
                   completedCount: progress.completedCount,
                   output: progress.output,
-                  kind: item.kind,
+                  kind: item.kind === "audio" ? "image" : item.kind,
                 },
               };
               const next = [...current];
@@ -639,7 +693,15 @@ export function GenerationProgressFloating() {
 
     const handleCardClick = () => {
       setIsCenterOpen(false);
-      router.push(`${kind === "video" ? "/create/video" : "/create/image"}?tab=${encodeURIComponent(tab)}`);
+      if (kind === "audio") {
+        try {
+          window.localStorage.setItem("eos.audio.active-tab", tab);
+        } catch {
+          // Opening the audio workspace still works if storage is unavailable.
+        }
+        router.push("/create/audio");
+      }
+      else router.push(`${kind === "video" ? "/create/video" : "/create/image"}?tab=${encodeURIComponent(tab)}`);
     };
 
     return (
@@ -651,7 +713,7 @@ export function GenerationProgressFloating() {
           aria-label={t("shell.generation.openItem", { label: localizedLabel })}
           title={t("shell.generation.openItemTitle", {
             label: localizedLabel,
-            studio: kind === "video" ? t("shell.nav.video") : t("shell.nav.image"),
+            studio: kind === "video" ? t("shell.nav.video") : kind === "audio" ? t("shell.nav.audio") : t("shell.nav.image"),
           })}
         >
           <div className={styles.itemHeading}>
@@ -690,9 +752,13 @@ export function GenerationProgressFloating() {
                     ? total === 1
                       ? t("shell.generation.videoUnit")
                       : t("shell.generation.videosUnit")
-                    : total === 1
-                      ? t("shell.generation.imageUnit")
-                      : t("shell.generation.imagesUnit"),
+                    : kind === "audio"
+                      ? total === 1
+                        ? t("shell.generation.audioUnit")
+                        : t("shell.generation.audiosUnit")
+                      : total === 1
+                        ? t("shell.generation.imageUnit")
+                        : t("shell.generation.imagesUnit"),
               })}
             </span>
             <span className={styles.eta}>
