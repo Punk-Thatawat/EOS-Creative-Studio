@@ -55,6 +55,7 @@ type AudioTab = typeof audioModes[number];
 
 // Keep only the main audio workflow visible while the advanced audio tools are being finalized.
 const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
+const TEXT_TO_SPEECH_MODEL = "elevenlabs/eleven-v3";
 
 const audioTabKeys = {
   "Text to Speech": "create.audio.tabs.textToSpeech",
@@ -606,8 +607,9 @@ export function AudioGenerationPage() {
     setModelLoadState("loading");
     try {
       const items = await listAudioModels("textToSpeech");
-      setAvailableModels(items);
-      setSelectedModel((current) => items.some((model) => model.key === current) ? current : items.find((model) => model.isActive)?.key ?? items[0]?.key ?? "");
+      const elevenV3 = items.filter((model) => model.key === TEXT_TO_SPEECH_MODEL);
+      setAvailableModels(elevenV3);
+      setSelectedModel(elevenV3.length ? TEXT_TO_SPEECH_MODEL : "");
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -788,7 +790,7 @@ export function AudioGenerationPage() {
     setTone("");
     setLanguage("Thai");
     setPronunciation("");
-    setSelectedModel(availableModels.find((model) => model.isActive)?.key ?? availableModels[0]?.key ?? "");
+    setSelectedModel(availableModels.length ? TEXT_TO_SPEECH_MODEL : "");
     setSelectedVoice(availableVoices[0]?.key ?? "");
     setFormat("MP3");
     setSpeed(0.95);
@@ -1158,7 +1160,7 @@ export function AudioGenerationPage() {
     </button>)}<button type="button" className={styles.addScene} onClick={addAudioScene} disabled={audioScenes.length >= 20}><Plus size={17} />{t("create.audio.scenes.addScene")}</button></div>
   </section>;
 
-  useTemplateSettings('audio',{ready:modelLoadState==='ready'&&voiceLoadState==='ready',model:selectedModel,models:availableModels.map(m=>m.key),setModel:setSelectedModel,apply:(s,p)=>{
+  useTemplateSettings('audio',{ready:modelLoadState==='ready'&&voiceLoadState==='ready',model:selectedModel,models:availableModels.map(m=>m.key),setModel:setSelectedModel,fixedModel:true,apply:(s,p)=>{
     setPrompt(p);setAudioScenes(current=>current.map((scene,i)=>i===0?{...scene,text:p}:scene));
     if(typeof s.voice==='string') {
       if(availableVoices.some(v=>v.key===s.voice))setSelectedVoice(s.voice);
@@ -1279,7 +1281,7 @@ export function AudioGenerationPage() {
 
       <aside className={styles.settingsPanel} aria-label={t("create.audio.a11y.settingsPanel")}>
         <div className={`${styles.settingsTitle} flex-wrap gap-2`}><h2>{t("create.audio.settings")}</h2><WandSparkles size={22} /></div>
-        <div className={styles.settingBlock}><SelectField label={t("create.audio.voiceModel")} value={selectedModel} onChange={(modelId) => { setSelectedModel(modelId); setSelectedVoice(""); }} disabled={modelLoadState !== "ready" || availableModels.length === 0} loading={modelLoadState === "loading"} options={availableModels.map((model) => ({ value: model.key, label: model.name, preserveLabel: true }))} /></div>
+        <div className={styles.settingBlock}><FieldLabel>{t("create.audio.voiceModel")}</FieldLabel><div className={styles.fixedVoiceModel}>{availableModels[0]?.name ?? "ElevenLabs · Eleven v3"}</div></div>
         <div className={styles.settingBlock}><FieldLabel>{t("create.audio.outputFormat")}</FieldLabel><div className={styles.formatRow}>{["MP3", "WAV", "OGG"].map((item) => <button type="button" key={item} className={format === item ? styles.formatActive : styles.formatButton} onClick={() => setFormat(item)}>{item}</button>)}</div></div>
         <div className={styles.settingBlock}><div className={styles.speedHeader}><FieldLabel>{t("create.audio.speechSpeed")}</FieldLabel><strong>{speed.toFixed(2)}x</strong></div><input className={styles.speedSlider} type="range" min="0.5" max="2" step="0.05" value={speed} onChange={(event) => setSpeed(Number(event.target.value))} /><div className={styles.rangeLabels}><span>0.5x</span><span>1x</span><span>2x</span></div></div>
         <div className={styles.settingBlock}><div className={styles.musicHeader}><FieldLabel>{t("create.audio.autoBackgroundMusic")}</FieldLabel><button type="button" className={backgroundMusic ? styles.toggleOn : styles.toggleOff} onClick={toggleBackgroundMusic} aria-pressed={backgroundMusic} disabled={backgroundMusicLoadState === "loading"}><span /></button></div>{backgroundMusic ? <SelectField label="" value={backgroundMusicPreset} onChange={setBackgroundMusicPreset} disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0} loading={backgroundMusicLoadState === "loading"} options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))} /> : null}</div>
