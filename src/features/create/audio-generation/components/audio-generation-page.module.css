@@ -856,7 +856,9 @@
   text-align: center;
 }
 .voiceCloneLink {
+  display: block;
   align-self: flex-start;
+  margin-top: 12px;
   border: none;
   background: none;
   padding: 0;

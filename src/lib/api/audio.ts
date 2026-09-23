@@ -518,7 +518,7 @@ export async function quoteVoiceClone(text: string, signal?: AbortSignal): Promi
   return payload.data;
 }
 
-export async function previewVoiceClone(voiceId: string, input: { text: string; outputFormat: "mp3" | "wav" | "ogg"; speed?: number }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
+export async function previewVoiceClone(voiceId: string, input: { text: string; outputFormat: "mp3" | "wav" | "ogg"; speed?: number; modelId?: string; pitch?: number; volume?: number; emotion?: string; languageCode?: string; pronunciationHint?: string; englishNormalization?: boolean; sampleRate?: number; bitrate?: number; channel?: string; accuracy?: number; needNoiseReduction?: boolean; needVolumeNormalization?: boolean }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
   return userAudioBlobRequest(`/audio/voice-clones/${encodeURIComponent(voiceId)}/preview`, {
     method: "POST",
     headers: { Accept: input.outputFormat === "mp3" ? "audio/mpeg" : input.outputFormat === "wav" ? "audio/wav" : "audio/ogg" },
