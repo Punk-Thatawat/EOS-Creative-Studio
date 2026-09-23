@@ -66,7 +66,6 @@ type Asset = {
   tags: string[];
 };
 
-
 const apiTabByLabel: Record<AssetTab, AssetsApiTab> = {
   "My Assets": "mine",
   "Shared with me": "shared",
@@ -119,10 +118,21 @@ const previewFallbacks: Record<AssetsApiType, string> = {
 };
 
 const typeColors: Record<string, string> = {
-  JPG: "#0bca84", JPEG: "#0bca84", PNG: "#0bca84", WEBP: "#0bca84",
-  MP4: "#ef0093", WEBM: "#ef0093", MOV: "#ef0093",
-  PDF: "#f20b26", AI: "#6f17d9", PPT: "#ff5e0b", PPTX: "#ff5e0b",
-  MP3: "#7f0ec1", WAV: "#7f0ec1", DOC: "#44a8d8", DOCX: "#44a8d8",
+  JPG: "#0bca84",
+  JPEG: "#0bca84",
+  PNG: "#0bca84",
+  WEBP: "#0bca84",
+  MP4: "#ef0093",
+  WEBM: "#ef0093",
+  MOV: "#ef0093",
+  PDF: "#f20b26",
+  AI: "#6f17d9",
+  PPT: "#ff5e0b",
+  PPTX: "#ff5e0b",
+  MP3: "#7f0ec1",
+  WAV: "#7f0ec1",
+  DOC: "#44a8d8",
+  DOCX: "#44a8d8",
 };
 
 const emptyData: AssetsApiListData = {
@@ -170,11 +180,22 @@ function mapApiAsset(asset: AssetsApiAsset): Asset {
   const type = extension || formatLabel(asset.type).toUpperCase();
   return {
     id: asset.id,
-    title: /^(create a high-quality image|preserve the entire original image|upscale the provided image|continue the source image)/i.test(asset.title.trim()) ? (metadataString(asset.metadata, "userPrompt") || "ผลงานสร้างสรรค์") : asset.title,
+    title:
+      /^(create a high-quality image|preserve the entire original image|upscale the provided image|continue the source image)/i.test(
+        asset.title.trim(),
+      )
+        ? metadataString(asset.metadata, "userPrompt") || "ผลงานสร้างสรรค์"
+        : asset.title,
     date: formatDate(asset.createdAt),
     size: asset.sizeLabel || formatBytes(asset.sizeBytes),
     type,
-    image: asset.previewUrl ?? (asset.type === "image" && asset.url ? asset.url : asset.type === "video" && asset.url ? asset.url : previewFallbacks[asset.type]),
+    image:
+      asset.previewUrl ??
+      (asset.type === "image" && asset.url
+        ? asset.url
+        : asset.type === "video" && asset.url
+          ? asset.url
+          : previewFallbacks[asset.type]),
     filter: filterByApiType[asset.type],
     mediaKind: asset.type,
     url: asset.url ?? null,
@@ -200,11 +221,22 @@ function TypeIcon({ kind }: { kind: AssetsApiType }) {
 }
 
 function AudioAssetPreview() {
-  return <div className="asset-audio-preview" aria-hidden="true">
-    <span className="asset-audio-preview-glow" />
-    <Image src="/generated-assets/audio-ui/audio-waveform.png" alt="" fill sizes="(max-width: 767px) 90vw, 30vw" unoptimized className="asset-audio-waveform" />
-    <span className="asset-audio-preview-label"><AudioLines size={13} /> AUDIO</span>
-  </div>;
+  return (
+    <div className="asset-audio-preview" aria-hidden="true">
+      <span className="asset-audio-preview-glow" />
+      <Image
+        src="/generated-assets/audio-ui/audio-waveform.png"
+        alt=""
+        fill
+        sizes="(max-width: 767px) 90vw, 30vw"
+        unoptimized
+        className="asset-audio-waveform"
+      />
+      <span className="asset-audio-preview-label">
+        <AudioLines size={13} /> AUDIO
+      </span>
+    </div>
+  );
 }
 
 function FilterSelect({
@@ -240,27 +272,63 @@ function FilterSelect({
     };
   }, [onToggle, open]);
 
-  return <div className={`assets-select ${open ? "is-open" : ""}`} ref={selectRef}>
-    <button type="button" className="assets-select-trigger" aria-haspopup="listbox" aria-expanded={open} aria-label={label} onClick={() => onToggle(!open)}>
-      <span>{label}</span>
-      <ChevronDown className="assets-select-chevron" size={15} aria-hidden="true" />
-    </button>
-    {open ? <div className="assets-select-menu" role="listbox" aria-label={label}>
-      {options.map((option) => {
-        const selected = option.value === value;
-        return <button type="button" role="option" aria-selected={selected} className={`assets-select-option ${selected ? "is-selected" : ""}`} value={option.value} key={option.value || "all"} onClick={() => { onSelect(option.value); onToggle(false); }}>
-          <span>{option.label}</span>
-          {selected ? <Check size={15} aria-hidden="true" /> : null}
-        </button>;
-      })}
-    </div> : null}
-  </div>;
+  return (
+    <div className={`assets-select ${open ? "is-open" : ""}`} ref={selectRef}>
+      <button
+        type="button"
+        className="assets-select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={() => onToggle(!open)}
+      >
+        <span>{label}</span>
+        <ChevronDown className="assets-select-chevron" size={15} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className="assets-select-menu" role="listbox" aria-label={label}>
+          {options.map((option) => {
+            const selected = option.value === value;
+            return (
+              <button
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`assets-select-option ${selected ? "is-selected" : ""}`}
+                value={option.value}
+                key={option.value || "all"}
+                onClick={() => {
+                  onSelect(option.value);
+                  onToggle(false);
+                }}
+              >
+                <span>{option.label}</span>
+                {selected ? <Check size={15} aria-hidden="true" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function AssetPreview({ asset }: { asset: Asset }) {
   if (asset.mediaKind === "audio") return <AudioAssetPreview />;
   if (asset.mediaKind === "video" && asset.url && asset.image === asset.url) {
-    return <VideoFrameThumbnail key={asset.url} src={asset.url} alt={`ภาพตัวอย่าง ${asset.title}`} className="asset-preview-video" fallback={<span className="flex h-full w-full items-center justify-center text-white/70"><Video size={32} /></span>} />;
+    return (
+      <VideoFrameThumbnail
+        key={asset.url}
+        src={asset.url}
+        alt={`ภาพตัวอย่าง ${asset.title}`}
+        className="asset-preview-video"
+        fallback={
+          <span className="flex h-full w-full items-center justify-center text-white/70">
+            <Video size={32} />
+          </span>
+        }
+      />
+    );
   }
   return <Image src={asset.image} alt="" fill sizes="(max-width: 1100px) 50vw, 22vw" loading="lazy" unoptimized />;
 }
@@ -276,21 +344,68 @@ function AssetPreviewPopup({ asset, onClose }: { asset: Asset; onClose: () => vo
 
   const source = asset.url ?? asset.image;
   if (asset.mediaKind === "video" && asset.url) {
-    return <div className="video-modal assets-video-modal" role="dialog" aria-modal="true" aria-label={`ตัวอย่าง ${asset.title}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <div className="video-modal-shell assets-video-modal-shell" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="video-modal-actions"><button type="button" className="video-modal-close" onClick={onClose} aria-label="ปิดตัวอย่าง"><X size={22} /></button></div>
-        <EosVideoPlayer src={asset.url} autoPlay ariaLabel={asset.title} />
+    return (
+      <div
+        className="video-modal assets-video-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`ตัวอย่าง ${asset.title}`}
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}
+      >
+        <div className="video-modal-shell assets-video-modal-shell" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="video-modal-actions">
+            <button type="button" className="video-modal-close" onClick={onClose} aria-label="ปิดตัวอย่าง">
+              <X size={22} />
+            </button>
+          </div>
+          <EosVideoPlayer src={asset.url} autoPlay ariaLabel={asset.title} />
+        </div>
       </div>
-    </div>;
+    );
   }
-  return <div className="assets-preview-popup" role="dialog" aria-modal="true" aria-label={`ตัวอย่าง ${asset.title}`} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <div className="assets-preview-popup-content">
-      <button type="button" className="assets-preview-popup-close" onClick={onClose} aria-label="ปิดตัวอย่าง"><X size={20} /></button>
-      {asset.mediaKind === "audio" && asset.url ? <div className="assets-preview-popup-audio"><AudioLines size={34} /><strong>{asset.title}</strong><audio src={asset.url} controls autoPlay aria-label={asset.title} /></div> : null}
-      {asset.mediaKind === "document" && asset.url ? <iframe className="assets-preview-popup-frame" src={asset.url} title={asset.title} /> : null}
-      {asset.mediaKind !== "video" && asset.mediaKind !== "audio" && !(asset.mediaKind === "document" && asset.url) ? <div className="assets-preview-popup-image-wrap"><Image className="assets-preview-popup-image" src={source} alt={asset.title} fill sizes="94vw" unoptimized /></div> : null}
+  return (
+    <div
+      className="assets-preview-popup"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`ตัวอย่าง ${asset.title}`}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="assets-preview-popup-content">
+        <button type="button" className="assets-preview-popup-close" onClick={onClose} aria-label="ปิดตัวอย่าง">
+          <X size={20} />
+        </button>
+        {asset.mediaKind === "audio" && asset.url ? (
+          <div className="assets-preview-popup-audio">
+            <AudioLines size={34} />
+            <strong>{asset.title}</strong>
+            <audio src={asset.url} controls autoPlay aria-label={asset.title} />
+          </div>
+        ) : null}
+        {asset.mediaKind === "document" && asset.url ? (
+          <iframe className="assets-preview-popup-frame" src={asset.url} title={asset.title} />
+        ) : null}
+        {asset.mediaKind !== "video" &&
+        asset.mediaKind !== "audio" &&
+        !(asset.mediaKind === "document" && asset.url) ? (
+          <div className="assets-preview-popup-image-wrap">
+            <Image
+              className="assets-preview-popup-image"
+              src={source}
+              alt={asset.title}
+              fill
+              sizes="94vw"
+              unoptimized
+            />
+          </div>
+        ) : null}
+      </div>
     </div>
-  </div>;
+  );
 }
 
 type TagListProps = {
@@ -319,9 +434,6 @@ function TagList({ items, activeId, onSelect, onRemove, removeBusy }: TagListPro
               <b>{formatCount(item.count)}</b>
             </button>
 
-            {/* Deleting a tag used to be one bin in the panel header, acting on
-                whatever happened to be selected. It rides its own chip now, so
-                only the selected tag offers one and the target is never in doubt. */}
             {isActive ? (
               <button
                 type="button"
@@ -354,15 +466,21 @@ function TagDeleteConfirm({ tag, busy, onCancel, onConfirm }: TagDeleteConfirmPr
   return (
     <div className="assets-tag-delete-popover" role="dialog" aria-label={`ยืนยันการลบ ${label}`}>
       <div className="assets-tag-delete-copy">
-        <span className="assets-tag-delete-icon"><Trash2 size={16} /></span>
+        <span className="assets-tag-delete-icon">
+          <Trash2 size={16} />
+        </span>
         <div>
           <strong>ลบแท็ก?</strong>
           <p>“{label}” จะถูกลบออกจากแอสเซ็ตของคุณ</p>
         </div>
       </div>
       <div className="assets-tag-delete-actions">
-        <button type="button" onClick={onCancel} disabled={busy}>ยกเลิก</button>
-        <button type="button" onClick={onConfirm} disabled={busy}>ลบ</button>
+        <button type="button" onClick={onCancel} disabled={busy}>
+          ยกเลิก
+        </button>
+        <button type="button" onClick={onConfirm} disabled={busy}>
+          ลบ
+        </button>
       </div>
     </div>
   );
@@ -458,7 +576,9 @@ export default function AssetsPage() {
       } catch (requestError) {
         if (!cancelled && !controller.signal.aborted) {
           if (!hadPreviousData) setAssetsData(emptyData);
-          setError(hadPreviousData ? null : requestError instanceof Error ? requestError.message : "Unable to load assets");
+          setError(
+            hadPreviousData ? null : requestError instanceof Error ? requestError.message : "Unable to load assets",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -467,7 +587,12 @@ export default function AssetsPage() {
         }
       }
     };
-    const timeoutId = window.setTimeout(() => { void load(); }, search.trim() ? 220 : 0);
+    const timeoutId = window.setTimeout(
+      () => {
+        void load();
+      },
+      search.trim() ? 220 : 0,
+    );
     return () => {
       cancelled = true;
       controller.abort();
@@ -496,11 +621,13 @@ export default function AssetsPage() {
     ? assetsData.filters.tags.filter((item) => !groupAssetTags.has(item.name.trim().toLocaleLowerCase()))
     : [];
   const duplicateTag = Boolean(groupDialog?.assetId) && groupAssetTags.has(groupName.trim().toLocaleLowerCase());
-  const startItem = assetsData.pagination.total === 0 ? 0 : ((assetsData.pagination.page - 1) * assetsData.pagination.limit) + 1;
+  const startItem =
+    assetsData.pagination.total === 0 ? 0 : (assetsData.pagination.page - 1) * assetsData.pagination.limit + 1;
   const endItem = Math.min(assetsData.pagination.total, startItem + assetsData.pagination.limit - 1);
-  const rangeLabel = assetsData.pagination.total === 0
-    ? "ไม่มีรายการ"
-    : `แสดง ${startItem}–${endItem} จาก ${formatCount(assetsData.pagination.total)} รายการ`;
+  const rangeLabel =
+    assetsData.pagination.total === 0
+      ? "ไม่มีรายการ"
+      : `แสดง ${startItem}–${endItem} จาก ${formatCount(assetsData.pagination.total)} รายการ`;
 
   const openTagDialog = (assetId: string | null = null) => {
     setOpenFilter(null);
@@ -538,11 +665,15 @@ export default function AssetsPage() {
     setGroupSaving(true);
     setError(null);
     try {
-      const existingGroup = assetsData.filters.tags.find((item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase());
+      const existingGroup = assetsData.filters.tags.find(
+        (item) => item.name.toLocaleLowerCase() === name.toLocaleLowerCase(),
+      );
       const savedName = existingGroup?.name ?? (await createAssetTag(name)).name;
       if (groupDialog.assetId) {
         const sourceAsset = assetsData.assets.find((asset) => asset.id === groupDialog.assetId);
-        const tags = Array.from(new Map([...(sourceAsset?.tags ?? []), savedName].map((tag) => [tag.toLocaleLowerCase(), tag])).values());
+        const tags = Array.from(
+          new Map([...(sourceAsset?.tags ?? []), savedName].map((tag) => [tag.toLocaleLowerCase(), tag])).values(),
+        );
         await updateAsset(groupDialog.assetId, { tags });
       }
       setGroupDialog(null);
@@ -554,7 +685,6 @@ export default function AssetsPage() {
       setGroupSaving(false);
     }
   };
-
 
   const handleDeleteTag = async (tag: AssetsApiFilter) => {
     if (!tag.name.trim() || busyTagName) return;
@@ -627,7 +757,8 @@ export default function AssetsPage() {
     setPreviewAsset(asset);
   };
 
-  const paginationButtons = totalPages <= 4 ? Array.from({ length: totalPages }, (_, index) => index + 1) : [1, 2, 3, totalPages];
+  const paginationButtons =
+    totalPages <= 4 ? Array.from({ length: totalPages }, (_, index) => index + 1) : [1, 2, 3, totalPages];
 
   return (
     <div className="assets-page" data-active-tab={activeTab} data-no-translate>
@@ -645,7 +776,10 @@ export default function AssetsPage() {
           />
         </picture>
       </section>
-      <div className="assets-retention-notice" role="note"><Clock3 size={16} aria-hidden="true" /><span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span></div>
+      <div className="assets-retention-notice" role="note">
+        <Clock3 size={16} aria-hidden="true" />
+        <span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span>
+      </div>
 
       <section className="assets-library" aria-label="คลังแอสเซ็ต">
         <div className="assets-toolbar">
@@ -656,7 +790,10 @@ export default function AssetsPage() {
                 type="button"
                 aria-pressed={activeType === value}
                 className={activeType === value ? "is-active" : ""}
-                onClick={() => { setActiveType(value); setPage(1); }}
+                onClick={() => {
+                  setActiveType(value);
+                  setPage(1);
+                }}
               >
                 {Icon ? <Icon size={16} /> : null}
                 {label}
@@ -664,16 +801,16 @@ export default function AssetsPage() {
             ))}
           </div>
 
-          {/* Tags share the row with the media types. They used to sit in a card
-              below, paired with folders; folders are gone from this page, so this
-              is the only grouping left and it belongs beside the other filters. */}
           <div className="assets-tag-strip" aria-label="แท็ก">
             <span className="assets-tag-strip-divider" aria-hidden="true" />
 
             <TagList
               items={visibleTagItems}
               activeId={activeTag}
-              onSelect={(id) => { setActiveTag(id); setPage(1); }}
+              onSelect={(id) => {
+                setActiveTag(id);
+                setPage(1);
+              }}
               onRemove={setPendingDeleteTag}
               removeBusy={busyTagName !== null}
             />
@@ -707,59 +844,295 @@ export default function AssetsPage() {
               key="sort"
               label={activeSort === "Newest" ? "ล่าสุด" : "เก่าสุด"}
               value={activeSort}
-              options={[{ value: "Newest", label: "ล่าสุด" }, { value: "Oldest", label: "เก่าสุด" }]}
-              onSelect={(value) => { setActiveSort(value as AssetSort); setPage(1); }}
+              options={[
+                { value: "Newest", label: "ล่าสุด" },
+                { value: "Oldest", label: "เก่าสุด" },
+              ]}
+              onSelect={(value) => {
+                setActiveSort(value as AssetSort);
+                setPage(1);
+              }}
               open={openFilter === "sort"}
               onToggle={(nextOpen) => setOpenFilter(nextOpen ? "sort" : null)}
             />
             <div className="assets-view-toggle" aria-label="เปลี่ยนมุมมองแอสเซ็ต">
-              <button type="button" aria-label="มุมมองตาราง" className={view === "grid" ? "is-active" : ""} onClick={() => setView("grid")}><Grid2X2 size={18} /></button>
-              <button type="button" aria-label="มุมมองรายการ" className={view === "list" ? "is-active" : ""} onClick={() => setView("list")}><List size={18} /></button>
+              <button
+                type="button"
+                aria-label="มุมมองตาราง"
+                className={view === "grid" ? "is-active" : ""}
+                onClick={() => setView("grid")}
+              >
+                <Grid2X2 size={18} />
+              </button>
+              <button
+                type="button"
+                aria-label="มุมมองรายการ"
+                className={view === "list" ? "is-active" : ""}
+                onClick={() => setView("list")}
+              >
+                <List size={18} />
+              </button>
             </div>
           </div>
         </div>
 
         <div className="assets-search-row">
-          <SearchInput className="w-full sm:w-57.5" aria-label="ค้นหาแอสเซ็ต" value={search} onValueChange={setSearch} placeholder="ค้นหาแอสเซ็ต..." />
+          <SearchInput
+            className="w-full sm:w-57.5"
+            aria-label="ค้นหาแอสเซ็ต"
+            value={search}
+            onValueChange={setSearch}
+            placeholder="ค้นหาแอสเซ็ต..."
+          />
           <span>{rangeLabel}</span>
         </div>
 
         <div className="assets-content-grid">
-
-          <div className={`${view === "grid" ? "assets-grid" : "assets-list"} ${isRefreshing ? "is-refreshing" : ""}`} aria-busy={loading || isRefreshing}>
-            {loading ? Array.from({ length: 8 }, (_, index) => <div className="asset-card assets-loading-card" key={`loading-${index}`} aria-hidden="true" />) : null}
-            {!loading && error ? <div className="assets-error" role="alert"><AlertCircle size={24} /><strong>โหลดผลงานไม่สำเร็จ</strong><span>{error}</span><button type="button" onClick={() => setRefreshKey((current) => current + 1)}>ลองอีกครั้ง</button></div> : null}
-            {!loading && !error ? assets.map((asset) => <article key={asset.id} className={`asset-card ${selectedAsset === asset.id ? "is-selected" : ""} ${openMenuAsset === asset.id ? "is-menu-open" : ""}`} tabIndex={0} aria-label={`ดูผลงาน ${asset.title}`} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); openAssetPreview(asset); } }} onClick={() => openAssetPreview(asset)}>
-              <div className="asset-card-media">
-                <AssetPreview asset={asset} />
-                <span className="asset-type-badge" style={{ backgroundColor: typeColors[asset.type] ?? "#73768a" }}><TypeIcon kind={asset.mediaKind} />{asset.type}</span>
-                {asset.playable ? <button type="button" className="asset-play" aria-label={`เล่น ${asset.title}`} onClick={(event) => { event.stopPropagation(); openAssetPreview(asset); }}><Play size={20} fill="white" /></button> : null}
-                {asset.duration ? <span className="asset-duration">{asset.duration}</span> : null}
+          <div
+            className={`${view === "grid" ? "assets-grid" : "assets-list"} ${isRefreshing ? "is-refreshing" : ""}`}
+            aria-busy={loading || isRefreshing}
+          >
+            {loading
+              ? Array.from({ length: 8 }, (_, index) => (
+                  <div className="asset-card assets-loading-card" key={`loading-${index}`} aria-hidden="true" />
+                ))
+              : null}
+            {!loading && error ? (
+              <div className="assets-error" role="alert">
+                <AlertCircle size={24} />
+                <strong>โหลดผลงานไม่สำเร็จ</strong>
+                <span>{error}</span>
+                <button type="button" onClick={() => setRefreshKey((current) => current + 1)}>
+                  ลองอีกครั้ง
+                </button>
               </div>
-              <div className="asset-card-footer"><div><strong>{asset.title}</strong><span>{asset.date} <i>•</i> {asset.size}</span></div><div className="asset-card-actions"><button type="button" aria-label={`ดาวน์โหลด ${asset.title}`} onClick={(event) => { event.stopPropagation(); void handleDownload(asset); }} disabled={busyAssetId === asset.id}><Download size={17} /></button><button type="button" aria-label={`ตัวเลือกเพิ่มเติมของ ${asset.title}`} onClick={(event) => { event.stopPropagation(); setOpenMenuAsset(openMenuAsset === asset.id ? null : asset.id); }} disabled={busyAssetId === asset.id}><MoreVertical size={18} /></button>{openMenuAsset === asset.id ? <div className="asset-card-menu" role="menu" onClick={(event) => event.stopPropagation()}>
-                <button type="button" role="menuitem" onClick={() => void handleDownload(asset)} disabled={busyAssetId === asset.id}><Download size={14} />{busyAssetId === asset.id ? "กำลังดาวน์โหลด..." : "ดาวน์โหลด"}</button>
-                {activeTab !== "Trash" ? <button type="button" role="menuitem" onClick={() => openTagDialog(asset.id)}><Plus size={14} />เพิ่มแท็ก</button> : null}
-                {activeTab === "Trash" ? <button type="button" role="menuitem" onClick={() => void handleAssetAction(asset.id, "restore")}><RotateCcw size={14} />กู้คืน</button> : <button type="button" role="menuitem" onClick={() => void handleAssetAction(asset.id, "trash")}><Trash2 size={14} />ย้ายไปถังขยะ</button>}
-              </div> : null}</div></div>
-            </article>) : null}
-            {!loading && !error && assets.length === 0 ? <div className="assets-empty"><Archive size={24} /><strong>ไม่พบผลงานที่ตรงกัน</strong><span>ลองเปลี่ยนคำค้นหาหรือตัวกรอง</span></div> : null}
+            ) : null}
+            {!loading && !error
+              ? assets.map((asset) => (
+                  <article
+                    key={asset.id}
+                    className={`asset-card ${selectedAsset === asset.id ? "is-selected" : ""} ${openMenuAsset === asset.id ? "is-menu-open" : ""}`}
+                    tabIndex={0}
+                    aria-label={`ดูผลงาน ${asset.title}`}
+                    onKeyDown={(event) => {
+                      if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault();
+                        openAssetPreview(asset);
+                      }
+                    }}
+                    onClick={() => openAssetPreview(asset)}
+                  >
+                    <div className="asset-card-media">
+                      <AssetPreview asset={asset} />
+                      <span
+                        className="asset-type-badge"
+                        style={{ backgroundColor: typeColors[asset.type] ?? "#73768a" }}
+                      >
+                        <TypeIcon kind={asset.mediaKind} />
+                        {asset.type}
+                      </span>
+                      {asset.playable ? (
+                        <button
+                          type="button"
+                          className="asset-play"
+                          aria-label={`เล่น ${asset.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openAssetPreview(asset);
+                          }}
+                        >
+                          <Play size={20} fill="white" />
+                        </button>
+                      ) : null}
+                      {asset.duration ? <span className="asset-duration">{asset.duration}</span> : null}
+                    </div>
+                    <div className="asset-card-footer">
+                      <div>
+                        <strong>{asset.title}</strong>
+                        <span>
+                          {asset.date} <i>•</i> {asset.size}
+                        </span>
+                      </div>
+                      <div className="asset-card-actions">
+                        <button
+                          type="button"
+                          aria-label={`ดาวน์โหลด ${asset.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleDownload(asset);
+                          }}
+                          disabled={busyAssetId === asset.id}
+                        >
+                          <Download size={17} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`ตัวเลือกเพิ่มเติมของ ${asset.title}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenMenuAsset(openMenuAsset === asset.id ? null : asset.id);
+                          }}
+                          disabled={busyAssetId === asset.id}
+                        >
+                          <MoreVertical size={18} />
+                        </button>
+                        {openMenuAsset === asset.id ? (
+                          <div className="asset-card-menu" role="menu" onClick={(event) => event.stopPropagation()}>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => void handleDownload(asset)}
+                              disabled={busyAssetId === asset.id}
+                            >
+                              <Download size={14} />
+                              {busyAssetId === asset.id ? "กำลังดาวน์โหลด..." : "ดาวน์โหลด"}
+                            </button>
+                            {activeTab !== "Trash" ? (
+                              <button type="button" role="menuitem" onClick={() => openTagDialog(asset.id)}>
+                                <Plus size={14} />
+                                เพิ่มแท็ก
+                              </button>
+                            ) : null}
+                            {activeTab === "Trash" ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => void handleAssetAction(asset.id, "restore")}
+                              >
+                                <RotateCcw size={14} />
+                                กู้คืน
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => void handleAssetAction(asset.id, "trash")}
+                              >
+                                <Trash2 size={14} />
+                                ย้ายไปถังขยะ
+                              </button>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                ))
+              : null}
+            {!loading && !error && assets.length === 0 ? (
+              <div className="assets-empty">
+                <Archive size={24} />
+                <strong>ไม่พบผลงานที่ตรงกัน</strong>
+                <span>ลองเปลี่ยนคำค้นหาหรือตัวกรอง</span>
+              </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="assets-pagination"><span>{rangeLabel}</span><div><button type="button" aria-label="หน้าก่อนหน้า" disabled={!assetsData.pagination.hasPrevious} onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft size={18} /></button>{paginationButtons.map((value, index) => <span key={value} className="assets-pagination-page">{totalPages > 4 && index === paginationButtons.length - 1 ? <span className="assets-pagination-ellipsis" aria-hidden="true">…</span> : null}<button type="button" className={page === value ? "is-active" : ""} onClick={() => setPage(value)}>{value}</button></span>)}<button type="button" aria-label="หน้าถัดไป" disabled={!assetsData.pagination.hasNext} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}><ChevronRight size={18} /></button></div></div>
+        <div className="assets-pagination">
+          <span>{rangeLabel}</span>
+          <div>
+            <button
+              type="button"
+              aria-label="หน้าก่อนหน้า"
+              disabled={!assetsData.pagination.hasPrevious}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            {paginationButtons.map((value, index) => (
+              <span key={value} className="assets-pagination-page">
+                {totalPages > 4 && index === paginationButtons.length - 1 ? (
+                  <span className="assets-pagination-ellipsis" aria-hidden="true">
+                    …
+                  </span>
+                ) : null}
+                <button type="button" className={page === value ? "is-active" : ""} onClick={() => setPage(value)}>
+                  {value}
+                </button>
+              </span>
+            ))}
+            <button
+              type="button"
+              aria-label="หน้าถัดไป"
+              disabled={!assetsData.pagination.hasNext}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
       </section>
 
-      {groupDialog ? <div className="assets-group-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeGroupDialog(); }}>
-        <div className="assets-group-dialog" role="dialog" aria-modal="true" aria-labelledby="assets-group-dialog-title">
-          <div className="assets-group-dialog-heading"><strong id="assets-group-dialog-title">{groupDialog.assetId ? "เพิ่มแท็ก" : "สร้างแท็ก"}</strong><button type="button" onClick={closeGroupDialog} disabled={groupSaving} aria-label="ปิด">×</button></div>
-          {groupDialog.assetId ? <div className="assets-group-options">
-            {groupOptions.length ? groupOptions.map((item) => <button type="button" key={item.id} className={groupName === item.name ? "is-selected" : ""} onClick={() => setGroupName(item.name)}>{formatLabel(item.name)}<span>{formatCount(item.count)}</span></button>) : <span className="assets-group-options-empty">ไม่มีแท็กที่ใช้ได้กับแอสเซ็ตนี้</span>}
-          </div> : null}
-          <input autoFocus value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="ชื่อแท็ก" maxLength={120} onKeyDown={(event) => { if (event.key === "Enter") void handleSaveGroup(); }} />
-          {duplicateTag ? <span className="assets-group-dialog-error" role="alert">แอสเซ็ตนี้มีแท็กนี้อยู่แล้ว</span> : null}
-          <div className="assets-group-dialog-actions"><button type="button" onClick={closeGroupDialog} disabled={groupSaving}>ยกเลิก</button><button type="button" onClick={() => void handleSaveGroup()} disabled={groupSaving || !groupName.trim() || duplicateTag}>{groupSaving ? "กำลังบันทึก..." : groupDialog.assetId ? "บันทึก" : "สร้าง"}</button></div>
+      {groupDialog ? (
+        <div
+          className="assets-group-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeGroupDialog();
+          }}
+        >
+          <div
+            className="assets-group-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="assets-group-dialog-title"
+          >
+            <div className="assets-group-dialog-heading">
+              <strong id="assets-group-dialog-title">{groupDialog.assetId ? "เพิ่มแท็ก" : "สร้างแท็ก"}</strong>
+              <button type="button" onClick={closeGroupDialog} disabled={groupSaving} aria-label="ปิด">
+                ×
+              </button>
+            </div>
+            {groupDialog.assetId ? (
+              <div className="assets-group-options">
+                {groupOptions.length ? (
+                  groupOptions.map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      className={groupName === item.name ? "is-selected" : ""}
+                      onClick={() => setGroupName(item.name)}
+                    >
+                      {formatLabel(item.name)}
+                      <span>{formatCount(item.count)}</span>
+                    </button>
+                  ))
+                ) : (
+                  <span className="assets-group-options-empty">ไม่มีแท็กที่ใช้ได้กับแอสเซ็ตนี้</span>
+                )}
+              </div>
+            ) : null}
+            <input
+              autoFocus
+              value={groupName}
+              onChange={(event) => setGroupName(event.target.value)}
+              placeholder="ชื่อแท็ก"
+              maxLength={120}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void handleSaveGroup();
+              }}
+            />
+            {duplicateTag ? (
+              <span className="assets-group-dialog-error" role="alert">
+                แอสเซ็ตนี้มีแท็กนี้อยู่แล้ว
+              </span>
+            ) : null}
+            <div className="assets-group-dialog-actions">
+              <button type="button" onClick={closeGroupDialog} disabled={groupSaving}>
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveGroup()}
+                disabled={groupSaving || !groupName.trim() || duplicateTag}
+              >
+                {groupSaving ? "กำลังบันทึก..." : groupDialog.assetId ? "บันทึก" : "สร้าง"}
+              </button>
+            </div>
+          </div>
         </div>
-      </div> : null}
+      ) : null}
       {previewAsset ? <AssetPreviewPopup asset={previewAsset} onClose={() => setPreviewAsset(null)} /> : null}
     </div>
   );

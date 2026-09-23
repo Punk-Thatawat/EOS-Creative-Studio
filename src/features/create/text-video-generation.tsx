@@ -22,7 +22,7 @@ import {
 import { VideoResultLibrary, type VideoPreviewView } from "./video-result-library";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
-import { emitGenerationStarted } from "@/lib/generation-progress-events";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
@@ -569,6 +569,8 @@ export function TextToVideoWorkspace() {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    const requestId = crypto.randomUUID();
+    emitGenerationSubmitting({ feature: "text-to-video", requestId });
     setGenerationError(null);
     setNotice(null);
     setFinalVideoUrl(null);
@@ -623,7 +625,7 @@ export function TextToVideoWorkspace() {
       const generationId = created.generationId ?? created.id;
       setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
-      if (generationId && pollUrl) emitGenerationStarted({ feature: "text-to-video", generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
+      if (generationId && pollUrl) emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
       let status: TextVideoGenerationStatus = {
         ...created,
         status: created.status ?? "processing",
@@ -655,7 +657,11 @@ export function TextToVideoWorkspace() {
       setGenerationStatus("completed");
       setNotice(t("create.video.common.videoReady"));
     } catch (error: unknown) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        emitGenerationRequestFailed({ feature: "text-to-video", requestId });
+        return;
+      }
+      emitGenerationRequestFailed({ feature: "text-to-video", requestId });
       setGenerationStatus("failed");
       setNotice(null);
       setGenerationError(formatGenerationError(error, t("create.video.common.unableToGenerateFeature", { feature: t("create.video.tabs.textToVideo") })));

@@ -20,7 +20,7 @@ import {
 } from "@/lib/api/motion-transfer-generations";
 import { VideoResultLibrary, type VideoPreviewView } from "./video-result-library";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
-import { emitGenerationStarted } from "@/lib/generation-progress-events";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
@@ -388,7 +388,9 @@ export function MotionTransferWorkspace() {
   const handleGenerate = async () => {
     if (!isComplete || !sourceImage || !motionVideo) return;
     const controller = new AbortController();
+    const requestId = crypto.randomUUID();
     abortRef.current = controller;
+    emitGenerationSubmitting({ feature: "motion-transfer", requestId });
     setGenerationError(null);
     setNotice(null);
     setFinalVideoUrl(null);
@@ -417,7 +419,7 @@ export function MotionTransferWorkspace() {
       const generationId = created.generationId ?? created.id;
       setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
-      if (generationId && pollUrl) emitGenerationStarted({ feature: "motion-transfer", generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
+      if (generationId && pollUrl) emitGenerationStarted({ feature: "motion-transfer", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
       let status: MotionTransferGenerationStatus = { ...created, status: created.status ?? "processing" } as MotionTransferGenerationStatus;
       let progress = 0;
       if (status.status !== "completed" && status.status !== "failed" && status.status !== "cancelled") {
@@ -444,6 +446,7 @@ export function MotionTransferWorkspace() {
       setLibraryRefreshKey((value) => value + 1);
        setNotice(t("create.video.common.videoReady"));
     } catch (error: unknown) {
+      emitGenerationRequestFailed({ feature: "motion-transfer", requestId });
       if (controller.signal.aborted) return;
       setGenerationStatus("failed");
       setNotice(null);

@@ -53,7 +53,7 @@ import { MobileModeDropdown } from "./components/mobile-mode-dropdown";
 import { VideoPreviewLiveBadge, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
 import { translateVideoSchemaDescription, translateVideoSchemaLabel, translateVideoSchemaOption } from "./video-schema-copy";
-import { emitGenerationStarted, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
 import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 import { getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import { listGenerationHistory } from "@/lib/api/generations";
@@ -2489,6 +2489,8 @@ export function VideoGenerationPage() {
     setPreviewView("latest");
     setContinuationInfo(null);
     setGenerationStatus("uploading");
+    const requestId = crypto.randomUUID();
+    emitGenerationSubmitting({ feature: "image-to-video", requestId });
     try {
       const uploadedImages: Array<string | undefined> = [];
       const uploadedReferenceImages: string[] = [];
@@ -2565,7 +2567,7 @@ export function VideoGenerationPage() {
       setNotice(t("create.video.common.submittingVideo"));
       const created = await createVideoStoryboard(request);
       if (!created.storyboardId) throw new Error("Video generation did not return a storyboard ID");
-      emitGenerationStarted({ feature: "image-to-video", generationId: created.storyboardId, pollUrl: created.pollUrl ?? `/api/v1/generations/video/image-to-video/${encodeURIComponent(created.storyboardId)}/status`, workspaceId: workspaceId ?? undefined, model: selectedModel, status: "queued", totalCount: created.totalScenes ?? scenes.length, completedCount: created.completedScenes ?? 0 });
+      emitGenerationStarted({ feature: "image-to-video", requestId, generationId: created.storyboardId, pollUrl: created.pollUrl ?? `/api/v1/generations/video/image-to-video/${encodeURIComponent(created.storyboardId)}/status`, workspaceId: workspaceId ?? undefined, model: selectedModel, status: "queued", totalCount: created.totalScenes ?? scenes.length, completedCount: created.completedScenes ?? 0 });
       const returnedCreditCost = Number(created.totalCreditCost);
       const quotedVideoCreditCost = Number(creditEstimate);
       // The create response may only contain the first scene for continuous
@@ -2643,6 +2645,7 @@ export function VideoGenerationPage() {
           : [completedHistoryItem, ...current]);
       });
     } catch (error: unknown) {
+      emitGenerationRequestFailed({ feature: "image-to-video", requestId });
       const message = formatGenerationError(error, "Unable to generate video");
       setGenerationStatus("failed");
       setGenerationError(message);
@@ -2720,13 +2723,15 @@ export function VideoGenerationPage() {
             }
           }}
         />}
-        content={
+        content={activeVideoTab !== "image-to-video" ? (
           <>
-        {visitedVideoTabs.has("text-to-video") ? <div hidden={activeVideoTab !== "text-to-video"}><TextToVideoWorkspace /></div> : null}
-        {visitedVideoTabs.has("people-video") ? <div hidden={activeVideoTab !== "people-video"}><PeopleVideoWorkspace initialVariant={initialPeopleVideoVariant} /></div> : null}
-        {visitedVideoTabs.has("motion-transfer") ? <div hidden={activeVideoTab !== "motion-transfer"}><MotionTransferWorkspace /></div> : null}
-        {visitedVideoTabs.has("extend-video") ? <div hidden={activeVideoTab !== "extend-video"}><ExtendVideoWorkspace /></div> : null}
-        {activeVideoTab === "image-to-video" ? <div className={styles.columns}>
+            {visitedVideoTabs.has("text-to-video") ? <div hidden={activeVideoTab !== "text-to-video"}><TextToVideoWorkspace /></div> : null}
+            {visitedVideoTabs.has("people-video") ? <div hidden={activeVideoTab !== "people-video"}><PeopleVideoWorkspace initialVariant={initialPeopleVideoVariant} /></div> : null}
+            {visitedVideoTabs.has("motion-transfer") ? <div hidden={activeVideoTab !== "motion-transfer"}><MotionTransferWorkspace /></div> : null}
+            {visitedVideoTabs.has("extend-video") ? <div hidden={activeVideoTab !== "extend-video"}><ExtendVideoWorkspace /></div> : null}
+          </>
+        ) : undefined}
+        left={activeVideoTab === "image-to-video" ? (
           <div className={styles.leftColumn}>
             <div className={styles.videoTopActionsPanel}>
               <div className={styles.videoPromptTopActions}>
@@ -2987,6 +2992,8 @@ export function VideoGenerationPage() {
               ) : null}
             </section> : null}
           </div>
+        ) : undefined}
+        preview={activeVideoTab === "image-to-video" ? (
           <div className={styles.centerColumn}>
             <section className={`${styles.previewPanel} ${styles.videoPreviewPanel}`}>
                <SectionTitle>{t("create.preview")}</SectionTitle>
@@ -3379,7 +3386,9 @@ export function VideoGenerationPage() {
             </section>
             ) : null}
           </div>
-           <aside className={styles.settings}>
+        ) : undefined}
+        right={activeVideoTab === "image-to-video" ? (
+          <aside className={styles.settings}>
               <SectionTitle number="3">{t("create.video.common.settings")}</SectionTitle>
             <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">
                {t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} />
@@ -3647,9 +3656,7 @@ export function VideoGenerationPage() {
                <p className={styles.generationProgress}>{t("create.video.common.scenesComplete", { completed: generationProgress.completed, total: generationProgress.total })}</p>
             ) : null}
           </aside>
-        </div> : null}
-          </>
-        }
+        ) : undefined}
       />
       {isSceneModalOpen ? (
         <div

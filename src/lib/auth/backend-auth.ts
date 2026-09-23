@@ -131,11 +131,12 @@ export function getStoredBackendSession(): BackendAuthSession | null {
   }
 }
 
-export async function persistBackendSession(session: BackendAuthSession, remember = true): Promise<string> {
+export async function persistBackendSession(session: BackendAuthSession): Promise<string> {
   if (typeof window === "undefined") throw new Error("Browser session is unavailable");
-  const storage = remember ? window.localStorage : window.sessionStorage;
-  storage.setItem(sessionStorageKey, JSON.stringify(session));
-  if (!remember) window.localStorage.removeItem(sessionStorageKey);
+  // Authentication sessions are always persistent. The refresh token keeps
+  // the access token valid until the user explicitly logs out.
+  window.localStorage.setItem(sessionStorageKey, JSON.stringify(session));
+  window.sessionStorage.removeItem(sessionStorageKey);
   window.dispatchEvent(new Event(AUTH_SESSION_UPDATED_EVENT));
   return session.accessToken;
 }

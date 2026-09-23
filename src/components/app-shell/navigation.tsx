@@ -3,15 +3,89 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, AudioLines, BarChart3, Boxes, ChevronDown, Clapperboard, FileText, ImageIcon, LayoutTemplate, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, UsersRound, Video, WandSparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  AudioLines,
+  BarChart3,
+  Boxes,
+  ChevronDown,
+  Clapperboard,
+  FileText,
+  ImageIcon,
+  LayoutTemplate,
+  MessageSquareText,
+  Palette,
+  Settings,
+  Settings2,
+  ShieldCheck,
+  UsersRound,
+  Video,
+  WandSparkles,
+} from "lucide-react";
 import { EosLogo } from "@/components/brand/eos-logo";
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 import type { NavigationItem } from "@/types/navigation";
 import { WorkspaceNavigation } from "./workspace-navigation";
 import { useHydrated } from "./use-hydrated";
 
-function AdminNavigationGroup({ label, items, pathname }: { label: string; items: Array<NavigationItem & { disabled?: boolean }>; pathname: string }) {
-  return <SidebarGroup className="px-0"><SidebarGroupLabel className="px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#a49c95]">{label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu className="gap-1">{items.map((item) => { const active = !item.disabled && (item.href === "/admin/model-routes" ? pathname === item.href : pathname.startsWith(item.href)); return <SidebarMenuItem key={item.label}>{item.disabled ? <SidebarMenuButton disabled className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground"><item.icon size={18} /><span>{item.label}</span><span className="ml-auto text-[9px] font-bold uppercase tracking-wider text-[#b9afa8]">Soon</span></SidebarMenuButton> : <SidebarMenuButton render={<Link href={item.href} aria-current={active ? "page" : undefined} />} isActive={active} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground data-active:bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] data-active:text-primary hover:bg-surface-muted hover:text-foreground"><item.icon size={18} strokeWidth={active ? 2.5 : 2} /><span>{item.label}</span></SidebarMenuButton>}</SidebarMenuItem>; })}</SidebarMenu></SidebarGroupContent></SidebarGroup>;
+function AdminNavigationGroup({
+  label,
+  items,
+  pathname,
+}: {
+  label: string;
+  items: Array<NavigationItem & { disabled?: boolean }>;
+  pathname: string;
+}) {
+  return (
+    <SidebarGroup className="px-0">
+      <SidebarGroupLabel className="px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#a49c95]">
+        {label}
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu className="gap-1">
+          {items.map((item) => {
+            const active =
+              !item.disabled &&
+              (item.href === "/admin/model-routes" ? pathname === item.href : pathname.startsWith(item.href));
+            return (
+              <SidebarMenuItem key={item.label}>
+                {item.disabled ? (
+                  <SidebarMenuButton
+                    disabled
+                    className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground"
+                  >
+                    <item.icon size={18} />
+                    <span>{item.label}</span>
+                    <span className="ml-auto text-[9px] font-bold uppercase tracking-wider text-[#b9afa8]">Soon</span>
+                  </SidebarMenuButton>
+                ) : (
+                  <SidebarMenuButton
+                    render={<Link href={item.href} aria-current={active ? "page" : undefined} />}
+                    isActive={active}
+                    className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground data-active:bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] data-active:text-primary hover:bg-surface-muted hover:text-foreground"
+                  >
+                    <item.icon size={18} strokeWidth={active ? 2.5 : 2} />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                )}
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
 }
 
 const adminImageFeatures = [
@@ -50,12 +124,120 @@ const adminCreativeFeatures = [
 function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; hydrated: boolean }) {
   const searchParams = useSearchParams();
   const requestedFeature = hydrated ? searchParams.get("feature") : null;
-  const selectedFeature = requestedFeature === "video" ? "image-to-video" : requestedFeature ?? "text-to-image";
+  const selectedFeature = requestedFeature === "video" ? "image-to-video" : (requestedFeature ?? "text-to-image");
   const isImageFeature = adminImageFeatures.some((item) => item.id === selectedFeature);
   const isVideoFeature = adminVideoFeatures.some((item) => item.id === selectedFeature);
   const isAudioFeature = selectedFeature === "audio" || adminAudioFeatures.some((item) => item.id === selectedFeature);
 
-  return <SidebarGroup className="px-0"><SidebarMenu className="gap-1"><SidebarMenuItem><details open={isImageFeature} className="group"><summary className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isImageFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}><ImageIcon size={18} strokeWidth={isImageFeature ? 2.5 : 2} /><span>Image</span><span className="ml-auto"><ChevronDown size={15} className="transition-transform group-open:rotate-180" /></span></summary><div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">{adminImageFeatures.map((item) => { const active = pathname === "/admin/model-routes" && selectedFeature === item.id; return <Link key={item.id} href={`/admin/model-routes?feature=${item.id}`} aria-current={active ? "page" : undefined} className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${active ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}>{item.label}</Link>; })}</div></details></SidebarMenuItem><SidebarMenuItem><details open={isVideoFeature} className="group"><summary className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isVideoFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}><Video size={18} strokeWidth={isVideoFeature ? 2.5 : 2} /><span>Video</span><span className="ml-auto"><ChevronDown size={15} className="transition-transform group-open:rotate-180" /></span></summary><div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">{adminVideoFeatures.map((item) => { const active = pathname === "/admin/model-routes" && selectedFeature === item.id; return <Link key={item.id} href={`/admin/model-routes?feature=${item.id}`} aria-current={active ? "page" : undefined} className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${active ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}>{item.label}</Link>; })}</div></details></SidebarMenuItem><SidebarMenuItem><details open={isAudioFeature} className="group"><summary className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isAudioFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}><AudioLines size={18} strokeWidth={isAudioFeature ? 2.5 : 2} /><span>Audio</span><span className="ml-auto"><ChevronDown size={15} className="transition-transform group-open:rotate-180" /></span></summary><div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">{adminAudioFeatures.map((item) => { const active = pathname === "/admin/model-routes" && selectedFeature === item.id; return <Link key={item.id} href={`/admin/model-routes?feature=${item.id}`} aria-current={active ? "page" : undefined} className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${active ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}>{item.label}</Link>; })}</div></details></SidebarMenuItem>{adminCreativeFeatures.filter((item) => item.id !== "audio").map((item) => { const active = pathname === "/admin/model-routes" && selectedFeature === item.id; return <SidebarMenuItem key={item.id}><SidebarMenuButton render={<Link href={`/admin/model-routes?feature=${item.id}`} aria-current={active ? "page" : undefined} />} isActive={active} className="h-8 rounded-[9px] px-3 text-xs font-medium text-muted-foreground data-active:bg-[#fff0e9] data-active:text-primary hover:bg-surface-muted hover:text-foreground"><item.icon size={15} strokeWidth={active ? 2.4 : 2} /><span>{item.label}</span></SidebarMenuButton></SidebarMenuItem>; })}</SidebarMenu></SidebarGroup>;
+  return (
+    <SidebarGroup className="px-0">
+      <SidebarMenu className="gap-1">
+        <SidebarMenuItem>
+          <details open={isImageFeature} className="group">
+            <summary
+              className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isImageFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+            >
+              <ImageIcon size={18} strokeWidth={isImageFeature ? 2.5 : 2} />
+              <span>Image</span>
+              <span className="ml-auto">
+                <ChevronDown size={15} className="transition-transform group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">
+              {adminImageFeatures.map((item) => {
+                const active = pathname === "/admin/model-routes" && selectedFeature === item.id;
+                return (
+                  <Link
+                    key={item.id}
+                    href={`/admin/model-routes?feature=${item.id}`}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${active ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </details>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <details open={isVideoFeature} className="group">
+            <summary
+              className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isVideoFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+            >
+              <Video size={18} strokeWidth={isVideoFeature ? 2.5 : 2} />
+              <span>Video</span>
+              <span className="ml-auto">
+                <ChevronDown size={15} className="transition-transform group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">
+              {adminVideoFeatures.map((item) => {
+                const active = pathname === "/admin/model-routes" && selectedFeature === item.id;
+                return (
+                  <Link
+                    key={item.id}
+                    href={`/admin/model-routes?feature=${item.id}`}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${active ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </details>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <details open={isAudioFeature} className="group">
+            <summary
+              className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isAudioFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+            >
+              <AudioLines size={18} strokeWidth={isAudioFeature ? 2.5 : 2} />
+              <span>Audio</span>
+              <span className="ml-auto">
+                <ChevronDown size={15} className="transition-transform group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">
+              {adminAudioFeatures.map((item) => {
+                const active = pathname === "/admin/model-routes" && selectedFeature === item.id;
+                return (
+                  <Link
+                    key={item.id}
+                    href={`/admin/model-routes?feature=${item.id}`}
+                    aria-current={active ? "page" : undefined}
+                    className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${active ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </details>
+        </SidebarMenuItem>
+        {adminCreativeFeatures
+          .filter((item) => item.id !== "audio")
+          .map((item) => {
+            const active = pathname === "/admin/model-routes" && selectedFeature === item.id;
+            return (
+              <SidebarMenuItem key={item.id}>
+                <SidebarMenuButton
+                  render={
+                    <Link href={`/admin/model-routes?feature=${item.id}`} aria-current={active ? "page" : undefined} />
+                  }
+                  isActive={active}
+                  className="h-8 rounded-[9px] px-3 text-xs font-medium text-muted-foreground data-active:bg-[#fff0e9] data-active:text-primary hover:bg-surface-muted hover:text-foreground"
+                >
+                  <item.icon size={15} strokeWidth={active ? 2.4 : 2} />
+                  <span>{item.label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+      </SidebarMenu>
+    </SidebarGroup>
+  );
 }
 
 function AdminFeatureNavigation({ pathname }: { pathname: string }) {
@@ -63,7 +245,62 @@ function AdminFeatureNavigation({ pathname }: { pathname: string }) {
   const selectedFeature = searchParams.get("feature") ?? "text-to-image";
   const isImageFeature = adminImageFeatures.some((item) => item.id === selectedFeature);
 
-  return <SidebarGroup className="px-0"><SidebarMenu className="gap-1"><SidebarMenuItem><details open={isImageFeature} className="group"><summary className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isImageFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}><WandSparkles size={18} strokeWidth={isImageFeature ? 2.5 : 2} /><span>Create</span><span className="ml-auto"><ChevronDown size={15} className="transition-transform group-open:rotate-180" /></span></summary><SidebarMenu className="ml-5 mt-1 gap-1 border-l border-[#f1d7cc] pl-2"><SidebarMenuItem><SidebarMenuButton render={<Link href="/admin/model-routes?feature=text-to-image" aria-current={isImageFeature ? "page" : undefined} />} isActive={isImageFeature} className="h-8 rounded-[9px] px-2.5 text-xs font-medium text-muted-foreground data-active:bg-[#fff0e9] data-active:text-primary hover:bg-surface-muted hover:text-foreground"><ImageIcon size={15} strokeWidth={isImageFeature ? 2.4 : 2} /><span>Image</span></SidebarMenuButton></SidebarMenuItem>{adminCreativeFeatures.map((item) => { const active = pathname === "/admin/model-routes" && selectedFeature === item.id; return <SidebarMenuItem key={item.id}><SidebarMenuButton render={<Link href={`/admin/model-routes?feature=${item.id}`} aria-current={active ? "page" : undefined} />} isActive={active} className="h-8 rounded-[9px] px-2.5 text-xs font-medium text-muted-foreground data-active:bg-[#fff0e9] data-active:text-primary hover:bg-surface-muted hover:text-foreground"><item.icon size={15} strokeWidth={active ? 2.4 : 2} /><span>{item.label}</span></SidebarMenuButton></SidebarMenuItem>; })}</SidebarMenu></details></SidebarMenuItem></SidebarMenu></SidebarGroup>;
+  return (
+    <SidebarGroup className="px-0">
+      <SidebarMenu className="gap-1">
+        <SidebarMenuItem>
+          <details open={isImageFeature} className="group">
+            <summary
+              className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isImageFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+            >
+              <WandSparkles size={18} strokeWidth={isImageFeature ? 2.5 : 2} />
+              <span>Create</span>
+              <span className="ml-auto">
+                <ChevronDown size={15} className="transition-transform group-open:rotate-180" />
+              </span>
+            </summary>
+            <SidebarMenu className="ml-5 mt-1 gap-1 border-l border-[#f1d7cc] pl-2">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={
+                    <Link
+                      href="/admin/model-routes?feature=text-to-image"
+                      aria-current={isImageFeature ? "page" : undefined}
+                    />
+                  }
+                  isActive={isImageFeature}
+                  className="h-8 rounded-[9px] px-2.5 text-xs font-medium text-muted-foreground data-active:bg-[#fff0e9] data-active:text-primary hover:bg-surface-muted hover:text-foreground"
+                >
+                  <ImageIcon size={15} strokeWidth={isImageFeature ? 2.4 : 2} />
+                  <span>Image</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              {adminCreativeFeatures.map((item) => {
+                const active = pathname === "/admin/model-routes" && selectedFeature === item.id;
+                return (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      render={
+                        <Link
+                          href={`/admin/model-routes?feature=${item.id}`}
+                          aria-current={active ? "page" : undefined}
+                        />
+                      }
+                      isActive={active}
+                      className="h-8 rounded-[9px] px-2.5 text-xs font-medium text-muted-foreground data-active:bg-[#fff0e9] data-active:text-primary hover:bg-surface-muted hover:text-foreground"
+                    >
+                      <item.icon size={15} strokeWidth={active ? 2.4 : 2} />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </details>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    </SidebarGroup>
+  );
 }
 
 function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydrated: boolean }) {
@@ -83,11 +320,44 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
     { label: "System settings", href: "/admin/settings", icon: Settings, disabled: true },
   ] satisfies Array<NavigationItem & { disabled?: boolean }>;
 
-  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 lg:flex lg:px-5"><SidebarHeader className="mb-8 items-center px-2"><EosLogo /></SidebarHeader><SidebarContent className="gap-1"><AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} /><AdminFeatureNavigationTree pathname={pathname} hydrated={hydrated} /><AdminNavigationGroup label="Operations" items={operations} pathname={pathname} /><SidebarGroup className="mt-2 px-0"><SidebarGroupContent><SidebarMenu className="gap-1"><SidebarMenuItem><SidebarMenuButton render={<Link href="/home" />} className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"><ArrowLeft size={18} /><span>Back to workspace</span></SidebarMenuButton></SidebarMenuItem></SidebarMenu></SidebarGroupContent></SidebarGroup></SidebarContent></Sidebar>;
+  return (
+    <Sidebar
+      collapsible="none"
+      className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 xl:flex xl:px-5"
+    >
+      <SidebarHeader className="mb-8 items-center px-2">
+        <EosLogo />
+      </SidebarHeader>
+      <SidebarContent className="gap-1">
+        <AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} />
+        <AdminFeatureNavigationTree pathname={pathname} hydrated={hydrated} />
+        <AdminNavigationGroup label="Operations" items={operations} pathname={pathname} />
+        <SidebarGroup className="mt-2 px-0">
+          <SidebarGroupContent>
+            <SidebarMenu className="gap-1">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<Link href="/home" />}
+                  className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground hover:bg-surface-muted hover:text-foreground"
+                >
+                  <ArrowLeft size={18} />
+                  <span>Back to workspace</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  );
 }
 
 function WorkspaceSidebarHeader() {
-  return <SidebarHeader className="px-2"><EosLogo className="origin-center scale-[1.1]" /></SidebarHeader>;
+  return (
+    <SidebarHeader className="px-2">
+      <EosLogo className="origin-center scale-[1.1]" />
+    </SidebarHeader>
+  );
 }
 
 export function SidebarNavigation() {
@@ -95,8 +365,15 @@ export function SidebarNavigation() {
   const hydrated = useHydrated();
   const pathname = hydrated ? pathnameFromRouter : "";
   if (pathname.startsWith("/admin")) return <AdminSidebarNavigation pathname={pathname} hydrated={hydrated} />;
-  return <Sidebar collapsible="none" className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 lg:flex lg:px-5">
-    <WorkspaceSidebarHeader />
-    <SidebarContent className="gap-1"><WorkspaceNavigation pathname={pathname} /></SidebarContent>
-  </Sidebar>;
+  return (
+    <Sidebar
+      collapsible="none"
+      className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 xl:flex xl:px-5"
+    >
+      <WorkspaceSidebarHeader />
+      <SidebarContent className="gap-1">
+        <WorkspaceNavigation pathname={pathname} />
+      </SidebarContent>
+    </Sidebar>
+  );
 }

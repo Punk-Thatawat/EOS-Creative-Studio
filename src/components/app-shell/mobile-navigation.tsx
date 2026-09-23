@@ -55,11 +55,11 @@ export function MobileNavigation() {
 
   return (
     <>
-      <button type="button" className="flex size-11 items-center justify-center rounded-xl border border-border bg-white text-foreground shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-muted lg:hidden" aria-label={locale === "th" ? "เปิดเมนูนำทาง" : "Open navigation menu"} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(true)}>
+      <button type="button" className="flex size-11 items-center justify-center rounded-xl border border-border bg-white text-foreground shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-muted xl:hidden" aria-label={locale === "th" ? "เปิดเมนูนำทาง" : "Open navigation menu"} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(true)}>
         <Menu size={21} strokeWidth={2.4} />
       </button>
       {open ? (
-        <div className="fixed inset-0 z-[60] lg:hidden">
+        <div className="fixed inset-0 z-[60] xl:hidden">
           <button type="button" className="absolute inset-0 bg-[#201d1b]/40" aria-label="Close navigation menu" onClick={() => setOpen(false)} />
           <nav id="mobile-navigation" className="absolute inset-y-0 left-0 flex w-[min(280px,calc(100vw-24px))] flex-col overflow-y-auto bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[var(--shadow-md)]" aria-label="Mobile navigation">
             <div className="mb-8 flex items-center justify-between">
