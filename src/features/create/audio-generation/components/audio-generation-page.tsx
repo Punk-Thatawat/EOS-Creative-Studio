@@ -1669,7 +1669,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     }
     const timer = window.setTimeout(() => {
       setCreditQuoteLoading(true);
-      void quoteVoiceClone(text)
+      void quoteVoiceClone(text, previewModel)
         .then((quote) => {
           if (active) setCreditQuote(quote);
         })
@@ -1684,7 +1684,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
       active = false;
       window.clearTimeout(timer);
     };
-  }, [testPhrase]);
+  }, [testPhrase, previewModel]);
 
   const translateError = (message: string): string => {
     const known: Record<string, string> = {

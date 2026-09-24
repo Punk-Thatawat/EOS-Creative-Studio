@@ -506,11 +506,11 @@ export async function deleteVoiceClone(voiceId: string): Promise<void> {
 
 export type VoiceCloneQuote = { provider: "wavespeed"; model: string; creditCost: number; pricingSource: "provider" | "fallback" };
 
-export async function quoteVoiceClone(text: string, signal?: AbortSignal): Promise<VoiceCloneQuote> {
+export async function quoteVoiceClone(text: string, modelId?: string, signal?: AbortSignal): Promise<VoiceCloneQuote> {
   const response = await userAudioRequest("/audio/voice-clones/quote", {
     method: "POST",
     headers: { Accept: "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...(modelId ? { modelId } : {}) }),
     signal,
   });
   const payload = await response.json().catch(() => null) as { data?: VoiceCloneQuote } | null;
