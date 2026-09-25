@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  FileText,
   Globe2,
   Info,
   KeyRound,
@@ -20,8 +21,11 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { CookieSettingsButton } from "@/components/privacy/cookie-settings-button";
+import { legalDocuments } from "@/features/legal/legal-documents";
 import { changePasswordWithBackend, getStoredBackendSession } from "@/lib/auth/backend-auth";
 import { getApiAccessToken } from "@/lib/auth/access-token";
 import { fetchBackendAuthProvider, fetchBackendAuthSessions, type BackendSessionSummary } from "@/lib/auth/backend-session";
@@ -37,6 +41,10 @@ const settingsKeys = {
   saved: "settings.saved",
   saving: "settings.saving",
   overview: "settings.overview",
+  legal: "settings.legal",
+  legalDescription: "settings.legalDescription",
+  cookieSettings: "settings.cookieSettings",
+  cookieSettingsDescription: "settings.cookieSettingsDescription",
   language: "settings.language",
   languageDescription: "settings.languageDescription",
   defaultLanguage: "settings.defaultLanguage",
@@ -98,7 +106,7 @@ const settingsKeys = {
 
 type Copy = { [Key in keyof typeof settingsKeys]: string };
 
-const sectionIds = ["language", "security"] as const;
+const sectionIds = ["legal", "language", "security"] as const;
 const showNotificationSettings = false;
 const SETTINGS_CACHE_TTL_MS = 60_000;
 let cachedAuthProvider: { value: "email" | "google" | "unknown"; cachedAt: number } | null = null;
@@ -214,7 +222,7 @@ export function SettingsPageClient() {
   const { locale, setLocale, persistLocale, t: translateKey } = useLocale();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<(typeof sectionIds)[number]>("language");
+  const [activeSection, setActiveSection] = useState<(typeof sectionIds)[number]>("legal");
   const [notifications, setNotifications] = useState({ email: true, project: true, security: true });
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
   const [passwordVisible, setPasswordVisible] = useState({ current: false, next: false, confirm: false });
@@ -365,8 +373,8 @@ export function SettingsPageClient() {
         <aside className={styles.sectionNav} aria-label={t.overview}>
           <p className={styles.navLabel}>{t.overview}</p>
           {sectionIds.map((id) => {
-            const labels = { language: t.language, security: t.security };
-            const icons = { language: Languages, security: LockKeyhole };
+            const labels = { legal: t.legal, language: t.language, security: t.security };
+            const icons = { legal: FileText, language: Languages, security: LockKeyhole };
             const Icon = icons[id];
             return (
               <button key={id} type="button" className={`${styles.navItem} ${activeSection === id ? styles.navItemActive : ""}`} onClick={() => scrollToSection(id)}>
@@ -383,6 +391,22 @@ export function SettingsPageClient() {
         </aside>
 
         <div className={styles.sections}>
+          <Card className={styles.settingsCard} id="settings-legal">
+            <SectionHeading icon={FileText} title={t.legal} description={t.legalDescription} />
+            <nav className={`${styles.cardBody} ${styles.legalLinks}`} aria-label={t.legal}>
+              {legalDocuments.map((document) => (
+                <Link key={document.slug} href={`/legal/${document.slug}`} className={styles.legalLink}>
+                  <span><FileText size={15} />{document.shortTitle}</span>
+                  <ChevronRight size={15} />
+                </Link>
+              ))}
+              <div className={styles.legalCookieSettings}>
+                <CookieSettingsButton label={t.cookieSettings} className={styles.legalCookieButton} />
+                <span>{t.cookieSettingsDescription}</span>
+              </div>
+            </nav>
+          </Card>
+
           <Card className={styles.settingsCard} id="settings-language">
             <SectionHeading icon={Globe2} title={t.language} description={t.languageDescription} />
             <div className={styles.cardBody}>

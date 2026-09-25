@@ -67,6 +67,18 @@
 .tonepink { background: #fae8ee; color: #b35a79; }
 .toneyellow { background: #fff5d5; color: #b18319; }
 .cardBody { padding: 0 1.25rem 1.2rem; }
+.legalLinks { display: grid; gap: 0.5rem; padding-top: 0.85rem; }
+.legalLink,
+.legalCookieButton { display: flex; min-height: 2.8rem; width: 100%; align-items: center; justify-content: space-between; gap: 0.75rem; border: 1px solid var(--settings-line); border-radius: 0.75rem; background: #fff; padding: 0.65rem 0.8rem; color: #554d47; font-size: 0.78rem; font-weight: 650; text-align: left; text-decoration: none; transition: 160ms ease; }
+.legalLink:hover,
+.legalCookieButton:hover { border-color: #f2b49b; background: #fffaf7; color: #e75e2c; }
+.legalLink > span { display: inline-flex; align-items: center; gap: 0.55rem; }
+.legalLink > span svg { color: #f26b38; }
+.legalLink > svg { color: #a4968c; }
+.legalCookieSettings { display: grid; gap: 0.3rem; }
+.legalCookieSettings > span { padding: 0 0.8rem; color: var(--settings-muted); font-size: 0.68rem; line-height: 1.45; }
+.legalCookieButton { cursor: pointer; }
+.legalCookieButton svg { flex: none; color: #f26b38; }
 .languageRow, .preferenceRow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; }
 .languageRow { border-bottom: 1px solid var(--settings-line); }
 .languageSwitch { display: inline-flex; flex: none; border: 1px solid var(--settings-line); border-radius: 0.7rem; background: var(--settings-soft); padding: 0.2rem; }
