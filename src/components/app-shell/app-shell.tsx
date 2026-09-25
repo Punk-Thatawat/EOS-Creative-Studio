@@ -6,7 +6,6 @@ import { HomeUtilityRail } from "@/features/home/components/home-utility-rail";
 import { SidebarNavigation } from "@/components/app-shell/navigation";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { StudioHeader } from "@/components/app-shell/studio-header";
-import { LegalFooter } from "@/components/legal/legal-footer";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const isHome = usePathname() === "/home";
@@ -21,7 +20,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <main className="min-w-0 flex-1 basis-0" data-studio-main>
               {children}
-              <LegalFooter />
             </main>
             {isHome ? <HomeUtilityRail /> : null}
           </div>
