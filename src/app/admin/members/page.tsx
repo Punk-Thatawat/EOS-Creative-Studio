@@ -57,17 +57,20 @@ function CreditDialog({ member, busy, onClose, onSubmit }: { member: AdminMember
   </Dialog>;
 }
 
-function InviteDialog({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (input: { email: string; role: AdminMemberRole; display_name?: string }) => void }) {
+function InviteDialog({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (input: { email: string; role: AdminMemberRole; display_name?: string; initial_credits?: number }) => void }) {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<AdminMemberRole>("user");
+  const [initialCredits, setInitialCredits] = useState("");
+  const creditAmount = Number(initialCredits);
+  const validCredits = !initialCredits.trim() || (Number.isFinite(creditAmount) && creditAmount > 0 && creditAmount <= 1000000 && Number(creditAmount.toFixed(4)) === creditAmount);
 
   return <Dialog open onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
     <DialogContent className="max-w-md overflow-hidden rounded-3xl border-[#eaded6] bg-[#faf8f6]" showCloseButton={false}>
       <header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Member access</p><DialogTitle className="mt-1 text-xl tracking-tight">Invite a member</DialogTitle><DialogDescription className="mt-1 text-xs">We’ll email them a one-time link to set their password. The link expires in 24 hours.</DialogDescription></div><DialogClose render={<button type="button" className="rounded-xl p-2 text-muted-foreground hover:bg-surface-muted" aria-label="Close invitation dialog" disabled={busy} />}><X size={19} /></DialogClose></header>
-      <form onSubmit={(event) => { event.preventDefault(); onSubmit({ email: email.trim(), role, ...(displayName.trim() ? { display_name: displayName.trim() } : {}) }); }}>
-        <div className="space-y-4 p-5"><label className="block text-xs font-semibold">Email address<input autoFocus type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="name@example.com" required /></label><label className="block text-xs font-semibold">Display name <span className="font-normal text-muted-foreground">(optional)</span><input maxLength={160} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="Name shown in the studio" /></label><label className="block text-xs font-semibold">Account role<select value={role} onChange={(event) => setRole(event.target.value as AdminMemberRole)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary"><option value="user">User</option><option value="admin">Admin — full access</option></select><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Only grant Admin access to people who need to manage members and settings.</span></label></div>
-        <footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="sm" disabled={!email.trim() || busy}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <UserPlus size={15} />} {busy ? "Sending…" : "Send invitation"}</Button></footer>
+      <form onSubmit={(event) => { event.preventDefault(); if (!validCredits) return; onSubmit({ email: email.trim(), role, ...(displayName.trim() ? { display_name: displayName.trim() } : {}), ...(initialCredits.trim() ? { initial_credits: creditAmount } : {}) }); }}>
+        <div className="space-y-4 p-5"><label className="block text-xs font-semibold">Email address<input autoFocus type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="name@example.com" required /></label><label className="block text-xs font-semibold">Display name <span className="font-normal text-muted-foreground">(optional)</span><input maxLength={160} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="Name shown in the studio" /></label><label className="block text-xs font-semibold">Initial credits <span className="font-normal text-muted-foreground">(optional)</span><input type="number" min="0.0001" max="1000000" step="0.0001" value={initialCredits} onChange={(event) => setInitialCredits(event.target.value)} aria-invalid={!validCredits} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="e.g. 100" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">For a new account, this replaces the configured signup bonus. Leave blank to use that bonus.</span></label><label className="block text-xs font-semibold">Account role<select value={role} onChange={(event) => setRole(event.target.value as AdminMemberRole)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary"><option value="user">User</option><option value="admin">Admin — full access</option></select><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Only grant Admin access to people who need to manage members and settings.</span></label></div>
+        <footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="sm" disabled={!email.trim() || !validCredits || busy}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <UserPlus size={15} />} {busy ? "Sending…" : "Send invitation"}</Button></footer>
       </form>
     </DialogContent>
   </Dialog>;
@@ -121,12 +124,13 @@ function AdminMembersContent() {
     finally { setBusyId(""); }
   };
 
-  const sendInvitation = async (input: { email: string; role: AdminMemberRole; display_name?: string }) => {
+  const sendInvitation = async (input: { email: string; role: AdminMemberRole; display_name?: string; initial_credits?: number }) => {
     setInviteBusy(true); setError(""); setMessage("");
     try {
       const result = await inviteAdminMember(input);
       setInviteOpen(false);
-      setMessage(`Invitation sent to ${result.email}.`);
+      const creditMessage = result.initialCreditsAdded === null ? "" : result.initialCreditsAdded > 0 ? ` ${formatCredits(result.initialCreditsAdded)} initial credits assigned.` : " Initial credits were already assigned for this account.";
+      setMessage(`Invitation sent to ${result.email}.${creditMessage}`);
       await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to send invitation"); }
     finally { setInviteBusy(false); }
