@@ -94,6 +94,7 @@ const MIN_PODCAST_SPEAKERS = 2;
 // Keep the other modes in the implementation so they can be enabled again without
 // changing the tab state or content branching below.
 const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
+const TEXT_TO_SPEECH_MODEL = "elevenlabs/eleven-v3";
 const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
 
 const audioTabKeys = {
@@ -2451,12 +2452,9 @@ export function AudioGenerationPage() {
     setModelLoadState("loading");
     try {
       const items = await listAudioModels("textToSpeech");
-      setAvailableModels(items);
-      setSelectedModel((current) =>
-        items.some((model) => model.key === current)
-          ? current
-          : (items.find((model) => model.isActive)?.key ?? items[0]?.key ?? ""),
-      );
+      const elevenV3 = items.filter((model) => model.key === TEXT_TO_SPEECH_MODEL);
+      setAvailableModels(elevenV3);
+      setSelectedModel(elevenV3.length ? TEXT_TO_SPEECH_MODEL : "");
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -2661,7 +2659,7 @@ export function AudioGenerationPage() {
     setTone("");
     setLanguage("Thai");
     setPronunciation("");
-    setSelectedModel(availableModels.find((model) => model.isActive)?.key ?? availableModels[0]?.key ?? "");
+    setSelectedModel(availableModels.length ? TEXT_TO_SPEECH_MODEL : "");
     setSelectedVoice(availableVoices[0]?.key ?? "");
     setFormat("MP3");
     setSpeed(0.95);
@@ -3075,6 +3073,7 @@ export function AudioGenerationPage() {
     model: selectedModel,
     models: availableModels.map((m) => m.key),
     setModel: setSelectedModel,
+    fixedModel: true,
     apply: (s, p) => {
       setPrompt(p);
       setAudioScenes((current) => current.map((scene, i) => (i === 0 ? { ...scene, text: p } : scene)));
@@ -3566,21 +3565,8 @@ export function AudioGenerationPage() {
                     <WandSparkles size={22} />
                   </div>
                   <div className={styles.settingBlock}>
-                    <SelectField
-                      label={t("create.audio.voiceModel")}
-                      value={selectedModel}
-                      onChange={(modelId) => {
-                        setSelectedModel(modelId);
-                        setSelectedVoice("");
-                      }}
-                      disabled={modelLoadState !== "ready" || availableModels.length === 0}
-                      loading={modelLoadState === "loading"}
-                      options={availableModels.map((model) => ({
-                        value: model.key,
-                        label: model.name,
-                        preserveLabel: true,
-                      }))}
-                    />
+                    <FieldLabel>{t("create.audio.voiceModel")}</FieldLabel>
+                    <div className={styles.fixedVoiceModel}>{availableModels[0]?.name ?? "ElevenLabs · Eleven v3"}</div>
                   </div>
                   <div className={styles.settingBlock}>
                     <FieldLabel>{t("create.audio.outputFormat")}</FieldLabel>

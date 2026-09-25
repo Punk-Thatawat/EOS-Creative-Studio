@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getTemplate, type CreativeTemplate, type TemplateKind } from "@/lib/api/templates";
 export function useTemplateSettings(kind: TemplateKind, options: {
-  ready: boolean; model: string; models: string[]; setModel: (model: string)=>void;
+  ready: boolean; model: string; models: string[]; setModel: (model: string)=>void; fixedModel?: boolean;
   apply: (settings: Record<string,unknown>, prompt: string)=>void;
 }) {
   const slug = useSearchParams().get('template');
@@ -21,12 +21,12 @@ export function useTemplateSettings(kind: TemplateKind, options: {
     if(!slug||!template||template.slug!==slug||template.kind!==kind||!options.ready||applied.current===slug)return;
     const settings=template.settings??{};
     const model=typeof settings.model==='string'?settings.model:typeof settings.modelId==='string'?settings.modelId:'';
-    if(model&&!current.current.models.includes(model)) {
+    if(model&&!options.fixedModel&&!current.current.models.includes(model)) {
       applied.current=slug; current.current.setModel('');
       window.alert('โมเดลในเทมเพลตนี้ไม่พร้อมใช้งาน กรุณาเลือกโมเดลใหม่ก่อนสร้างงาน'); return;
     }
-    if(model&&options.model!==model){current.current.setModel(model);return;}
+    if(model&&!options.fixedModel&&options.model!==model){current.current.setModel(model);return;}
     applied.current=slug;
     current.current.apply(settings,template.prompt);
-  },[slug,template,kind,options.ready,options.model]);
+  },[slug,template,kind,options.ready,options.model,options.fixedModel]);
 }

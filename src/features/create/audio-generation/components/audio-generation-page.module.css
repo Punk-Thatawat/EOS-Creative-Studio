@@ -1116,6 +1116,17 @@
 .settingBlock > .fieldLabel {
   margin-bottom: 9px;
 }
+.fixedVoiceModel {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid #dfe2e7;
+  border-radius: var(--eos-field-radius);
+  background: #fff;
+  padding: 0 11px;
+  color: #323741;
+  font-size: 11px;
+}
 .tierRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
