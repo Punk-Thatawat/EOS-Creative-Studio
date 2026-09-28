@@ -7,6 +7,7 @@ const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`
 
 export type AdminMemberRole = "user" | "admin";
 export type AdminMemberStatus = "active" | "suspended";
+export type InviteAdminMemberInput = { email: string; role: AdminMemberRole; display_name?: string; initial_credits?: number };
 export type AdminMember = {
   id: string;
   email: string;
@@ -16,6 +17,7 @@ export type AdminMember = {
   role: AdminMemberRole;
   status: AdminMemberStatus;
   emailConfirmed: boolean;
+  invitationPending?: boolean;
   creditBalance: number;
   permissions: string[];
   lastSeenAt?: string;
@@ -53,8 +55,16 @@ export async function listAdminMembers(input: { q?: string; role?: AdminMemberRo
   return adminRequest<AdminMembersResponse>(`/admin/members?${params.toString()}`);
 }
 
+export async function inviteAdminMember(input: InviteAdminMemberInput) {
+  return adminRequest<{ sent: boolean; userId: string; email: string; initialCreditsAdded: number | null }>("/admin/members/invite", { method: "POST", body: JSON.stringify(input) });
+}
+
 export async function updateAdminMember(id: string, input: { role?: AdminMemberRole; status?: AdminMemberStatus }) {
   return adminRequest<AdminMember>(`/admin/members/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function resendAdminMemberInvitation(id: string) {
+  return adminRequest<{ sent: boolean; email: string }>(`/admin/members/${encodeURIComponent(id)}/resend-invitation`, { method: "POST" });
 }
 
 export async function grantAdminMemberCredits(id: string, input: { credits: number; reason?: string; idempotencyKey: string }) {

@@ -2,6 +2,11 @@
 import { useTemplateSettings } from "@/features/templates/use-template-settings";
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 import { promptMaxLength } from "@/lib/prompt-limits";
+import {
+  emitGenerationRequestFailed,
+  emitGenerationRequestFinished,
+  emitGenerationSubmitting,
+} from "@/lib/generation-progress-events";
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
@@ -93,6 +98,7 @@ type AudioTab = (typeof audioModes)[number];
 const MIN_PODCAST_SPEAKERS = 2;
 
 const visibleTabs: readonly AudioTab[] = audioModes;
+const TEXT_TO_SPEECH_MODEL = "elevenlabs/eleven-v3";
 const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
 
 const audioTabKeys = {
@@ -214,6 +220,20 @@ function formatAudioHistoryDate(value: string, locale: "th" | "en"): string {
 
 function createAudioIdempotencyKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function startAudioProgress(feature: string): string {
+  const requestId = createAudioIdempotencyKey();
+  emitGenerationSubmitting({ feature, requestId });
+  return requestId;
+}
+
+function finishAudioProgress(feature: string, requestId: string): void {
+  emitGenerationRequestFinished({ feature, requestId });
+}
+
+function failAudioProgress(feature: string, requestId: string): void {
+  emitGenerationRequestFailed({ feature, requestId });
 }
 
 function FieldLabel({ children, hint }: { children: ReactNode; hint?: string }) {
@@ -659,6 +679,7 @@ function PodcastDialogueLayout({
     setPreviewDuration(0);
     setStatus("generating");
     setError(null);
+    const requestId = startAudioProgress("audio-podcast");
     try {
       const result = await createDialogue({
         script: episodeScript,
@@ -706,7 +727,9 @@ function PodcastDialogueLayout({
         setPodcastHistory(nextHistory);
       }
       setStatus("ready");
+      finishAudioProgress("audio-podcast", requestId);
     } catch (cause) {
+      failAudioProgress("audio-podcast", requestId);
       setError(cause instanceof Error ? cause.message : "Podcast generation failed");
       setStatus("error");
     }
@@ -1620,6 +1643,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     }
     setStatus("creating");
     setError(null);
+    const requestId = startAudioProgress("audio-voice-clone");
     try {
       const result = await createVoiceClone({
         name: voiceName,
@@ -1631,7 +1655,9 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
       setVoiceId(result.voiceId);
       setStatus("ready");
       void refreshSavedVoices();
+      finishAudioProgress("audio-voice-clone", requestId);
     } catch (cause) {
+      failAudioProgress("audio-voice-clone", requestId);
       setError(cause instanceof Error ? translateError(cause.message) : t("create.audio.clone.error.createFailed"));
       setStatus("error");
     }
@@ -1645,6 +1671,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     }
     setStatus("previewing");
     setError(null);
+    const requestId = startAudioProgress("audio-voice-clone");
     try {
       const result = await previewVoiceClone(voiceId, {
         text: testPhrase,
@@ -1670,7 +1697,9 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
         metadata: { character },
       });
       setStatus("ready");
+      finishAudioProgress("audio-voice-clone", requestId);
     } catch (cause) {
+      failAudioProgress("audio-voice-clone", requestId);
       setError(cause instanceof Error ? translateError(cause.message) : t("create.audio.clone.error.previewFailed"));
       setStatus("error");
     }
@@ -2222,6 +2251,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   }, [sourceMode, effectDuration, variationCount]);
 
   const handleGenerate = async () => {
+    const requestId = startAudioProgress("audio-sound-effects");
     setStatus("generating");
     setError(null);
     try {
@@ -2276,7 +2306,9 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       setProgress(0);
       setIsPlaying(false);
       setStatus("ready");
+      finishAudioProgress("audio-sound-effects", requestId);
     } catch (cause) {
+      failAudioProgress("audio-sound-effects", requestId);
       setError(cause instanceof Error ? cause.message : "Sound effect generation failed");
       setStatus("error");
     }
@@ -3018,12 +3050,9 @@ export function AudioGenerationPage() {
     setModelLoadState("loading");
     try {
       const items = await listAudioModels("textToSpeech");
-      setAvailableModels(items);
-      setSelectedModel((current) =>
-        items.some((model) => model.key === current)
-          ? current
-          : (items.find((model) => model.isActive)?.key ?? items[0]?.key ?? ""),
-      );
+      const elevenV3 = items.filter((model) => model.key === TEXT_TO_SPEECH_MODEL);
+      setAvailableModels(elevenV3);
+      setSelectedModel(elevenV3.length ? TEXT_TO_SPEECH_MODEL : "");
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -3228,7 +3257,7 @@ export function AudioGenerationPage() {
     setTone("");
     setLanguage("Thai");
     setPronunciation("");
-    setSelectedModel(availableModels.find((model) => model.isActive)?.key ?? availableModels[0]?.key ?? "");
+    setSelectedModel(availableModels.length ? TEXT_TO_SPEECH_MODEL : "");
     setSelectedVoice(availableVoices[0]?.key ?? "");
     setFormat("MP3");
     setSpeed(0.95);
@@ -3426,6 +3455,7 @@ export function AudioGenerationPage() {
   const handleGenerate = async () => {
     setStatus("generating");
     setErrorMessage(null);
+    const requestId = startAudioProgress("audio-text-to-speech");
     try {
       const result = await createTextToSpeech({
         text: prompt,
@@ -3442,7 +3472,9 @@ export function AudioGenerationPage() {
       });
       setGeneratedAudioResult(result, `Generation ${historySequenceRef.current + 1}`, selectedVoice);
       setStatus("complete");
+      finishAudioProgress("audio-text-to-speech", requestId);
     } catch (error) {
+      failAudioProgress("audio-text-to-speech", requestId);
       setStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Audio generation failed");
     }
@@ -3474,6 +3506,7 @@ export function AudioGenerationPage() {
     setStatus("generating");
     setSceneError(null);
     setErrorMessage(null);
+    const requestId = startAudioProgress("audio-scenes");
     try {
       const result = await createTextToSpeechScenes({
         scenes: scenesToGenerate.map(({ title, text, voice }) => ({ title, text, voice })),
@@ -3493,7 +3526,9 @@ export function AudioGenerationPage() {
       });
       setSceneGenerationStatus("complete");
       setStatus("complete");
+      finishAudioProgress("audio-scenes", requestId);
     } catch (error) {
+      failAudioProgress("audio-scenes", requestId);
       setSceneGenerationStatus("error");
       setStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Scene generation failed");
@@ -3636,6 +3671,7 @@ export function AudioGenerationPage() {
     model: selectedModel,
     models: availableModels.map((m) => m.key),
     setModel: setSelectedModel,
+    fixedModel: true,
     apply: (s, p) => {
       setPrompt(p);
       setAudioScenes((current) => current.map((scene, i) => (i === 0 ? { ...scene, text: p } : scene)));
@@ -4127,21 +4163,8 @@ export function AudioGenerationPage() {
                     <WandSparkles size={22} />
                   </div>
                   <div className={styles.settingBlock}>
-                    <SelectField
-                      label={t("create.audio.voiceModel")}
-                      value={selectedModel}
-                      onChange={(modelId) => {
-                        setSelectedModel(modelId);
-                        setSelectedVoice("");
-                      }}
-                      disabled={modelLoadState !== "ready" || availableModels.length === 0}
-                      loading={modelLoadState === "loading"}
-                      options={availableModels.map((model) => ({
-                        value: model.key,
-                        label: model.name,
-                        preserveLabel: true,
-                      }))}
-                    />
+                    <FieldLabel>{t("create.audio.voiceModel")}</FieldLabel>
+                    <div className={styles.fixedVoiceModel}>{availableModels[0]?.name ?? "ElevenLabs · Eleven v3"}</div>
                   </div>
                   <div className={styles.settingBlock}>
                     <FieldLabel>{t("create.audio.outputFormat")}</FieldLabel>

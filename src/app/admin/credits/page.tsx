@@ -78,6 +78,9 @@ type PromptAddonEntry = {
   values: Array<{ option: string; amount: string }>;
 };
 
+const MAX_TARGET_MARKUP_PERCENT = 999.99;
+const MAX_TARGET_MARKUP_RATIO = MAX_TARGET_MARKUP_PERCENT / 100;
+
 const featureLabels: Record<string, string> = {
   "text-to-image": "Text to Image",
   "image-to-image": "Image to Image",
@@ -267,6 +270,8 @@ function NumberField({
   onChange,
   help,
   readOnly = false,
+  max,
+  step,
 }: {
   label: string;
   value: string;
@@ -274,6 +279,8 @@ function NumberField({
   onChange: (value: string) => void;
   help?: string;
   readOnly?: boolean;
+  max?: number;
+  step?: number;
 }) {
   const autoRate = label === "USD / THB rate";
   const locked = readOnly || autoRate;
@@ -287,6 +294,8 @@ function NumberField({
         <input
           type="number"
           min="0"
+          max={max}
+          step={step}
           value={value}
           readOnly={locked}
           onChange={(event) => onChange(event.target.value)}
@@ -357,14 +366,14 @@ function previewWithDraft(
     creditValue <= 0
   )
     return preview;
-  const margin = Math.min(
+  const markup = Math.min(
     Math.max((Number(draft.targetMargin) || 0) / 100, 0),
-    0.99,
+    MAX_TARGET_MARKUP_RATIO,
   );
   const fixedCostThb = Math.max(Number(draft.fixedCostThb) || 0, 0);
   const minimumCreditCost = Math.max(Number(draft.minimumCreditCost) || 1, 1);
   const sellingPriceBeforeRound =
-    (preview.providerCostThb + fixedCostThb) / Math.max(1 - margin, 0.01);
+    (preview.providerCostThb + fixedCostThb) * (1 + markup);
   const factor = 10 ** roundingDecimals;
   const calculatedCreditCost =
     Math.ceil(
@@ -1325,12 +1334,12 @@ function AdminCreditsContent() {
     const creditValue = credits > 0 ? price / credits : 0;
     const providerUsd = 0.04;
     const providerThb = providerUsd * (Number(fxRate) || 0);
-    const margin = Math.min(
+    const markup = Math.min(
       Math.max((Number(marginPercent) || 0) / 100, 0),
-      0.99,
+      MAX_TARGET_MARKUP_RATIO,
     );
     const sellingBeforeRound =
-      (providerThb + (Number(fixedCost) || 0)) / Math.max(1 - margin, 0.01);
+      (providerThb + (Number(fixedCost) || 0)) * (1 + markup);
     const chargedCredits =
       creditValue > 0
         ? Math.max(
@@ -1370,8 +1379,8 @@ function AdminCreditsContent() {
     const fixed = Number(fixedCost);
     const smartEnhance = Number(smartEnhancePrice);
     const minimum = Number(minimumCredits);
-    if (!Number.isFinite(targetMargin) || targetMargin < 0 || targetMargin >= 1) {
-      setError("Global margin must be between 0% and 99.99%");
+    if (!Number.isFinite(targetMargin) || targetMargin < 0 || targetMargin > MAX_TARGET_MARKUP_RATIO) {
+      setError(`Global markup must be between 0% and ${MAX_TARGET_MARKUP_PERCENT}%`);
       return;
     }
     if (!Number.isFinite(fixed) || fixed < 0) {
@@ -1448,10 +1457,10 @@ function AdminCreditsContent() {
           if (
             !Number.isFinite(targetMargin) ||
             targetMargin < 0 ||
-            targetMargin >= 1
+            targetMargin > MAX_TARGET_MARKUP_RATIO
           )
             throw new Error(
-              `${row.displayName}: margin must be between 0% and 99.99%`,
+              `${row.displayName}: markup must be between 0% and ${MAX_TARGET_MARKUP_PERCENT}%`,
             );
           const fixed = Number(draft.fixedCostThb);
           const minimum = Number(draft.minimumCreditCost);
@@ -1664,7 +1673,7 @@ function AdminCreditsContent() {
                   />
                   <SummaryCard
                     icon={Percent}
-                    label="Global margin"
+                    label="Global markup"
                     value={`${Number(marginPercent || 0)}%`}
                     detail="Fallback when model has no override"
                     tone="green"
@@ -1794,14 +1803,16 @@ function AdminCreditsContent() {
                         help="ราคาที่ผู้ใช้จ่ายจริง"
                       />
                       <NumberField
-                        label="Target margin"
+                        label="Target markup"
                         value={marginPercent}
                         suffix="%"
+                        max={MAX_TARGET_MARKUP_PERCENT}
+                        step={0.01}
                         onChange={(value) => {
                           setMarginPercent(value);
                           setGlobalDirty(true);
                         }}
-                        help="คำนวณแบบ margin ไม่ใช่ markup"
+                        help="คิด markup จากต้นทุน: 100% = กำไรเท่ากับต้นทุน"
                       />
                       <NumberField
                         label="Fixed cost"
@@ -1850,8 +1861,8 @@ function AdminCreditsContent() {
                         <div>
                           <p className="text-xs font-bold">Pricing formula</p>
                           <p className="mt-1 font-mono text-[11px] leading-6 text-muted-foreground">
-                            selling price = (provider cost × FX + fixed cost) ÷
-                            (1 − margin)
+                            selling price = (provider cost × FX + fixed cost) ×
+                            (1 + markup)
                             <br />
                             Smart Enhance = เพิ่มตามราคาที่ตั้งไว้ เมื่อเปิดใช้งาน
                             <br />
@@ -1950,7 +1961,7 @@ function AdminCreditsContent() {
                         Model rules
                       </h2>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        ตั้งค่า margin และตัวแปรราคาแยกตาม model
+                        ตั้งค่า markup และตัวแปรราคาแยกตาม model
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -2056,7 +2067,7 @@ function AdminCreditsContent() {
                           <th className="px-3 py-2">Feature / model</th>
                           <th className="px-3 py-2">Provider cost</th>
                           <th className="px-3 py-2">Profit</th>
-                          <th className="px-3 py-2">Target margin</th>
+                          <th className="px-3 py-2">Target markup</th>
                           <th className="px-3 py-2">Fixed cost</th>
                           <th className="px-3 py-2">Minimum</th>
                           <th className="px-3 py-2">Prompt add-ons</th>
@@ -2172,14 +2183,14 @@ function AdminCreditsContent() {
                                     className="sr-only"
                                     htmlFor={`${key}-margin`}
                                   >
-                                    Target margin for {row.model}
+                                    Target markup for {row.model}
                                   </label>
                                   <div className="relative">
                                     <input
                                       id={`${key}-margin`}
                                       type="number"
                                       min="0"
-                                      max="99.99"
+                                      max={MAX_TARGET_MARKUP_PERCENT}
                                       step="0.01"
                                       value={draft.targetMargin}
                                       onChange={(event) =>

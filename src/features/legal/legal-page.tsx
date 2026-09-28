@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, FileText } from "lucide-react";
 import { EosLogo } from "@/components/brand/eos-logo";
-import { CookieSettingsButton } from "@/components/privacy/cookie-settings-button";
 import { legalDocuments, type LegalDocument } from "./legal-documents";
 import styles from "./legal-page.module.css";
 
@@ -12,15 +11,8 @@ export function LegalShell({ children, title = "Legal Center" }: { children: Rea
       <Link href="/" className={styles.backLink}><ArrowLeft size={14} /> กลับหน้าแรก</Link>
     </header>
     <main>{children}</main>
-    <footer className={styles.footer}><small>© EOS Creative Studio · {title}</small><LegalLinks /></footer>
+    <footer className={styles.footer}><small>© EOS Creative Studio · {title}</small></footer>
   </div>;
-}
-
-export function LegalLinks() {
-  return <nav className={styles.footerLinks} aria-label="Legal links">
-    {legalDocuments.map((document) => <Link key={document.slug} href={`/legal/${document.slug}`}>{document.shortTitle}</Link>)}
-    <span className={styles.cookieSettingsButton}><CookieSettingsButton /></span>
-  </nav>;
 }
 
 export function LegalHubPage() {

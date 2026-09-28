@@ -292,6 +292,7 @@ export function ImageGenerationPage() {
         sourceImage={state.sourceImage}
         previewRatio={state.ratio}
         modelPreviewUrl={selectedModelOption?.previewUrl ?? null}
+        modelPreviewThumbnailUrl={selectedModelOption?.previewThumbnailUrl ?? null}
         modelPreviewType={selectedModelOption?.previewType ?? null}
         backgroundMask={state.backgroundMask}
         backgroundMode={state.backgroundMode}

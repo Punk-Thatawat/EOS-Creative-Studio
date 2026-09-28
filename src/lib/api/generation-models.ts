@@ -29,6 +29,8 @@ export type GenerationModelOption = {
   kind?: string;
   previewUrl?: string | null;
   previewStorageKey?: string | null;
+  previewThumbnailUrl?: string | null;
+  previewThumbnailStorageKey?: string | null;
   previewType?: ModelPreviewType | null;
   postAudio?: ModelPostAudioOptions;
   capabilities: {
@@ -218,31 +220,32 @@ async function adminRequest(path: string, init: RequestInit = {}): Promise<unkno
   return payload;
 }
 
-async function adminUploadModelPreview(file: File): Promise<{ storageKey: string; previewUrl: string | null; mediaType: ModelPreviewType }> {
+async function adminUploadModelPreview(file: File, createThumbnail = false): Promise<{ storageKey: string; previewUrl: string | null; thumbnailStorageKey: string | null; mediaType: ModelPreviewType }> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in as an admin");
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch(`${backendApiUrl}/admin/model-routes/preview/upload`, {
+  const thumbnailQuery = createThumbnail ? "?createThumbnail=true" : "";
+  const response = await fetch(`${backendApiUrl}/admin/model-routes/preview/upload${thumbnailQuery}`, {
     method: "POST",
     headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
     body: formData,
     cache: "no-store",
   });
-  const payload = await response.json().catch(() => null) as { data?: { storageKey: string; previewUrl: string | null; mediaType: ModelPreviewType }; message?: string } | null;
+  const payload = await response.json().catch(() => null) as { data?: { storageKey: string; previewUrl: string | null; thumbnailStorageKey: string | null; mediaType: ModelPreviewType }; message?: string } | null;
   if (!response.ok || !payload?.data) throw new Error(payload?.message ?? "Model preview upload failed");
   return payload.data;
 }
 
-export async function uploadAdminModelPreview(file: File): Promise<{ storageKey: string; previewUrl: string | null; mediaType: ModelPreviewType }> {
-  return adminUploadModelPreview(file);
+export async function uploadAdminModelPreview(file: File, options: { createThumbnail?: boolean } = {}): Promise<{ storageKey: string; previewUrl: string | null; thumbnailStorageKey: string | null; mediaType: ModelPreviewType }> {
+  return adminUploadModelPreview(file, options.createThumbnail ?? false);
 }
 
 export async function deleteAdminModelPreviewUpload(storageKey: string): Promise<void> {
   await adminRequest(`/api/v1/admin/model-routes/preview/upload?storageKey=${encodeURIComponent(storageKey)}`, { method: "DELETE" });
 }
 
-export async function updateAdminModelPreview(model: string, provider: string, feature: string, backgroundMode: AiBackgroundMode | undefined, preview: { previewUrl?: string | null; previewStorageKey?: string | null; previewType?: ModelPreviewType | null }): Promise<AdminModelRoutesOverview> {
+export async function updateAdminModelPreview(model: string, provider: string, feature: string, backgroundMode: AiBackgroundMode | undefined, preview: { previewUrl?: string | null; previewStorageKey?: string | null; previewThumbnailStorageKey?: string | null; previewType?: ModelPreviewType | null }): Promise<AdminModelRoutesOverview> {
   const payload = await adminRequest("/api/v1/admin/model-routes/preview", { method: "PATCH", body: JSON.stringify({
     model,
     provider,
@@ -250,6 +253,7 @@ export async function updateAdminModelPreview(model: string, provider: string, f
     ...(backgroundMode ? { backgroundMode } : {}),
     previewUrl: preview.previewUrl ?? null,
     previewStorageKey: preview.previewStorageKey ?? null,
+    previewThumbnailStorageKey: preview.previewThumbnailStorageKey ?? null,
     previewType: preview.previewType ?? null,
   }) }) as { data?: AdminModelRoutesOverview };
   return payload.data ?? { catalog: [], routes: {} };

@@ -18,7 +18,7 @@ import {
 } from "@/lib/api/extend-video-generations";
 import { VideoResultLibrary, type VideoPreviewView } from "./video-result-library";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
-import { emitGenerationStarted } from "@/lib/generation-progress-events";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
@@ -262,7 +262,9 @@ export function ExtendVideoWorkspace() {
   const handleGenerate = async () => {
     if (!isComplete || !sourceVideo) return;
     const controller = new AbortController();
+    const requestId = crypto.randomUUID();
     abortRef.current = controller;
+    emitGenerationSubmitting({ feature: "extend-video", requestId });
     setError(null); setNotice(null); setFinalVideoUrl(null); setPreviewVideoUrl(null); setPreviewView("latest"); setGenerationId(null); setProgress(0); setState("uploading");
     try {
        setNotice(t("create.video.common.uploadingSourceVideo"));
@@ -282,7 +284,7 @@ export function ExtendVideoWorkspace() {
       setGenerationId(id ?? null);
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const pollUrl = created.pollUrl ?? (id ? `/generations/${encodeURIComponent(id)}/status` : "");
-      if (id && pollUrl) emitGenerationStarted({ feature: "extend-video", generationId: id, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
+      if (id && pollUrl) emitGenerationStarted({ feature: "extend-video", requestId, generationId: id, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
       let status = responseStatus(created);
       let currentProgress = 0;
       if (status.status !== "completed" && status.status !== "failed" && status.status !== "cancelled") {
@@ -300,6 +302,7 @@ export function ExtendVideoWorkspace() {
       if (!url) throw new Error("Extend Video completed without an output URL");
        setFinalVideoUrl(url); setPreviewVideoUrl(url); setProgress(100); setState("completed"); setLibraryRefreshKey((value) => value + 1); setNotice(t("create.video.common.videoReady"));
     } catch (reason: unknown) {
+      emitGenerationRequestFailed({ feature: "extend-video", requestId });
       if (controller.signal.aborted) return;
        setState("failed"); setNotice(null); setError(formatGenerationError(reason, t("create.video.extend.generateError")));
     } finally {

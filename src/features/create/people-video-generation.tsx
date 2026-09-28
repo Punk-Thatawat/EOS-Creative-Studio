@@ -27,7 +27,7 @@ import {
 import { VideoResultLibrary, type VideoPreviewView } from "./video-result-library";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "./video-preview-placeholder";
 import { DurationControl } from "./components/duration-control";
-import { emitGenerationStarted } from "@/lib/generation-progress-events";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { validateMediaFile } from "@/lib/media/upload-validation";
 import { useVideoCreditEstimate, VideoCreditEstimate } from "./components/video-credit-estimate";
 import styles from "./video-generation-page.module.css";
@@ -675,7 +675,10 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
   const handleGenerate = async () => {
     if (!isComplete || !sourcePerson) return;
     const controller = new AbortController();
+    const requestId = crypto.randomUUID();
+    const progressFeature = isLipsync ? "lipsync" : "people-video";
     abortRef.current = controller;
+    emitGenerationSubmitting({ feature: progressFeature, requestId });
     setGenerationError(null);
     setFinalVideoUrl(null);
     setPreviewVideoUrl(null);
@@ -721,7 +724,7 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
       const generationId = created.generationId ?? created.id;
       setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
-      if (generationId && pollUrl) emitGenerationStarted({ feature: isLipsync ? "lipsync" : "people-video", generationId, pollUrl, workspaceId: typeof created.workspaceId === "string" ? created.workspaceId : undefined, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
+      if (generationId && pollUrl) emitGenerationStarted({ feature: progressFeature, requestId, generationId, pollUrl, workspaceId: typeof created.workspaceId === "string" ? created.workspaceId : undefined, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
       let status: PeopleVideoGenerationStatus | LipsyncGenerationStatus = {
         ...created,
         status: created.status ?? "processing",
@@ -756,6 +759,7 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
       setGenerationStatus("completed");
       setNotice(t("create.video.common.videoReady"));
     } catch (error: unknown) {
+      emitGenerationRequestFailed({ feature: progressFeature, requestId });
       if (controller.signal.aborted) return;
       setGenerationStatus("failed");
       setNotice(null);
