@@ -3373,6 +3373,8 @@ export function AudioGenerationPage() {
   // apart from a stale preset selection without re-running on every refresh.
   const savedVoicesRef = useRef<VoiceCloneListItem[]>([]);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
+  const [previewLoadingKey, setPreviewLoadingKey] = useState<string | null>(null);
+  const clonePreviewUrlsRef = useRef(new Map<string, string>());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -3479,7 +3481,7 @@ export function AudioGenerationPage() {
       setAvailableVoices(items);
       setSelectedVoice((current) => {
         const isPreset = items.some((voice) => voice.key === current);
-        const isClonedVoice = savedVoicesRef.current.some((item) => item.providerVoiceId === current);
+        const isClonedVoice = savedVoicesRef.current.some((item) => item.voiceId === current);
         return isPreset || isClonedVoice ? current : (items[0]?.key ?? "");
       });
       setVoiceLoadState("ready");
@@ -3590,9 +3592,8 @@ export function AudioGenerationPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (voiceMode === "cloned") {
-        const cloned = savedVoices.filter((item) => item.providerVoiceId);
-        if (!cloned.some((item) => item.providerVoiceId === selectedVoice)) {
-          setSelectedVoice(cloned[0]?.providerVoiceId ?? "");
+        if (!savedVoices.some((item) => item.voiceId === selectedVoice)) {
+          setSelectedVoice(savedVoices[0]?.voiceId ?? "");
         }
       } else if (availableVoices.length && !availableVoices.some((voice) => voice.key === selectedVoice)) {
         setSelectedVoice(availableVoices[0]!.key);
@@ -3631,12 +3632,60 @@ export function AudioGenerationPage() {
     [previewingVoiceKey],
   );
 
+  // Cloned voices have no stored sample, so generate a short one on first play and reuse it afterwards.
+  const toggleClonePreview = useCallback(
+    async (voiceKey: string) => {
+      const audio = voicePreviewAudioRef.current;
+      if (!audio) return;
+      if (previewingVoiceKey === voiceKey && !audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+        setPreviewingVoiceKey(null);
+        return;
+      }
+      audio.pause();
+      let url = clonePreviewUrlsRef.current.get(voiceKey);
+      if (!url) {
+        setPreviewLoadingKey(voiceKey);
+        setErrorMessage(null);
+        try {
+          const result = await previewVoiceClone(voiceKey, {
+            text: language === "Thai" ? "สวัสดีครับ ยินดีต้อนรับสู่ อี-โอ-เอส ครีเอทีฟ สตูดิโอ" : "Hello, welcome to EOS Creative Studio.",
+            outputFormat: "mp3",
+          });
+          url = URL.createObjectURL(result.blob);
+          clonePreviewUrlsRef.current.set(voiceKey, url);
+        } catch (error) {
+          setErrorMessage(error instanceof Error ? error.message : "Unable to preview this voice");
+          return;
+        } finally {
+          setPreviewLoadingKey(null);
+        }
+      }
+      audio.src = url;
+      audio.currentTime = 0;
+      setPreviewingVoiceKey(voiceKey);
+      void audio.play().catch(() => setPreviewingVoiceKey(null));
+    },
+    [previewingVoiceKey, language],
+  );
+
+  useEffect(() => {
+    const previews = clonePreviewUrlsRef.current;
+    return () => previews.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+
   const handleVoicePreviewClick = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
-      const voice = availableVoices.find((item) => item.key === event.currentTarget.dataset.voiceKey);
+      const voiceKey = event.currentTarget.dataset.voiceKey;
+      if (voiceMode === "cloned") {
+        if (voiceKey) void toggleClonePreview(voiceKey);
+        return;
+      }
+      const voice = availableVoices.find((item) => item.key === voiceKey);
       if (voice) toggleVoicePreview(voice);
     },
-    [availableVoices, toggleVoicePreview],
+    [availableVoices, toggleVoicePreview, toggleClonePreview, voiceMode],
   );
 
   const syncAudioDuration = useCallback((audio: HTMLAudioElement) => {
@@ -3688,19 +3737,14 @@ export function AudioGenerationPage() {
   }, [isPlaying]);
 
   // In "cloned" mode the Voice / Speaker carousel lists the user's saved clones instead of the presets.
-  const clonedVoices: AudioVoice[] = savedVoices.flatMap((item) =>
-    item.providerVoiceId
-      ? [
-          {
-            key: item.providerVoiceId,
-            name: item.name,
-            description: item.character || item.description || t("create.audio.clone.characterNatural"),
-            imageUrl: null,
-            previewUrl: null,
-          },
-        ]
-      : [],
-  );
+  // A clone's voiceId is what the Voice Clone tab and the backend use to look it up (the API has no separate provider id).
+  const clonedVoices: AudioVoice[] = savedVoices.map((item) => ({
+    key: item.voiceId,
+    name: item.name,
+    description: item.character || item.description || t("create.audio.clone.characterNatural"),
+    imageUrl: null,
+    previewUrl: null,
+  }));
   const carouselVoices = voiceMode === "cloned" ? clonedVoices : availableVoices;
   const voicePages = Array.from({ length: Math.ceil(carouselVoices.length / VOICE_PAGE_SIZE) }, (_, pageIndex) =>
     carouselVoices.slice(pageIndex * VOICE_PAGE_SIZE, pageIndex * VOICE_PAGE_SIZE + VOICE_PAGE_SIZE),
@@ -4396,7 +4440,7 @@ export function AudioGenerationPage() {
                               <div className={styles.voicePage} key={`voice-page-${pageIndex}`}>
                                 {page.map((voice, index) => (
                                   <div
-                                    className={`${styles.voiceCardWrap} ${selectedVoice === voice.key ? styles.voiceCardWrapActive : ""}`}
+                                    className={`${styles.voiceCardWrap} ${selectedVoice === voice.key ? styles.voiceCardWrapActive : ""} ${voiceMode === "cloned" && !voice.imageUrl ? styles.voiceCardWrapCompact : ""}`}
                                     key={voice.key}
                                   >
                                     <button
@@ -4407,18 +4451,20 @@ export function AudioGenerationPage() {
                                       onClick={() => setSelectedVoice(voice.key)}
                                       aria-pressed={selectedVoice === voice.key}
                                     >
-                                      <div className={styles.voiceImage}>
-                                        <Image
-                                          src={
-                                            voice.imageUrl ||
-                                            voiceImages[(pageIndex * VOICE_PAGE_SIZE + index) % voiceImages.length]
-                                          }
-                                          alt=""
-                                          fill
-                                          unoptimized
-                                          sizes="60px"
-                                        />
-                                      </div>
+                                      {voiceMode === "cloned" && !voice.imageUrl ? null : (
+                                        <div className={styles.voiceImage}>
+                                          <Image
+                                            src={
+                                              voice.imageUrl ||
+                                              voiceImages[(pageIndex * VOICE_PAGE_SIZE + index) % voiceImages.length]
+                                            }
+                                            alt=""
+                                            fill
+                                            unoptimized
+                                            sizes="60px"
+                                          />
+                                        </div>
+                                      )}
                                       <strong>{voice.name}</strong>
                                       <small>{voice.description || t("create.audio.voiceFallback")}</small>
                                       {selectedVoice === voice.key ? (
@@ -4430,17 +4476,19 @@ export function AudioGenerationPage() {
                                       data-voice-key={voice.key}
                                       className={`${styles.voicePreviewButton} ${previewingVoiceKey === voice.key ? styles.voicePreviewButtonActive : ""}`}
                                       onClick={handleVoicePreviewClick}
-                                      disabled={!voice.previewUrl}
+                                      disabled={voiceMode === "cloned" ? previewLoadingKey !== null : !voice.previewUrl}
                                       aria-label={
-                                        voice.previewUrl
+                                        voiceMode === "cloned" || voice.previewUrl
                                           ? previewingVoiceKey === voice.key
                                             ? `หยุดตัวอย่างเสียง ${voice.name}`
                                             : `ฟังตัวอย่างเสียง ${voice.name}`
                                           : `ยังไม่มีตัวอย่างเสียง ${voice.name}`
                                       }
-                                      title={voice.previewUrl ? "ฟังตัวอย่างเสียง" : "ยังไม่มีตัวอย่างเสียง"}
+                                      title={voiceMode === "cloned" || voice.previewUrl ? "ฟังตัวอย่างเสียง" : "ยังไม่มีตัวอย่างเสียง"}
                                     >
-                                      {previewingVoiceKey === voice.key ? (
+                                      {previewLoadingKey === voice.key ? (
+                                        <span className={styles.voicePreviewSpinner} />
+                                      ) : previewingVoiceKey === voice.key ? (
                                         <span className={styles.voicePauseGlyph} />
                                       ) : (
                                         <Play size={11} fill="currentColor" />

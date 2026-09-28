@@ -969,6 +969,14 @@
   object-fit: cover;
   object-position: center center;
 }
+/* Cloned voices have no portrait: a text-only card with the play button on the right. */
+.voiceCardWrapCompact .voiceCard,
+.voiceCardWrapCompact .voiceCardActive {
+  padding: 14px 44px 14px 12px;
+}
+.voiceCardWrapCompact .voiceCheck {
+  display: none;
+}
 .voicePreviewButton {
   position: absolute;
   z-index: 1;
@@ -1382,6 +1390,15 @@
   height: 14px;
   border: 2px solid #fff8;
   border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+/* Dark variant for the white voice-card play button. */
+.voicePreviewSpinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #22283144;
+  border-top-color: #222831;
   border-radius: 50%;
   animation: spin 0.75s linear infinite;
 }
