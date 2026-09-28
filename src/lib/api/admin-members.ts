@@ -8,7 +8,7 @@ const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`
 export type AdminMemberRole = "user" | "admin";
 export type AdminMemberStatus = "active" | "suspended";
 export type QuickPlaybookType = "creator" | "marketing" | "agency" | "sme_owner" | "corporate" | "beginner" | "ai_power_user";
-export type InviteAdminMemberInput = { email: string; role: AdminMemberRole; display_name?: string; recipient_name?: string; quick_playbook: QuickPlaybookType; initial_credits?: number };
+export type InviteAdminMemberInput = { email: string; role: AdminMemberRole; display_name?: string; recipient_name?: string; quick_playbooks: QuickPlaybookType[]; initial_credits?: number };
 export type AdminMember = {
   id: string;
   email: string;
@@ -19,6 +19,7 @@ export type AdminMember = {
   status: AdminMemberStatus;
   emailConfirmed: boolean;
   invitationPending?: boolean;
+  quickPlaybookTypes?: QuickPlaybookType[];
   quickPlaybookType?: QuickPlaybookType;
   creditBalance: number;
   permissions: string[];
@@ -65,7 +66,7 @@ export async function updateAdminMember(id: string, input: { role?: AdminMemberR
   return adminRequest<AdminMember>(`/admin/members/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
-export async function resendAdminMemberInvitation(id: string, input: { quick_playbook: QuickPlaybookType }) {
+export async function resendAdminMemberInvitation(id: string, input: { quick_playbooks: QuickPlaybookType[] }) {
   return adminRequest<{ sent: boolean; email: string }>(`/admin/members/${encodeURIComponent(id)}/resend-invitation`, { method: "POST", body: JSON.stringify(input) });
 }
 
