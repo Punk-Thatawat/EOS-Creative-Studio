@@ -17,6 +17,7 @@ export type AdminMember = {
   role: AdminMemberRole;
   status: AdminMemberStatus;
   emailConfirmed: boolean;
+  invitationPending?: boolean;
   creditBalance: number;
   permissions: string[];
   lastSeenAt?: string;
@@ -60,6 +61,10 @@ export async function inviteAdminMember(input: InviteAdminMemberInput) {
 
 export async function updateAdminMember(id: string, input: { role?: AdminMemberRole; status?: AdminMemberStatus }) {
   return adminRequest<AdminMember>(`/admin/members/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export async function resendAdminMemberInvitation(id: string) {
+  return adminRequest<{ sent: boolean; email: string }>(`/admin/members/${encodeURIComponent(id)}/resend-invitation`, { method: "POST" });
 }
 
 export async function grantAdminMemberCredits(id: string, input: { credits: number; reason?: string; idempotencyKey: string }) {
