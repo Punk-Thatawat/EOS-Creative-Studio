@@ -512,7 +512,27 @@ export function GenerationProgressFloating() {
     const handleGenerationRequestFinished = (event: Event) => {
       const detail = (event as CustomEvent<{ requestId?: string }>).detail;
       if (!detail?.requestId) return;
-      setActive((current) => current.filter((item) => item.requestId !== detail.requestId || !item.isSubmitting));
+      setActive((current) =>
+        current.flatMap((item) => {
+          if (item.requestId !== detail.requestId || !item.isSubmitting) return [item];
+          // Audio requests are synchronous and have no backend record to poll, so keep the
+          // finished request as a completed card (dismissed manually, like image/video).
+          if (item.kind === "audio") {
+            return [
+              {
+                ...item,
+                isSubmitting: false,
+                pending: {
+                  ...item.pending,
+                  status: "completed" as const,
+                  completedCount: Math.max(1, item.pending.totalCount),
+                },
+              },
+            ];
+          }
+          return [];
+        }),
+      );
     };
     const handleGenerationSubmitting = (event: Event) => handleGenerationStarted(event);
     window.addEventListener("eos:generation-started", handleGenerationStarted);
@@ -651,6 +671,8 @@ export function GenerationProgressFloating() {
   const completedItems = active.filter((item) => item.pending.status === "completed");
 
   const removeProgressForItem = (item: ActivePendingGeneration) => {
+    // In-memory audio cards were never persisted or polled, so there is nothing to clean up.
+    if (item.kind === "audio" && item.requestId) return;
     const generationId = item.pending.generationId;
     dismissedGenerationIdsRef.current.add(generationId);
     dismissGeneration(generationId);

@@ -98,7 +98,15 @@ type AudioTab = (typeof audioModes)[number];
 const MIN_PODCAST_SPEAKERS = 2;
 
 const visibleTabs: readonly AudioTab[] = audioModes;
-const TEXT_TO_SPEECH_MODEL = "elevenlabs/eleven-v3";
+// The backend may list Eleven v3 under either its WaveSpeed-style key or the raw ElevenLabs id.
+const TEXT_TO_SPEECH_MODEL_KEYS = ["elevenlabs/eleven-v3", "eleven_v3"];
+
+/** Prefer Eleven v3; otherwise fall back to the active (or first) model so generation is never left without one. */
+function pickTextToSpeechModels(items: AudioModel[]): AudioModel[] {
+  const preferred = items.find((model) => TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key));
+  const chosen = preferred ?? items.find((model) => model.isActive) ?? items[0];
+  return chosen ? [chosen] : [];
+}
 const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
 
 const audioTabKeys = {
@@ -3451,9 +3459,9 @@ export function AudioGenerationPage() {
     setModelLoadState("loading");
     try {
       const items = await listAudioModels("textToSpeech");
-      const elevenV3 = items.filter((model) => model.key === TEXT_TO_SPEECH_MODEL);
-      setAvailableModels(elevenV3);
-      setSelectedModel(elevenV3.length ? TEXT_TO_SPEECH_MODEL : "");
+      const eligible = pickTextToSpeechModels(items);
+      setAvailableModels(eligible);
+      setSelectedModel(eligible[0]?.key ?? "");
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -3577,7 +3585,21 @@ export function AudioGenerationPage() {
       row.removeEventListener("scroll", updateVoiceScrollButtons);
       resizeObserver.disconnect();
     };
-  }, [availableVoices.length, selectedModel, voiceLoadState, updateVoiceScrollButtons]);
+  }, [availableVoices.length, savedVoices.length, voiceMode, selectedModel, voiceLoadState, updateVoiceScrollButtons]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (voiceMode === "cloned") {
+        const cloned = savedVoices.filter((item) => item.providerVoiceId);
+        if (!cloned.some((item) => item.providerVoiceId === selectedVoice)) {
+          setSelectedVoice(cloned[0]?.providerVoiceId ?? "");
+        }
+      } else if (availableVoices.length && !availableVoices.some((voice) => voice.key === selectedVoice)) {
+        setSelectedVoice(availableVoices[0]!.key);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [voiceMode, savedVoices, availableVoices, selectedVoice]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = speed;
@@ -3665,13 +3687,31 @@ export function AudioGenerationPage() {
     };
   }, [isPlaying]);
 
-  const voicePages = Array.from({ length: Math.ceil(availableVoices.length / VOICE_PAGE_SIZE) }, (_, pageIndex) =>
-    availableVoices.slice(pageIndex * VOICE_PAGE_SIZE, pageIndex * VOICE_PAGE_SIZE + VOICE_PAGE_SIZE),
+  // In "cloned" mode the Voice / Speaker carousel lists the user's saved clones instead of the presets.
+  const clonedVoices: AudioVoice[] = savedVoices.flatMap((item) =>
+    item.providerVoiceId
+      ? [
+          {
+            key: item.providerVoiceId,
+            name: item.name,
+            description: item.character || item.description || t("create.audio.clone.characterNatural"),
+            imageUrl: null,
+            previewUrl: null,
+          },
+        ]
+      : [],
   );
+  const carouselVoices = voiceMode === "cloned" ? clonedVoices : availableVoices;
+  const voicePages = Array.from({ length: Math.ceil(carouselVoices.length / VOICE_PAGE_SIZE) }, (_, pageIndex) =>
+    carouselVoices.slice(pageIndex * VOICE_PAGE_SIZE, pageIndex * VOICE_PAGE_SIZE + VOICE_PAGE_SIZE),
+  );
+  const carouselLoadState = voiceMode === "cloned" ? "ready" : voiceLoadState;
   const isSceneMode = activeTab === "Podcast & Dialogue" && audioScenes.length > 0;
   const hasIncompleteScene = audioScenes.some((scene) => !scene.text.trim() || !scene.voice.trim());
   const isGenerating = status === "generating" || sceneGenerationStatus === "generating";
   const clearValues = () => {
+    // The button stays visually independent of Generate; ignore clicks while a request is in flight.
+    if (isGenerating) return;
     audioRef.current?.pause();
     voicePreviewAudioRef.current?.pause();
     setPrompt("");
@@ -3679,7 +3719,7 @@ export function AudioGenerationPage() {
     setVoiceMode("tone");
     setLanguage("Thai");
     setPronunciation("");
-    setSelectedModel(availableModels.length ? TEXT_TO_SPEECH_MODEL : "");
+    setSelectedModel(availableModels[0]?.key ?? "");
     setSelectedVoice(availableVoices[0]?.key ?? "");
     setFormat("MP3");
     setSpeed(0.95);
@@ -3706,7 +3746,9 @@ export function AudioGenerationPage() {
     setStatus("idle");
     setSceneGenerationStatus("idle");
   };
-  const generationValidationMessage = isSceneMode
+  const generationValidationMessage = modelLoadState !== "loading" && !selectedModel
+    ? t("create.audio.validation.noModel")
+    : isSceneMode
     ? hasIncompleteScene
       ? t("create.audio.validation.completeScenes")
       : null
@@ -4183,8 +4225,51 @@ export function AudioGenerationPage() {
                 <section className={styles.scriptPanel} aria-label={t("create.audio.a11y.scriptPanel")}>
                   <div className={styles.audioPromptTopActions}>
                     <ImageTutorialButton feature="textToSpeech" featureName="Text to Speech" />
-                    <ClearValuesButton onClick={clearValues} disabled={isGenerating} />
+                    <ClearValuesButton onClick={clearValues} />
                   </div>
+                  <div className={styles.voiceModePanel}>
+                    <div className={styles.voiceModeHeading}>
+                      <h2>{t("create.audio.voiceMode.label")}</h2>
+                      <InfoTooltip content={t("create.audio.info.voiceMode")} size={11} />
+                    </div>
+                    <Dropdown
+                      value={voiceMode}
+                      onChange={(value) => setVoiceMode(value as "tone" | "cloned")}
+                      options={[
+                        { value: "tone", label: t("create.audio.voiceMode.tone") },
+                        { value: "cloned", label: t("create.audio.voiceMode.cloned") },
+                      ]}
+                      ariaLabel={t("create.audio.voiceMode.label")}
+                      triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
+                    />
+                    {voiceMode === "tone" ? (
+                      <div className={styles.chipRow}>
+                        {tones.map(({ label, icon: ToneIcon }) => (
+                          <button
+                            type="button"
+                            key={label}
+                            className={tone === label ? styles.toneActive : styles.toneButton}
+                            onClick={() => setTone((current) => (current === label ? "" : label))}
+                            aria-pressed={tone === label}
+                          >
+                            <ToneIcon size={12} />
+                            {t(toneKeys[label])}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {voiceMode === "cloned" ? (
+                      <button
+                        type="button"
+                        className={styles.voiceCloneLink}
+                        onClick={() => setActiveTab("Voice Clone")}
+                      >
+                        {t("create.audio.voiceMode.cloneNewLink")}
+                      </button>
+                    ) : null}
+                  </div>
+
                   <div className={styles.panelHeading}>
                     <h2>
                       <span>1</span> {t("create.audio.scriptPrompt")}
@@ -4222,104 +4307,6 @@ export function AudioGenerationPage() {
                     </div>
                   </div>
 
-                  <div className={styles.inputSection}>
-                    <SelectField
-                      label={t("create.audio.voiceMode.label")}
-                      value={voiceMode}
-                      onChange={(value) => setVoiceMode(value as "tone" | "cloned")}
-                      options={[
-                        { value: "tone", label: t("create.audio.voiceMode.tone") },
-                        { value: "cloned", label: t("create.audio.voiceMode.cloned") },
-                      ]}
-                    />
-
-                    {voiceMode === "tone" ? (
-                      <div className={styles.chipRow}>
-                        {tones.map(({ label, icon: ToneIcon }) => (
-                          <button
-                            type="button"
-                            key={label}
-                            className={tone === label ? styles.toneActive : styles.toneButton}
-                            onClick={() => setTone((current) => (current === label ? "" : label))}
-                            aria-pressed={tone === label}
-                          >
-                            <ToneIcon size={12} />
-                            {t(toneKeys[label])}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {voiceMode === "cloned" ? (
-                      <section className={styles.historyPanel}>
-                        <div className={styles.sectionHeading}>
-                          <h2>
-                            <Mic2 size={13} /> {t("create.audio.clone.savedVoices")}
-                          </h2>
-                          <span className={styles.timelineHint}>
-                            {savedVoices.length
-                              ? savedVoices.length === 1
-                                ? t("create.audio.resultCountOne")
-                                : t("create.audio.resultCountMany", { count: savedVoices.length })
-                              : t("create.audio.noResults")}
-                          </span>
-                        </div>
-                        {savedVoices.length ? (
-                          <div className={styles.historyList}>
-                            {savedVoices.map((item) => (
-                              <div
-                                key={item.id}
-                                className={
-                                  selectedVoice === item.providerVoiceId
-                                    ? styles.historyItemRowActive
-                                    : styles.historyItemRow
-                                }
-                              >
-                                <button
-                                  type="button"
-                                  className={
-                                    selectedVoice === item.providerVoiceId
-                                      ? styles.historyItemActive
-                                      : styles.historyItem
-                                  }
-                                  onClick={() => item.providerVoiceId && setSelectedVoice(item.providerVoiceId)}
-                                  disabled={!item.providerVoiceId}
-                                >
-                                  <span className={styles.historyPlay}>
-                                    <Mic2 size={13} />
-                                  </span>
-                                  <span className={styles.historyCopy}>
-                                    <strong>{item.name}</strong>
-                                    <small>{item.character || t("create.audio.clone.characterNatural")}</small>
-                                  </span>
-                                  <span className={styles.historyCurrent}>
-                                    {!item.providerVoiceId
-                                      ? t("create.audio.voiceMode.notReady")
-                                      : selectedVoice === item.providerVoiceId
-                                        ? t("create.audio.clone.voiceSelected")
-                                        : t("create.audio.clone.selectVoice")}
-                                  </span>
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className={styles.historyEmpty}>
-                            <Mic2 size={15} />
-                            <span>{t("create.audio.noResults")}</span>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          className={styles.voiceCloneLink}
-                          onClick={() => setActiveTab("Voice Clone")}
-                        >
-                          {t("create.audio.voiceMode.cloneNewLink")}
-                        </button>
-                      </section>
-                    ) : null}
-                  </div>
-
                   <div className={styles.twoColumnFields}>
                     <SelectField
                       label={t("create.audio.language")}
@@ -4344,7 +4331,7 @@ export function AudioGenerationPage() {
                 <section className={styles.centerColumn} aria-label={t("create.audio.a11y.centerColumn")}>
                   <div className={`${styles.sectionBlock} ${styles.voiceSection}`}>
                     <div className={styles.sectionHeading}>
-                      <h2>{t("create.audio.voiceSpeaker")}</h2>
+                      <h2>{voiceMode === "cloned" ? t("create.audio.clone.savedVoices") : t("create.audio.voiceSpeaker")}</h2>
                     </div>
                     <div className={styles.voiceCarousel}>
                       {canScrollVoicesLeft ? (
@@ -4369,12 +4356,12 @@ export function AudioGenerationPage() {
                           voiceScrollUserMovedRef.current = true;
                         }}
                       >
-                        {voiceLoadState === "loading" ? (
+                        {carouselLoadState === "loading" ? (
                           <div className={styles.voiceState} role="status">
                             {t("create.audio.loadingVoices")}
                           </div>
                         ) : null}
-                        {voiceLoadState === "error" ? (
+                        {carouselLoadState === "error" ? (
                           <div className={styles.voiceStateError} role="alert">
                             <span>{voiceError ?? t("create.audio.voicesError")}</span>
                             <button
@@ -4386,10 +4373,25 @@ export function AudioGenerationPage() {
                             </button>
                           </div>
                         ) : null}
-                        {voiceLoadState === "ready" && availableVoices.length === 0 ? (
-                          <div className={styles.voiceState}>{t("create.audio.noVoices")}</div>
+                        {carouselLoadState === "ready" && carouselVoices.length === 0 ? (
+                          <div className={`${styles.voiceState} ${voiceMode === "cloned" ? styles.voiceStateEmpty : ""}`}>
+                            {voiceMode === "cloned" ? (
+                              <>
+                                <span>{t("create.audio.clone.noSavedVoices")}</span>
+                                <button
+                                  type="button"
+                                  className={styles.voiceCloneLink}
+                                  onClick={() => setActiveTab("Voice Clone")}
+                                >
+                                  {t("create.audio.voiceMode.cloneNewLink")}
+                                </button>
+                              </>
+                            ) : (
+                              t("create.audio.noVoices")
+                            )}
+                          </div>
                         ) : null}
-                        {voiceLoadState === "ready"
+                        {carouselLoadState === "ready"
                           ? voicePages.map((page, pageIndex) => (
                               <div className={styles.voicePage} key={`voice-page-${pageIndex}`}>
                                 {page.map((voice, index) => (
@@ -4588,11 +4590,6 @@ export function AudioGenerationPage() {
                           setProgress(100);
                         }}
                       />
-                      {errorMessage ? (
-                        <p className={styles.securityNote} role="alert">
-                          {errorMessage}
-                        </p>
-                      ) : null}
                     </div>
                   ) : null}
 
@@ -4801,6 +4798,11 @@ export function AudioGenerationPage() {
                     {generationValidationMessage ? (
                       <p className={styles.generationValidation} role="status">
                         {generationValidationMessage}
+                      </p>
+                    ) : null}
+                    {errorMessage ? (
+                      <p className={styles.generationValidation} role="alert">
+                        {errorMessage}
                       </p>
                     ) : null}
                     <button

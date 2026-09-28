@@ -864,6 +864,8 @@ const en = {
   "create.audio.tones.friendly": "Friendly",
   "create.audio.tones.premium": "Premium",
   "create.audio.tones.dramatic": "Dramatic",
+  "create.audio.info.voiceMode":
+    "Choose a preset voice tone or use one of your cloned voices.",
   "create.audio.info.script":
     "Write the words you want the voice to speak. You can add tone and pronunciation guidance.",
   "create.audio.info.estimatedCredits":
@@ -912,6 +914,7 @@ const en = {
   "create.audio.generateAudio": "GENERATE AUDIO",
   "create.audio.privateSecure": "Your generation is private and secure",
   "create.audio.validation.addScript": "Add a script before generating.",
+  "create.audio.validation.noModel": "No voice model is available right now. Please contact an administrator.",
   "create.audio.validation.selectVoice": "Select a voice before generating.",
   "create.audio.validation.completeScenes": "Add text and choose a voice for every scene.",
   "create.audio.deleteHistory.title": "Delete this item?",
@@ -1008,6 +1011,7 @@ const en = {
   "create.audio.clone.noiseReduction": "NOISE REDUCTION",
   "create.audio.clone.volumeNormalization": "VOLUME NORMALIZATION",
   "create.audio.clone.savedVoices": "SAVED VOICES",
+  "create.audio.clone.noSavedVoices": "You have not cloned any voices yet.",
   "create.audio.clone.deleteVoice": "Delete {name}",
   "create.audio.clone.emotionNeutral": "Neutral",
   "create.audio.clone.emotionHappy": "Happy",
@@ -2106,6 +2110,7 @@ const th: Record<keyof typeof en, string> = {
   "create.audio.tones.friendly": "เป็นมิตร",
   "create.audio.tones.premium": "พรีเมียม",
   "create.audio.tones.dramatic": "ดราม่า",
+  "create.audio.info.voiceMode": "เลือกโทนเสียงสำเร็จรูป หรือใช้เสียงที่โคลนไว้",
   "create.audio.info.script": "เขียนข้อความที่ต้องการให้เสียงพูด พร้อมระบุโทนและคำอ่านได้",
   "create.audio.info.estimatedCredits": "เครดิตโดยประมาณสำหรับการตั้งค่าเสียงนี้ ยอดจริงอาจเปลี่ยนตามโมเดลและความยาว",
   "create.audio.scriptPrompt": "บทพูด / พรอมต์",
@@ -2152,6 +2157,7 @@ const th: Record<keyof typeof en, string> = {
   "create.audio.generateAudio": "สร้างเสียง",
   "create.audio.privateSecure": "ผลงานของคุณเป็นส่วนตัวและปลอดภัย",
   "create.audio.validation.addScript": "ใส่บทพูดก่อนเริ่มสร้าง",
+  "create.audio.validation.noModel": "ยังไม่มีโมเดลเสียงให้ใช้งาน กรุณาติดต่อผู้ดูแลระบบ",
   "create.audio.validation.selectVoice": "เลือกเสียงผู้พูดก่อนเริ่มสร้าง",
   "create.audio.validation.completeScenes": "ใส่ข้อความและเลือกเสียงให้ครบทุกฉาก",
   "create.audio.deleteHistory.title": "ลบรายการนี้?",
@@ -2248,6 +2254,7 @@ const th: Record<keyof typeof en, string> = {
   "create.audio.clone.noiseReduction": "ลดเสียงรบกวน",
   "create.audio.clone.volumeNormalization": "ปรับระดับเสียงให้สม่ำเสมอ",
   "create.audio.clone.savedVoices": "เสียงที่บันทึกไว้",
+  "create.audio.clone.noSavedVoices": "ยังไม่มีเสียงโคลน",
   "create.audio.clone.deleteVoice": "ลบ {name}",
   "create.audio.clone.emotionNeutral": "เป็นกลาง",
   "create.audio.clone.emotionHappy": "มีความสุข",
