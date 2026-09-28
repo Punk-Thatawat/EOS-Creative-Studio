@@ -12,6 +12,8 @@ export type TextToSpeechInput = {
   languageCode: string;
   tone?: "Energetic" | "Friendly" | "Premium" | "Dramatic";
   speed: number;
+  pitch?: number;
+  volume?: number;
   pronunciationHint?: string;
   backgroundMusicEnabled?: boolean;
   backgroundMusicKey?: string;
@@ -26,6 +28,8 @@ export type TextToSpeechScenesInput = {
   languageCode: string;
   tone?: "Energetic" | "Friendly" | "Premium" | "Dramatic";
   speed: number;
+  pitch?: number;
+  volume?: number;
   pronunciationHint?: string;
   pauseSeconds?: number;
   backgroundMusicEnabled?: boolean;
@@ -112,7 +116,7 @@ export type VoiceCloneInput = {
 };
 
 export type VoiceCloneResponse = { voiceId: string; requiresVerification: boolean; name: string };
-export type VoiceCloneListItem = { id: string; voiceId: string; name: string; character?: string; description?: string; createdAt: string };
+export type VoiceCloneListItem = { id: string; voiceId: string; name: string; character?: string; description?: string; createdAt: string; providerVoiceId?: string };
 export type VoiceListResponse = { voices: VoiceCloneListItem[]; nextPageToken?: string | null };
 export type SoundEffectsInput = {
   description: string;
@@ -502,11 +506,11 @@ export async function deleteVoiceClone(voiceId: string): Promise<void> {
 
 export type VoiceCloneQuote = { provider: "wavespeed"; model: string; creditCost: number; pricingSource: "provider" | "fallback" };
 
-export async function quoteVoiceClone(text: string, signal?: AbortSignal): Promise<VoiceCloneQuote> {
+export async function quoteVoiceClone(text: string, modelId?: string, signal?: AbortSignal): Promise<VoiceCloneQuote> {
   const response = await userAudioRequest("/audio/voice-clones/quote", {
     method: "POST",
     headers: { Accept: "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, ...(modelId ? { modelId } : {}) }),
     signal,
   });
   const payload = await response.json().catch(() => null) as { data?: VoiceCloneQuote } | null;
@@ -514,7 +518,7 @@ export async function quoteVoiceClone(text: string, signal?: AbortSignal): Promi
   return payload.data;
 }
 
-export async function previewVoiceClone(voiceId: string, input: { text: string; outputFormat: "mp3" | "wav" | "ogg"; speed?: number }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
+export async function previewVoiceClone(voiceId: string, input: { text: string; outputFormat: "mp3" | "wav" | "ogg"; speed?: number; modelId?: string; pitch?: number; volume?: number; emotion?: string; languageCode?: string; pronunciationHint?: string; englishNormalization?: boolean; sampleRate?: number; bitrate?: number; channel?: string; accuracy?: number; needNoiseReduction?: boolean; needVolumeNormalization?: boolean }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
   return userAudioBlobRequest(`/audio/voice-clones/${encodeURIComponent(voiceId)}/preview`, {
     method: "POST",
     headers: { Accept: input.outputFormat === "mp3" ? "audio/mpeg" : input.outputFormat === "wav" ? "audio/wav" : "audio/ogg" },
