@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { SearchInput } from "@/components/ui/search-input";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { grantAdminMemberCredits, resendAdminMemberInvitation, inviteAdminMember, listAdminMembers, updateAdminMember, type AdminMember, type AdminMemberRole, type AdminMemberStatus } from "@/lib/api/admin-members";
+import { grantAdminMemberCredits, resendAdminMemberInvitation, inviteAdminMember, listAdminMembers, updateAdminMember, type AdminMember, type AdminMemberRole, type AdminMemberStatus, type InviteAdminMemberInput, type QuickPlaybookType } from "@/lib/api/admin-members";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 const permissionLabels: Record<string, string> = {
@@ -58,21 +58,45 @@ function CreditDialog({ member, busy, onClose, onSubmit }: { member: AdminMember
   </Dialog>;
 }
 
-function InviteDialog({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (input: { email: string; role: AdminMemberRole; display_name?: string; initial_credits?: number }) => void }) {
+function InviteDialog({ busy, onClose, onSubmit }: { busy: boolean; onClose: () => void; onSubmit: (input: InviteAdminMemberInput) => void }) {
   const { t } = useLocale();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [quickPlaybook, setQuickPlaybook] = useState<InviteAdminMemberInput["quick_playbook"] | "">("");
   const [role, setRole] = useState<AdminMemberRole>("user");
   const [initialCredits, setInitialCredits] = useState("");
   const creditAmount = Number(initialCredits);
   const validCredits = !initialCredits.trim() || (Number.isFinite(creditAmount) && creditAmount > 0 && creditAmount <= 1000000 && Number(creditAmount.toFixed(4)) === creditAmount);
 
   return <Dialog open onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
-    <DialogContent className="max-w-md overflow-hidden rounded-3xl border-[#eaded6] bg-[#faf8f6]" showCloseButton={false}>
+    <DialogContent className="max-h-[90dvh] max-w-md overflow-hidden rounded-3xl border-[#eaded6] bg-[#faf8f6]" showCloseButton={false}>
       <header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">{t("admin.members.invite.eyebrow")}</p><DialogTitle className="mt-1 text-xl tracking-tight">{t("admin.members.invite.title")}</DialogTitle><DialogDescription className="mt-1 text-xs">{t("admin.members.invite.description")}</DialogDescription></div><DialogClose render={<button type="button" className="rounded-xl p-2 text-muted-foreground hover:bg-surface-muted" aria-label={t("admin.members.invite.close")} disabled={busy} />}><X size={19} /></DialogClose></header>
-      <form onSubmit={(event) => { event.preventDefault(); if (!validCredits) return; onSubmit({ email: email.trim(), role, ...(displayName.trim() ? { display_name: displayName.trim() } : {}), ...(initialCredits.trim() ? { initial_credits: creditAmount } : {}) }); }}>
-        <div className="space-y-4 p-5"><label className="block text-xs font-semibold">{t("admin.members.invite.email")}<input autoFocus type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="name@example.com" required /></label><label className="block text-xs font-semibold">{t("admin.members.invite.displayName")} <span className="font-normal text-muted-foreground">{t("admin.members.invite.optional")}</span><input maxLength={160} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder={t("admin.members.invite.displayNamePlaceholder")} /></label><label className="block text-xs font-semibold">{t("admin.members.invite.initialCredits")} <span className="font-normal text-muted-foreground">{t("admin.members.invite.optional")}</span><input type="number" min="0.0001" max="1000000" step="0.0001" value={initialCredits} onChange={(event) => setInitialCredits(event.target.value)} aria-invalid={!validCredits} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder={t("admin.members.invite.initialCreditsPlaceholder")} /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">{t("admin.members.invite.initialCreditsHint")}</span></label><label className="block text-xs font-semibold">{t("admin.members.invite.accountRole")}<select value={role} onChange={(event) => setRole(event.target.value as AdminMemberRole)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary"><option value="user">{t("admin.members.invite.userRole")}</option><option value="admin">{t("admin.members.invite.adminRole")}</option></select><span className="mt-1 block text-[10px] font-normal text-muted-foreground">{t("admin.members.invite.adminRoleHint")}</span></label></div>
-        <footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>{t("admin.members.invite.cancel")}</Button><Button type="submit" size="sm" disabled={!email.trim() || !validCredits || busy}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <UserPlus size={15} />} {busy ? t("admin.members.invite.sending") : t("admin.members.invite.send")}</Button></footer>
+      <form className="flex min-h-0 flex-1 flex-col overflow-hidden" onSubmit={(event) => { event.preventDefault(); if (!validCredits || !quickPlaybook) return; onSubmit({ email: email.trim(), role, quick_playbook: quickPlaybook, ...(displayName.trim() ? { display_name: displayName.trim() } : {}), ...(recipientName.trim() ? { recipient_name: recipientName.trim() } : {}), ...(initialCredits.trim() ? { initial_credits: creditAmount } : {}) }); }}>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+          <label className="block text-xs font-semibold">{t("admin.members.invite.email")}<input autoFocus type="email" autoComplete="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder="name@example.com" required /></label>
+          <label className="block text-xs font-semibold">{t("admin.members.invite.recipientName")} <span className="font-normal text-muted-foreground">{t("admin.members.invite.optional")}</span><input maxLength={160} value={recipientName} onChange={(event) => setRecipientName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder={t("admin.members.invite.recipientNamePlaceholder")} /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">{t("admin.members.invite.recipientNameHint")}</span></label>
+          <label className="block text-xs font-semibold">{t("admin.members.invite.quickPlaybook")}<select required value={quickPlaybook} onChange={(event) => setQuickPlaybook(event.target.value as InviteAdminMemberInput["quick_playbook"] | "")} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary"><option value="">{t("admin.members.invite.quickPlaybookPlaceholder")}</option><option value="creator">{t("admin.members.invite.quickPlaybook.creator")}</option><option value="marketing">{t("admin.members.invite.quickPlaybook.marketing")}</option><option value="agency">{t("admin.members.invite.quickPlaybook.agency")}</option><option value="sme_owner">{t("admin.members.invite.quickPlaybook.smeOwner")}</option><option value="corporate">{t("admin.members.invite.quickPlaybook.corporate")}</option><option value="beginner">{t("admin.members.invite.quickPlaybook.beginner")}</option><option value="ai_power_user">{t("admin.members.invite.quickPlaybook.aiPowerUser")}</option></select><span className="mt-1 block text-[10px] font-normal text-muted-foreground">{t("admin.members.invite.quickPlaybookHint")}</span></label>
+          <label className="block text-xs font-semibold">{t("admin.members.invite.displayName")} <span className="font-normal text-muted-foreground">{t("admin.members.invite.optional")}</span><input maxLength={160} value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder={t("admin.members.invite.displayNamePlaceholder")} /></label>
+          <label className="block text-xs font-semibold">{t("admin.members.invite.initialCredits")} <span className="font-normal text-muted-foreground">{t("admin.members.invite.optional")}</span><input type="number" min="0.0001" max="1000000" step="0.0001" value={initialCredits} onChange={(event) => setInitialCredits(event.target.value)} aria-invalid={!validCredits} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" placeholder={t("admin.members.invite.initialCreditsPlaceholder")} /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">{t("admin.members.invite.initialCreditsHint")}</span></label>
+          <label className="block text-xs font-semibold">{t("admin.members.invite.accountRole")}<select value={role} onChange={(event) => setRole(event.target.value as AdminMemberRole)} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary"><option value="user">{t("admin.members.invite.userRole")}</option><option value="admin">{t("admin.members.invite.adminRole")}</option></select><span className="mt-1 block text-[10px] font-normal text-muted-foreground">{t("admin.members.invite.adminRoleHint")}</span></label>
+        </div>
+        <footer className="flex shrink-0 justify-end gap-2 border-t border-border bg-white px-5 py-4"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>{t("admin.members.invite.cancel")}</Button><Button type="submit" size="sm" disabled={!email.trim() || !quickPlaybook || !validCredits || busy}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <UserPlus size={15} />} {busy ? t("admin.members.invite.sending") : t("admin.members.invite.send")}</Button></footer>
+      </form>
+    </DialogContent>
+  </Dialog>;
+}
+
+function ResendQuickPlaybookDialog({ member, busy, onClose, onSubmit }: { member: AdminMember; busy: boolean; onClose: () => void; onSubmit: (quickPlaybook: QuickPlaybookType) => void }) {
+  const { t } = useLocale();
+  const [quickPlaybook, setQuickPlaybook] = useState<QuickPlaybookType | "">("");
+
+  return <Dialog open onOpenChange={(next) => { if (!next && !busy) onClose(); }}>
+    <DialogContent className="max-w-md overflow-hidden rounded-3xl border-[#eaded6] bg-[#faf8f6]" showCloseButton={false}>
+      <header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">{t("admin.members.invite.eyebrow")}</p><DialogTitle className="mt-1 text-xl tracking-tight">{t("admin.members.invite.resendPlaybookTitle")}</DialogTitle><DialogDescription className="mt-1 text-xs">{t("admin.members.invite.resendPlaybookDescription", { email: member.email })}</DialogDescription></div><DialogClose render={<button type="button" className="rounded-xl p-2 text-muted-foreground hover:bg-surface-muted" aria-label={t("admin.members.invite.close")} disabled={busy} />}><X size={19} /></DialogClose></header>
+      <form onSubmit={(event) => { event.preventDefault(); if (quickPlaybook) onSubmit(quickPlaybook); }}>
+        <div className="p-5"><label className="block text-xs font-semibold">{t("admin.members.invite.quickPlaybook")}<select required autoFocus value={quickPlaybook} onChange={(event) => setQuickPlaybook(event.target.value as QuickPlaybookType | "")} className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary"><option value="">{t("admin.members.invite.quickPlaybookPlaceholder")}</option><option value="creator">{t("admin.members.invite.quickPlaybook.creator")}</option><option value="marketing">{t("admin.members.invite.quickPlaybook.marketing")}</option><option value="agency">{t("admin.members.invite.quickPlaybook.agency")}</option><option value="sme_owner">{t("admin.members.invite.quickPlaybook.smeOwner")}</option><option value="corporate">{t("admin.members.invite.quickPlaybook.corporate")}</option><option value="beginner">{t("admin.members.invite.quickPlaybook.beginner")}</option><option value="ai_power_user">{t("admin.members.invite.quickPlaybook.aiPowerUser")}</option></select></label></div>
+        <footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>{t("admin.members.invite.cancel")}</Button><Button type="submit" size="sm" disabled={!quickPlaybook || busy}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <RefreshCw size={15} />} {t("admin.members.invite.resend")}</Button></footer>
       </form>
     </DialogContent>
   </Dialog>;
@@ -96,6 +120,7 @@ function AdminMembersContent() {
   const [busyId, setBusyId] = useState("");
   const [creditMember, setCreditMember] = useState<AdminMember | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [resendTarget, setResendTarget] = useState<AdminMember | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -128,7 +153,7 @@ function AdminMembersContent() {
     finally { setBusyId(""); }
   };
 
-  const sendInvitation = async (input: { email: string; role: AdminMemberRole; display_name?: string; initial_credits?: number }) => {
+  const sendInvitation = async (input: InviteAdminMemberInput) => {
     setInviteBusy(true); setError(""); setMessage("");
     try {
       const result = await inviteAdminMember(input);
@@ -140,10 +165,12 @@ function AdminMembersContent() {
     finally { setInviteBusy(false); }
   };
 
-  const resendInvitation = async (member: AdminMember) => {
+  const resendInvitation = async (member: AdminMember, quickPlaybook = member.quickPlaybookType) => {
+    if (!quickPlaybook) { setResendTarget(member); return; }
+    setResendTarget(null);
     setBusyId(member.id); setError(""); setMessage("");
     try {
-      const result = await resendAdminMemberInvitation(member.id);
+      const result = await resendAdminMemberInvitation(member.id, { quick_playbook: quickPlaybook });
       setMessage(t("admin.members.invite.resent", { email: result.email }));
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("admin.members.invite.error")); }
     finally { setBusyId(""); }
@@ -159,7 +186,7 @@ function AdminMembersContent() {
     <section aria-label="Member filters" className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#eaded6] bg-white p-3 sm:flex-row"><SearchInput size="compact" className="min-w-0 flex-1" value={query} onValueChange={(value) => { setQuery(value); setPage(1); }} placeholder="Search by email, name, or username" aria-label="Search members" /><select value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value as AdminMemberRole | "all"); setPage(1); }} aria-label="Filter members by role" className="h-10 rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs font-semibold outline-none focus:border-primary"><option value="all">All roles</option><option value="user">Members</option><option value="admin">Administrators</option></select><select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as AdminMemberStatus | "all"); setPage(1); }} aria-label="Filter members by status" className="h-10 rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs font-semibold outline-none focus:border-primary"><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option></select></section>
     {loading ? <div className="space-y-3"><div className="h-40 animate-pulse rounded-2xl border border-border bg-white" /><div className="h-40 animate-pulse rounded-2xl border border-border bg-white" /></div> : members.length === 0 ? <div className="rounded-2xl border border-dashed border-[#d8d0ca] bg-white p-12 text-center"><UserRound className="mx-auto text-primary" size={30} /><p className="mt-3 text-sm font-bold">No members found</p><p className="mt-1 text-xs text-muted-foreground">Try another search or filter.</p></div> : <><div className="space-y-3">{members.map((member) => <MemberRow key={member.id} member={member} busy={Boolean(busyId)} onResend={() => void resendInvitation(member)} onChange={(input) => void updateMember(member, input)} onCredit={() => { setError(""); setMessage(""); setCreditMember(member); }} />)}</div>{totalPages > 1 ? <div className="mt-4 flex items-center justify-between rounded-2xl border border-[#eaded6] bg-white px-4 py-3"><p className="text-xs text-muted-foreground">Page {page} of {totalPages}</p><div className="flex gap-2"><Button type="button" variant="outline" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={loading || page === 1}><ChevronLeft size={14} /> Previous</Button><Button type="button" variant="outline" size="sm" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={loading || page === totalPages}>Next <ChevronRight size={14} /></Button></div></div> : null}</>}
     <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[#eaded6] bg-[#fffdfb] p-4 text-xs text-muted-foreground"><Coins className="mt-0.5 shrink-0 text-primary" size={16} /><p>Credit grants are recorded as auditable transactions and protected with an idempotency key. The server also prevents removing the last active administrator.</p></div>
-    </div></div></main></div></div>{creditMember ? <CreditDialog member={creditMember} busy={busyId === creditMember.id} onClose={() => setCreditMember(null)} onSubmit={(amount, reason) => void addCredits(amount, reason)} /> : null}{inviteOpen ? <InviteDialog busy={inviteBusy} onClose={() => setInviteOpen(false)} onSubmit={(input) => void sendInvitation(input)} /> : null}</SidebarProvider>;
+    </div></div></main></div></div>{creditMember ? <CreditDialog member={creditMember} busy={busyId === creditMember.id} onClose={() => setCreditMember(null)} onSubmit={(amount, reason) => void addCredits(amount, reason)} /> : null}{inviteOpen ? <InviteDialog busy={inviteBusy} onClose={() => setInviteOpen(false)} onSubmit={(input) => void sendInvitation(input)} /> : null}{resendTarget ? <ResendQuickPlaybookDialog member={resendTarget} busy={busyId === resendTarget.id} onClose={() => setResendTarget(null)} onSubmit={(quickPlaybook) => void resendInvitation(resendTarget, quickPlaybook)} /> : null}</SidebarProvider>;
 }
 
 export default function AdminMembersPage() {
