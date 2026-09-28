@@ -92,10 +92,7 @@ const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Soun
 type AudioTab = (typeof audioModes)[number];
 const MIN_PODCAST_SPEAKERS = 2;
 
-// Hotfix: expose only Text to Speech until the remaining audio workflows are ready.
-// Keep the other modes in the implementation so they can be enabled again without
-// changing the tab state or content branching below.
-const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
+const visibleTabs: readonly AudioTab[] = audioModes;
 const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
 
 const audioTabKeys = {
