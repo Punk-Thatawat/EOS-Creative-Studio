@@ -69,11 +69,16 @@ export function Dropdown({ value, options, onChange, placeholder = "Select an op
     const updateMenuPosition = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setFixedMenuStyle({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const openUpward = spaceBelow < 200 && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(120, (openUpward ? spaceAbove : spaceBelow) - 12);
+      setFixedMenuStyle(
+        openUpward
+          ? { bottom: viewportHeight - rect.top + 4, left: rect.left, width: rect.width, maxHeight }
+          : { top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight },
+      );
     };
 
     updateMenuPosition();

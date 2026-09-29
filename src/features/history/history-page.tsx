@@ -3,43 +3,199 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, ArrowRight, AudioLines, Check, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileClock, Image as ImageIcon, LoaderCircle, RefreshCw, SlidersHorizontal, Sparkles, Trash2, Video, X } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  AudioLines,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  ExternalLink,
+  FileClock,
+  Image as ImageIcon,
+  LoaderCircle,
+  RefreshCw,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+  Video,
+  X,
+} from "lucide-react";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Dropdown } from "@/components/ui/dropdown";
 import { SearchInput } from "@/components/ui/search-input";
-import { deleteHistoryItem, fetchHistory, type HistoryItem, type HistoryResponse, type HistoryStatus, type HistoryType } from "@/lib/api/history";
+import {
+  deleteHistoryItem,
+  fetchHistory,
+  type HistoryItem,
+  type HistoryResponse,
+  type HistoryStatus,
+  type HistoryType,
+} from "@/lib/api/history";
 import { templateCopy } from "@/features/templates/template-copy";
 import s from "./history-page.module.css";
 
 const PAGE_SIZE = 24;
 const HISTORY_CACHE_TTL_MS = 30_000;
-const types = [{ value: "all", label: "ทั้งหมด", icon: Sparkles }, { value: "image", label: "ภาพ", icon: ImageIcon }, { value: "video", label: "วิดีโอ", icon: Video }, { value: "audio", label: "เสียง", icon: AudioLines }] as const;
-const statuses = { all: "ทุกสถานะ", queued: "รอคิว", processing: "กำลังสร้าง", completed: "สำเร็จ", failed: "ไม่สำเร็จ", cancelled: "ยกเลิกแล้ว" };
-const features: Record<string, string> = { "text-to-image": "สร้างภาพจากข้อความ", "image-to-image": "ปรับแต่งภาพ", "style-transfer": "เปลี่ยนสไตล์", "background-removal": "พื้นหลัง AI", "extend-image": "ขยายภาพ", upscale: "เพิ่มความละเอียด", "image-to-video": "ภาพเป็นวิดีโอ", "text-to-video": "ข้อความเป็นวิดีโอ", "reference-to-video": "วิดีโอจากภาพอ้างอิง", "people-video": "พรีเซนเตอร์ AI", lipsync: "ลิปซิงก์", "motion-transfer": "ถ่ายทอดการเคลื่อนไหว", tts: "เสียงบรรยาย", dialogue: "พอดแคสต์", "voice-clone": "โคลนเสียง", "sound-effects": "เอฟเฟกต์เสียง", "audio-cleanup": "ปรับคุณภาพเสียง" };
+const types = [
+  { value: "all", label: "ทั้งหมด", icon: Sparkles },
+  { value: "image", label: "ภาพ", icon: ImageIcon },
+  { value: "video", label: "วิดีโอ", icon: Video },
+  { value: "audio", label: "เสียง", icon: AudioLines },
+] as const;
+const statuses = {
+  all: "ทุกสถานะ",
+  queued: "รอคิว",
+  processing: "กำลังสร้าง",
+  completed: "สำเร็จ",
+  failed: "ไม่สำเร็จ",
+  cancelled: "ยกเลิกแล้ว",
+};
+const features: Record<string, string> = {
+  "text-to-image": "สร้างภาพจากข้อความ",
+  "image-to-image": "ปรับแต่งภาพ",
+  "style-transfer": "เปลี่ยนสไตล์",
+  "background-removal": "พื้นหลัง AI",
+  "extend-image": "ขยายภาพ",
+  upscale: "เพิ่มความละเอียด",
+  "image-to-video": "ภาพเป็นวิดีโอ",
+  "text-to-video": "ข้อความเป็นวิดีโอ",
+  "reference-to-video": "วิดีโอจากภาพอ้างอิง",
+  "people-video": "พรีเซนเตอร์ AI",
+  lipsync: "ลิปซิงก์",
+  "motion-transfer": "ถ่ายทอดการเคลื่อนไหว",
+  tts: "เสียงบรรยาย",
+  dialogue: "พอดแคสต์",
+  "voice-clone": "โคลนเสียง",
+  "sound-effects": "เอฟเฟกต์เสียง",
+  "audio-cleanup": "ปรับคุณภาพเสียง",
+};
 const historyTypeValues = new Set<HistoryType>(["all", "image", "video", "audio"]);
 const featureLabel = (item: HistoryItem) => features[item.feature] ?? item.feature;
 const modelLabel = (item: HistoryItem) => item.modelLabel || item.model;
-const title = (item: HistoryItem) => templateCopy(item.title, "", item.feature, item.mediaKind).title || featureLabel(item);
-const dateLabel = (value: string) => Number.isNaN(Date.parse(value)) ? "ไม่ระบุวันที่" : new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+const title = (item: HistoryItem) =>
+  templateCopy(item.title, "", item.feature, item.mediaKind).title || featureLabel(item);
+const dateLabel = (value: string) =>
+  Number.isNaN(Date.parse(value))
+    ? "ไม่ระบุวันที่"
+    : new Intl.DateTimeFormat("th-TH", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(new Date(value));
 function creatorHref(item: HistoryItem) {
   if (item.mediaKind !== "image") return `/create/${item.mediaKind}`;
   return `/create/image?tab=${encodeURIComponent(item.feature === "style-transfer" ? "image-to-image" : item.feature)}`;
 }
 function Status({ item }: { item: HistoryItem }) {
-  const Icon = item.status === "completed" ? Check : item.status === "failed" ? AlertCircle : item.status === "cancelled" ? X : item.status === "queued" ? Clock3 : LoaderCircle;
-  return <span className={`${s.status} ${s[item.status]}`}><Icon size={13} className={item.status === "processing" ? s.spin : undefined} />{statuses[item.status]}</span>;
+  const Icon =
+    item.status === "completed"
+      ? Check
+      : item.status === "failed"
+        ? AlertCircle
+        : item.status === "cancelled"
+          ? X
+          : item.status === "queued"
+            ? Clock3
+            : LoaderCircle;
+  return (
+    <span className={`${s.status} ${s[item.status]}`}>
+      <Icon size={13} className={item.status === "processing" ? s.spin : undefined} />
+      {statuses[item.status]}
+    </span>
+  );
 }
 function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const Icon = item.mediaKind === "image" ? ImageIcon : item.mediaKind === "video" ? Video : AudioLines;
-  if (failed || !item.outputUrl) return <div className={s.mediaFallback}><Icon size={32} /><strong>{failed || item.status === "completed" ? "ยังแสดงตัวอย่างไม่ได้" : statuses[item.status]}</strong><span>{item.status === "queued" || item.status === "processing" ? "ผลงานจะแสดงเมื่อสร้างเสร็จ" : "สถานะงานยังคงเดิม"}</span>{failed && <button onClick={() => { setFailed(false); setAttempt(v => v + 1); }}>ลองโหลดใหม่</button>}</div>;
-  if (item.mediaKind === "image") return <img key={attempt} src={item.outputUrl} alt={title(item)} loading="lazy" onError={() => setFailed(true)} className={large ? s.fullImage : s.cardImage} />;
-  if (item.mediaKind === "video" && !large) return <VideoFrameThumbnail key={item.outputUrl} src={item.outputUrl} alt={`ภาพตัวอย่าง ${title(item)}`} className={s.videoThumbnail} fallback={<div className={s.mediaFallback}><Video size={32} /><strong>ยังแสดงตัวอย่างไม่ได้</strong></div>} />;
-  if (item.mediaKind === "video") return <video key={attempt} src={item.outputUrl} controls playsInline preload="metadata" onError={() => setFailed(true)} aria-label={`วิดีโอ ${title(item)}`} className={s.video} />;
-  return <div className={s.audio}><AudioLines size={42} /><span>เสียงของไอเดียคุณ</span><audio key={attempt} src={item.outputUrl} controls preload="none" onError={() => setFailed(true)} aria-label={`เสียง ${title(item)}`} /></div>;
+  if (failed || !item.outputUrl)
+    return (
+      <div className={s.mediaFallback}>
+        <Icon size={32} />
+        <strong>{failed || item.status === "completed" ? "ยังแสดงตัวอย่างไม่ได้" : statuses[item.status]}</strong>
+        <span>
+          {item.status === "queued" || item.status === "processing"
+            ? "ผลงานจะแสดงเมื่อสร้างเสร็จ"
+            : "สถานะงานยังคงเดิม"}
+        </span>
+        {failed && (
+          <button
+            onClick={() => {
+              setFailed(false);
+              setAttempt((v) => v + 1);
+            }}
+          >
+            ลองโหลดใหม่
+          </button>
+        )}
+      </div>
+    );
+  if (item.mediaKind === "image")
+    return (
+      <img
+        key={attempt}
+        src={item.outputUrl}
+        alt={title(item)}
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={large ? s.fullImage : s.cardImage}
+      />
+    );
+  if (item.mediaKind === "video" && !large)
+    return (
+      <VideoFrameThumbnail
+        key={item.outputUrl}
+        src={item.outputUrl}
+        alt={`ภาพตัวอย่าง ${title(item)}`}
+        className={s.videoThumbnail}
+        fallback={
+          <div className={s.mediaFallback}>
+            <Video size={32} />
+            <strong>ยังแสดงตัวอย่างไม่ได้</strong>
+          </div>
+        }
+      />
+    );
+  if (item.mediaKind === "video")
+    return (
+      <video
+        key={attempt}
+        src={item.outputUrl}
+        controls
+        playsInline
+        preload="metadata"
+        onError={() => setFailed(true)}
+        aria-label={`วิดีโอ ${title(item)}`}
+        className={s.video}
+      />
+    );
+  return (
+    <div className={s.audio}>
+      <AudioLines size={42} />
+      <span>เสียงของไอเดียคุณ</span>
+      <audio
+        key={attempt}
+        src={item.outputUrl}
+        controls
+        preload="none"
+        onError={() => setFailed(true)}
+        aria-label={`เสียง ${title(item)}`}
+      />
+    </div>
+  );
 }
 function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -47,24 +203,139 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
     const dialog = ref.current;
     const previous = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
-    dialog?.showModal(); document.body.style.overflow = "hidden";
-    return () => { dialog?.close(); document.body.style.overflow = overflow; previous?.focus(); };
+    dialog?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      dialog?.close();
+      document.body.style.overflow = overflow;
+      previous?.focus();
+    };
   }, []);
-  return <dialog ref={ref} className={s.dialog} aria-labelledby="history-work-title" onCancel={close} onClick={event => { if (event.target === ref.current) close(); }}>
-    <div className={s.dialogLayout}><div className={s.dialogMedia}><Media key={item.outputUrl ?? item.id} item={item} large /></div><div className={s.dialogInfo}>
-      <button className={s.close} onClick={close} aria-label="ปิดตัวอย่าง" autoFocus><X size={21} /></button>
-      <span className={s.eyebrow}>YOUR CREATIVE ARCHIVE</span><Status item={item} /><h2 id="history-work-title">{title(item)}</h2><p>{featureLabel(item)}</p>
-      <dl><div><dt>สร้างเมื่อ</dt><dd>{dateLabel(item.createdAt)}</dd></div><div><dt>โมเดล</dt><dd>{modelLabel(item) || "ไม่ระบุ"}</dd></div><div><dt>จำนวนผลงาน</dt><dd>{item.outputCount} ไฟล์{item.outputCount > 1 ? " · แสดงตัวอย่างไฟล์แรก" : ""}</dd></div>{item.creditCost != null && <div><dt>เครดิตที่ใช้</dt><dd>{item.creditCost.toLocaleString()} เครดิต</dd></div>}</dl>
-      {item.errorMessage && <details className={s.errorDetails}><summary>รายละเอียดข้อผิดพลาด</summary><p>{item.errorMessage}</p></details>}
-      <div className={s.dialogActions}>{item.outputUrl && <a href={item.outputUrl} target="_blank" rel="noreferrer" className={s.primary}>เปิดไฟล์ต้นฉบับ <ExternalLink size={16} /></a>}<Link href={creatorHref(item)} className={s.secondary}>ไปหน้าสร้างงาน <ArrowRight size={16} /></Link><small>เปิดดูผลงานได้โดยไม่ใช้เครดิต</small></div>
-    </div></div>
-  </dialog>;
+  return (
+    <dialog
+      ref={ref}
+      className={s.dialog}
+      aria-labelledby="history-work-title"
+      onCancel={close}
+      onClick={(event) => {
+        if (event.target === ref.current) close();
+      }}
+    >
+      <div className={s.dialogLayout}>
+        <div className={s.dialogMedia}>
+          <Media key={item.outputUrl ?? item.id} item={item} large />
+        </div>
+        <div className={s.dialogInfo}>
+          <button className={s.close} onClick={close} aria-label="ปิดตัวอย่าง" autoFocus>
+            <X size={21} />
+          </button>
+          <span className={s.eyebrow}>YOUR CREATIVE ARCHIVE</span>
+          <Status item={item} />
+          <h2 id="history-work-title">{title(item)}</h2>
+          <p>{featureLabel(item)}</p>
+          <dl>
+            <div>
+              <dt>สร้างเมื่อ</dt>
+              <dd>{dateLabel(item.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>โมเดล</dt>
+              <dd>{modelLabel(item) || "ไม่ระบุ"}</dd>
+            </div>
+            <div>
+              <dt>จำนวนผลงาน</dt>
+              <dd>
+                {item.outputCount} ไฟล์{item.outputCount > 1 ? " · แสดงตัวอย่างไฟล์แรก" : ""}
+              </dd>
+            </div>
+            {item.creditCost != null && (
+              <div>
+                <dt>เครดิตที่ใช้</dt>
+                <dd>{item.creditCost.toLocaleString()} เครดิต</dd>
+              </div>
+            )}
+          </dl>
+          {item.errorMessage && (
+            <details className={s.errorDetails}>
+              <summary>รายละเอียดข้อผิดพลาด</summary>
+              <p>{item.errorMessage}</p>
+            </details>
+          )}
+          <div className={s.dialogActions}>
+            {item.outputUrl && (
+              <a href={item.outputUrl} target="_blank" rel="noreferrer" className={s.primary}>
+                เปิดไฟล์ต้นฉบับ <ExternalLink size={16} />
+              </a>
+            )}
+            <Link href={creatorHref(item)} className={s.secondary}>
+              ไปหน้าสร้างงาน <ArrowRight size={16} />
+            </Link>
+            <small>เปิดดูผลงานได้โดยไม่ใช้เครดิต</small>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  );
 }
-function WorkCard({ item, open, remove, deleting }: { item: HistoryItem; open: () => void; remove: (item: HistoryItem) => void; deleting: boolean }) {
+function WorkCard({
+  item,
+  open,
+  remove,
+  deleting,
+}: {
+  item: HistoryItem;
+  open: () => void;
+  remove: (item: HistoryItem) => void;
+  deleting: boolean;
+}) {
   const providerAudio = item.source === "audio" && item.id.startsWith("wavespeed:");
   const canDelete = !providerAudio && item.status !== "queued" && item.status !== "processing";
-  const deleteHint = providerAudio ? "ประวัติเสียงจากผู้ให้บริการลบไม่ได้" : item.status === "queued" || item.status === "processing" ? "ลบไม่ได้ขณะกำลังสร้าง" : "ลบรายการนี้";
-  return <article className={s.card}><div className={s.cardMedia}><Media key={item.outputUrl ?? item.id} item={item} /><div className={s.cardBadge}><Status item={item} /></div>{item.outputCount > 1 && <span className={s.outputCount}>{item.outputCount} ไฟล์</span>}</div><div className={s.cardBody}><div className={s.feature}><span>{featureLabel(item)}</span>{item.creditCost != null && <span>{item.creditCost.toLocaleString()} เครดิต</span>}</div><button className={s.cardTitle} onClick={open}>{title(item)}</button><p className={s.model} title={item.model}>{modelLabel(item) || "—"}</p><div className={s.cardFooter}><time dateTime={item.createdAt}>{dateLabel(item.createdAt)}</time><div className={s.cardActions}><button onClick={open} aria-label={`ดูรายละเอียด ${title(item)}`}>ดูงาน <ArrowRight size={15} /></button><button type="button" className={s.deleteButton} onClick={() => remove(item)} disabled={!canDelete || deleting} aria-label={canDelete ? `ลบ ${title(item)}` : `ลบไม่ได้ ${title(item)}`} title={deleteHint}>{deleting ? <LoaderCircle size={15} className={s.spin} /> : <Trash2 size={15} />}</button></div></div></div></article>;
+  const deleteHint = providerAudio
+    ? "ประวัติเสียงจากผู้ให้บริการลบไม่ได้"
+    : item.status === "queued" || item.status === "processing"
+      ? "ลบไม่ได้ขณะกำลังสร้าง"
+      : "ลบรายการนี้";
+  return (
+    <article className={s.card}>
+      <div className={s.cardMedia}>
+        <Media key={item.outputUrl ?? item.id} item={item} />
+        <div className={s.cardBadge}>
+          <Status item={item} />
+        </div>
+        {item.outputCount > 1 && <span className={s.outputCount}>{item.outputCount} ไฟล์</span>}
+      </div>
+      <div className={s.cardBody}>
+        <div className={s.feature}>
+          <span>{featureLabel(item)}</span>
+          {item.creditCost != null && <span>{item.creditCost.toLocaleString()} เครดิต</span>}
+        </div>
+        <button className={s.cardTitle} onClick={open}>
+          {title(item)}
+        </button>
+        <p className={s.model} title={item.model}>
+          {modelLabel(item) || "—"}
+        </p>
+        <div className={s.cardFooter}>
+          <time dateTime={item.createdAt}>{dateLabel(item.createdAt)}</time>
+          <div className={s.cardActions}>
+            <button onClick={open} aria-label={`ดูรายละเอียด ${title(item)}`}>
+              ดูงาน <ArrowRight size={15} />
+            </button>
+            <button
+              type="button"
+              className={s.deleteButton}
+              onClick={() => remove(item)}
+              disabled={!canDelete || deleting}
+              aria-label={canDelete ? `ลบ ${title(item)}` : `ลบไม่ได้ ${title(item)}`}
+              title={deleteHint}
+            >
+              {deleting ? <LoaderCircle size={15} className={s.spin} /> : <Trash2 size={15} />}
+            </button>
+          </div>
+        </div>
+      </div>
+    </article>
+  );
 }
 type Query = { type: HistoryType; status: HistoryStatus; search: string; offset: number };
 export function HistoryPageClient() {
@@ -89,7 +360,9 @@ export function HistoryPageClient() {
     if (!requestedType || !historyTypeValues.has(requestedType as HistoryType)) return;
     // Sync the initial URL filter once after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuery(current => current.type === requestedType ? current : { ...current, type: requestedType as HistoryType, offset: 0 });
+    setQuery((current) =>
+      current.type === requestedType ? current : { ...current, type: requestedType as HistoryType, offset: 0 },
+    );
   }, []);
   useEffect(() => {
     const controller = new AbortController();
@@ -107,31 +380,68 @@ export function HistoryPageClient() {
       return undefined;
     }
     fetching.current = true;
-    const timer = window.setTimeout(() => {
-      setLoading(true); setError(null);
-      fetchHistory({ ...query, limit: PAGE_SIZE, signal: controller.signal }).then(next => {
-        if (controller.signal.aborted) return;
-        if (query.offset > 0 && next.items.length === 0) { setQuery(current => ({ ...current, offset: Math.max(0, Math.ceil(next.pagination.total / PAGE_SIZE) - 1) * PAGE_SIZE })); return; }
-        historyCacheRef.current.set(cacheKey, { data: next, cachedAt: Date.now() });
-        setData(next); setLoadedQuery(query);
-      }).catch((reason: unknown) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "โหลดประวัติไม่สำเร็จ"); }).finally(() => { if (!controller.signal.aborted) { fetching.current = false; setLoading(false); } });
-    }, query.search ? 250 : 0);
-    return () => { controller.abort(); fetching.current = false; window.clearTimeout(timer); };
+    const timer = window.setTimeout(
+      () => {
+        setLoading(true);
+        setError(null);
+        fetchHistory({ ...query, limit: PAGE_SIZE, signal: controller.signal })
+          .then((next) => {
+            if (controller.signal.aborted) return;
+            if (query.offset > 0 && next.items.length === 0) {
+              setQuery((current) => ({
+                ...current,
+                offset: Math.max(0, Math.ceil(next.pagination.total / PAGE_SIZE) - 1) * PAGE_SIZE,
+              }));
+              return;
+            }
+            historyCacheRef.current.set(cacheKey, { data: next, cachedAt: Date.now() });
+            setData(next);
+            setLoadedQuery(query);
+          })
+          .catch((reason: unknown) => {
+            if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "โหลดประวัติไม่สำเร็จ");
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) {
+              fetching.current = false;
+              setLoading(false);
+            }
+          });
+      },
+      query.search ? 250 : 0,
+    );
+    return () => {
+      controller.abort();
+      fetching.current = false;
+      window.clearTimeout(timer);
+    };
   }, [query, refresh]);
   useEffect(() => {
-    const reloadOnFocus = () => { if (document.visibilityState === "visible" && !fetching.current) setRefresh(v => v + 1); };
+    const reloadOnFocus = () => {
+      if (document.visibilityState === "visible" && !fetching.current) setRefresh((v) => v + 1);
+    };
     window.addEventListener("focus", reloadOnFocus);
     const timer = data?.summary.inProgress ? window.setInterval(reloadOnFocus, 8000) : undefined;
-    return () => { window.removeEventListener("focus", reloadOnFocus); window.clearInterval(timer); };
+    return () => {
+      window.removeEventListener("focus", reloadOnFocus);
+      window.clearInterval(timer);
+    };
   }, [data?.summary.inProgress]);
-  const change = (patch: Partial<Query>) => { setLoading(true); setQuery(current => ({ ...current, ...patch, offset: patch.offset ?? 0 })); };
+  const change = (patch: Partial<Query>) => {
+    setLoading(true);
+    setQuery((current) => ({ ...current, ...patch, offset: patch.offset ?? 0 }));
+  };
   const reset = () => change({ type: "all", status: "all", search: "" });
   const hasFilters = query.type !== "all" || query.status !== "all" || Boolean(query.search.trim());
-  const count = (n?: number) => n == null || error ? "—" : n.toLocaleString();
+  const count = (n?: number) => (n == null || error ? "—" : n.toLocaleString());
   const summary = data?.summary;
   const page = Math.floor(query.offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil((data?.pagination.total ?? 0) / PAGE_SIZE));
-  const goPage = (offset: number) => { change({ offset }); results.current?.focus(); results.current?.scrollIntoView({ block: "start" }); };
+  const goPage = (offset: number) => {
+    change({ offset });
+    results.current?.focus();
+    results.current?.scrollIntoView({ block: "start" });
+  };
   const remove = (item: HistoryItem) => {
     if (item.source === "audio" && item.id.startsWith("wavespeed:")) return;
     if (item.status === "queued" || item.status === "processing") return;
@@ -141,41 +451,248 @@ export function HistoryPageClient() {
   const confirmDelete = async (item: HistoryItem) => {
     setConfirmOpen(false);
     const key = `${item.source}:${item.id}`;
-    setDeletingKey(key); setActionError(null);
+    setDeletingKey(key);
+    setActionError(null);
     try {
       await deleteHistoryItem(item);
-      setSelected(current => current?.id === item.id && current.source === item.source ? null : current);
-      setRefresh(value => value + 1);
+      setSelected((current) => (current?.id === item.id && current.source === item.source ? null : current));
+      setRefresh((value) => value + 1);
     } catch (reason: unknown) {
       setActionError(reason instanceof Error ? reason.message : "ลบรายการไม่สำเร็จ");
     } finally {
-      setDeletingKey(current => current === key ? null : current);
+      setDeletingKey((current) => (current === key ? null : current));
     }
   };
-  return <div className={s.page} data-no-translate data-page="history">
-    <header className={`studio-hero-frame ${s.hero}`} aria-label="ประวัติการสร้าง"><picture className={s.heroPicture}><source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/history-mobile-v2.webp" /><Image src="/generated-assets/studio-heroes-v4/history-desktop-v2.webp" alt="History — every idea has a story" width={2400} height={435} priority className={s.heroImage} sizes="100vw" /></picture></header>
-     <section className={s.stats} aria-label="สรุปงานทั้งหมดในเวิร์กสเปซ"><div><FileClock size={18} /><span>งานทั้งหมด</span><strong>{count(summary?.total)}</strong></div><div><Check size={18} /><span>สำเร็จ</span><strong>{count(summary?.completed)}</strong></div><div><Clock3 size={18} /><span>กำลังดำเนินการ</span><strong>{count(summary?.inProgress)}</strong></div><div><AlertCircle size={18} /><span>ไม่สำเร็จ / ยกเลิก</span><strong>{count(summary?.failed)}</strong></div></section>
-     <div className={s.retentionNotice} role="note"><Clock3 size={16} aria-hidden="true" /><span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span></div>
-    <section className={s.library} aria-label="คลังประวัติผลงาน" ref={results} tabIndex={-1}>
-      <div className={s.toolbar}><div className={s.typeFilters} role="group" aria-label="ประเภทผลงาน">{types.map(({ value, label, icon: Icon }) => <button key={value} aria-pressed={query.type === value} onClick={() => change({ type: value })}><Icon size={16} />{label}</button>)}</div><SearchInput className="w-full max-w-[380px] flex-1" value={query.search} onValueChange={value => change({ search: value })} placeholder="ค้นหาชื่อผลงานหรือโมเดล…" aria-label="ค้นหาประวัติผลงาน" /></div>
-      <div className={s.resultBar}><div><h2>รายการของคุณ</h2><span role="status">{loading ? "กำลังอัปเดต…" : error ? "โหลดไม่สำเร็จ" : `${data?.pagination.total.toLocaleString() ?? 0} รายการ`}</span></div><div className={s.controls}><span className={s.statusFilter}><SlidersHorizontal size={15} aria-hidden="true" /><Dropdown className={s.statusDropdown} value={query.status} options={Object.entries(statuses).map(([value, label]) => ({ value, label }))} onChange={value => change({ status: value as HistoryStatus })} ariaLabel="กรองตามสถานะ" /></span><button onClick={() => setRefresh(v => v + 1)} disabled={busy} aria-label="รีเฟรชประวัติ"><RefreshCw size={16} className={busy ? s.spin : undefined} /></button></div></div>
-      {hasFilters && <div className={s.filterNotice}><span>กำลังกรอง{query.type !== "all" ? ` · ${types.find(t => t.value === query.type)?.label}` : ""}{query.status !== "all" ? ` · ${statuses[query.status]}` : ""}{query.search.trim() ? ` · “${query.search.trim()}”` : ""}</span><button onClick={reset}>ล้างตัวกรอง <X size={13} /></button></div>}
-      {actionError && <div className={s.actionError} role="alert"><AlertCircle size={15} /><span>{actionError}</span><button type="button" onClick={() => setActionError(null)} aria-label="ปิดข้อความผิดพลาด"><X size={14} /></button></div>}
-      <div aria-busy={busy}>
-        {loading ? <div className={s.list} aria-label="กำลังโหลดประวัติ">{[0, 1, 2].map(i => <div className={s.skeleton} key={i}><div /><span /><span /></div>)}</div> : error ? <div className={s.empty} role="alert"><AlertCircle size={34} /><h3>โหลดประวัติไม่สำเร็จ</h3><p>{error}</p><button className={s.secondary} onClick={() => setRefresh(v => v + 1)}><RefreshCw size={16} />ลองอีกครั้ง</button></div> : data?.items.length ? <><div className={s.list}>{data.items.map(item => <WorkCard key={`${item.source}-${item.id}`} item={item} open={() => setSelected(item)} remove={remove} deleting={deletingKey === `${item.source}:${item.id}`} />)}</div><nav className={s.pagination} aria-label="แบ่งหน้าประวัติ"><span>แสดง {query.offset + 1}–{query.offset + data.items.length} จาก {data.pagination.total.toLocaleString()} รายการ</span><div><button disabled={query.offset === 0} onClick={() => goPage(Math.max(0, query.offset - PAGE_SIZE))} aria-label="หน้าก่อนหน้า"><ChevronLeft size={17} /></button><span>หน้า {page} / {pageCount}</span><button disabled={!data.pagination.hasMore} onClick={() => goPage(query.offset + PAGE_SIZE)} aria-label="หน้าถัดไป"><ChevronRight size={17} /></button></div></nav></> : <div className={s.empty}><FileClock size={36} /><h3>{hasFilters ? "ยังไม่พบงานที่ตรงกับตัวกรอง" : "ไอเดียแรกของคุณ เริ่มได้ที่นี่"}</h3><p>{hasFilters ? "ลองเปลี่ยนคำค้นหา หรือแสดงผลงานทั้งหมด" : "เมื่อสร้างงานแล้ว ผลงานและสถานะจะปรากฏในหน้านี้"}</p>{hasFilters ? <button className={s.secondary} onClick={reset}>แสดงผลงานทั้งหมด</button> : <Link href="/create/image" className={s.primary}>สร้างภาพแรก <ArrowRight size={16} /></Link>}</div>}
+  return (
+    <div className={s.page} data-no-translate data-page="history">
+      <header className={`studio-hero-frame ${s.hero}`} aria-label="ประวัติการสร้าง">
+        <picture className={s.heroPicture}>
+          <source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/history-mobile-v2.webp" />
+          <Image
+            src="/generated-assets/studio-heroes-v4/history-desktop-v2.webp"
+            alt="History — every idea has a story"
+            width={2400}
+            height={435}
+            priority
+            className={s.heroImage}
+            sizes="100vw"
+          />
+        </picture>
+      </header>
+      <section className={s.stats} aria-label="สรุปงานทั้งหมดในเวิร์กสเปซ">
+        <div>
+          <FileClock size={18} />
+          <span>งานทั้งหมด</span>
+          <strong>{count(summary?.total)}</strong>
+        </div>
+        <div>
+          <Check size={18} />
+          <span>สำเร็จ</span>
+          <strong>{count(summary?.completed)}</strong>
+        </div>
+        <div>
+          <Clock3 size={18} />
+          <span>กำลังดำเนินการ</span>
+          <strong>{count(summary?.inProgress)}</strong>
+        </div>
+        <div>
+          <AlertCircle size={18} />
+          <span>ไม่สำเร็จ / ยกเลิก</span>
+          <strong>{count(summary?.failed)}</strong>
+        </div>
+      </section>
+      <div className={s.retentionNotice} role="note">
+        <Clock3 size={16} aria-hidden="true" />
+        <span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span>
       </div>
-    </section>{selected && <WorkDialog item={data?.items.find(item => item.id === selected.id && item.source === selected.source) ?? selected} close={() => setSelected(null)} />}
-    <Dialog open={confirmOpen} onOpenChange={next => { if (!next) setConfirmOpen(false); }} onOpenChangeComplete={next => { if (!next) setPendingDelete(null); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>ลบรายการนี้?</DialogTitle>
-          <DialogDescription>ต้องการลบ “{pendingDelete ? title(pendingDelete) : ""}” ออกจากประวัติหรือไม่ ไฟล์ผลงานจะถูกลบถาวรและกู้คืนไม่ได้</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmOpen(false)}>ยกเลิก</Button>
-          <Button type="button" variant="destructive" size="sm" onClick={() => { if (pendingDelete) void confirmDelete(pendingDelete); }}><Trash2 size={15} /> ลบรายการ</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </div>;
+      <section className={s.library} aria-label="คลังประวัติผลงาน" ref={results} tabIndex={-1}>
+        <div className={s.toolbar}>
+          <div className={s.typeFilters} role="group" aria-label="ประเภทผลงาน">
+            {types.map(({ value, label, icon: Icon }) => (
+              <button key={value} aria-pressed={query.type === value} onClick={() => change({ type: value })}>
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </div>
+          <SearchInput
+            className="w-full max-w-[380px] flex-1"
+            value={query.search}
+            onValueChange={(value) => change({ search: value })}
+            placeholder="ค้นหาชื่อผลงานหรือโมเดล…"
+            aria-label="ค้นหาประวัติผลงาน"
+          />
+        </div>
+        <div className={s.resultBar}>
+          <div>
+            <h2>รายการของคุณ</h2>
+            <span role="status">
+              {loading
+                ? "กำลังอัปเดต…"
+                : error
+                  ? "โหลดไม่สำเร็จ"
+                  : `${data?.pagination.total.toLocaleString() ?? 0} รายการ`}
+            </span>
+          </div>
+          <div className={s.controls}>
+            <span className={s.statusFilter}>
+              <SlidersHorizontal size={15} aria-hidden="true" />
+              <Dropdown
+                className={s.statusDropdown}
+                value={query.status}
+                options={Object.entries(statuses).map(([value, label]) => ({ value, label }))}
+                onChange={(value) => change({ status: value as HistoryStatus })}
+                ariaLabel="กรองตามสถานะ"
+              />
+            </span>
+            <button onClick={() => setRefresh((v) => v + 1)} disabled={busy} aria-label="รีเฟรชประวัติ">
+              <RefreshCw size={16} className={busy ? s.spin : undefined} />
+            </button>
+          </div>
+        </div>
+        {hasFilters && (
+          <div className={s.filterNotice}>
+            <span>
+              กำลังกรอง{query.type !== "all" ? ` · ${types.find((t) => t.value === query.type)?.label}` : ""}
+              {query.status !== "all" ? ` · ${statuses[query.status]}` : ""}
+              {query.search.trim() ? ` · “${query.search.trim()}”` : ""}
+            </span>
+            <button onClick={reset}>
+              ล้างตัวกรอง <X size={13} />
+            </button>
+          </div>
+        )}
+        {actionError && (
+          <div className={s.actionError} role="alert">
+            <AlertCircle size={15} />
+            <span>{actionError}</span>
+            <button type="button" onClick={() => setActionError(null)} aria-label="ปิดข้อความผิดพลาด">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        <div aria-busy={busy}>
+          {loading ? (
+            <div className={s.list} aria-label="กำลังโหลดประวัติ">
+              {[0, 1, 2].map((i) => (
+                <div className={s.skeleton} key={i}>
+                  <div />
+                  <span />
+                  <span />
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className={s.empty} role="alert">
+              <AlertCircle size={34} />
+              <h3>โหลดประวัติไม่สำเร็จ</h3>
+              <p>{error}</p>
+              <button className={s.secondary} onClick={() => setRefresh((v) => v + 1)}>
+                <RefreshCw size={16} />
+                ลองอีกครั้ง
+              </button>
+            </div>
+          ) : data?.items.length ? (
+            <>
+              <div className={s.list}>
+                {data.items.map((item) => (
+                  <WorkCard
+                    key={`${item.source}-${item.id}`}
+                    item={item}
+                    open={() => setSelected(item)}
+                    remove={remove}
+                    deleting={deletingKey === `${item.source}:${item.id}`}
+                  />
+                ))}
+              </div>
+              <nav className={s.pagination} aria-label="แบ่งหน้าประวัติ">
+                <span>
+                  แสดง {query.offset + 1}–{query.offset + data.items.length} จาก{" "}
+                  {data.pagination.total.toLocaleString()} รายการ
+                </span>
+                <div>
+                  <button
+                    disabled={query.offset === 0}
+                    onClick={() => goPage(Math.max(0, query.offset - PAGE_SIZE))}
+                    aria-label="หน้าก่อนหน้า"
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <span>
+                    หน้า {page} / {pageCount}
+                  </span>
+                  <button
+                    disabled={!data.pagination.hasMore}
+                    onClick={() => goPage(query.offset + PAGE_SIZE)}
+                    aria-label="หน้าถัดไป"
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+              </nav>
+            </>
+          ) : (
+            <div className={s.empty}>
+              <FileClock size={36} />
+              <h3>{hasFilters ? "ยังไม่พบงานที่ตรงกับตัวกรอง" : "ไอเดียแรกของคุณ เริ่มได้ที่นี่"}</h3>
+              <p>
+                {hasFilters
+                  ? "ลองเปลี่ยนคำค้นหา หรือแสดงผลงานทั้งหมด"
+                  : "เมื่อสร้างงานแล้ว ผลงานและสถานะจะปรากฏในหน้านี้"}
+              </p>
+              {hasFilters ? (
+                <button className={s.secondary} onClick={reset}>
+                  แสดงผลงานทั้งหมด
+                </button>
+              ) : (
+                <Link href="/create/image" className={s.primary}>
+                  สร้างภาพแรก <ArrowRight size={16} />
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+      {selected && (
+        <WorkDialog
+          item={data?.items.find((item) => item.id === selected.id && item.source === selected.source) ?? selected}
+          close={() => setSelected(null)}
+        />
+      )}
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(next) => {
+          if (!next) setConfirmOpen(false);
+        }}
+        onOpenChangeComplete={(next) => {
+          if (!next) setPendingDelete(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>ลบรายการนี้?</DialogTitle>
+            <DialogDescription>
+              ต้องการลบ “{pendingDelete ? title(pendingDelete) : ""}” ออกจากประวัติหรือไม่
+              ไฟล์ผลงานจะถูกลบถาวรและกู้คืนไม่ได้
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmOpen(false)}>
+              ยกเลิก
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (pendingDelete) void confirmDelete(pendingDelete);
+              }}
+            >
+              <Trash2 size={15} /> ลบรายการ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
