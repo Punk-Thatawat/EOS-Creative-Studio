@@ -101,6 +101,10 @@ const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
 // The backend may list Eleven v3 under either its WaveSpeed-style key or the raw ElevenLabs id.
 const TEXT_TO_SPEECH_MODEL_KEYS = ["elevenlabs/eleven-v3", "eleven_v3"];
 
+function supportsMiniMaxSpeechTuning(modelId: string): boolean {
+  return /^minimax(?:\/|_)speech[-_]/i.test(modelId.trim());
+}
+
 /** Prefer Eleven v3; otherwise fall back to the active (or first) model so generation is never left without one. */
 function pickTextToSpeechModels(items: AudioModel[]): AudioModel[] {
   const preferred = items.find((model) => TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key));
@@ -3977,8 +3981,7 @@ export function AudioGenerationPage() {
         languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
         ...(voiceMode === "tone" && tone ? { tone } : {}),
         speed,
-        pitch,
-        volume: synthVolume,
+        ...(supportsMiniMaxSpeechTuning(selectedModel) ? { pitch, volume: synthVolume } : {}),
         pronunciationHint: pronunciation.trim() || undefined,
         backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
         backgroundMusicKey: backgroundMusicPreset || undefined,
@@ -4029,8 +4032,7 @@ export function AudioGenerationPage() {
         languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
         ...(voiceMode === "tone" && tone ? { tone } : {}),
         speed,
-        pitch,
-        volume: synthVolume,
+        ...(supportsMiniMaxSpeechTuning(selectedModel) ? { pitch, volume: synthVolume } : {}),
         pronunciationHint: pronunciation.trim() || undefined,
         pauseSeconds: 0.25,
         backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
@@ -4754,46 +4756,50 @@ export function AudioGenerationPage() {
                       <span>2x</span>
                     </div>
                   </div>
-                  <div className={styles.settingBlock}>
-                    <div className={styles.speedHeader}>
-                      <FieldLabel>{t("create.audio.pitch")}</FieldLabel>
-                      <strong>{pitch}</strong>
-                    </div>
-                    <input
-                      className={styles.speedSlider}
-                      type="range"
-                      min="-12"
-                      max="12"
-                      step="1"
-                      value={pitch}
-                      onChange={(event) => setPitch(Number(event.target.value))}
-                    />
-                    <div className={styles.rangeLabels}>
-                      <span>-12</span>
-                      <span>0</span>
-                      <span>12</span>
-                    </div>
-                  </div>
-                  <div className={styles.settingBlock}>
-                    <div className={styles.speedHeader}>
-                      <FieldLabel>{t("create.audio.synthVolume")}</FieldLabel>
-                      <strong>{synthVolume.toFixed(1)}x</strong>
-                    </div>
-                    <input
-                      className={styles.speedSlider}
-                      type="range"
-                      min="0.5"
-                      max="10"
-                      step="0.5"
-                      value={synthVolume}
-                      onChange={(event) => setSynthVolume(Number(event.target.value))}
-                    />
-                    <div className={styles.rangeLabels}>
-                      <span>0.5x</span>
-                      <span>1x</span>
-                      <span>10x</span>
-                    </div>
-                  </div>
+                  {supportsMiniMaxSpeechTuning(selectedModel) ? (
+                    <>
+                      <div className={styles.settingBlock}>
+                        <div className={styles.speedHeader}>
+                          <FieldLabel>{t("create.audio.pitch")}</FieldLabel>
+                          <strong>{pitch}</strong>
+                        </div>
+                        <input
+                          className={styles.speedSlider}
+                          type="range"
+                          min="-12"
+                          max="12"
+                          step="1"
+                          value={pitch}
+                          onChange={(event) => setPitch(Number(event.target.value))}
+                        />
+                        <div className={styles.rangeLabels}>
+                          <span>-12</span>
+                          <span>0</span>
+                          <span>12</span>
+                        </div>
+                      </div>
+                      <div className={styles.settingBlock}>
+                        <div className={styles.speedHeader}>
+                          <FieldLabel>{t("create.audio.synthVolume")}</FieldLabel>
+                          <strong>{synthVolume.toFixed(1)}x</strong>
+                        </div>
+                        <input
+                          className={styles.speedSlider}
+                          type="range"
+                          min="0.5"
+                          max="10"
+                          step="0.5"
+                          value={synthVolume}
+                          onChange={(event) => setSynthVolume(Number(event.target.value))}
+                        />
+                        <div className={styles.rangeLabels}>
+                          <span>0.5x</span>
+                          <span>1x</span>
+                          <span>10x</span>
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
                   <div className={styles.settingBlock}>
                     <div className={styles.musicHeader}>
                       <FieldLabel>{t("create.audio.autoBackgroundMusic")}</FieldLabel>
