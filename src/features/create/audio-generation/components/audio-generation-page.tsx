@@ -93,11 +93,11 @@ import {
   type VoiceCloneQuote,
 } from "@/lib/api/audio";
 
-const audioModes = ["Text to Speech", "Podcast & Dialogue", "Voice Clone", "Sound Effects", "Audio Cleanup"] as const;
-type AudioTab = (typeof audioModes)[number];
+type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Audio Cleanup";
 const MIN_PODCAST_SPEAKERS = 2;
 
-const visibleTabs: readonly AudioTab[] = audioModes;
+// Keep the other workflows implemented, but expose only text-to-speech for now.
+const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
 // The backend may list Eleven v3 under either its WaveSpeed-style key or the raw ElevenLabs id.
 const TEXT_TO_SPEECH_MODEL_KEYS = ["elevenlabs/eleven-v3", "eleven_v3"];
 
@@ -4271,7 +4271,7 @@ export function AudioGenerationPage() {
                     <ImageTutorialButton feature="textToSpeech" featureName="Text to Speech" />
                     <ClearValuesButton onClick={clearValues} />
                   </div>
-                  <div className={styles.voiceModePanel}>
+                  <div className={styles.voiceModePanel} hidden>
                     <div className={styles.voiceModeHeading}>
                       <h2>{t("create.audio.voiceMode.label")}</h2>
                       <InfoTooltip content={t("create.audio.info.voiceMode")} size={11} />

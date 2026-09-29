@@ -205,6 +205,9 @@
   border-bottom: 1px solid var(--audio-line);
   background: #fffaf7;
 }
+.voiceModePanel[hidden] {
+  display: none;
+}
 .voiceModePanel > * + * {
   margin-top: 10px;
 }
