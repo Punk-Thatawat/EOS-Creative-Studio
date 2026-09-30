@@ -2562,6 +2562,12 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   }, [sourceMode, effectDuration, variationCount]);
 
   const handleGenerate = async () => {
+    const inputVideoFile = videoFile;
+    if (sourceMode === "video" && !inputVideoFile) {
+      setError(t("create.audio.sfx.error.noVideo"));
+      setStatus("error");
+      return;
+    }
     const requestId = startAudioProgress("audio-sound-effects");
     setStatus("generating");
     setError(null);
@@ -2569,13 +2575,8 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       let nextVariants: SoundEffectVariant[];
       let nextUrls: Record<number, string> = {};
       if (sourceMode === "video") {
-        if (!videoFile) {
-          setError(t("create.audio.sfx.error.noVideo"));
-          setStatus("error");
-          return;
-        }
         const result = await createVideoSoundEffect({
-          video: videoFile,
+          video: inputVideoFile,
           description: videoDescription.trim() || undefined,
           outputFormat,
         });
