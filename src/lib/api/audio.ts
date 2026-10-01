@@ -95,12 +95,14 @@ export type AudioBackgroundMusic = {
 export type AudioFeatureKey = "textToSpeech" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
 
 export type DialogueSpeakerInput = { name: string; voice: string };
+export type DialogueEmotionTag = "happy" | "excited" | "calm" | "sad" | "serious" | "whispering" | "angry";
 export type DialogueInput = {
   script: string;
   speakers: DialogueSpeakerInput[];
   conversationStyle: "Interview" | "Roundtable" | "Storytelling";
   languageCode: string;
-  emotion: number;
+  emotion?: number;
+  emotionTags?: Array<DialogueEmotionTag | "natural">;
   pauseSeconds: number;
   autoDirect: boolean;
   modelId?: string;

@@ -88,6 +88,7 @@ import {
   type AudioHistoryEntry,
   type AudioModel,
   type AudioVoice,
+  type DialogueEmotionTag,
   type SaveAudioHistoryInput,
   type SoundEffectsQuote,
   type SoundEffectVariant,
@@ -99,8 +100,13 @@ import {
 type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Audio Cleanup";
 const MIN_PODCAST_SPEAKERS = 2;
 
-// Keep the other workflows implemented, but expose only text-to-speech for now.
-const visibleTabs: readonly AudioTab[] = ["Text to Speech"];
+const visibleTabs: readonly AudioTab[] = [
+  "Text to Speech",
+  "Podcast & Dialogue",
+  "Voice Clone",
+  "Sound Effects",
+  "Audio Cleanup",
+];
 // The backend may list Eleven v3 under either its WaveSpeed-style key or the raw ElevenLabs id.
 const TEXT_TO_SPEECH_MODEL_KEYS = ["elevenlabs/eleven-v3", "eleven_v3"];
 
@@ -164,7 +170,7 @@ type SaveHistoryCallback = (input: SaveAudioHistoryInput) => Promise<AudioHistor
 type AudioScene = { id: string; title: string; durationSeconds: number; text: string; voice: string };
 type PodcastSpeaker = { id: string; role: string; name: string; voice: string; image: string };
 type PodcastSpeakerDraft = Pick<PodcastSpeaker, "role" | "name" | "voice">;
-type PodcastLine = { id: string; speakerId: string; text: string };
+type PodcastLine = { id: string; speakerId: string; text: string; emotionTag?: DialogueEmotionTag };
 
 const DEFAULT_AUDIO_PROMPT =
   "ขอแนะนำ EOS Creative Studio — แพลตฟอร์มครบวงจรสำหรับสร้างสรรค์ สื่อสาร และสร้างความประทับใจ ตั้งแต่ภาพที่โดดเด่นไปจนถึงเสียงที่ทรงพลัง เราช่วยให้ไอเดียของคุณส่งถึงใจและเชื่อมต่อได้ลึกกว่าเดิม";
@@ -495,6 +501,36 @@ function AltWaveform({ label = "LIVE PREVIEW" }: { label?: string }) {
   );
 }
 
+function AutoGrowPodcastLineInput({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  ariaLabel: string;
+}) {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = `${input.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={inputRef}
+      className={styles.podcastLineInput}
+      rows={1}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      aria-label={ariaLabel}
+    />
+  );
+}
+
 function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
   const { locale, t } = useLocale();
   const [speakers, setSpeakers] = useState(defaultPodcastSpeakers);
@@ -547,12 +583,11 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   // and count Unicode characters rather than UTF-16 code units.
   const dialogueCharacterCount = lines.reduce((total, line) => total + Array.from(line.text.trim()).length, 0);
   const dialogueCharacterLimit = 2000;
-  const episodeScript = lines
-    .map(
-      (line) => `${speakers.find((speaker) => speaker.id === line.speakerId)?.role ?? "Speaker"}: ${line.text.trim()}`,
-    )
-    .filter((line) => line.split(": ")[1]?.trim())
+  const spokenLines = lines.filter((line) => line.text.trim());
+  const episodeScript = spokenLines
+    .map((line) => `${speakers.find((speaker) => speaker.id === line.speakerId)?.role ?? "Speaker"}: ${line.text.trim()}`)
     .join("\n");
+  const episodeEmotionTags = spokenLines.map((line) => line.emotionTag ?? "natural");
   useEffect(
     () => () => {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -599,7 +634,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           speakers: speakers.map(({ role, voice }) => ({ name: role, voice })),
           conversationStyle: speakingStyle,
           languageCode: language.startsWith("Thai") ? "th" : "en",
-          emotion: 0.64,
+          emotionTags: episodeEmotionTags,
           pauseSeconds: 0.4,
           autoDirect: true,
           outputFormat,
@@ -746,7 +781,8 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
         speakers: speakers.map(({ role, voice }) => ({ name: role, voice })),
         conversationStyle: speakingStyle,
         languageCode: language.startsWith("Thai") ? "th" : "en",
-        emotion: 0.64,
+        ...(creditEstimate?.provider === "wavespeed" ? { emotion: 0.64 } : {}),
+        emotionTags: episodeEmotionTags,
         pauseSeconds: 0.4,
         autoDirect: true,
         outputFormat,
@@ -1097,7 +1133,11 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
                 .reduce((total, item) => total + estimatePodcastLineSeconds(item.text), 0);
               return (
                 <div
-                  className={`${styles.podcastLineRow} ${index === 0 ? styles.podcastLineRowActive : ""}`}
+                  className={[
+                    styles.podcastLineRow,
+                    index === 0 ? styles.podcastLineRowActive : "",
+                    creditEstimate?.provider === "elevenlabs" ? styles.podcastLineRowWithEmotion : "",
+                  ].filter(Boolean).join(" ")}
                   key={line.id}
                 >
                   <span className={styles.podcastLineAvatar}>
@@ -1131,12 +1171,38 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
                       menuPosition="fixed"
                     />
                   </div>
-                  <input
-                    className={styles.podcastLineInput}
+                  <AutoGrowPodcastLineInput
                     value={line.text}
-                    onChange={(event) => updateLine(line.id, { text: event.target.value })}
-                    aria-label={t("create.audio.podcast.a11y.line", { index: index + 1 })}
+                    onChange={(text) => updateLine(line.id, { text })}
+                    ariaLabel={t("create.audio.podcast.a11y.line", { index: index + 1 })}
                   />
+                  {creditEstimate?.provider === "elevenlabs" ? (
+                    <div className={styles.podcastLineEmotionDropdown}>
+                      <Dropdown
+                        value={line.emotionTag ?? "natural"}
+                        options={[
+                          { value: "natural", label: t("create.audio.podcast.emotionNatural") },
+                          { value: "happy", label: t("create.audio.podcast.emotionCheerful") },
+                          { value: "excited", label: t("create.audio.podcast.emotionExcited") },
+                          { value: "calm", label: t("create.audio.podcast.emotionCalm") },
+                          { value: "sad", label: t("create.audio.podcast.emotionSad") },
+                          { value: "serious", label: t("create.audio.podcast.emotionSerious") },
+                          { value: "whispering", label: t("create.audio.podcast.emotionWhispering") },
+                          { value: "angry", label: t("create.audio.podcast.emotionAngry") },
+                        ]}
+                        onChange={(value) =>
+                          updateLine(line.id, {
+                            emotionTag: value === "natural" ? undefined : (value as DialogueEmotionTag),
+                          })
+                        }
+                        ariaLabel={`${t("create.audio.podcast.emotion")} — ${t("create.audio.podcast.a11y.line", { index: index + 1 })}`}
+                        className={styles.podcastLineEmotionControl}
+                        triggerClassName={styles.podcastLineEmotionTrigger}
+                        menuClassName={styles.podcastDropdownMenu}
+                        optionClassName={styles.podcastDropdownOption}
+                      />
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     className={`${styles.podcastLineAction} ${styles.podcastLineCopyAction}`}
@@ -2585,7 +2651,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       let nextUrls: Record<number, string> = {};
       if (sourceMode === "video") {
         const result = await createVideoSoundEffect({
-          video: inputVideoFile,
+          video: inputVideoFile!,
           description: videoDescription.trim() || undefined,
           outputFormat,
         });
@@ -4345,7 +4411,7 @@ export function AudioGenerationPage() {
                     <ImageTutorialButton feature="textToSpeech" featureName="Text to Speech" />
                     <ClearValuesButton onClick={clearValues} />
                   </div>
-                  <div className={styles.voiceModePanel} hidden>
+                  <div className={styles.voiceModePanel}>
                     <div className={styles.voiceModeHeading}>
                       <h2>{t("create.audio.voiceMode.label")}</h2>
                       <InfoTooltip content={t("create.audio.info.voiceMode")} size={11} />
