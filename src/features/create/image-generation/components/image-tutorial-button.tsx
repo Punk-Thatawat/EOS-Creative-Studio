@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { CirclePlay, LoaderCircle, Video, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { YouTubeVideoEmbed } from "@/components/media/youtube-video-embed";
 import { listPublicTutorials, type AdminTutorialSlot } from "@/lib/api/tutorials";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { isYouTubeVideoUrl } from "@/lib/media/youtube";
 import { cx } from "../styles";
 
 function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature: string; featureName: string; mode?: string; onClose: () => void }) {
@@ -41,7 +43,7 @@ function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature:
     <div className={cx("gen-tutorial-dialog-content")}>
       <header className={cx("gen-tutorial-dialog-header")}><div><span>{t("create.image.tutorial.title")}</span><h2 id="image-tutorial-dialog-title">{title}</h2><p>{tutorial?.mode ? "Mode-specific guide" : "Feature guide"}</p></div><button type="button" onClick={onClose} className={cx("gen-tutorial-dialog-close")} aria-label="Close tutorial"><X size={18} /></button></header>
       <div className={cx("gen-tutorial-dialog-body")}>
-        {loading ? <div className={cx("gen-tutorial-dialog-state")}><LoaderCircle size={22} className={cx("gen-generating-icon")} /><span>Loading tutorial...</span></div> : error ? <div className={cx("gen-tutorial-dialog-state", "is-error")}><span>{error}</span></div> : tutorial?.videoUrl ? <EosVideoPlayer src={tutorial.videoUrl} autoPlay muted className={cx("gen-tutorial-video-player")} ariaLabel={`${tutorial.featureName} ${tutorial.modeName ?? "tutorial"}`} /> : <div className={cx("gen-tutorial-dialog-state")}><Video size={26} /><span>No tutorial is available for this tool yet.</span></div>}
+        {loading ? <div className={cx("gen-tutorial-dialog-state")}><LoaderCircle size={22} className={cx("gen-generating-icon")} /><span>Loading tutorial...</span></div> : error ? <div className={cx("gen-tutorial-dialog-state", "is-error")}><span>{error}</span></div> : tutorial?.videoUrl ? isYouTubeVideoUrl(tutorial.videoUrl) ? <YouTubeVideoEmbed url={tutorial.videoUrl} title={`${tutorial.featureName} ${tutorial.modeName ?? "tutorial"}`} autoPlay muted className={cx("gen-tutorial-video-player")} /> : <EosVideoPlayer src={tutorial.videoUrl} autoPlay muted className={cx("gen-tutorial-video-player")} ariaLabel={`${tutorial.featureName} ${tutorial.modeName ?? "tutorial"}`} /> : <div className={cx("gen-tutorial-dialog-state")}><Video size={26} /><span>No tutorial is available for this tool yet.</span></div>}
       </div>
       <footer className={cx("gen-tutorial-dialog-footer")}><p>{tutorial?.description ?? "Learn the key steps before you generate."}</p><button type="button" onClick={onClose}>{t("create.image.tutorial.close")}</button></footer>
     </div>

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, CheckCircle2, LoaderCircle, PlayCircle, RefreshCw, Trash2, Upload, Video, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { YouTubeVideoEmbed } from "@/components/media/youtube-video-embed";
 import { deleteAdminTutorial, deleteAdminTutorialUpload, listAdminTutorials, saveAdminTutorial, uploadAdminTutorial, type AdminTutorialSlot, type UploadedAdminTutorial } from "@/lib/api/tutorials";
+import { isYouTubeVideoUrl } from "@/lib/media/youtube";
 
 const tutorialAccept = "video/mp4,video/webm,video/quicktime,video/x-m4v,video/ogg,.mp4,.webm,.mov,.m4v,.ogv";
 
@@ -23,18 +25,18 @@ function slotLabel(slot: AdminTutorialSlot): string {
 }
 
 function TutorialSlotRow({ slot, busy, onOpen }: { slot: AdminTutorialSlot; busy: boolean; onOpen: (slot: AdminTutorialSlot) => void }) {
-  const hasVideo = Boolean(slot.videoStorageKey);
+  const hasVideo = Boolean(slot.videoStorageKey || slot.videoUrl);
 
   return <div className="flex flex-col gap-3 px-1 py-3 sm:flex-row sm:items-center sm:justify-between">
     <div className="flex min-w-0 items-center gap-3">
       <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${hasVideo ? "bg-[#fff0e9] text-primary" : "bg-[#f7f3f0] text-muted-foreground"}`}><Video size={16} /></span>
       <div className="min-w-0">
         <p className="truncate text-xs font-bold">{slotLabel(slot)}</p>
-        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{slot.mode ? `${slot.feature} · ${slot.mode}` : "General feature tutorial"}{hasVideo ? ` · ${formatBytes(slot.sizeBytes)}` : " · No video uploaded"}</p>
+        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{slot.mode ? `${slot.feature} · ${slot.mode}` : "General feature tutorial"}{hasVideo ? slot.videoStorageKey ? ` · ${formatBytes(slot.sizeBytes)}` : " · YouTube link" : " · No video configured"}</p>
       </div>
     </div>
     <div className="flex shrink-0 items-center gap-2">
-      {hasVideo ? <Badge tone={slot.enabled ? "success" : "neutral"}>{slot.enabled ? "Enabled" : "Disabled"}</Badge> : <Badge tone="warning">Not uploaded</Badge>}
+      {hasVideo ? <Badge tone={slot.enabled ? "success" : "neutral"}>{slot.enabled ? "Enabled" : "Disabled"}</Badge> : <Badge tone="warning">Not configured</Badge>}
       <Button variant="outline" size="sm" onClick={() => onOpen(slot)} disabled={busy}><PlayCircle size={14} /> {hasVideo ? "Manage / view" : "Upload tutorial"}</Button>
     </div>
   </div>;
@@ -47,9 +49,11 @@ function TutorialDialog({ slot, busy, onClose, onSaved, onRemoved, onBusyChange 
   const [message, setMessage] = useState("");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [youtubeUrlDraft, setYoutubeUrlDraft] = useState(slot.videoStorageKey ? "" : slot.videoUrl ?? "");
 
-  const previewUrl = pendingUpload?.videoUrl ?? slot.videoUrl;
-  const hasChanges = Boolean(pendingUpload) || (Boolean(slot.id) && enabled !== slot.enabled);
+  const previewUrl = youtubeUrlDraft.trim() || pendingUpload?.videoUrl || slot.videoUrl;
+  const savedYoutubeUrl = slot.videoStorageKey ? "" : slot.videoUrl ?? "";
+  const hasChanges = Boolean(pendingUpload) || (Boolean(slot.id) && enabled !== slot.enabled) || youtubeUrlDraft.trim() !== savedYoutubeUrl;
 
   const cleanupPendingUpload = () => {
     if (pendingUpload) void deleteAdminTutorialUpload(pendingUpload.storageKey).catch(() => undefined);
@@ -70,6 +74,7 @@ function TutorialDialog({ slot, busy, onClose, onSaved, onRemoved, onBusyChange 
       const uploaded = await uploadAdminTutorial(file);
       if (pendingUpload) await deleteAdminTutorialUpload(pendingUpload.storageKey).catch(() => undefined);
       setPendingUpload(uploaded);
+      setYoutubeUrlDraft("");
       setMessage("Video uploaded temporarily. Press Save to apply it.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to upload tutorial video");
@@ -80,9 +85,14 @@ function TutorialDialog({ slot, busy, onClose, onSaved, onRemoved, onBusyChange 
   };
 
   const save = async () => {
-    const storageKey = pendingUpload?.storageKey ?? slot.videoStorageKey;
-    if (!storageKey) {
-      setError("Please upload a tutorial video first.");
+    const videoUrl = youtubeUrlDraft.trim();
+    const storageKey = videoUrl ? undefined : pendingUpload?.storageKey ?? slot.videoStorageKey ?? undefined;
+    if (!videoUrl && !storageKey) {
+      setError("Upload a video file or enter a YouTube link first.");
+      return;
+    }
+    if (videoUrl && !isYouTubeVideoUrl(videoUrl)) {
+      setError("Enter a valid YouTube video link.");
       return;
     }
     setSaving(true);
@@ -92,12 +102,13 @@ function TutorialDialog({ slot, busy, onClose, onSaved, onRemoved, onBusyChange 
     try {
       const saved = await saveAdminTutorial(slot.feature, {
         ...(slot.mode ? { mode: slot.mode } : {}),
-        storageKey,
-        sizeBytes: pendingUpload?.sizeBytes ?? slot.sizeBytes ?? undefined,
+        ...(videoUrl ? { videoUrl } : { storageKey: storageKey! }),
+        ...(storageKey ? { sizeBytes: pendingUpload?.sizeBytes ?? slot.sizeBytes ?? undefined } : {}),
         ...(slot.title ? { title: slot.title } : {}),
         ...(slot.description ? { description: slot.description } : {}),
         enabled,
       });
+      if (videoUrl && pendingUpload) await deleteAdminTutorialUpload(pendingUpload.storageKey).catch(() => undefined);
       setPendingUpload(null);
       onSaved(saved);
       setMessage("Tutorial saved.");
@@ -137,11 +148,12 @@ function TutorialDialog({ slot, busy, onClose, onSaved, onRemoved, onBusyChange 
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
         <div className="flex aspect-video items-center justify-center overflow-hidden rounded-2xl border border-border bg-[#201d1b]">
-          {previewUrl ? <video key={previewUrl} src={previewUrl} controls playsInline preload="metadata" className="h-full w-full object-contain" aria-label={`${slot.featureName} ${slotLabel(slot)} tutorial`} /> : <div className="flex flex-col items-center gap-2 text-white/60"><Video size={30} /><p className="text-xs">No tutorial video yet</p></div>}
+          {previewUrl ? isYouTubeVideoUrl(previewUrl) ? <YouTubeVideoEmbed key={previewUrl} url={previewUrl} title={`${slot.featureName} ${slotLabel(slot)} tutorial`} className="h-full w-full" /> : <video key={previewUrl} src={previewUrl} controls playsInline preload="metadata" className="h-full w-full object-contain" aria-label={`${slot.featureName} ${slotLabel(slot)} tutorial`} /> : <div className="flex flex-col items-center gap-2 text-white/60"><Video size={30} /><p className="text-xs">No tutorial video yet</p></div>}
         </div>
 
         <div className="rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-sm font-bold">Tutorial video</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">เลือกไฟล์ใหม่เพื่อเปลี่ยนวิดีโอ แล้วกด Save เพื่อเผยแพร่</p></div><label className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-3 text-[11px] font-bold text-white transition hover:bg-primary/85 has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50"><Upload size={14} /> {uploading ? "Uploading..." : slot.videoStorageKey ? "Replace video" : "Upload video"}<input type="file" className="hidden" accept={tutorialAccept} disabled={busy || uploading} onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = ""; if (file) void upload(file); }} /></label></div>
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-sm font-bold">Tutorial video</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">อัปโหลดไฟล์วิดีโอหรือวางลิงก์ YouTube แล้วกด Save เพื่อเผยแพร่</p></div><label className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg bg-primary px-3 text-[11px] font-bold text-white transition hover:bg-primary/85 has-[:disabled]:pointer-events-none has-[:disabled]:opacity-50"><Upload size={14} /> {uploading ? "Uploading..." : slot.videoStorageKey ? "Replace video" : "Upload video"}<input type="file" className="hidden" accept={tutorialAccept} disabled={busy || uploading} onChange={(event) => { const file = event.target.files?.[0]; event.currentTarget.value = ""; if (file) void upload(file); }} /></label></div>
+          <label className="mt-3 block text-[11px] font-semibold text-muted-foreground">Or use a YouTube link<input type="url" value={youtubeUrlDraft} onChange={(event) => setYoutubeUrlDraft(event.target.value)} placeholder="https://youtu.be/... or https://www.youtube.com/watch?v=..." disabled={busy || uploading} className="mt-1.5 h-9 w-full rounded-lg border border-border bg-white px-2.5 text-xs text-foreground outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" /></label>
           {pendingUpload ? <p className="mt-3 text-[10px] font-semibold text-[#347454]">New video ready · {pendingUpload.mimeType.replace("video/", "").toUpperCase()} · {formatBytes(pendingUpload.sizeBytes)}</p> : slot.videoStorageKey ? <p className="mt-3 text-[10px] text-muted-foreground">Current file · {slot.mimeType?.replace("video/", "").toUpperCase() ?? "VIDEO"} · {formatBytes(slot.sizeBytes)}</p> : null}
         </div>
 
@@ -183,13 +195,13 @@ export function FeatureTutorialPanel({ feature, featureName, includeFeatureOverv
   const hasModeSlots = slots.some((slot) => Boolean(slot.mode));
   const visibleSlots = includeFeatureOverview && !hasModeSlots ? slots : slots.filter((slot) => Boolean(slot.mode));
   const activeSlot = useMemo(() => visibleSlots.find((slot) => slotKey(slot) === activeKey) ?? null, [activeKey, visibleSlots]);
-  const configuredCount = visibleSlots.filter((slot) => Boolean(slot.videoStorageKey)).length;
+  const configuredCount = visibleSlots.filter((slot) => Boolean(slot.videoStorageKey || slot.videoUrl)).length;
   const updateSlot = (next: AdminTutorialSlot) => setSlots((current) => current.map((slot) => slotKey(slot) === slotKey(next) ? next : slot));
 
   return <section aria-labelledby="feature-tutorial-heading" className="mb-7 rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Feature tutorial</p><h2 id="feature-tutorial-heading" className="mt-1 text-xl font-bold tracking-tight">{featureName} tutorial videos</h2><p className="mt-1 text-[11px] text-muted-foreground">จัดการ tutorial ของ feature และ mode ใน popup</p></div>
-      <div className="flex items-center gap-2"><span className="rounded-full bg-[#fff0e9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">{configuredCount}/{visibleSlots.length || "—"} uploaded</span><Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading || Boolean(busyKey)} aria-label="Refresh tutorial videos"><RefreshCw size={14} className={loading ? "animate-spin" : undefined} /></Button></div>
+      <div className="flex items-center gap-2"><span className="rounded-full bg-[#fff0e9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">{configuredCount}/{visibleSlots.length || "—"} configured</span><Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading || Boolean(busyKey)} aria-label="Refresh tutorial videos"><RefreshCw size={14} className={loading ? "animate-spin" : undefined} /></Button></div>
     </div>
 
     {error ? <div className="mt-4 flex items-start gap-2 rounded-xl border border-[#efc2c2] bg-[#fff6f6] p-3 text-xs text-[#9f3b3b]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={16} /><p>{error}</p></div> : null}
