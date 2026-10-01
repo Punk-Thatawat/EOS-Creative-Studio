@@ -416,6 +416,17 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
     : false;
   const hasSupportedTextDriver = driverTextSupported && Boolean(script.trim());
   const hasSupportedAudioDriver = audioSupported && Boolean(audioFile || audioUrl);
+  const lipsyncTutorialMode = isLipsync
+    ? audioFile || audioUrl
+      ? "audio"
+      : script.trim()
+        ? "script"
+        : requiredAudioInput
+          ? "audio"
+          : requiredScriptInput
+            ? "script"
+            : audioSupported ? "audio" : "script"
+    : undefined;
   const sourceAccept = sourceImageSupported && sourceVideoSupported
     ? "image/png,image/jpeg,image/webp,video/mp4,video/webm"
     : sourceImageSupported
@@ -815,7 +826,7 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
       <div className={styles.leftColumn}>
         <div className={styles.videoTopActionsPanel}>
           <div className={styles.videoPromptTopActions}>
-            <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")} />
+            <ImageTutorialButton feature={workspaceFeature} featureName={isLipsync ? t("create.video.lipsync.title") : t("create.video.people.title")} mode={lipsyncTutorialMode} />
             <ClearValuesButton onClick={clearValues} disabled={isGenerating || mediaUploadInProgress} />
           </div>
         </div>
