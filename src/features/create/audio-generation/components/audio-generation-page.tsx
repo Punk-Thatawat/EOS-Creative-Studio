@@ -42,7 +42,6 @@ import {
   Zap,
 } from "lucide-react";
 import styles from "./audio-generation-page.module.css";
-import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
 import { ClearValuesButton } from "@/features/create/components/clear-values-button";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
@@ -403,58 +402,89 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
     }
   };
 
+  const seekBy = (seconds: number) => {
+    if (!audioRef.current || duration <= 0) return;
+    const nextTime = Math.max(0, Math.min(duration, audioRef.current.currentTime + seconds));
+    audioRef.current.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  };
+
   return (
-    <div className={styles.cleanupPlayer} aria-label={label}>
-      <button
-        type="button"
-        className={styles.podcastPlayButton}
-        onClick={() => void togglePlayback()}
-        disabled={!src}
-        aria-label={isPlaying ? "หยุดเสียงชั่วคราว" : "เล่นเสียง"}
-      >
-        {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
-      </button>
-      <div className={styles.podcastWaveformWrap}>
+    <div className={styles.cleanupPlayer} role="group" aria-label={label}>
+      <div className={styles.cleanupPlayerWaveform}>
         <PreviewWaveform audioUrl={src} progress={progress} isPlaying={isPlaying} />
-        <div className={styles.podcastAudioMeta}>
-          <span>
-            {formatSceneSeconds(currentTime)} / {formatSceneSeconds(duration)}
-          </span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={progress}
-            onChange={(event) => {
-              const nextProgress = Number(event.target.value);
-              if (audioRef.current && duration > 0) audioRef.current.currentTime = (nextProgress / 100) * duration;
-            }}
-            aria-label="ตำแหน่งเสียง"
-            disabled={!src || duration <= 0}
-          />
-        </div>
       </div>
-      <Volume2 size={16} className={styles.podcastVolumeIcon} aria-hidden="true" />
-      <input
-        className={styles.podcastVolumeSlider}
-        type="range"
-        min="0"
-        max="100"
-        value={volume}
-        onChange={(event) => {
-          const nextVolume = Number(event.target.value);
-          setVolume(nextVolume);
-          if (audioRef.current) audioRef.current.volume = nextVolume / 100;
-        }}
-        aria-label="ระดับเสียง"
-      />
+      <div className={styles.cleanupPlayerControls}>
+        <button
+          type="button"
+          className={`${styles.podcastPlayButton} ${styles.cleanupPlayerPlay}`}
+          onClick={() => void togglePlayback()}
+          disabled={!src}
+          aria-label={isPlaying ? "หยุดเสียงชั่วคราว" : "เล่นเสียง"}
+        >
+          {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+        </button>
+        <button
+          type="button"
+          className={styles.cleanupSkipButton}
+          onClick={() => seekBy(-10)}
+          disabled={!src || duration <= 0}
+          aria-label="ย้อนกลับ 10 วินาที"
+          title="ย้อนกลับ 10 วินาที"
+        >
+          <RotateCcw size={15} aria-hidden="true" /><span>10</span>
+        </button>
+        <button
+          type="button"
+          className={styles.cleanupSkipButton}
+          onClick={() => seekBy(10)}
+          disabled={!src || duration <= 0}
+          aria-label="ข้ามไปข้างหน้า 10 วินาที"
+          title="ข้ามไปข้างหน้า 10 วินาที"
+        >
+          <RotateCw size={15} aria-hidden="true" /><span>10</span>
+        </button>
+        <span className={styles.cleanupPlayerTime}>
+          {formatSceneSeconds(currentTime)} / {formatSceneSeconds(duration)}
+        </span>
+        <input
+          className={styles.cleanupSeekSlider}
+          type="range"
+          min="0"
+          max={duration || 1}
+          step="0.01"
+          value={Math.min(currentTime, duration || 0)}
+          onChange={(event) => {
+            const nextTime = Number(event.target.value);
+            if (audioRef.current && duration > 0) audioRef.current.currentTime = nextTime;
+            setCurrentTime(nextTime);
+          }}
+          aria-label={`${label}: ตำแหน่งเสียง`}
+          disabled={!src || duration <= 0}
+        />
+        <Volume2 size={15} className={styles.cleanupVolumeIcon} aria-hidden="true" />
+        <input
+          className={styles.cleanupVolumeSlider}
+          type="range"
+          min="0"
+          max="100"
+          value={volume}
+          onChange={(event) => {
+            const nextVolume = Number(event.target.value);
+            setVolume(nextVolume);
+            if (audioRef.current) audioRef.current.volume = nextVolume / 100;
+          }}
+          aria-label={`${label}: ระดับเสียง`}
+          disabled={!src}
+        />
+      </div>
       <audio
         ref={audioRef}
         className={styles.podcastNativeAudio}
         src={src ?? undefined}
         preload="metadata"
         onLoadedMetadata={(event) => {
-          setDuration(event.currentTarget.duration);
+          setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0);
           event.currentTarget.volume = volume / 100;
         }}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
@@ -3284,23 +3314,15 @@ function AudioCleanupLayout() {
           <div><strong>{file ? formatAudioFileSize(file.size) : "—"}</strong><small>ขนาดไฟล์</small></div>
           <div><strong>{file ? file.type.split("/")[1]?.toUpperCase() ?? "AUDIO" : "—"}</strong><small>รูปแบบ</small></div>
         </div>
-        <div className={styles.cleanupWorkflowCard}>
-          <div className={styles.cleanupWorkflowHeader}>
-            <div><span>WORKFLOW</span><strong>ปรับปรุงเสียงใน 3 ขั้นตอน</strong></div>
-            <WandSparkles size={16} />
+        <div className={styles.cleanupSourceGuide}>
+          <div className={styles.cleanupSourceGuideHeader}>
+            <div><span>FILE GUIDE</span><strong>ไฟล์เสียงที่รองรับ</strong></div>
+            <span>สูงสุด 50 MB</span>
           </div>
-          <ol className={styles.cleanupWorkflowList}>
-            <li className={file ? styles.cleanupWorkflowDone : styles.cleanupWorkflowActive}>
-              <span>1</span><div><strong>อัปโหลดไฟล์</strong><small>{file ? "ไฟล์พร้อมใช้งาน" : "เลือกไฟล์เสียงของคุณ"}</small></div>
-              {file ? <Check size={14} /> : null}
-            </li>
-            <li className={file ? styles.cleanupWorkflowActive : ""}>
-              <span>2</span><div><strong>เลือกเครื่องมือ</strong><small>ลดซ่า เพิ่มความชัด และลดเสียงก้อง</small></div>
-            </li>
-            <li>
-              <span>3</span><div><strong>ดาวน์โหลดผลลัพธ์</strong><small>ฟังเทียบก่อนบันทึกไฟล์</small></div>
-            </li>
-          </ol>
+          <div className={styles.cleanupFormatChips} aria-label="รูปแบบไฟล์ที่รองรับ">
+            <span>MP3</span><span>WAV</span><span>OGG</span>
+          </div>
+          <p>อัปโหลดไฟล์เสียงพูดหรือพอดแคสต์ แล้วเลือกเครื่องมือที่ต้องการปรับได้เลย</p>
         </div>
       </section>
 
@@ -3330,25 +3352,30 @@ function AudioCleanupLayout() {
           <div className={`${styles.cleanupPreviewCard} ${styles.cleanupPreviewCardAfter}`}>
             <div className={styles.cleanupPreviewLabel}>
               <span>{t("create.audio.cleanup.cleaned")}</span>
-              <small>{cleanedUrl ? outputFormat.toUpperCase() : "—"}</small>
+              <span className={styles.cleanupPreviewLabelActions}>
+                <small>{cleanedUrl ? outputFormat.toUpperCase() : "—"}</small>
+                {cleanedUrl ? (
+                  <a
+                    className={styles.cleanupInlineDownload}
+                    href={cleanedUrl}
+                    download={`cleaned-audio.${outputFormat}`}
+                    aria-label={t("create.audio.cleanup.download")}
+                    title={t("create.audio.cleanup.download")}
+                  >
+                    <Download size={13} aria-hidden="true" />
+                    <span>{t("create.audio.cleanup.download")}</span>
+                  </a>
+                ) : null}
+              </span>
             </div>
             <CleanupAudioPlayer src={cleanedUrl} label={t("create.audio.cleanup.cleaned")} />
           </div>
         </div>
-        {cleanedUrl ? (
-          <div className={styles.cleanupResultActions}>
-            <span>
-              <Check size={14} /> {t("create.audio.cleanup.resultReady")}
-            </span>
-            <a className={styles.cleanupDownloadButton} href={cleanedUrl} download={`cleaned-audio.${outputFormat}`}>
-              <Download size={14} /> {t("create.audio.cleanup.download")}
-            </a>
-          </div>
-        ) : (
+        {!cleanedUrl ? (
           <div className={styles.cleanupPreviewHint}>
             <WandSparkles size={14} /> {t("create.audio.cleanup.previewHint")}
           </div>
-        )}
+        ) : null}
         <div className={styles.cleanupProcessBoard}>
           <div className={styles.cleanupProcessHeader}>
             <div><span>PROCESS OVERVIEW</span><h3>เสียงของคุณจะถูกปรับอย่างไร</h3></div>
@@ -3396,14 +3423,22 @@ function AudioCleanupLayout() {
           <span className={styles.cleanupToneCopy}><strong>{t("create.audio.cleanup.preserveTone")}</strong><small>{t("create.audio.cleanup.preserveToneHint")}</small></span>
           <span className={styles.cleanupToolSwitch} aria-hidden="true"><span /></span>
         </label>
-        <label className={styles.cleanupFormatField}>
+        <div className={styles.cleanupFormatField}>
           <span>{t("create.audio.cleanup.outputFormat")}</span>
-          <select value={outputFormat} onChange={(event) => setOutputFormat(event.target.value as typeof outputFormat)}>
-            <option value="mp3">MP3</option>
-            <option value="wav">WAV</option>
-            <option value="ogg">OGG</option>
-          </select>
-        </label>
+          <Dropdown
+            value={outputFormat}
+            options={[
+              { value: "mp3", label: "MP3" },
+              { value: "wav", label: "WAV" },
+              { value: "ogg", label: "OGG" },
+            ]}
+            onChange={(value) => setOutputFormat(value as typeof outputFormat)}
+            ariaLabel={t("create.audio.cleanup.outputFormat")}
+            className={styles.cleanupFormatDropdown}
+            triggerClassName={styles.cleanupFormatTrigger}
+            menuPosition="fixed"
+          />
+        </div>
         <div className={styles.cleanupSettingsSummary}>
           <div className={styles.cleanupSettingsSummaryHeader}><span>สรุปการตั้งค่า</span><strong>{optionRows.filter((option) => options[option.key]).length + (options.preserveTone ? 1 : 0)} รายการ</strong></div>
           <div className={styles.cleanupSelectedTags}>
@@ -4385,22 +4420,6 @@ export function AudioGenerationPage() {
               );
             })}
           </nav>
-        }
-        mobileTabs={
-          <MobileModeDropdown
-            menuId="audio-mode-menu"
-            value={activeTab}
-            options={visibleTabs.map((label) => ({
-              value: label,
-              label: t(audioTabKeys[label]),
-              icon: audioModeIcons[label],
-            }))}
-            ariaLabel={t("create.audio.tools")}
-            currentModeLabel={t("create.mode.current")}
-            switchModeLabel={t("create.mode.switch")}
-            otherModesLabel={t("create.mode.other")}
-            onChange={changeActiveTab}
-          />
         }
         content={
           <>
