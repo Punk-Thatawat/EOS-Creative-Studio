@@ -1,6 +1,7 @@
 "use client";
 
 import { getApiAccessToken } from "@/lib/auth/access-token";
+import type { HistoryResponse, HistoryStatus, HistoryType } from "@/lib/api/history";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
@@ -56,6 +57,16 @@ export async function listAdminMembers(input: { q?: string; role?: AdminMemberRo
   params.set("page", String(input.page ?? 1));
   params.set("limit", String(input.limit ?? 25));
   return adminRequest<AdminMembersResponse>(`/admin/members?${params.toString()}`);
+}
+
+export async function fetchAdminMemberHistory(id: string, input: { search?: string; type?: HistoryType; status?: HistoryStatus; offset?: number; limit?: number; signal?: AbortSignal } = {}) {
+  const params = new URLSearchParams();
+  if (input.search?.trim()) params.set("search", input.search.trim());
+  if (input.type && input.type !== "all") params.set("type", input.type);
+  if (input.status && input.status !== "all") params.set("status", input.status);
+  params.set("offset", String(input.offset ?? 0));
+  params.set("limit", String(input.limit ?? 24));
+  return adminRequest<HistoryResponse>(`/admin/members/${encodeURIComponent(id)}/history?${params.toString()}`, { signal: input.signal });
 }
 
 export async function inviteAdminMember(input: InviteAdminMemberInput) {
