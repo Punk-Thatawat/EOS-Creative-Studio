@@ -2,6 +2,8 @@
 
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { YouTubeVideoEmbed } from "@/components/media/youtube-video-embed";
+import { isYouTubeVideoUrl } from "@/lib/media/youtube";
 
 type ModelPreviewMediaProps = {
   url: string;
@@ -27,6 +29,19 @@ export function ModelPreviewMedia({ url, type = "image", alt, className, frameCl
   const frame = (media: ReactNode) => frameClassName
     ? <div className={frameClassName} style={{ aspectRatio: mediaAspectRatio, ...frameStyle }}>{media}</div>
     : media;
+
+  if (isYouTubeVideoUrl(url)) {
+    return <YouTubeVideoEmbed
+      key={url}
+      url={url}
+      title={alt}
+      className={className}
+      frameClassName={frameClassName}
+      frameStyle={frameStyle}
+      autoPlay={autoPlay}
+      muted={autoPlay}
+    />;
+  }
 
   if (type === "video") {
     return <EosVideoPlayer
