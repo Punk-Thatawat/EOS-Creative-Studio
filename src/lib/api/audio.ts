@@ -45,6 +45,21 @@ export type AudioCreditQuote = {
   pricingSource: "provider" | "fallback";
 };
 
+export type AudioCleanupCreditQuote = {
+  provider: "elevenlabs" | "internal";
+  model: string;
+  sceneCount: number;
+  textCharacters: number;
+  creditCost: number;
+  speechCredits: number;
+  backgroundMusicCredits: number;
+  backgroundMusicSource: "disabled";
+  pricingSource: "provider" | "fallback";
+  durationSeconds: number;
+  billableMinutes: number;
+  providerCredits: number;
+};
+
 export type AudioCreditBalance = { balance: number };
 
 export type TextToSpeechResponse = {
@@ -94,6 +109,7 @@ export type DialogueInput = {
 
 export type AudioCleanupInput = {
   audio: File;
+  durationSeconds: number;
   noiseReduction: boolean;
   voiceClarity: boolean;
   removeReverb: boolean;
@@ -448,6 +464,7 @@ export async function createDialogue(input: DialogueInput, signal?: AbortSignal)
 export async function cleanupAudio(input: AudioCleanupInput, signal?: AbortSignal): Promise<TextToSpeechResponse> {
   const form = new FormData();
   form.append("audio", input.audio, input.audio.name);
+  form.append("durationSeconds", String(input.durationSeconds));
   form.append("noiseReduction", String(input.noiseReduction));
   form.append("voiceClarity", String(input.voiceClarity));
   form.append("removeReverb", String(input.removeReverb));
@@ -460,6 +477,19 @@ export async function cleanupAudio(input: AudioCleanupInput, signal?: AbortSigna
     body: form,
     signal,
   });
+}
+
+export async function quoteAudioCleanup(input: Omit<AudioCleanupInput, "audio">, signal?: AbortSignal): Promise<AudioCleanupCreditQuote> {
+  const response = await userAudioRequest("/audio/cleanup/quote", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const payload = await response.json().catch(() => null) as { data?: AudioCleanupCreditQuote } | AudioCleanupCreditQuote | null;
+  if (payload && typeof payload === "object" && "data" in payload && payload.data) return payload.data;
+  if (payload && typeof payload === "object" && "creditCost" in payload) return payload as AudioCleanupCreditQuote;
+  throw new Error("Audio cleanup pricing unavailable");
 }
 
 export async function quoteDialogue(input: Omit<DialogueInput, "idempotencyKey">, signal?: AbortSignal): Promise<AudioCreditQuote> {

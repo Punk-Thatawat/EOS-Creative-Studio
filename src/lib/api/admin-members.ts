@@ -7,6 +7,7 @@ const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`
 
 export type AdminMemberRole = "user" | "admin";
 export type AdminMemberStatus = "active" | "suspended";
+export type InviteAdminMemberInput = { email: string; role: AdminMemberRole; display_name?: string; initial_credits?: number };
 export type AdminMember = {
   id: string;
   email: string;
@@ -51,6 +52,10 @@ export async function listAdminMembers(input: { q?: string; role?: AdminMemberRo
   params.set("page", String(input.page ?? 1));
   params.set("limit", String(input.limit ?? 25));
   return adminRequest<AdminMembersResponse>(`/admin/members?${params.toString()}`);
+}
+
+export async function inviteAdminMember(input: InviteAdminMemberInput) {
+  return adminRequest<{ sent: boolean; userId: string; email: string; initialCreditsAdded: number | null }>("/admin/members/invite", { method: "POST", body: JSON.stringify(input) });
 }
 
 export async function updateAdminMember(id: string, input: { role?: AdminMemberRole; status?: AdminMemberStatus }) {
