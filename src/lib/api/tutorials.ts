@@ -105,7 +105,7 @@ export async function uploadAdminTutorial(file: File): Promise<UploadedAdminTuto
   return payload.data;
 }
 
-export async function saveAdminTutorial(feature: string, input: { mode?: string; storageKey: string; sizeBytes?: number; title?: string; description?: string; enabled?: boolean }): Promise<AdminTutorialSlot> {
+export async function saveAdminTutorial(feature: string, input: { mode?: string; storageKey?: string; videoUrl?: string; sizeBytes?: number; title?: string; description?: string; enabled?: boolean }): Promise<AdminTutorialSlot> {
   const payload = await adminJsonRequest(`/admin/tutorials/${encodeURIComponent(feature)}`, {
     method: "PUT",
     body: JSON.stringify(input),
