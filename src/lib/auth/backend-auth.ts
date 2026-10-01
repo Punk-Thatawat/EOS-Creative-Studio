@@ -4,6 +4,7 @@ import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
 const sessionStorageKey = "eos.backend.session";
+const AUTH_REQUEST_TIMEOUT_MS = 15000;
 
 export type BackendAuthSession = {
   accessToken: string;
@@ -40,27 +41,45 @@ function getErrorMessage(payload: unknown): string {
 }
 
 async function postAuth(path: string, body: Record<string, string>): Promise<BackendAuthResponse> {
-  const response = await fetch(`${backendUrl}/api/v1/auth/${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl}/api/v1/auth/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new Error("The authentication server is taking too long to respond. Please check the server connection and try again.");
+    }
+    throw new Error("Unable to connect to the authentication server. Please try again.");
+  }
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new Error(getErrorMessage(payload));
   return payload as BackendAuthResponse;
 }
 
 async function postAuthenticatedAuth(path: string, body: Record<string, string>, accessToken: string): Promise<BackendAuthResponse> {
-  const response = await fetch(`${backendUrl}/api/v1/auth/${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(body),
-    credentials: "include",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl}/api/v1/auth/${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+      credentials: "include",
+      signal: AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new Error("The authentication server is taking too long to respond. Please try again.");
+    }
+    throw new Error("Unable to connect to the authentication server. Please try again.");
+  }
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new Error(getErrorMessage(payload));
   return payload as BackendAuthResponse;

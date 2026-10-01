@@ -30,11 +30,13 @@ import {
   RotateCcw,
   RotateCw,
   Settings2,
+  SlidersHorizontal,
   Smile,
   Sparkles,
   Star,
   Trash2,
   Volume2,
+  VolumeX,
   WandSparkles,
   Waves,
   Zap,
@@ -73,6 +75,7 @@ import {
   listVoiceClones,
   previewAudioVoice,
   previewVoiceClone,
+  quoteAudioCleanup,
   quoteDialogue,
   quoteSoundEffects,
   quoteTextToSpeech,
@@ -81,6 +84,7 @@ import {
   saveAudioHistory,
   type AudioBackgroundMusic,
   type AudioCreditQuote,
+  type AudioCleanupCreditQuote,
   type AudioHistoryEntry,
   type AudioModel,
   type AudioVoice,
@@ -3037,6 +3041,9 @@ function AudioCleanupLayout() {
     preserveTone: true,
   });
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
+  const [creditEstimate, setCreditEstimate] = useState<AudioCleanupCreditQuote | null>(null);
+  const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
+  const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!file) {
@@ -3057,6 +3064,29 @@ function AudioCleanupLayout() {
     };
   }, [cleanedUrl]);
 
+  useEffect(() => {
+    if (!file || durationSeconds <= 0) {
+      setCreditEstimate(null);
+      setCreditEstimateLoading(false);
+      setCreditEstimateError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setCreditEstimateLoading(true);
+    setCreditEstimateError(null);
+    void quoteAudioCleanup({ durationSeconds, ...options, outputFormat }, controller.signal)
+      .then((quote) => setCreditEstimate(quote))
+      .catch((quoteError) => {
+        if (controller.signal.aborted) return;
+        setCreditEstimate(null);
+        setCreditEstimateError(quoteError instanceof Error ? quoteError.message : "Audio cleanup pricing unavailable");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCreditEstimateLoading(false);
+      });
+    return () => controller.abort();
+  }, [durationSeconds, file, options, outputFormat]);
+
   const setSelectedFile = (nextFile: File | undefined) => {
     if (!nextFile) return;
     if (!nextFile.type.startsWith("audio/")) {
@@ -3069,6 +3099,8 @@ function AudioCleanupLayout() {
     }
     setFile(nextFile);
     setCleanedUrl(null);
+    setCreditEstimate(null);
+    setCreditEstimateError(null);
     setDurationSeconds(0);
     setStatus("ready");
     setError(null);
@@ -3093,13 +3125,20 @@ function AudioCleanupLayout() {
       setError(t("create.audio.cleanup.selectTool"));
       return;
     }
+    if (durationSeconds <= 0) {
+      setError(t("create.audio.cleanup.selectFile"));
+      return;
+    }
+    const requestId = startAudioProgress("audio-cleanup");
     setStatus("processing");
     setError(null);
     try {
-      const result = await cleanupAudio({ audio: file, ...options, outputFormat });
+      const result = await cleanupAudio({ audio: file, durationSeconds, ...options, outputFormat });
       setCleanedUrl(URL.createObjectURL(result.blob));
       setStatus("done");
+      finishAudioProgress("audio-cleanup", requestId);
     } catch (cleanupError) {
+      failAudioProgress("audio-cleanup", requestId);
       setStatus("ready");
       setError(cleanupError instanceof Error ? cleanupError.message : t("create.audio.cleanup.processError"));
     }
@@ -3113,30 +3152,10 @@ function AudioCleanupLayout() {
 
   const formattedDuration = durationSeconds > 0 ? formatSceneSeconds(durationSeconds) : "—";
   const optionRows = [
-    {
-      key: "noiseReduction" as const,
-      label: t("create.audio.cleanup.noiseReduction"),
-      hint: t("create.audio.cleanup.noiseReductionHint"),
-      provider: "ElevenLabs",
-    },
-    {
-      key: "voiceClarity" as const,
-      label: t("create.audio.cleanup.voiceClarity"),
-      hint: t("create.audio.cleanup.voiceClarityHint"),
-      provider: "ElevenLabs",
-    },
-    {
-      key: "removeReverb" as const,
-      label: t("create.audio.cleanup.removeReverb"),
-      hint: t("create.audio.cleanup.removeReverbHint"),
-      provider: t("create.audio.cleanup.internalProcessor"),
-    },
-    {
-      key: "normalizeLoudness" as const,
-      label: t("create.audio.cleanup.normalizeLoudness"),
-      hint: t("create.audio.cleanup.normalizeLoudnessHint"),
-      provider: t("create.audio.cleanup.internalProcessor"),
-    },
+    { key: "noiseReduction" as const, label: t("create.audio.cleanup.noiseReduction"), hint: t("create.audio.cleanup.noiseReductionHint"), provider: "ElevenLabs", icon: VolumeX },
+    { key: "voiceClarity" as const, label: t("create.audio.cleanup.voiceClarity"), hint: t("create.audio.cleanup.voiceClarityHint"), provider: "ElevenLabs", icon: Mic2 },
+    { key: "removeReverb" as const, label: t("create.audio.cleanup.removeReverb"), hint: t("create.audio.cleanup.removeReverbHint"), provider: t("create.audio.cleanup.internalProcessor"), icon: Waves },
+    { key: "normalizeLoudness" as const, label: t("create.audio.cleanup.normalizeLoudness"), hint: t("create.audio.cleanup.normalizeLoudnessHint"), provider: t("create.audio.cleanup.internalProcessor"), icon: SlidersHorizontal },
   ];
 
   return (
@@ -3192,14 +3211,31 @@ function AudioCleanupLayout() {
             <RotateCcw size={14} /> {t("create.audio.cleanup.replaceFile")}
           </button>
         ) : null}
-        <div className={styles.cleanupSourceNote}>
-          <LockKeyhole size={12} /> {t("create.audio.cleanup.privateNote")}
+        <div className={styles.cleanupSourceNote}><LockKeyhole size={12} /> {t("create.audio.cleanup.privateNote")}</div>
+        {error ? <p className={styles.cleanupError} role="alert">{error}</p> : null}
+        <div className={styles.cleanupFileStats} aria-label="สรุปไฟล์เสียง">
+          <div><strong>{formattedDuration}</strong><small>ความยาว</small></div>
+          <div><strong>{file ? formatAudioFileSize(file.size) : "—"}</strong><small>ขนาดไฟล์</small></div>
+          <div><strong>{file ? file.type.split("/")[1]?.toUpperCase() ?? "AUDIO" : "—"}</strong><small>รูปแบบ</small></div>
         </div>
-        {error ? (
-          <p className={styles.cleanupError} role="alert">
-            {error}
-          </p>
-        ) : null}
+        <div className={styles.cleanupWorkflowCard}>
+          <div className={styles.cleanupWorkflowHeader}>
+            <div><span>WORKFLOW</span><strong>ปรับปรุงเสียงใน 3 ขั้นตอน</strong></div>
+            <WandSparkles size={16} />
+          </div>
+          <ol className={styles.cleanupWorkflowList}>
+            <li className={file ? styles.cleanupWorkflowDone : styles.cleanupWorkflowActive}>
+              <span>1</span><div><strong>อัปโหลดไฟล์</strong><small>{file ? "ไฟล์พร้อมใช้งาน" : "เลือกไฟล์เสียงของคุณ"}</small></div>
+              {file ? <Check size={14} /> : null}
+            </li>
+            <li className={file ? styles.cleanupWorkflowActive : ""}>
+              <span>2</span><div><strong>เลือกเครื่องมือ</strong><small>ลดซ่า เพิ่มความชัด และลดเสียงก้อง</small></div>
+            </li>
+            <li>
+              <span>3</span><div><strong>ดาวน์โหลดผลลัพธ์</strong><small>ฟังเทียบก่อนบันทึกไฟล์</small></div>
+            </li>
+          </ol>
+        </div>
       </section>
 
       <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel} ${styles.cleanupPreviewPanel}`}>
@@ -3247,6 +3283,23 @@ function AudioCleanupLayout() {
             <WandSparkles size={14} /> {t("create.audio.cleanup.previewHint")}
           </div>
         )}
+        <div className={styles.cleanupProcessBoard}>
+          <div className={styles.cleanupProcessHeader}>
+            <div><span>PROCESS OVERVIEW</span><h3>เสียงของคุณจะถูกปรับอย่างไร</h3></div>
+            <span className={file ? styles.cleanupBoardReady : ""}>{file ? "พร้อมเริ่ม" : "รอไฟล์เสียง"}</span>
+          </div>
+          <div className={styles.cleanupProcessTrack}>
+            <div><span>01</span><strong>วิเคราะห์ต้นฉบับ</strong><small>ตรวจระดับเสียงและเสียงรบกวน</small></div>
+            <ChevronRight size={15} />
+            <div><span>02</span><strong>ปรับแต่งเสียง</strong><small>ใช้เครื่องมือที่คุณเลือกไว้</small></div>
+            <ChevronRight size={15} />
+            <div><span>03</span><strong>ฟังและเปรียบเทียบ</strong><small>ตรวจผลก่อนดาวน์โหลด</small></div>
+          </div>
+          <div className={styles.cleanupProcessFooter}>
+            <Sparkles size={15} />
+            <span>{file ? `เลือกไว้ ${optionRows.filter((option) => options[option.key]).length} เครื่องมือ · เสียงต้นฉบับจะยังคงโทนธรรมชาติ` : "อัปโหลดไฟล์เพื่อเริ่มดูตัวอย่างการปรับปรุงเสียง"}</span>
+          </div>
+        </div>
       </section>
 
       <aside className={`${styles.alternateSettings} ${styles.cleanupSettingsPanel}`}>
@@ -3257,27 +3310,25 @@ function AudioCleanupLayout() {
           </div>
           <Settings2 size={20} />
         </div>
+        <p className={styles.cleanupSettingsHint}>{t("create.audio.cleanup.settingsHint")}</p>
         <div className={styles.cleanupToolList}>
           {optionRows.map((option) => (
-            <label
-              className={`${styles.cleanupToolCard} ${options[option.key] ? styles.cleanupToolCardActive : ""}`}
-              key={option.key}
-            >
-              <input type="checkbox" checked={options[option.key]} onChange={() => toggleOption(option.key)} />
+            <label className={`${styles.cleanupToolCard} ${options[option.key] ? styles.cleanupToolCardActive : ""}`} key={option.key}>
+              <input type="checkbox" checked={options[option.key]} onChange={() => toggleOption(option.key)} aria-label={option.label} />
+              <span className={styles.cleanupToolIcon}><option.icon size={18} strokeWidth={2.1} /></span>
               <span className={styles.cleanupToolCopy}>
-                <strong>{option.label}</strong>
+                <span className={styles.cleanupToolTitleRow}><strong>{option.label}</strong><em>{option.provider}</em></span>
                 <small>{option.hint}</small>
               </span>
-              <em>{option.provider}</em>
+              <span className={styles.cleanupToolSwitch} aria-hidden="true"><span /></span>
             </label>
           ))}
         </div>
         <label className={styles.cleanupToneToggle}>
-          <span>
-            <strong>{t("create.audio.cleanup.preserveTone")}</strong>
-            <small>{t("create.audio.cleanup.preserveToneHint")}</small>
-          </span>
-          <input type="checkbox" checked={options.preserveTone} onChange={() => toggleOption("preserveTone")} />
+          <input type="checkbox" checked={options.preserveTone} onChange={() => toggleOption("preserveTone")} aria-label={t("create.audio.cleanup.preserveTone")} />
+          <span className={styles.cleanupToneIcon}><Sparkles size={16} /></span>
+          <span className={styles.cleanupToneCopy}><strong>{t("create.audio.cleanup.preserveTone")}</strong><small>{t("create.audio.cleanup.preserveToneHint")}</small></span>
+          <span className={styles.cleanupToolSwitch} aria-hidden="true"><span /></span>
         </label>
         <label className={styles.cleanupFormatField}>
           <span>{t("create.audio.cleanup.outputFormat")}</span>
@@ -3287,17 +3338,32 @@ function AudioCleanupLayout() {
             <option value="ogg">OGG</option>
           </select>
         </label>
+        <div className={styles.cleanupSettingsSummary}>
+          <div className={styles.cleanupSettingsSummaryHeader}><span>สรุปการตั้งค่า</span><strong>{optionRows.filter((option) => options[option.key]).length + (options.preserveTone ? 1 : 0)} รายการ</strong></div>
+          <div className={styles.cleanupSelectedTags}>
+            {optionRows.filter((option) => options[option.key]).map((option) => <span key={option.key}>{option.label}</span>)}
+            {options.preserveTone ? <span>คงโทนเสียง</span> : null}
+          </div>
+          <p>เหมาะสำหรับเสียงพูด พอดแคสต์ และบทสนทนา</p>
+        </div>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
           <div className={styles.creditEstimate}>
             <div className={styles.creditEstimateHeader}>
-              <strong>
-                {t("create.audio.estimatedCredits")}{" "}
-                <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} />
-              </strong>
-              <b>—</b>
+              <strong>{t("create.audio.estimatedCredits")} <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} /></strong>
+              <b title={creditEstimateError ?? undefined}>
+                {creditEstimateLoading
+                  ? t("create.audio.calculating")
+                  : creditEstimate
+                    ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditEstimate.creditCost) })
+                    : "—"}
+              </b>
             </div>
             <p className={styles.creditEstimateCount}>
-              {file ? t("create.audio.audioCount") : t("create.audio.cleanup.waiting")}
+              {creditEstimate
+                ? `${formattedDuration} · ${creditEstimate.provider === "elevenlabs" ? "ElevenLabs Voice Isolator" : t("create.audio.cleanup.internalProcessor")}`
+                : file
+                  ? t("create.audio.calculating")
+                  : t("create.audio.cleanup.waiting")}
             </p>
           </div>
           <button
