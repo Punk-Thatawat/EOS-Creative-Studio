@@ -343,7 +343,7 @@ export function ImageGenerationPage() {
         onCountChange={state.setCount}
         onGenerate={generateCurrentTab}
         onImageSizeToggle={state.toggleImageSize}
-        onModelChange={(model) => { state.clearRecentSelection(); const nextModel = state.activeModelOptions.find((item) => item.model === model); setPreviewDisplayMode(nextModel?.previewType !== "video" && Boolean(nextModel?.previewUrl) ? "model" : "current"); state.setOutputFormat(null); if (isImageToImageTab) state.setSelectedImageToImageModel(model); else if (isStyleTransferTab) state.setSelectedStyleTransferModel(model); else if (isBackgroundTab) state.setSelectedBackgroundModel(model); else if (isUpscaleTab) state.setSelectedUpscaleModel(model); else if (isExtendTab) state.setSelectedExtendModel(model); else state.setSelectedModel(model); }}
+        onModelChange={(model) => { state.clearRecentSelection(); const nextModel = state.activeModelOptions.find((item) => item.model === model); setPreviewDisplayMode(Boolean(nextModel?.previewUrl) ? "model" : "current"); state.setOutputFormat(null); if (isImageToImageTab) state.setSelectedImageToImageModel(model); else if (isStyleTransferTab) state.setSelectedStyleTransferModel(model); else if (isBackgroundTab) state.setSelectedBackgroundModel(model); else if (isUpscaleTab) state.setSelectedUpscaleModel(model); else if (isExtendTab) state.setSelectedExtendModel(model); else state.setSelectedModel(model); }}
         onQualityChange={state.setQuality}
         onOutputFormatChange={state.setOutputFormat}
         onResolutionChange={state.setResolution}
