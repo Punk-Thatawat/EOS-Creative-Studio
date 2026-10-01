@@ -65,7 +65,6 @@ import {
   createVideoSoundEffect,
   createVoiceClone,
   deleteAudioHistory,
-  deleteVoiceClone,
   fetchAudioHistoryAudio,
   listAudioBackgroundMusic,
   listAudioHistory,
@@ -164,16 +163,14 @@ const DEFAULT_AUDIO_PROMPT =
 const defaultAudioScenes: AudioScene[] = [
   { id: "01", title: "ฉากที่ 1", durationSeconds: 12, text: DEFAULT_AUDIO_PROMPT, voice: "" },
 ];
-const VOICE_CLONE_MODEL_ID = "wavespeed-ai/omnivoice/voice-clone";
+const VOICE_CLONE_MODEL_ID = "minimax/voice-clone";
 const MINIMAX_LANGUAGE_BOOST_OPTIONS: DropdownOption[] = [
   { value: "Thai", label: "ภาษาไทย" },
   { value: "English", label: "English" },
 ];
 
 const VOICE_CLONE_MODEL_OPTIONS: DropdownOption[] = [
-  { value: VOICE_CLONE_MODEL_ID, label: "WaveSpeed · OmniVoice" },
-  { value: "minimax/speech-2.8-hd", label: "MiniMax · Speech 2.8 HD" },
-  { value: "minimax/voice-clone", label: "MiniMax · Voice Clone" },
+  { value: VOICE_CLONE_MODEL_ID, label: "MiniMax · Voice Clone" },
 ];
 const SFX_MODEL_OPTIONS: DropdownOption[] = [
   { value: "text", label: "WaveSpeed · Sonilo Text-to-SFX" },
@@ -1608,7 +1605,7 @@ function estimatePodcastLineSeconds(text: string): number {
 }
 
 function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const [sampleReady, setSampleReady] = useState(false);
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [voiceName, setVoiceName] = useState("");
@@ -1636,8 +1633,10 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
   const [channel, setChannel] = useState("1");
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [previewModel, setPreviewModel] = useState(VOICE_CLONE_MODEL_ID);
-  const [savedVoices, setSavedVoices] = useState<VoiceCloneListItem[]>([]);
-  const [deleteConfirmVoice, setDeleteConfirmVoice] = useState<VoiceCloneListItem | null>(null);
+  const [cloneHistory, setCloneHistory] = useState<AudioHistoryEntry[]>([]);
+  const [activeCloneHistoryId, setActiveCloneHistoryId] = useState<string | null>(null);
+  const [cloneHistoryLoadingId, setCloneHistoryLoadingId] = useState<string | null>(null);
+  const [pendingCloneHistoryDelete, setPendingCloneHistoryDelete] = useState<AudioHistoryEntry | null>(null);
   const [creditQuote, setCreditQuote] = useState<VoiceCloneQuote | null>(null);
   const [creditQuoteLoading, setCreditQuoteLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1667,19 +1666,17 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     return () => window.clearTimeout(timer);
   }, [audioUrl]);
 
-  const refreshSavedVoices = useCallback(async () => {
-    try {
-      const result = await listVoiceClones();
-      setSavedVoices(result.voices);
-    } catch {
-      // Saved-voices list is a convenience; ignore load failures silently.
-    }
-  }, []);
-
   useEffect(() => {
-    const timer = window.setTimeout(() => void refreshSavedVoices(), 0);
-    return () => window.clearTimeout(timer);
-  }, [refreshSavedVoices]);
+    let active = true;
+    void listAudioHistory({ feature: "voice-clone", limit: AUDIO_HISTORY_LIMIT })
+      .then((items) => {
+        if (active) setCloneHistory(items);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1762,7 +1759,6 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
       });
       setVoiceId(result.voiceId);
       setStatus("ready");
-      void refreshSavedVoices();
       finishAudioProgress("audio-voice-clone", requestId);
     } catch (cause) {
       failAudioProgress("audio-voice-clone", requestId);
@@ -1818,6 +1814,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
       setCurrentTime(0);
       setProgress(0);
       setIsPlaying(false);
+      setActiveCloneHistoryId(null);
       void onHistorySaved?.({
         audio: result.blob,
         feature: "voice-clone",
@@ -1825,6 +1822,12 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
         outputFormat,
         voice: voiceId,
         metadata: { character },
+      })?.then((saved) => {
+        if (!saved) return;
+        setCloneHistory((current) =>
+          [saved, ...current.filter((entry) => entry.id !== saved.id)].slice(0, AUDIO_HISTORY_LIMIT),
+        );
+        setActiveCloneHistoryId(saved.id);
       });
       setStatus("ready");
       finishAudioProgress("audio-voice-clone", requestId);
@@ -1876,32 +1879,51 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     setProgress(Math.min(100, (nextTime / nextDuration) * 100));
   };
 
-  const handleSelectSavedVoice = (item: VoiceCloneListItem) => {
-    if (voiceId === item.voiceId) {
-      setVoiceId(null);
-      setVoiceName("");
-      setStatus("idle");
-      setError(null);
+  const playCloneHistory = async (item: AudioHistoryEntry) => {
+    if (item.id === activeCloneHistoryId && audioUrl) {
+      togglePlayback();
       return;
     }
-    setVoiceId(item.voiceId);
-    setVoiceName(item.name);
-    if (item.character) setCharacter(item.character);
-    setStatus("ready");
+    setCloneHistoryLoadingId(item.id);
     setError(null);
-  };
-
-  const handleDeleteSavedVoice = async (item: VoiceCloneListItem) => {
     try {
-      await deleteVoiceClone(item.voiceId);
-      if (voiceId === item.voiceId) setVoiceId(null);
-      void refreshSavedVoices();
+      const result = await fetchAudioHistoryAudio(item.id);
+      durationRef.current = 0;
+      setDuration(0);
+      setCurrentTime(0);
+      setProgress(0);
+      setIsPlaying(false);
+      setAudioUrl(URL.createObjectURL(result.blob));
+      setActiveCloneHistoryId(item.id);
     } catch (cause) {
-      setError(cause instanceof Error ? translateError(cause.message) : t("create.audio.clone.error.deleteFailed"));
+      setError(cause instanceof Error ? cause.message : t("create.audio.clone.error.previewFailed"));
       setStatus("error");
     } finally {
-      setDeleteConfirmVoice(null);
+      setCloneHistoryLoadingId(null);
     }
+  };
+
+  const confirmRemoveCloneHistory = () => {
+    const item = pendingCloneHistoryDelete;
+    if (!item) return;
+    setPendingCloneHistoryDelete(null);
+    void deleteAudioHistory(item.id)
+      .then(() => {
+        setCloneHistory((current) => current.filter((entry) => entry.id !== item.id));
+        if (item.id === activeCloneHistoryId) {
+          previewAudioRef.current?.pause();
+          setAudioUrl(null);
+          setActiveCloneHistoryId(null);
+          setProgress(0);
+          setCurrentTime(0);
+          setDuration(0);
+          setIsPlaying(false);
+        }
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : t("create.audio.clone.error.deleteFailed"));
+        setStatus("error");
+      });
   };
 
   return (
@@ -1980,62 +2002,6 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
           <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} />{" "}
           {t("create.audio.clone.consent")}
         </label>
-        <section className={styles.historyPanel}>
-          <div className={styles.sectionHeading}>
-            <h2>
-              <Mic2 size={13} /> {t("create.audio.clone.savedVoices")}
-            </h2>
-            <span className={styles.timelineHint}>
-              {savedVoices.length
-                ? savedVoices.length === 1
-                  ? t("create.audio.resultCountOne")
-                  : t("create.audio.resultCountMany", { count: savedVoices.length })
-                : t("create.audio.noResults")}
-            </span>
-          </div>
-          {savedVoices.length ? (
-            <div className={styles.historyList}>
-              {savedVoices.map((item) => (
-                <div
-                  key={item.id}
-                  className={item.voiceId === voiceId ? styles.historyItemRowActive : styles.historyItemRow}
-                >
-                  <button
-                    type="button"
-                    className={item.voiceId === voiceId ? styles.historyItemActive : styles.historyItem}
-                    onClick={() => handleSelectSavedVoice(item)}
-                  >
-                    <span className={styles.historyPlay}>
-                      <Mic2 size={13} />
-                    </span>
-                    <span className={styles.historyCopy}>
-                      <strong>{item.name}</strong>
-                      <small>{item.character || t("create.audio.clone.characterNatural")}</small>
-                    </span>
-                    <span className={`${styles.historyCurrent} ${styles.savedVoiceStatus}`}>
-                      {item.voiceId === voiceId
-                        ? t("create.audio.clone.voiceSelected")
-                        : t("create.audio.clone.selectVoice")}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.historyDelete}
-                    onClick={() => setDeleteConfirmVoice(item)}
-                    aria-label={t("create.audio.clone.deleteVoice", { name: item.name })}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className={styles.historyEmpty}>
-              <Mic2 size={15} />
-              <span>{t("create.audio.noResults")}</span>
-            </div>
-          )}
-        </section>
       </section>
 
       <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel}`}>
@@ -2210,6 +2176,66 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
             {status === "creating" ? t("create.audio.clone.creating") : t("create.audio.clone.saveVoice")}
           </button>
         </div>
+        <section className={styles.historyPanel} aria-label={t("create.audio.a11y.historyPanel")}>
+          <div className={styles.sectionHeading}>
+            <h2>
+              <History size={13} /> {t("create.audio.generationHistory")}
+            </h2>
+            <span className={styles.timelineHint}>
+              {cloneHistory.length
+                ? cloneHistory.length === 1
+                  ? t("create.audio.resultCountOne")
+                  : t("create.audio.resultCountMany", { count: cloneHistory.length })
+                : t("create.audio.noResults")}
+            </span>
+          </div>
+          {cloneHistory.length ? (
+            <div className={styles.historyList}>
+              {cloneHistory.map((item) => {
+                const isActive = item.id === activeCloneHistoryId;
+                return (
+                  <div key={item.id} className={isActive ? styles.historyItemRowActive : styles.historyItemRow}>
+                    <button
+                      type="button"
+                      className={isActive ? styles.historyItemActive : styles.historyItem}
+                      onClick={() => void playCloneHistory(item)}
+                      disabled={cloneHistoryLoadingId === item.id}
+                      aria-busy={cloneHistoryLoadingId === item.id}
+                    >
+                      <span className={cloneHistoryLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>
+                        {cloneHistoryLoadingId === item.id ? null : isActive && isPlaying ? (
+                          <Pause size={13} fill="currentColor" />
+                        ) : (
+                          <Play size={13} fill="currentColor" />
+                        )}
+                      </span>
+                      <span className={styles.historyCopy}>
+                        <strong>{item.label}</strong>
+                        <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
+                      </span>
+                      <span className={styles.historyCurrent}>
+                        {isActive ? t("create.audio.historyCurrent") : t("create.audio.historyPlay")}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.historyDelete}
+                      aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
+                      onClick={() => setPendingCloneHistoryDelete(item)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={styles.historyEmpty}>
+              <History size={15} />
+              <span>{t("create.audio.historyEmpty")}</span>
+            </div>
+          )}
+        </section>
       </section>
 
       <aside className={styles.alternateSettings}>
@@ -2456,36 +2482,15 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
           </button>
         </div>
       </aside>
-      <Dialog
-        open={deleteConfirmVoice !== null}
-        onOpenChange={(next) => {
-          if (!next) setDeleteConfirmVoice(null);
+      <PodcastConfirmationDialog
+        open={Boolean(pendingCloneHistoryDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingCloneHistoryDelete(null);
         }}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t("create.audio.clone.deleteVoice.title")}</DialogTitle>
-            <DialogDescription>
-              {t("create.audio.clone.deleteVoice.body", { name: deleteConfirmVoice?.name ?? "" })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setDeleteConfirmVoice(null)}>
-              {t("create.audio.clone.deleteVoice.cancel")}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                if (deleteConfirmVoice) void handleDeleteSavedVoice(deleteConfirmVoice);
-              }}
-            >
-              <Trash2 size={15} /> {t("create.audio.clone.deleteVoice.confirm")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="ลบประวัติการสร้างหรือไม่?"
+        description={`“${pendingCloneHistoryDelete?.label ?? "รายการนี้"}” จะถูกลบออกจากประวัติการสร้างและกู้คืนไม่ได้`}
+        onConfirm={confirmRemoveCloneHistory}
+      />
     </div>
   );
 }
