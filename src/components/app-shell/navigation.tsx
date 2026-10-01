@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import {
+  Activity,
   ArrowLeft,
   AudioLines,
   BarChart3,
@@ -310,6 +311,7 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
     { label: "Templates", href: "/admin/templates", icon: LayoutTemplate },
     { label: "Video showcase", href: "/admin/video-showcase", icon: Clapperboard },
     { label: "Prompt templates", href: "/admin/prompt-templates", icon: MessageSquareText },
+    { label: "User activity", href: "/admin/usage", icon: Activity },
     { label: "Provider catalog", href: "/admin/provider-catalog", icon: Boxes, disabled: true },
     { label: "Feature settings", href: "/admin/feature-settings", icon: ShieldCheck, disabled: true },
   ] satisfies Array<NavigationItem & { disabled?: boolean }>;
