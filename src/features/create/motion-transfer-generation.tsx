@@ -155,7 +155,21 @@ function MotionSchemaField({
     );
   }
   if (type === "boolean") {
-    return <div className={styles.toggleRow}>{label}{required ? <b>*</b> : null}<button type="button" className={styles.toggle} aria-pressed={Boolean(value)} onClick={() => onChange(!Boolean(value))}><i /></button></div>;
+    const enabled = Boolean(value);
+    return (
+      <button
+        type="button"
+        className={styles.motionSchemaToggleRow}
+        aria-label={label}
+        aria-pressed={enabled}
+        onClick={() => onChange(!enabled)}
+      >
+        <span>{label}{required ? <b>*</b> : null}</span>
+        <span className={`${styles.motionSchemaToggleTrack} ${enabled ? styles.motionSchemaToggleOn : styles.motionSchemaToggleOff}`} aria-hidden="true">
+          <i />
+        </span>
+      </button>
+    );
   }
   if (type === "array") {
     return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} value={Array.isArray(value) ? value.join(", ") : ""} placeholder={t("create.video.common.addValues")} onChange={(event) => onChange(event.target.value.split(",").map((item) => item.trim()).filter(Boolean))} aria-required={required} />{description ? <small>{description}</small> : null}</label>;

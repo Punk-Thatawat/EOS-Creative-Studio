@@ -611,6 +611,56 @@
   border-radius: 50%;
   background: #fff;
 }
+.motionSchemaToggleRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+.motionSchemaToggleRow > span:first-child b {
+  margin-left: 3px;
+  color: #ef5b20;
+}
+.motionSchemaToggleRow:focus-visible {
+  outline: 2px solid #ff620b;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.motionSchemaToggleTrack {
+  display: flex;
+  flex: 0 0 auto;
+  width: 38px;
+  height: 20px;
+  align-items: center;
+  padding: 2px;
+  border-radius: 99px;
+  transition: background-color 140ms ease;
+}
+.motionSchemaToggleOn {
+  justify-content: flex-end;
+  background: #ff620b;
+}
+.motionSchemaToggleOff {
+  justify-content: flex-start;
+  background: #aeb8c2;
+}
+.motionSchemaToggleTrack > i {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+}
 .estimate {
   margin-top: 18px;
   border-top: 1px dashed #ddd;
