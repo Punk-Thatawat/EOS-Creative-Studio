@@ -81,6 +81,10 @@ export async function resendAdminMemberInvitation(id: string, input: { quick_pla
   return adminRequest<{ sent: boolean; email: string }>(`/admin/members/${encodeURIComponent(id)}/resend-invitation`, { method: "POST", body: JSON.stringify(input) });
 }
 
+export async function sendAdminMemberAssessment(id: string) {
+  return adminRequest<{ sent: boolean; userId: string; email: string; formCount: number }>(`/admin/members/${encodeURIComponent(id)}/send-assessment`, { method: "POST" });
+}
+
 export async function grantAdminMemberCredits(id: string, input: { credits: number; reason?: string; idempotencyKey: string }) {
   return adminRequest<{ memberId: string; creditsAdded: number; balance: number; transaction: unknown }>(`/admin/members/${encodeURIComponent(id)}/credits`, { method: "POST", body: JSON.stringify(input) });
 }
