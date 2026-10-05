@@ -577,7 +577,7 @@
 .summaryOutputCards article > div { display: flex; align-items: center; gap: 4px; color: #5d6670; }
 .summaryOutputCards article svg { flex: none; color: #e9703c; }
 .summaryOutputCards article strong { overflow: hidden; font-size: 10px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
-.summaryOutputCards article p { display: -webkit-box; overflow: hidden; margin: 9px 0 0; color: #808890; font-size: 10px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.summaryOutputCards article p { margin: 9px 0 0; color: #808890; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
 
 .historySection { display: grid; gap: 14px; min-width: 0; border: 1px solid var(--doc-line); border-radius: 12px; background: #fff; padding: 18px; }
 .historyHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
