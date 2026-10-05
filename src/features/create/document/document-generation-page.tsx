@@ -1,3 +1,5 @@
+"use client";
+
 import {
   ArrowUpRight,
   BarChart3,
@@ -18,11 +20,12 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import styles from "./document-generation-page.module.css";
 
 const modes = [
-  { label: "OCR & Extract", icon: ScanText, active: true },
+  { label: "OCR & Extract", icon: ScanText },
   { label: "Summarize", icon: NotebookPen },
   { label: "Translate", icon: Languages },
   { label: "Contract Review", icon: FileCheck2 },
@@ -74,6 +77,10 @@ function SelectPlaceholder({ label, value }: { label: string; value: string }) {
 }
 
 export function DocumentGenerationPage() {
+  const [activeMode, setActiveMode] = useState("OCR & Extract");
+  const [summaryStyle, setSummaryStyle] = useState("Executive brief");
+  const isSummarize = activeMode === "Summarize";
+
   return (
     <div className={styles.page}>
       <header className={styles.hero}>
@@ -103,12 +110,24 @@ export function DocumentGenerationPage() {
       <CreatorWorkspaceLayout
         tabs={
           <nav className={styles.modeTabs} aria-label="Document tools">
-            {modes.map(({ label, icon: Icon, active }) => (
-              <button key={label} type="button" className={`${styles.modeTab} ${active ? styles.modeTabActive : ""}`} aria-pressed={active}>
+            {modes.map(({ label, icon: Icon }) => {
+              const isAvailable = label === "OCR & Extract" || label === "Summarize";
+              const isActive = activeMode === label;
+              return (
+              <button
+                key={label}
+                type="button"
+                className={`${styles.modeTab} ${isActive ? styles.modeTabActive : ""} ${!isAvailable ? styles.modeTabDisabled : ""}`}
+                aria-pressed={isActive}
+                aria-disabled={!isAvailable}
+                title={isAvailable ? label : `${label} — coming soon`}
+                onClick={() => isAvailable && setActiveMode(label)}
+              >
                 <Icon size={16} strokeWidth={2} aria-hidden="true" />
                 <span>{label}</span>
               </button>
-            ))}
+              );
+            })}
           </nav>
         }
         left={
@@ -127,22 +146,58 @@ export function DocumentGenerationPage() {
           </div>
           <SelectPlaceholder label="Pages" value="All pages" />
           <div className={styles.sectionRule} />
-          <PanelHeading step="2">INSTRUCTIONS</PanelHeading>
-          <div className={styles.instructionPlaceholder}>
-            <span>Describe what you want to find or create…</span>
-            <small>0 / 600</small>
-          </div>
+          <PanelHeading step="2">{isSummarize ? "SUMMARY GOAL" : "INSTRUCTIONS"}</PanelHeading>
+          {isSummarize ? (
+            <>
+              <div className={styles.summaryPrompt}>
+                <textarea aria-label="Summary instructions" maxLength={600} placeholder="Example: Summarize the main findings, decisions, and action items…" />
+                <small>0 / 600</small>
+              </div>
+              <div className={styles.summaryFormatGroup}>
+                <span>Summary format</span>
+                <div className={styles.summaryFormatChoices}>
+                  {["Executive brief", "Bullet points"].map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      className={summaryStyle === style ? styles.summaryFormatActive : ""}
+                      aria-pressed={summaryStyle === style}
+                      onClick={() => setSummaryStyle(style)}
+                    >
+                      {style === "Executive brief" ? <NotebookPen size={14} aria-hidden="true" /> : <ListChecks size={14} aria-hidden="true" />}
+                      {style}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className={styles.instructionPlaceholder}>
+              <span>Describe what you want to find or create…</span>
+              <small>0 / 600</small>
+            </div>
+          )}
           <div className={styles.checkList}>
-            <div><i className={styles.checkedBox} />Extract tables</div>
-            <div><i className={styles.checkedBox} />Detect handwriting</div>
-            <div><i className={styles.checkedBox} />Preserve document layout</div>
+            {isSummarize ? (
+              <>
+                <div><i className={styles.checkedBox} />Include key takeaways</div>
+                <div><i className={styles.checkedBox} />Highlight action items</div>
+                <div><i className={styles.checkedBox} />Keep important dates</div>
+              </>
+            ) : (
+              <>
+                <div><i className={styles.checkedBox} />Extract tables</div>
+                <div><i className={styles.checkedBox} />Detect handwriting</div>
+                <div><i className={styles.checkedBox} />Preserve document layout</div>
+              </>
+            )}
           </div>
           </aside>
         }
         preview={
           <main className={styles.previewPanel} aria-label="Document preview">
           <div className={styles.previewHeader}>
-            <div><span>PREVIEW</span><small>Document canvas</small></div>
+            <div><span>PREVIEW</span><small>{isSummarize ? "Summary workspace" : "Document canvas"}</small></div>
             <div className={styles.previewToolbar} aria-label="Preview controls">
               <ZoomIn size={14} aria-hidden="true" />
               <ZoomOut size={14} aria-hidden="true" />
@@ -155,45 +210,84 @@ export function DocumentGenerationPage() {
             </div>
           </div>
 
-          <div className={styles.previewStage}>
-            <div className={styles.pageRail} aria-hidden="true">
-              {[1, 2, 3, 4].map((page) => (
-                <div key={page} className={`${styles.pageThumb} ${page === 1 ? styles.pageThumbActive : ""}`}>
-                  <span>{page}</span>
-                  <div><i /><i /><i /></div>
+          <div className={`${styles.previewStage} ${isSummarize ? styles.previewStageSummary : ""}`}>
+            {isSummarize ? (
+              <div className={styles.summaryStage}>
+                <article className={styles.summaryDocument}>
+                  <div className={styles.summaryDocumentTopline}>
+                    <span className={styles.sampleBadge}>SAMPLE OUTPUT</span>
+                    <span>Q2 Business Report · 8 pages</span>
+                  </div>
+                  <div className={styles.summaryDocumentHeading}>
+                    <small>{summaryStyle.toUpperCase()}</small>
+                    <h3>Q2 Business Report</h3>
+                    <p>Revenue reached <strong>$8.42M</strong>, growing 18.6% quarter over quarter as product adoption and strategic partnerships expanded.</p>
+                  </div>
+                  <div className={styles.summaryMetric}>
+                    <span><small>Total revenue</small><strong>$8.42M</strong><em>+18.6% vs Q1</em></span>
+                    <span><small>Net profit</small><strong>$1.68M</strong><em>+34.4% vs Q1</em></span>
+                    <span><small>Gross profit</small><strong>$3.92M</strong><em>+22.1% vs Q1</em></span>
+                  </div>
+                  <div className={styles.summaryTakeaways}>
+                    <h4>Key takeaways</h4>
+                    <ul>
+                      <li>Product adoption was the strongest driver of revenue growth.</li>
+                      <li>Net profit grew faster than revenue, improving overall margins.</li>
+                    </ul>
+                  </div>
+                  <div className={styles.summaryDocumentFooter}>Example only · Upload a document to generate your own summary</div>
+                </article>
+              </div>
+            ) : (
+              <>
+                <div className={styles.pageRail} aria-hidden="true">
+                  {[1, 2, 3, 4].map((page) => (
+                    <div key={page} className={`${styles.pageThumb} ${page === 1 ? styles.pageThumbActive : ""}`}>
+                      <span>{page}</span>
+                      <div><i /><i /><i /></div>
+                    </div>
+                  ))}
+                </div>
+                <div className={styles.canvas}>
+                  <div className={styles.documentSheet} aria-hidden="true">
+                    <div className={styles.sheetTopline}><span /><span>DOCUMENT PREVIEW</span></div>
+                    <div className={styles.sheetTitle} />
+                    <div className={styles.sheetSubtitle} />
+                    <div className={styles.sheetParagraph}><i /><i /><i /><i /></div>
+                    <div className={styles.sheetDataRow}>
+                      <div className={styles.sheetTable}><i /><i /><i /><i /><i /><i /></div>
+                      <div className={styles.sheetChart}><b /><b /><b /><b /><b /></div>
+                    </div>
+                    <div className={styles.sheetParagraph}><i /><i /><i /></div>
+                  </div>
+                  <div className={styles.canvasEmptyState}>
+                    <span><FileText size={22} aria-hidden="true" /></span>
+                    <strong>Your document preview will appear here</strong>
+                    <small>Upload a file to see pages, annotations, and extracted content</small>
+                  </div>
+                  <div className={styles.canvasPageNumber}>Page 1 of 1</div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {isSummarize ? (
+            <div className={styles.summaryOutputCards}>
+              <article><div><NotebookPen size={13} /><strong>Executive summary</strong></div><p>Q2 revenue increased 18.6% to $8.42M, led by product adoption and strategic partnerships.</p></article>
+              <article><div><ListChecks size={13} /><strong>Key takeaways</strong></div><p>Profit grew faster than revenue and margins improved across key segments.</p></article>
+              <article><div><Sparkles size={13} /><strong>Suggested next steps</strong></div><p>Monitor operating costs and continue investment in top-performing segments.</p></article>
+            </div>
+          ) : (
+            <div className={styles.outputCards}>
+              {outputs.map(({ label, icon: Icon }) => (
+                <div className={styles.outputCard} key={label}>
+                  <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{label}</strong></div>
+                  <i /><i /><i />
+                  <small>Results appear after processing</small>
                 </div>
               ))}
             </div>
-            <div className={styles.canvas}>
-              <div className={styles.documentSheet} aria-hidden="true">
-                <div className={styles.sheetTopline}><span /><span>DOCUMENT PREVIEW</span></div>
-                <div className={styles.sheetTitle} />
-                <div className={styles.sheetSubtitle} />
-                <div className={styles.sheetParagraph}><i /><i /><i /><i /></div>
-                <div className={styles.sheetDataRow}>
-                  <div className={styles.sheetTable}><i /><i /><i /><i /><i /><i /></div>
-                  <div className={styles.sheetChart}><b /><b /><b /><b /><b /></div>
-                </div>
-                <div className={styles.sheetParagraph}><i /><i /><i /></div>
-              </div>
-              <div className={styles.canvasEmptyState}>
-                <span><FileText size={22} aria-hidden="true" /></span>
-                <strong>Your document preview will appear here</strong>
-                <small>Upload a file to see pages, annotations, and extracted content</small>
-              </div>
-              <div className={styles.canvasPageNumber}>Page 1 of 1</div>
-            </div>
-          </div>
-
-          <div className={styles.outputCards}>
-            {outputs.map(({ label, icon: Icon }) => (
-              <div className={styles.outputCard} key={label}>
-                <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{label}</strong></div>
-                <i /><i /><i />
-                <small>Results appear after processing</small>
-              </div>
-            ))}
-          </div>
+          )}
           </main>
         }
         right={
@@ -217,11 +311,24 @@ export function DocumentGenerationPage() {
             </div>
           </div>
           <SelectPlaceholder label="Language" value="English (US)" />
-          <SelectPlaceholder label="Page range" value="All pages" />
-          <SelectPlaceholder label="Extraction depth" value="Advanced (Tables, Forms, Notes)" />
-          <SelectPlaceholder label="Tone / Style" value="Professional & Clear" />
+          {isSummarize ? (
+            <>
+              <SelectPlaceholder label="Summary length" value="Standard · 1–2 pages" />
+              <SelectPlaceholder label="Focus areas" value="Takeaways, decisions, actions" />
+              <SelectPlaceholder label="Tone / Style" value="Executive & concise" />
+            </>
+          ) : (
+            <>
+              <SelectPlaceholder label="Page range" value="All pages" />
+              <SelectPlaceholder label="Extraction depth" value="Advanced (Tables, Forms, Notes)" />
+              <SelectPlaceholder label="Tone / Style" value="Professional & Clear" />
+            </>
+          )}
           <div className={styles.estimate}><span>Estimated credits</span><strong>— Credits</strong></div>
-          <div className={styles.generateButton} aria-disabled="true"><span>GENERATE DOCUMENT</span><Sparkles size={17} aria-hidden="true" /></div>
+          <button className={styles.generateButton} type="button" disabled>
+            <span>{isSummarize ? "GENERATE SUMMARY" : "GENERATE DOCUMENT"}</span>
+            <Sparkles size={17} aria-hidden="true" />
+          </button>
           <div className={styles.secureNote}><span />Your documents stay private and secure</div>
           </aside>
         }
