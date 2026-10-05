@@ -20,7 +20,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -28,13 +28,16 @@ import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
 
-const modes = [
-  { key: K("mode.ocr"), icon: ScanText, active: true },
-  { key: K("mode.summarize"), icon: NotebookPen },
-  { key: K("mode.translate"), icon: Languages },
-  { key: K("mode.contract"), icon: FileCheck2 },
-  { key: K("mode.report"), icon: BarChart3 },
-  { key: K("mode.form"), icon: ListChecks },
+type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
+type SummaryStyle = "executive" | "bullets";
+
+const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
+  { id: "ocr", icon: ScanText, available: true },
+  { id: "summarize", icon: NotebookPen, available: true },
+  { id: "translate", icon: Languages },
+  { id: "contract", icon: FileCheck2 },
+  { id: "report", icon: BarChart3 },
+  { id: "form", icon: ListChecks },
 ];
 
 const outputs = [
@@ -92,6 +95,10 @@ function SelectPlaceholder({ label, value }: { label: string; value: string }) {
 
 export function DocumentGenerationPage() {
   const { t } = useLocale();
+  const [activeMode, setActiveMode] = useState<ModeId>("ocr");
+  const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("executive");
+  const isSummarize = activeMode === "summarize";
+
   return (
     <div className={`${styles.page} document-studio-page`}>
       <header className={styles.hero}>
@@ -121,12 +128,24 @@ export function DocumentGenerationPage() {
       <CreatorWorkspaceLayout
         tabs={
           <nav className={styles.modeTabs} aria-label={t(K("a11y.tools"))}>
-            {modes.map(({ key, icon: Icon, active }) => (
-              <button key={key} type="button" className={`${styles.modeTab} ${active ? styles.modeTabActive : ""}`} aria-pressed={active}>
-                <Icon size={16} strokeWidth={2} aria-hidden="true" />
-                <span>{t(key)}</span>
-              </button>
-            ))}
+            {modes.map(({ id, icon: Icon, available }) => {
+              const isActive = activeMode === id;
+              const label = t(K(`mode.${id}`));
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`${styles.modeTab} ${isActive ? styles.modeTabActive : ""} ${!available ? styles.modeTabDisabled : ""}`}
+                  aria-pressed={isActive}
+                  aria-disabled={!available}
+                  title={available ? label : t(K("mode.comingSoon"), { label })}
+                  onClick={() => available && setActiveMode(id)}
+                >
+                  <Icon size={16} strokeWidth={2} aria-hidden="true" />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
           </nav>
         }
         left={
@@ -145,22 +164,58 @@ export function DocumentGenerationPage() {
           </div>
           <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />
           <div className={styles.sectionRule} />
-          <PanelHeading step="2">{t(K("instructions.heading"))}</PanelHeading>
-          <div className={styles.instructionPlaceholder}>
-            <span>{t(K("instructions.placeholder"))}</span>
-            <small>0 / 600</small>
-          </div>
+          <PanelHeading step="2">{isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
+          {isSummarize ? (
+            <>
+              <div className={styles.summaryPrompt}>
+                <textarea aria-label={t(K("summary.promptLabel"))} maxLength={600} placeholder={t(K("summary.promptPlaceholder"))} />
+                <small>0 / 600</small>
+              </div>
+              <div className={styles.summaryFormatGroup}>
+                <span>{t(K("summary.format"))}</span>
+                <div className={styles.summaryFormatChoices}>
+                  {(["executive", "bullets"] as const).map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      className={summaryStyle === style ? styles.summaryFormatActive : ""}
+                      aria-pressed={summaryStyle === style}
+                      onClick={() => setSummaryStyle(style)}
+                    >
+                      {style === "executive" ? <NotebookPen size={14} aria-hidden="true" /> : <ListChecks size={14} aria-hidden="true" />}
+                      {t(K(`summary.${style}`))}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className={styles.instructionPlaceholder}>
+              <span>{t(K("instructions.placeholder"))}</span>
+              <small>0 / 600</small>
+            </div>
+          )}
           <div className={styles.checkList}>
-            <div><i className={styles.checkedBox} />{t(K("instructions.extractTables"))}</div>
-            <div><i className={styles.checkedBox} />{t(K("instructions.handwriting"))}</div>
-            <div><i className={styles.checkedBox} />{t(K("instructions.layout"))}</div>
+            {isSummarize ? (
+              <>
+                <div><i className={styles.checkedBox} />{t(K("summary.checkTakeaways"))}</div>
+                <div><i className={styles.checkedBox} />{t(K("summary.checkActions"))}</div>
+                <div><i className={styles.checkedBox} />{t(K("summary.checkDates"))}</div>
+              </>
+            ) : (
+              <>
+                <div><i className={styles.checkedBox} />{t(K("instructions.extractTables"))}</div>
+                <div><i className={styles.checkedBox} />{t(K("instructions.handwriting"))}</div>
+                <div><i className={styles.checkedBox} />{t(K("instructions.layout"))}</div>
+              </>
+            )}
           </div>
           </aside>
         }
         preview={
           <main className={styles.previewPanel} aria-label={t(K("a11y.preview"))}>
           <div className={styles.previewHeader}>
-            <div><span>{t(K("preview.heading"))}</span><small>{t(K("preview.canvas"))}</small></div>
+            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : t(K("preview.canvas"))}</small></div>
             <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
               <ZoomIn size={14} aria-hidden="true" />
               <ZoomOut size={14} aria-hidden="true" />
@@ -173,45 +228,84 @@ export function DocumentGenerationPage() {
             </div>
           </div>
 
-          <div className={styles.previewStage}>
-            <div className={styles.pageRail} aria-hidden="true">
-              {[1, 2, 3, 4].map((page) => (
-                <div key={page} className={`${styles.pageThumb} ${page === 1 ? styles.pageThumbActive : ""}`}>
-                  <span>{page}</span>
-                  <div><i /><i /><i /></div>
+          <div className={`${styles.previewStage} ${isSummarize ? styles.previewStageSummary : ""}`}>
+            {isSummarize ? (
+              <div className={styles.summaryStage}>
+                <article className={styles.summaryDocument}>
+                  <div className={styles.summaryDocumentTopline}>
+                    <span className={styles.sampleBadge}>{t(K("summary.sample"))}</span>
+                    <span>{t(K("summary.sampleDoc"))}</span>
+                  </div>
+                  <div className={styles.summaryDocumentHeading}>
+                    <small>{t(K(`summary.${summaryStyle}`)).toUpperCase()}</small>
+                    <h3>{t(K("summary.docTitle"))}</h3>
+                    <p>{t(K("summary.leadBefore"))}<strong>{t(K("summary.leadValue"))}</strong>{t(K("summary.leadAfter"))}</p>
+                  </div>
+                  <div className={styles.summaryMetric}>
+                    <span><small>{t(K("summary.totalRevenue"))}</small><strong>$8.42M</strong><em>{t(K("summary.vsQ1"), { value: "+18.6%" })}</em></span>
+                    <span><small>{t(K("summary.netProfit"))}</small><strong>$1.68M</strong><em>{t(K("summary.vsQ1"), { value: "+34.4%" })}</em></span>
+                    <span><small>{t(K("summary.grossProfit"))}</small><strong>$3.92M</strong><em>{t(K("summary.vsQ1"), { value: "+22.1%" })}</em></span>
+                  </div>
+                  <div className={styles.summaryTakeaways}>
+                    <h4>{t(K("summary.takeawaysHeading"))}</h4>
+                    <ul>
+                      <li>{t(K("summary.takeaway1"))}</li>
+                      <li>{t(K("summary.takeaway2"))}</li>
+                    </ul>
+                  </div>
+                  <div className={styles.summaryDocumentFooter}>{t(K("summary.footer"))}</div>
+                </article>
+              </div>
+            ) : (
+              <>
+                <div className={styles.pageRail} aria-hidden="true">
+                  {[1, 2, 3, 4].map((page) => (
+                    <div key={page} className={`${styles.pageThumb} ${page === 1 ? styles.pageThumbActive : ""}`}>
+                      <span>{page}</span>
+                      <div><i /><i /><i /></div>
+                    </div>
+                  ))}
+                </div>
+                <div className={styles.canvas}>
+                  <div className={styles.documentSheet} aria-hidden="true">
+                    <div className={styles.sheetTopline}><span /><span>{t(K("preview.sheetLabel"))}</span></div>
+                    <div className={styles.sheetTitle} />
+                    <div className={styles.sheetSubtitle} />
+                    <div className={styles.sheetParagraph}><i /><i /><i /><i /></div>
+                    <div className={styles.sheetDataRow}>
+                      <div className={styles.sheetTable}><i /><i /><i /><i /><i /><i /></div>
+                      <div className={styles.sheetChart}><b /><b /><b /><b /><b /></div>
+                    </div>
+                    <div className={styles.sheetParagraph}><i /><i /><i /></div>
+                  </div>
+                  <div className={styles.canvasEmptyState}>
+                    <span><FileText size={22} aria-hidden="true" /></span>
+                    <strong>{t(K("preview.emptyTitle"))}</strong>
+                    <small>{t(K("preview.emptyHint"))}</small>
+                  </div>
+                  <div className={styles.canvasPageNumber}>{t(K("preview.pageOf"))}</div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {isSummarize ? (
+            <div className={styles.summaryOutputCards}>
+              <article><div><NotebookPen size={13} /><strong>{t(K("summary.cardExecutive"))}</strong></div><p>{t(K("summary.cardExecutiveBody"))}</p></article>
+              <article><div><ListChecks size={13} /><strong>{t(K("summary.takeawaysHeading"))}</strong></div><p>{t(K("summary.cardTakeawaysBody"))}</p></article>
+              <article><div><Sparkles size={13} /><strong>{t(K("summary.cardNext"))}</strong></div><p>{t(K("summary.cardNextBody"))}</p></article>
+            </div>
+          ) : (
+            <div className={styles.outputCards}>
+              {outputs.map(({ key, icon: Icon }) => (
+                <div className={styles.outputCard} key={key}>
+                  <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{t(key)}</strong></div>
+                  <i /><i /><i />
+                  <small>{t(K("output.pending"))}</small>
                 </div>
               ))}
             </div>
-            <div className={styles.canvas}>
-              <div className={styles.documentSheet} aria-hidden="true">
-                <div className={styles.sheetTopline}><span /><span>{t(K("preview.sheetLabel"))}</span></div>
-                <div className={styles.sheetTitle} />
-                <div className={styles.sheetSubtitle} />
-                <div className={styles.sheetParagraph}><i /><i /><i /><i /></div>
-                <div className={styles.sheetDataRow}>
-                  <div className={styles.sheetTable}><i /><i /><i /><i /><i /><i /></div>
-                  <div className={styles.sheetChart}><b /><b /><b /><b /><b /></div>
-                </div>
-                <div className={styles.sheetParagraph}><i /><i /><i /></div>
-              </div>
-              <div className={styles.canvasEmptyState}>
-                <span><FileText size={22} aria-hidden="true" /></span>
-                <strong>{t(K("preview.emptyTitle"))}</strong>
-                <small>{t(K("preview.emptyHint"))}</small>
-              </div>
-              <div className={styles.canvasPageNumber}>{t(K("preview.pageOf"))}</div>
-            </div>
-          </div>
-
-          <div className={styles.outputCards}>
-            {outputs.map(({ key, icon: Icon }) => (
-              <div className={styles.outputCard} key={key}>
-                <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{t(key)}</strong></div>
-                <i /><i /><i />
-                <small>{t(K("output.pending"))}</small>
-              </div>
-            ))}
-          </div>
+          )}
           </main>
         }
         right={
@@ -235,11 +329,24 @@ export function DocumentGenerationPage() {
             </div>
           </div>
           <SelectPlaceholder label={t(K("settings.language"))} value={t(K("settings.languageValue"))} />
-          <SelectPlaceholder label={t(K("settings.pageRange"))} value={t(K("source.allPages"))} />
-          <SelectPlaceholder label={t(K("settings.depth"))} value={t(K("settings.depthValue"))} />
-          <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
+          {isSummarize ? (
+            <>
+              <SelectPlaceholder label={t(K("summary.length"))} value={t(K("summary.lengthValue"))} />
+              <SelectPlaceholder label={t(K("summary.focus"))} value={t(K("summary.focusValue"))} />
+              <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("summary.toneValue"))} />
+            </>
+          ) : (
+            <>
+              <SelectPlaceholder label={t(K("settings.pageRange"))} value={t(K("source.allPages"))} />
+              <SelectPlaceholder label={t(K("settings.depth"))} value={t(K("settings.depthValue"))} />
+              <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
+            </>
+          )}
           <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{t(K("settings.credits"))}</strong></div>
-          <div className={styles.generateButton} aria-disabled="true"><span>{t(K("settings.generate"))}</span><Sparkles size={17} aria-hidden="true" /></div>
+          <button className={styles.generateButton} type="button" disabled>
+            <span>{isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
+            <Sparkles size={17} aria-hidden="true" />
+          </button>
           <div className={styles.secureNote}><span />{t(K("settings.secure"))}</div>
           </aside>
         }
