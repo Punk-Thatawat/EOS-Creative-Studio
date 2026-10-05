@@ -14,6 +14,15 @@ export type TextToSpeechInput = {
   speed: number;
   pitch?: number;
   volume?: number;
+  /** MiniMax speech only; overrides the emotion derived from `tone`. */
+  emotion?: "happy" | "sad" | "angry" | "fearful" | "disgusted" | "surprised" | "neutral";
+  /** MiniMax speech only. */
+  englishNormalization?: boolean;
+  /** MiniMax speech only; overrides the language_boost derived from `languageCode`. */
+  languageBoost?: "Thai" | "English";
+  sampleRate?: 8000 | 16000 | 22050 | 24000 | 32000 | 44100;
+  bitrate?: 32000 | 64000 | 128000 | 256000;
+  channel?: "1" | "2";
   pronunciationHint?: string;
   backgroundMusicEnabled?: boolean;
   backgroundMusicKey?: string;
@@ -30,6 +39,15 @@ export type TextToSpeechScenesInput = {
   speed: number;
   pitch?: number;
   volume?: number;
+  /** MiniMax speech only; overrides the emotion derived from `tone`. */
+  emotion?: "happy" | "sad" | "angry" | "fearful" | "disgusted" | "surprised" | "neutral";
+  /** MiniMax speech only. */
+  englishNormalization?: boolean;
+  /** MiniMax speech only; overrides the language_boost derived from `languageCode`. */
+  languageBoost?: "Thai" | "English";
+  sampleRate?: 8000 | 16000 | 22050 | 24000 | 32000 | 44100;
+  bitrate?: 32000 | 64000 | 128000 | 256000;
+  channel?: "1" | "2";
   pronunciationHint?: string;
   pauseSeconds?: number;
   backgroundMusicEnabled?: boolean;

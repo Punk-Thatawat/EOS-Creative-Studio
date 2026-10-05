@@ -108,15 +108,24 @@ const visibleTabs: readonly AudioTab[] = [
 ];
 // The backend may list Eleven v3 under either its WaveSpeed-style key or the raw ElevenLabs id.
 const TEXT_TO_SPEECH_MODEL_KEYS = ["elevenlabs/eleven-v3", "eleven_v3"];
+const MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS = ["minimax/speech-2.8-hd"];
+type MiniMaxSpeechEmotion = "happy" | "sad" | "angry" | "fearful" | "disgusted" | "surprised" | "neutral";
 
 function supportsMiniMaxSpeechTuning(modelId: string): boolean {
   return /^minimax(?:\/|_)speech[-_]/i.test(modelId.trim());
 }
 
-/** Prefer Eleven v3; otherwise fall back to the active (or first) model so generation is never left without one. */
+/**
+ * Offer Eleven v3 (default, listed first) and MiniMax Speech 2.8 HD when the backend lists them; otherwise fall
+ * back to the active (or first) model so generation is never left without one.
+ */
 function pickTextToSpeechModels(items: AudioModel[]): AudioModel[] {
-  const preferred = items.find((model) => TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key));
-  const chosen = preferred ?? items.find((model) => model.isActive) ?? items[0];
+  const offered = [
+    items.find((model) => TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key)),
+    items.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key)),
+  ].filter((model): model is AudioModel => model !== undefined);
+  if (offered.length) return offered;
+  const chosen = items.find((model) => model.isActive) ?? items[0];
   return chosen ? [chosen] : [];
 }
 const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
@@ -3507,6 +3516,12 @@ export function AudioGenerationPage() {
   const [speed, setSpeed] = useState(0.95);
   const [pitch, setPitch] = useState(0);
   const [synthVolume, setSynthVolume] = useState(1);
+  const [speechEmotion, setSpeechEmotion] = useState<MiniMaxSpeechEmotion | "">("");
+  const [englishNormalization, setEnglishNormalization] = useState(false);
+  const [ttsLanguageBoost, setTtsLanguageBoost] = useState<"Thai" | "English">("Thai");
+  const [ttsSampleRate, setTtsSampleRate] = useState("");
+  const [ttsBitrate, setTtsBitrate] = useState("");
+  const [ttsChannel, setTtsChannel] = useState<"" | "1" | "2">("");
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -3640,7 +3655,7 @@ export function AudioGenerationPage() {
       const items = await listAudioModels("textToSpeech");
       const eligible = pickTextToSpeechModels(items);
       setAvailableModels(eligible);
-      setSelectedModel(eligible[0]?.key ?? "");
+      setSelectedModel((current) => (eligible.some((model) => model.key === current) ? current : (eligible[0]?.key ?? "")));
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -4154,7 +4169,18 @@ export function AudioGenerationPage() {
         languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
         ...(voiceMode === "tone" && tone ? { tone } : {}),
         speed,
-        ...(supportsMiniMaxSpeechTuning(selectedModel) ? { pitch, volume: synthVolume } : {}),
+        ...(supportsMiniMaxSpeechTuning(selectedModel)
+          ? {
+              pitch,
+              volume: synthVolume,
+              englishNormalization,
+              ...(speechEmotion ? { emotion: speechEmotion } : {}),
+              languageBoost: ttsLanguageBoost,
+              ...(ttsSampleRate ? { sampleRate: Number(ttsSampleRate) as 8000 | 16000 | 22050 | 24000 | 32000 | 44100 } : {}),
+              ...(ttsBitrate ? { bitrate: Number(ttsBitrate) as 32000 | 64000 | 128000 | 256000 } : {}),
+              ...(ttsChannel ? { channel: ttsChannel } : {}),
+            }
+          : {}),
         pronunciationHint: pronunciation.trim() || undefined,
         backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
         backgroundMusicKey: backgroundMusicPreset || undefined,
@@ -4205,7 +4231,18 @@ export function AudioGenerationPage() {
         languageCode: language === "Thai" ? "th" : language === "Japanese" ? "ja" : "en",
         ...(voiceMode === "tone" && tone ? { tone } : {}),
         speed,
-        ...(supportsMiniMaxSpeechTuning(selectedModel) ? { pitch, volume: synthVolume } : {}),
+        ...(supportsMiniMaxSpeechTuning(selectedModel)
+          ? {
+              pitch,
+              volume: synthVolume,
+              englishNormalization,
+              ...(speechEmotion ? { emotion: speechEmotion } : {}),
+              languageBoost: ttsLanguageBoost,
+              ...(ttsSampleRate ? { sampleRate: Number(ttsSampleRate) as 8000 | 16000 | 22050 | 24000 | 32000 | 44100 } : {}),
+              ...(ttsBitrate ? { bitrate: Number(ttsBitrate) as 32000 | 64000 | 128000 | 256000 } : {}),
+              ...(ttsChannel ? { channel: ttsChannel } : {}),
+            }
+          : {}),
         pronunciationHint: pronunciation.trim() || undefined,
         pauseSeconds: 0.25,
         backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
@@ -4876,7 +4913,17 @@ export function AudioGenerationPage() {
                   </div>
                   <div className={styles.settingBlock}>
                     <FieldLabel>{t("create.audio.voiceModel")}</FieldLabel>
-                    <div className={styles.fixedVoiceModel}>{availableModels[0]?.name ?? "ElevenLabs · Eleven v3"}</div>
+                    {availableModels.length > 1 ? (
+                      <Dropdown
+                        value={selectedModel}
+                        options={availableModels.map((model) => ({ value: model.key, label: model.name }))}
+                        onChange={setSelectedModel}
+                        ariaLabel={t("create.audio.voiceModel")}
+                        triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
+                      />
+                    ) : (
+                      <div className={styles.fixedVoiceModel}>{availableModels[0]?.name ?? "ElevenLabs · Eleven v3"}</div>
+                    )}
                   </div>
                   <div className={styles.settingBlock}>
                     <FieldLabel>{t("create.audio.outputFormat")}</FieldLabel>
@@ -4954,6 +5001,78 @@ export function AudioGenerationPage() {
                           <span>1x</span>
                           <span>10x</span>
                         </div>
+                      </div>
+                      <div className={styles.settingBlock}>
+                        <SelectField
+                          label={t("create.audio.clone.emotion")}
+                          value={speechEmotion}
+                          onChange={(value) => setSpeechEmotion(value as MiniMaxSpeechEmotion | "")}
+                          options={[
+                            { value: "", label: t("create.audio.emotionAuto") },
+                            { value: "neutral", label: t("create.audio.clone.emotionNeutral") },
+                            { value: "happy", label: t("create.audio.clone.emotionHappy") },
+                            { value: "sad", label: t("create.audio.clone.emotionSad") },
+                            { value: "angry", label: t("create.audio.clone.emotionAngry") },
+                            { value: "fearful", label: t("create.audio.clone.emotionFearful") },
+                            { value: "disgusted", label: t("create.audio.clone.emotionDisgusted") },
+                            { value: "surprised", label: t("create.audio.clone.emotionSurprised") },
+                          ]}
+                        />
+                      </div>
+                      <div className={styles.settingBlock}>
+                        <div className={styles.musicHeader}>
+                          <FieldLabel>{t("create.audio.clone.englishNormalization")}</FieldLabel>
+                          <button
+                            type="button"
+                            className={englishNormalization ? styles.toggleOn : styles.toggleOff}
+                            onClick={() => setEnglishNormalization((current) => !current)}
+                            aria-pressed={englishNormalization}
+                          >
+                            <span />
+                          </button>
+                        </div>
+                      </div>
+                      <div className={styles.settingBlock}>
+                        <SelectField
+                          label={t("create.audio.language")}
+                          value={ttsLanguageBoost}
+                          onChange={(value) => setTtsLanguageBoost(value as "Thai" | "English")}
+                          options={MINIMAX_LANGUAGE_BOOST_OPTIONS}
+                        />
+                      </div>
+                      <div className={styles.settingBlock}>
+                        <SelectField
+                          label={t("create.audio.clone.sampleRate")}
+                          value={ttsSampleRate}
+                          onChange={setTtsSampleRate}
+                          options={[
+                            { value: "", label: t("create.audio.defaultOption") },
+                            ...["8000", "16000", "22050", "24000", "32000", "44100"].map((value) => ({ value, label: `${value} Hz` })),
+                          ]}
+                        />
+                      </div>
+                      <div className={styles.settingBlock}>
+                        <SelectField
+                          label={t("create.audio.clone.bitrate")}
+                          value={ttsBitrate}
+                          onChange={setTtsBitrate}
+                          options={[
+                            { value: "", label: t("create.audio.defaultOption") },
+                            ...["32000", "64000", "128000", "256000"].map((value) => ({ value, label: `${Number(value) / 1000} kbps` })),
+                          ]}
+                        />
+                      </div>
+                      <div className={styles.settingBlock}>
+                        <SelectField
+                          label={t("create.audio.clone.channel")}
+                          value={ttsChannel}
+                          onChange={(value) => setTtsChannel(value as "" | "1" | "2")}
+                          options={[
+                            { value: "", label: t("create.audio.defaultOption") },
+                            { value: "1", label: t("create.audio.clone.channelMono") },
+                            { value: "2", label: t("create.audio.clone.channelStereo") },
+                          ]}
+                        />
                       </div>
                     </>
                   ) : null}

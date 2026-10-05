@@ -864,8 +864,7 @@ const en = {
   "create.audio.tones.friendly": "Friendly",
   "create.audio.tones.premium": "Premium",
   "create.audio.tones.dramatic": "Dramatic",
-  "create.audio.info.voiceMode":
-    "Choose a preset voice tone or use one of your cloned voices.",
+  "create.audio.info.voiceMode": "Choose a preset voice tone or use one of your cloned voices.",
   "create.audio.info.script":
     "Write the words you want the voice to speak. You can add tone and pronunciation guidance.",
   "create.audio.info.estimatedCredits":
@@ -884,6 +883,8 @@ const en = {
   "create.audio.voiceMode.cloneNewLink": "+ Clone a new voice",
   "create.audio.voiceMode.notReady": "Not ready yet",
   "create.audio.pitch": "PITCH",
+  "create.audio.emotionAuto": "Match the tone",
+  "create.audio.defaultOption": "Default",
   "create.audio.synthVolume": "VOICE VOLUME",
   "create.audio.loadingVoices": "Loading voices...",
   "create.audio.voicesError": "Unable to load voices",
@@ -1061,7 +1062,8 @@ const en = {
   "create.audio.sfx.title": "Design the moment",
   "create.audio.sfx.description": "Describe a sound and create variations ready for your edit.",
   "create.audio.sfx.soundDescription": "SOUND DESCRIPTION",
-  "create.audio.sfx.defaultDescription": "A cinematic whoosh that rises quickly, hits with a soft impact, and fades into a deep room tone.",
+  "create.audio.sfx.defaultDescription":
+    "A cinematic whoosh that rises quickly, hits with a soft impact, and fades into a deep room tone.",
   "create.audio.sfx.effectCategory": "EFFECT CATEGORY",
   "create.audio.sfx.categoryCinematic": "Cinematic",
   "create.audio.sfx.categoryNature": "Nature",
@@ -1209,11 +1211,13 @@ const en = {
   "auth.invite.newPassword": "Create password",
   "auth.invite.confirmPassword": "Confirm password",
   "auth.invite.submit": "SET PASSWORD",
-  "auth.invite.invalid": "This invitation link is invalid or has expired. Ask an administrator to send a new invitation.",
+  "auth.invite.invalid":
+    "This invitation link is invalid or has expired. Ask an administrator to send a new invitation.",
   "admin.members.invite.open": "Invite member",
   "admin.members.invite.eyebrow": "Member access",
   "admin.members.invite.title": "Invite a member",
-  "admin.members.invite.description": "We’ll email them a one-time password setup link, the test period, and the selected Quick Playbook PDF. The link expires in 3 days.",
+  "admin.members.invite.description":
+    "We’ll email them a one-time password setup link with the test period and attach the selected Quick Playbook PDF. The link expires in 3 days.",
   "admin.members.invite.email": "Email address",
   "admin.members.invite.recipientName": "Recipient name in email",
   "admin.members.invite.recipientNamePlaceholder": "e.g. Alex Smith",
@@ -1224,7 +1228,8 @@ const en = {
   "admin.members.invite.testDateRangeError": "End date must be the same as or later than the start date.",
   "admin.members.invite.quickPlaybook": "Quick Playbook category",
   "admin.members.invite.quickPlaybookPlaceholder": "Choose a category",
-  "admin.members.invite.quickPlaybookHint": "Select all that apply; every matching PDF will be attached to the invitation email.",
+  "admin.members.invite.quickPlaybookHint":
+    "Select all that apply; every matching PDF will be attached to the invitation email.",
   "admin.members.invite.quickPlaybookSelected": "{count} selected",
   "admin.members.invite.quickPlaybook.creator": "Creator / KOL",
   "admin.members.invite.quickPlaybook.marketing": "Marketing / Content",
@@ -1240,7 +1245,8 @@ const en = {
   "admin.members.invite.displayNamePlaceholder": "English name shown in the studio",
   "admin.members.invite.initialCredits": "Initial credits",
   "admin.members.invite.initialCreditsPlaceholder": "e.g. 100",
-  "admin.members.invite.initialCreditsHint": "For a new account, this replaces the configured signup bonus. Leave blank to use that bonus.",
+  "admin.members.invite.initialCreditsHint":
+    "For a new account, this replaces the configured signup bonus. Leave blank to use that bonus.",
   "admin.members.invite.accountRole": "Account role",
   "admin.members.invite.userRole": "User",
   "admin.members.invite.adminRole": "Admin — full access",
@@ -1255,7 +1261,8 @@ const en = {
   "admin.members.invite.error": "Unable to send invitation",
   "admin.members.invite.pending": "Invitation pending",
   "admin.members.invite.resend": "Resend invitation",
-  "admin.members.invite.resent": "Invitation resent to {email}. The new link is valid for 3 days; previous links no longer work.",
+  "admin.members.invite.resent":
+    "Invitation resent to {email}. The new link is valid for 3 days; previous links no longer work.",
   "auth.reset.invalid": "This reset link is invalid or has expired.",
   "auth.passwordStrength.needsMore": "Needs more strength",
   "auth.passwordStrength.goodStart": "Good start",
@@ -2157,6 +2164,8 @@ const th: Record<keyof typeof en, string> = {
   "create.audio.voiceMode.cloneNewLink": "+ โคลนเสียงใหม่",
   "create.audio.voiceMode.notReady": "ยังใช้งานไม่ได้",
   "create.audio.pitch": "ระดับเสียงสูงต่ำ",
+  "create.audio.emotionAuto": "ตามโทนเสียง",
+  "create.audio.defaultOption": "ค่าเริ่มต้น",
   "create.audio.synthVolume": "ความดังของเสียงพูด",
   "create.audio.loadingVoices": "กำลังโหลดรายการเสียง...",
   "create.audio.voicesError": "โหลดรายการเสียงไม่สำเร็จ",
@@ -2334,7 +2343,8 @@ const th: Record<keyof typeof en, string> = {
   "create.audio.sfx.title": "ออกแบบช่วงเวลาของคุณ",
   "create.audio.sfx.description": "อธิบายเสียงที่ต้องการ แล้วสร้างหลายเวอร์ชันพร้อมนำไปตัดต่อ",
   "create.audio.sfx.soundDescription": "คำอธิบายเสียง",
-  "create.audio.sfx.defaultDescription": "เสียงหวือแบบภาพยนตร์ที่พุ่งขึ้นอย่างรวดเร็ว กระทบแบบนุ่มนวล แล้วจางหายไปเป็นเสียงก้องในห้องลึกๆ",
+  "create.audio.sfx.defaultDescription":
+    "เสียงหวือแบบภาพยนตร์ที่พุ่งขึ้นอย่างรวดเร็ว กระทบแบบนุ่มนวล แล้วจางหายไปเป็นเสียงก้องในห้องลึกๆ",
   "create.audio.sfx.effectCategory": "หมวดเอฟเฟกต์",
   "create.audio.sfx.categoryCinematic": "แบบภาพยนตร์",
   "create.audio.sfx.categoryNature": "ธรรมชาติ",
@@ -2486,11 +2496,13 @@ const th: Record<keyof typeof en, string> = {
   "admin.members.invite.open": "เชิญสมาชิก",
   "admin.members.invite.eyebrow": "สิทธิ์สมาชิก",
   "admin.members.invite.title": "เชิญสมาชิก",
-  "admin.members.invite.description": "เราจะส่งลิงก์ตั้งรหัสผ่านแบบใช้ครั้งเดียว ช่วงเวลาทดลอง และ Quick Playbook ที่เลือกไปทางอีเมล ลิงก์มีอายุ 3 วัน",
+  "admin.members.invite.description":
+    "เราจะส่งลิงก์ตั้งรหัสผ่านแบบใช้ครั้งเดียวพร้อมช่วงเวลาทดลอง และแนบ Quick Playbook ตามประเภทที่เลือกไปทางอีเมล ลิงก์มีอายุ 3 วัน",
   "admin.members.invite.email": "อีเมล",
   "admin.members.invite.recipientName": "ชื่อผู้รับในอีเมล",
   "admin.members.invite.recipientNamePlaceholder": "เช่น สมชาย ใจดี",
-  "admin.members.invite.recipientNameHint": "กรอกชื่อโดยไม่ต้องเติมคำว่า ‘คุณ’ ใช้ในคำขึ้นต้นอีเมล หากเว้นว่างจะใช้คำทักทายทั่วไป",
+  "admin.members.invite.recipientNameHint":
+    "กรอกชื่อโดยไม่ต้องเติมคำว่า ‘คุณ’ ใช้ในคำขึ้นต้นอีเมล หากเว้นว่างจะใช้คำทักทายทั่วไป",
   "admin.members.invite.testPeriod": "ช่วงเวลาทดลองใช้งาน",
   "admin.members.invite.testStartDate": "วันที่เริ่มทดสอบ",
   "admin.members.invite.testEndDate": "วันที่สิ้นสุดการทดสอบ",
@@ -2513,7 +2525,8 @@ const th: Record<keyof typeof en, string> = {
   "admin.members.invite.displayNamePlaceholder": "ชื่อภาษาอังกฤษที่แสดงในสตูดิโอ",
   "admin.members.invite.initialCredits": "เครดิตเริ่มต้น",
   "admin.members.invite.initialCreditsPlaceholder": "เช่น 100",
-  "admin.members.invite.initialCreditsHint": "สำหรับบัญชีใหม่ ค่านี้จะแทนโบนัสสมัครสมาชิกที่ตั้งค่าไว้ หากเว้นว่าง ระบบจะใช้โบนัสเดิม",
+  "admin.members.invite.initialCreditsHint":
+    "สำหรับบัญชีใหม่ ค่านี้จะแทนโบนัสสมัครสมาชิกที่ตั้งค่าไว้ หากเว้นว่าง ระบบจะใช้โบนัสเดิม",
   "admin.members.invite.accountRole": "สิทธิ์บัญชี",
   "admin.members.invite.userRole": "ผู้ใช้",
   "admin.members.invite.adminRole": "ผู้ดูแลระบบ — เข้าถึงได้ทั้งหมด",
