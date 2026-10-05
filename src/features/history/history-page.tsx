@@ -13,6 +13,7 @@ import {
   Clock3,
   ExternalLink,
   FileClock,
+  FileText,
   Image as ImageIcon,
   LoaderCircle,
   RefreshCw,
@@ -52,6 +53,7 @@ const types = [
   { value: "image", label: "ภาพ", icon: ImageIcon },
   { value: "video", label: "วิดีโอ", icon: Video },
   { value: "audio", label: "เสียง", icon: AudioLines },
+  { value: "document", label: "เอกสาร", icon: FileText },
 ] as const;
 const statuses = {
   all: "ทุกสถานะ",
@@ -80,7 +82,7 @@ const features: Record<string, string> = {
   "sound-effects": "เอฟเฟกต์เสียง",
   "audio-cleanup": "ปรับคุณภาพเสียง",
 };
-const historyTypeValues = new Set<HistoryType>(["all", "image", "video", "audio"]);
+const historyTypeValues = new Set<HistoryType>(["all", "image", "video", "audio", "document"]);
 const featureLabel = (item: HistoryItem) => features[item.feature] ?? item.feature;
 const modelLabel = (item: HistoryItem) => item.modelLabel || item.model;
 const title = (item: HistoryItem) =>
@@ -120,7 +122,15 @@ function Status({ item }: { item: HistoryItem }) {
 function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const Icon = item.mediaKind === "image" ? ImageIcon : item.mediaKind === "video" ? Video : AudioLines;
+  const Icon = item.mediaKind === "image" ? ImageIcon : item.mediaKind === "video" ? Video : item.mediaKind === "document" ? FileText : AudioLines;
+  if (item.documentSummary)
+    return (
+      <div className={`${s.mediaFallback} ${s.documentPreview}`}>
+        <FileText size={25} />
+        <strong>{item.documentSummary.filename}</strong>
+        <span>{item.documentSummary.summary.executiveSummary}</span>
+      </div>
+    );
   if (failed || !item.outputUrl)
     return (
       <div className={s.mediaFallback}>
@@ -221,9 +231,19 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
         if (event.target === ref.current) close();
       }}
     >
-      <div className={s.dialogLayout}>
+    <div className={s.dialogLayout}>
         <div className={s.dialogMedia}>
-          <Media key={item.outputUrl ?? item.id} item={item} large />
+          {item.documentSummary ? (
+            <article className={s.documentPage}>
+              <span><FileText size={16} /> สรุปเอกสาร</span>
+              <h3>{item.documentSummary.summary.title}</h3>
+              <p>{item.documentSummary.summary.executiveSummary}</p>
+              {item.documentSummary.summary.keyTakeaways.length > 0 && <>
+                <h4>ประเด็นสำคัญ</h4>
+                <ul>{item.documentSummary.summary.keyTakeaways.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
+              </>}
+            </article>
+          ) : <Media key={item.outputUrl ?? item.id} item={item} large />}
         </div>
         <div className={s.dialogInfo}>
           <button className={s.close} onClick={close} aria-label="ปิดตัวอย่าง" autoFocus>
@@ -254,7 +274,30 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
                 <dd>{item.creditCost.toLocaleString()} เครดิต</dd>
               </div>
             )}
+            {item.documentSummary && <div><dt>ไฟล์ต้นฉบับ</dt><dd>{item.documentSummary.filename}</dd></div>}
           </dl>
+          {item.documentSummary && <section className={s.documentDetails} aria-label="รายละเอียดสรุปเอกสาร">
+            <h3>บทสรุปผู้บริหาร</h3>
+            <p>{item.documentSummary.summary.executiveSummary}</p>
+            {item.documentSummary.summary.keyTakeaways.length > 0 && <>
+              <h3>ประเด็นสำคัญ</h3>
+              <ul>{item.documentSummary.summary.keyTakeaways.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
+            </>}
+            {item.documentSummary.summary.actionItems.length > 0 && <>
+              <h3>สิ่งที่ต้องดำเนินการ</h3>
+              <ul>{item.documentSummary.summary.actionItems.map((entry, index) => <li key={`${index}-${entry.task}`}>
+                {entry.task}{entry.owner ? ` · ${entry.owner}` : ""}{entry.dueDate ? ` · ${entry.dueDate}` : ""}
+              </li>)}</ul>
+            </>}
+            {item.documentSummary.summary.decisions.length > 0 && <>
+              <h3>มติและข้อสรุป</h3>
+              <ul>{item.documentSummary.summary.decisions.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
+            </>}
+            {item.documentSummary.summary.importantDates.length > 0 && <>
+              <h3>วันที่สำคัญ</h3>
+              <ul>{item.documentSummary.summary.importantDates.map((entry, index) => <li key={`${index}-${entry.date}-${entry.event}`}><b>{entry.date}</b> · {entry.event}</li>)}</ul>
+            </>}
+          </section>}
           {item.errorMessage && (
             <details className={s.errorDetails}>
               <summary>รายละเอียดข้อผิดพลาด</summary>

@@ -5,14 +5,35 @@ import { getApiAccessToken } from "@/lib/auth/access-token";
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
 
-export type HistoryType = "all" | "image" | "video" | "audio";
+export type HistoryType = "all" | "image" | "video" | "audio" | "document";
 export type HistoryStatus = "all" | "queued" | "processing" | "completed" | "failed" | "cancelled";
+
+export type HistoryDocumentSummary = {
+  filename: string;
+  summary: {
+    title: string;
+    executiveSummary: string;
+    keyTakeaways: string[];
+    actionItems: Array<{ task: string; owner?: string; dueDate?: string }>;
+    decisions: string[];
+    importantDates: Array<{ date: string; event: string }>;
+  };
+  options: {
+    summaryStyle: "executive" | "bullets";
+    summaryLength: "brief" | "standard" | "detailed";
+    language: "auto" | "English" | "Thai";
+    includeKeyTakeaways: boolean;
+    includeActionItems: boolean;
+    includeImportantDates: boolean;
+    prompt?: string;
+  };
+};
 
 export type HistoryItem = {
   settings?: Record<string, unknown>;
   id: string;
-  source: "generation" | "video-storyboard" | "audio";
-  mediaKind: "image" | "video" | "audio";
+  source: "generation" | "video-storyboard" | "audio" | "document-summary";
+  mediaKind: "image" | "video" | "audio" | "document";
   feature: string;
   title: string;
   prompt?: string;
@@ -28,6 +49,7 @@ export type HistoryItem = {
   durationSeconds?: number;
   creditCost?: number;
   errorMessage?: string;
+  documentSummary?: HistoryDocumentSummary;
   createdAt: string;
   updatedAt: string;
 };
@@ -35,7 +57,7 @@ export type HistoryItem = {
 export type HistoryResponse = {
   items: HistoryItem[];
   pagination: { limit: number; offset: number; total: number; hasMore: boolean };
-  summary: { total: number; inProgress: number; completed: number; failed: number; images: number; videos: number; audio: number };
+  summary: { total: number; inProgress: number; completed: number; failed: number; images: number; videos: number; audio: number; documents: number };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,8 +71,8 @@ function isCount(value: unknown): value is number {
 function isHistoryItem(value: unknown): value is HistoryItem {
   return isRecord(value)
     && ["id", "feature", "title", "createdAt", "updatedAt"].every((key) => typeof value[key] === "string")
-    && ["generation", "video-storyboard", "audio"].some((source) => source === value.source)
-    && ["image", "video", "audio"].some((kind) => kind === value.mediaKind)
+    && ["generation", "video-storyboard", "audio", "document-summary"].some((source) => source === value.source)
+    && ["image", "video", "audio", "document"].some((kind) => kind === value.mediaKind)
     && ["queued", "processing", "completed", "failed", "cancelled"].some((status) => status === value.status)
     && ["outputCount", "totalCount", "completedCount"].every((key) => isCount(value[key]));
 }
@@ -63,7 +85,7 @@ function isHistoryResponse(value: unknown): value is HistoryResponse {
     && ["limit", "offset", "total"].every((key) => isCount(pagination[key]))
     && typeof pagination.hasMore === "boolean"
     && isRecord(summary)
-    && ["total", "inProgress", "completed", "failed", "images", "videos", "audio"].every((key) => isCount(summary[key]));
+    && ["total", "inProgress", "completed", "failed", "images", "videos", "audio", "documents"].every((key) => isCount(summary[key]));
 }
 
 export async function fetchHistory(input: { search?: string; type?: HistoryType; status?: HistoryStatus; offset?: number; limit?: number; signal?: AbortSignal } = {}): Promise<HistoryResponse> {
