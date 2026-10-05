@@ -224,29 +224,38 @@
   display: flex;
   min-width: 0;
   overflow-x: auto;
-  border: 1px solid var(--doc-line);
-  border-radius: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--doc-line);
+  border-radius: 0;
   background: #fff;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 
+.modeTabs::-webkit-scrollbar { display: none; }
+
 .modeTab {
-  display: inline-flex;
+  display: flex;
+  flex: 1 1 auto;
   min-width: max-content;
-  min-height: 42px;
+  min-height: 52px;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-right: 1px solid #eeece9;
-  padding: 0 17px;
-  color: #626a72;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  padding: 12px 10px;
+  color: #515866;
+  background: transparent;
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.modeTab:last-child { border-right: 0; }
+.modeTab:hover { color: var(--doc-orange); }
 .modeTab svg { color: #808890; }
-.modeTabActive { color: var(--doc-orange); }
+.modeTabActive { border-bottom-color: var(--doc-orange); color: var(--doc-orange); }
 .modeTabActive svg { color: var(--doc-orange); }
 
 .sourcePanel,

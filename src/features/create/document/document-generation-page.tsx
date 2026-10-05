@@ -104,10 +104,10 @@ export function DocumentGenerationPage() {
         tabs={
           <nav className={styles.modeTabs} aria-label="Document tools">
             {modes.map(({ label, icon: Icon, active }) => (
-              <div key={label} className={`${styles.modeTab} ${active ? styles.modeTabActive : ""}`} aria-current={active ? "page" : undefined}>
+              <button key={label} type="button" className={`${styles.modeTab} ${active ? styles.modeTabActive : ""}`} aria-pressed={active}>
                 <Icon size={16} strokeWidth={2} aria-hidden="true" />
                 <span>{label}</span>
-              </div>
+              </button>
             ))}
           </nav>
         }
