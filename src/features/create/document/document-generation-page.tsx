@@ -1,28 +1,35 @@
 "use client";
 
 import {
+  ArrowRight,
   ArrowUpRight,
   BarChart3,
+  Clock3,
   ChevronDown,
   CloudUpload,
   Download,
   FileCheck2,
   FileText,
   Hand,
+  History as HistoryIcon,
+  LoaderCircle,
   Languages,
   ListChecks,
   NotebookPen,
   Play,
   Plus,
+  RefreshCw,
   ScanText,
   Sparkles,
   Table2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
+import { fetchHistory, type HistoryItem } from "@/lib/api/history";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import styles from "./document-generation-page.module.css";
@@ -35,7 +42,7 @@ type SummaryStyle = "executive" | "bullets";
 const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "ocr", icon: ScanText, available: true },
   { id: "summarize", icon: NotebookPen, available: true },
-  { id: "translate", icon: Languages },
+  { id: "translate", icon: Languages, available: true },
   { id: "contract", icon: FileCheck2 },
   { id: "report", icon: BarChart3 },
   { id: "form", icon: ListChecks },
@@ -109,6 +116,11 @@ function formatFileSize(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function historyDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "ไม่ทราบวันที่" : new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
 export function DocumentGenerationPage() {
   const { t } = useLocale();
   const [activeMode, setActiveMode] = useState<ModeId>("ocr");
@@ -116,14 +128,24 @@ export function DocumentGenerationPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [summaryPrompt, setSummaryPrompt] = useState("");
   const [summaryResult, setSummaryResult] = useState<DocumentSummary | null>(null);
+  const [summaryFilename, setSummaryFilename] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryLength, setSummaryLength] = useState<"brief" | "standard" | "detailed">("standard");
   const [summaryLanguage, setSummaryLanguage] = useState<"auto" | "English" | "Thai">("auto");
   const [focusAreas, setFocusAreas] = useState({ keyTakeaways: true, actionItems: true, importantDates: true });
   const [summaryOptions, setSummaryOptions] = useState({ model: "google/gemini-3.5-flash", credits: 1 });
+  const [documentHistory, setDocumentHistory] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [historyRefresh, setHistoryRefresh] = useState(0);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const [translationSourceLanguage, setTranslationSourceLanguage] = useState("auto");
+  const [translationTargetLanguage, setTranslationTargetLanguage] = useState("Thai");
+  const [outputFormat, setOutputFormat] = useState("DOCX");
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const isSummarize = activeMode === "summarize";
+  const isTranslate = activeMode === "translate";
 
   useEffect(() => {
     let mounted = true;
@@ -132,6 +154,23 @@ export function DocumentGenerationPage() {
     }).catch(() => undefined);
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setHistoryLoading(true);
+    setHistoryError("");
+    void fetchHistory({ type: "document", status: "completed", limit: 6, signal: controller.signal })
+      .then((response) => {
+        setDocumentHistory(response.items.filter((item) => item.documentSummary));
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setHistoryError(error instanceof Error ? error.message : "โหลดประวัติไม่สำเร็จ");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setHistoryLoading(false);
+      });
+    return () => controller.abort();
+  }, [historyRefresh]);
 
   const setFileFromList = (files: FileList | null) => {
     const file = files?.[0];
@@ -147,6 +186,8 @@ export function DocumentGenerationPage() {
     }
     setSelectedFile(file);
     setSummaryResult(null);
+    setSummaryFilename(file.name);
+    setSelectedHistoryId(null);
     setSummaryError("");
   };
 
@@ -166,12 +207,37 @@ export function DocumentGenerationPage() {
         includeImportantDates: focusAreas.importantDates,
       });
       setSummaryResult(response.summary);
+      setSummaryFilename(selectedFile.name);
+      setSelectedHistoryId(response.id);
+      setHistoryRefresh((current) => current + 1);
       setSummaryOptions((current) => ({ ...current, model: response.model, credits: response.creditsUsed }));
     } catch (error) {
       setSummaryError(error instanceof Error ? error.message : t(K("summary.errorGeneral")));
     } finally {
       setIsSummarizing(false);
     }
+  };
+
+  const openDocumentHistory = (item: HistoryItem) => {
+    const saved = item.documentSummary;
+    if (!saved) return;
+    if (uploadInputRef.current) uploadInputRef.current.value = "";
+    setActiveMode("summarize");
+    setSelectedFile(null);
+    setSummaryFilename(saved.filename);
+    setSummaryResult(saved.summary);
+    setSummaryError("");
+    setSelectedHistoryId(item.id);
+    setSummaryPrompt(saved.options.prompt ?? "");
+    setSummaryStyle(saved.options.summaryStyle);
+    setSummaryLength(saved.options.summaryLength);
+    setSummaryLanguage(saved.options.language);
+    setFocusAreas({
+      keyTakeaways: saved.options.includeKeyTakeaways,
+      actionItems: saved.options.includeActionItems,
+      importantDates: saved.options.includeImportantDates,
+    });
+    setSummaryOptions((current) => ({ ...current, model: item.model ?? current.model, credits: item.creditCost ?? current.credits }));
   };
 
   return (
@@ -248,7 +314,7 @@ export function DocumentGenerationPage() {
           </div>
           <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />
           <div className={styles.sectionRule} />
-          <PanelHeading step="2">{isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
+          <PanelHeading step="2">{isSummarize ? t(K("summary.goal")) : isTranslate ? t(K("translate.workflow")) : t(K("instructions.heading"))}</PanelHeading>
           {isSummarize ? (
             <>
               <div className={styles.summaryPrompt}>
@@ -273,6 +339,15 @@ export function DocumentGenerationPage() {
                 </div>
               </div>
             </>
+          ) : isTranslate ? (
+            <div className={styles.translationGuide}>
+              <span className={styles.translationGuideIcon}><Languages size={17} aria-hidden="true" /></span>
+              <strong>{t(K("translate.guideTitle"))}</strong>
+              <p>{t(K("translate.guideDescription"))}</p>
+              <div><span>1</span>{t(K("translate.stepSource"))}</div>
+              <div><span>2</span>{t(K("translate.stepTarget"))}</div>
+              <div><span>3</span>{t(K("translate.stepOutput"))}</div>
+            </div>
           ) : (
             <div className={styles.instructionPlaceholder}>
               <span>{t(K("instructions.placeholder"))}</span>
@@ -286,7 +361,7 @@ export function DocumentGenerationPage() {
                 <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.actionItems} onChange={(event) => setFocusAreas((current) => ({ ...current, actionItems: event.target.checked }))} />{t(K("summary.checkActions"))}</label>
                 <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.importantDates} onChange={(event) => setFocusAreas((current) => ({ ...current, importantDates: event.target.checked }))} />{t(K("summary.checkDates"))}</label>
               </>
-            ) : (
+            ) : isTranslate ? null : (
               <>
                 <div><i className={styles.checkedBox} />{t(K("instructions.extractTables"))}</div>
                 <div><i className={styles.checkedBox} />{t(K("instructions.handwriting"))}</div>
@@ -299,7 +374,7 @@ export function DocumentGenerationPage() {
         preview={
           <main className={styles.previewPanel} aria-label={t(K("a11y.preview"))}>
           <div className={styles.previewHeader}>
-            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : t(K("preview.canvas"))}</small></div>
+            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isTranslate ? t(K("translate.workspace")) : t(K("preview.canvas"))}</small></div>
             <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
               <ZoomIn size={14} aria-hidden="true" />
               <ZoomOut size={14} aria-hidden="true" />
@@ -312,13 +387,13 @@ export function DocumentGenerationPage() {
             </div>
           </div>
 
-          <div className={`${styles.previewStage} ${isSummarize ? styles.previewStageSummary : ""}`}>
+          <div className={`${styles.previewStage} ${isSummarize || isTranslate ? styles.previewStageSummary : ""}`}>
             {isSummarize ? (
               <div className={styles.summaryStage}>
                 <article className={styles.summaryDocument}>
                   <div className={styles.summaryDocumentTopline}>
                     <span className={styles.sampleBadge}>{summaryResult ? t(K("summary.generated")) : t(K("summary.sample"))}</span>
-                    <span>{selectedFile?.name ?? t(K("summary.sampleDoc"))}</span>
+                    <span>{summaryFilename || selectedFile?.name || t(K("summary.sampleDoc"))}</span>
                   </div>
                   <div className={styles.summaryDocumentHeading}>
                     <small>{t(K(`summary.${summaryStyle}`)).toUpperCase()}</small>
@@ -340,6 +415,28 @@ export function DocumentGenerationPage() {
                   <div className={styles.summaryDocumentFooter}>{summaryResult ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
                 </article>
                 {isSummarizing && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("summary.loading"))}</strong><span>{t(K("summary.loadingHint"))}</span></div>}
+              </div>
+            ) : isTranslate ? (
+              <div className={styles.translationStage}>
+                <div className={styles.translationFlow}>
+                  <article className={styles.translationFileCard}>
+                    <small>{t(K("translate.sourceDocument"))}</small>
+                    <span className={styles.translationFileIcon}><FileText size={19} aria-hidden="true" /></span>
+                    <strong title={selectedFile?.name}>{selectedFile?.name ?? t(K("translate.noSource"))}</strong>
+                    <span>{t(K(translationSourceLanguage === "auto" ? "translate.detectAutomatically" : `translate.language.${translationSourceLanguage.toLowerCase()}`))}</span>
+                  </article>
+                  <ArrowRight className={styles.translationFlowArrow} size={20} aria-hidden="true" />
+                  <article className={`${styles.translationFileCard} ${styles.translationOutputCard}`}>
+                    <small>{t(K("translate.translatedDocument"))}</small>
+                    <span className={styles.translationFileIcon}><Languages size={19} aria-hidden="true" /></span>
+                    <strong>{t(K(`translate.language.${translationTargetLanguage.toLowerCase()}`))}</strong>
+                    <span>{t(K("translate.outputReadyAfter"))}</span>
+                  </article>
+                </div>
+                <div className={styles.translationPreviewNote}>
+                  <Languages size={16} aria-hidden="true" />
+                  <div><strong>{t(K("translate.previewTitle"))}</strong><span>{t(K(selectedFile ? "translate.previewHint" : "translate.uploadHint"))}</span></div>
+                </div>
               </div>
             ) : (
               <>
@@ -379,6 +476,11 @@ export function DocumentGenerationPage() {
               <article><div><NotebookPen size={13} /><strong>{t(K("summary.cardExecutive"))}</strong></div><p>{summaryResult?.executiveSummary ?? t(K("summary.cardExecutiveBody"))}</p></article>
               <article><div><ListChecks size={13} /><strong>{t(K("summary.takeawaysHeading"))}</strong></div><p>{summaryResult?.keyTakeaways.join(" · ") ?? t(K("summary.cardTakeawaysBody"))}</p></article>
               <article><div><Sparkles size={13} /><strong>{summaryResult ? t(K("summary.actionItems")) : t(K("summary.cardNext"))}</strong></div><p>{summaryResult ? [...summaryResult.actionItems.map((item) => item.task), ...summaryResult.importantDates.map((item) => `${item.date}: ${item.event}`)].join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardNextBody"))}</p></article>
+            </div>
+          ) : isTranslate ? (
+            <div className={styles.translationResultCard}>
+              <div><Languages size={14} aria-hidden="true" /><strong>{t(K("output.translated"))}</strong></div>
+              <p>{t(K("translate.resultHint"))}</p>
             </div>
           ) : (
             <div className={styles.outputCards}>
@@ -420,7 +522,7 @@ export function DocumentGenerationPage() {
               <div className={styles.summaryFocusNote}>{t(K("summary.focus"))}: {[focusAreas.keyTakeaways && t(K("summary.focusTakeaways")), focusAreas.actionItems && t(K("summary.focusActions")), focusAreas.importantDates && t(K("summary.focusDates"))].filter(Boolean).join(", ") || t(K("summary.focusGeneral"))}</div>
               <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("summary.toneValue"))} />
             </>
-            ) : (
+            ) : isTranslate ? null : (
               <>
               <SelectPlaceholder label={t(K("settings.language"))} value={t(K("settings.languageValue"))} />
               <SelectPlaceholder label={t(K("settings.pageRange"))} value={t(K("source.allPages"))} />
@@ -438,6 +540,55 @@ export function DocumentGenerationPage() {
           </aside>
         }
       />
+
+      {isSummarize && (
+        <section className={styles.historySection} aria-labelledby="document-history-heading">
+          <header className={styles.historyHeader}>
+            <div className={styles.historyTitle}>
+              <span><HistoryIcon size={16} aria-hidden="true" /></span>
+              <div><h2 id="document-history-heading">ประวัติสรุปเอกสาร</h2><p>เปิดดูผลสรุปที่สร้างไว้ในช่วง 7 วันที่ผ่านมา</p></div>
+            </div>
+            <div className={styles.historyActions}>
+              <button type="button" onClick={() => setHistoryRefresh((current) => current + 1)} disabled={historyLoading} aria-label="รีเฟรชประวัติเอกสาร">
+                <RefreshCw size={15} className={historyLoading ? styles.historySpin : undefined} /> รีเฟรช
+              </button>
+              <Link href="/history?type=document">ประวัติทั้งหมด <ArrowRight size={14} aria-hidden="true" /></Link>
+            </div>
+          </header>
+          {historyError ? <p className={styles.historyMessage} role="alert">{historyError}</p> : historyLoading ? (
+            <div className={styles.historyMessage} role="status"><LoaderCircle size={16} className={styles.historySpin} /> กำลังโหลดประวัติ…</div>
+          ) : documentHistory.length ? (
+            <div className={styles.historyGrid}>
+              {documentHistory.map((item) => {
+                const saved = item.documentSummary;
+                if (!saved) return null;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`${styles.historyCard} ${selectedHistoryId === item.id ? styles.historyCardActive : ""}`}
+                    aria-pressed={selectedHistoryId === item.id}
+                    onClick={() => openDocumentHistory(item)}
+                  >
+                    <span className={styles.historyCardHeading}>
+                      <span className={styles.historyFileIcon}><FileText size={18} aria-hidden="true" /></span>
+                      <span className={styles.historyCardNames}><strong>{saved.summary.title || item.title}</strong><small>{saved.filename}</small></span>
+                      <ArrowUpRight size={15} aria-hidden="true" />
+                    </span>
+                    <span className={styles.historyExcerpt}>{saved.summary.executiveSummary}</span>
+                    <span className={styles.historyMeta}><Clock3 size={12} aria-hidden="true" />{historyDate(item.createdAt)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className={styles.historyEmpty}>
+              <FileText size={22} aria-hidden="true" />
+              <div><strong>ยังไม่มีประวัติสรุปเอกสาร</strong><span>เมื่อสร้างสรุปสำเร็จ รายการจะปรากฏที่นี่และเปิดดูได้ภายหลัง</span></div>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className={styles.resourceShelf} aria-label={t(K("a11y.shelf"))}>
         <div className={styles.learnArea}>
