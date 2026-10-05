@@ -20,8 +20,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
+import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import styles from "./document-generation-page.module.css";
@@ -93,11 +94,85 @@ function SelectPlaceholder({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SelectControl({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
+  return (
+    <label className={styles.selectField}>
+      <span>{label}</span>
+      <select className={styles.controlSelect} value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function DocumentGenerationPage() {
   const { t } = useLocale();
   const [activeMode, setActiveMode] = useState<ModeId>("ocr");
   const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("executive");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [summaryPrompt, setSummaryPrompt] = useState("");
+  const [summaryResult, setSummaryResult] = useState<DocumentSummary | null>(null);
+  const [summaryError, setSummaryError] = useState("");
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryLength, setSummaryLength] = useState<"brief" | "standard" | "detailed">("standard");
+  const [summaryLanguage, setSummaryLanguage] = useState<"auto" | "English" | "Thai">("auto");
+  const [focusAreas, setFocusAreas] = useState({ keyTakeaways: true, actionItems: true, importantDates: true });
+  const [summaryOptions, setSummaryOptions] = useState({ model: "google/gemini-3.5-flash", credits: 1 });
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const isSummarize = activeMode === "summarize";
+
+  useEffect(() => {
+    let mounted = true;
+    void getDocumentSummaryOptions().then((options) => {
+      if (mounted) setSummaryOptions(options);
+    }).catch(() => undefined);
+    return () => { mounted = false; };
+  }, []);
+
+  const setFileFromList = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!extension || !["pdf", "docx", "png", "jpg", "jpeg"].includes(extension)) {
+      setSummaryError(t(K("summary.errorType")));
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setSummaryError(t(K("summary.errorSize")));
+      return;
+    }
+    setSelectedFile(file);
+    setSummaryResult(null);
+    setSummaryError("");
+  };
+
+  const generateSummary = async () => {
+    if (!selectedFile || isSummarizing) return;
+    setIsSummarizing(true);
+    setSummaryError("");
+    try {
+      const response = await summarizeDocument({
+        file: selectedFile,
+        prompt: summaryPrompt,
+        summaryStyle,
+        summaryLength,
+        language: summaryLanguage,
+        includeKeyTakeaways: focusAreas.keyTakeaways,
+        includeActionItems: focusAreas.actionItems,
+        includeImportantDates: focusAreas.importantDates,
+      });
+      setSummaryResult(response.summary);
+      setSummaryOptions((current) => ({ ...current, model: response.model, credits: response.creditsUsed }));
+    } catch (error) {
+      setSummaryError(error instanceof Error ? error.message : t(K("summary.errorGeneral")));
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
 
   return (
     <div className={`${styles.page} document-studio-page`}>
@@ -151,16 +226,25 @@ export function DocumentGenerationPage() {
         left={
           <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
           <PanelHeading step="1">{t(K("source.heading"))}</PanelHeading>
-          <div className={styles.dropzone}>
+          <div
+            className={styles.dropzone}
+            role="button"
+            tabIndex={0}
+            onClick={() => uploadInputRef.current?.click()}
+            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); uploadInputRef.current?.click(); } }}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => { event.preventDefault(); setFileFromList(event.dataTransfer.files); }}
+          >
             <CloudUpload size={29} strokeWidth={1.7} aria-hidden="true" />
-            <strong>{t(K("source.dropTitle"))}</strong>
+            <strong>{selectedFile ? t(K("source.dropReplace")) : t(K("source.dropTitle"))}</strong>
             <span>{t(K("source.dropHint"))}</span>
-            <small>{t(K("source.dropTypes"))}</small>
+            <small>{t(K("source.dropTypes"), { max: 25 })}</small>
           </div>
+          <input ref={uploadInputRef} className={styles.fileInput} type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg" onChange={(event) => setFileFromList(event.currentTarget.files)} />
           <div className={styles.filePlaceholder}>
             <span className={styles.fileIcon}><FileText size={17} aria-hidden="true" /></span>
-            <span className={styles.fileCopy}><strong>{t(K("source.filesTitle"))}</strong><small>{t(K("source.filesHint"))}</small></span>
-            <Plus size={16} aria-hidden="true" />
+            <span className={styles.fileCopy}><strong>{selectedFile?.name ?? t(K("source.filesTitle"))}</strong><small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("source.filesHint"))}</small></span>
+            <button type="button" className={styles.replaceFileButton} aria-label={t(K("source.chooseFile"))} onClick={() => uploadInputRef.current?.click()}><Plus size={16} aria-hidden="true" /></button>
           </div>
           <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />
           <div className={styles.sectionRule} />
@@ -168,8 +252,8 @@ export function DocumentGenerationPage() {
           {isSummarize ? (
             <>
               <div className={styles.summaryPrompt}>
-                <textarea aria-label={t(K("summary.promptLabel"))} maxLength={600} placeholder={t(K("summary.promptPlaceholder"))} />
-                <small>0 / 600</small>
+                <textarea aria-label={t(K("summary.promptLabel"))} maxLength={600} value={summaryPrompt} onChange={(event) => setSummaryPrompt(event.target.value)} placeholder={t(K("summary.promptPlaceholder"))} />
+                <small>{summaryPrompt.length} / 600</small>
               </div>
               <div className={styles.summaryFormatGroup}>
                 <span>{t(K("summary.format"))}</span>
@@ -198,9 +282,9 @@ export function DocumentGenerationPage() {
           <div className={styles.checkList}>
             {isSummarize ? (
               <>
-                <div><i className={styles.checkedBox} />{t(K("summary.checkTakeaways"))}</div>
-                <div><i className={styles.checkedBox} />{t(K("summary.checkActions"))}</div>
-                <div><i className={styles.checkedBox} />{t(K("summary.checkDates"))}</div>
+                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.keyTakeaways} onChange={(event) => setFocusAreas((current) => ({ ...current, keyTakeaways: event.target.checked }))} />{t(K("summary.checkTakeaways"))}</label>
+                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.actionItems} onChange={(event) => setFocusAreas((current) => ({ ...current, actionItems: event.target.checked }))} />{t(K("summary.checkActions"))}</label>
+                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.importantDates} onChange={(event) => setFocusAreas((current) => ({ ...current, importantDates: event.target.checked }))} />{t(K("summary.checkDates"))}</label>
               </>
             ) : (
               <>
@@ -233,28 +317,29 @@ export function DocumentGenerationPage() {
               <div className={styles.summaryStage}>
                 <article className={styles.summaryDocument}>
                   <div className={styles.summaryDocumentTopline}>
-                    <span className={styles.sampleBadge}>{t(K("summary.sample"))}</span>
-                    <span>{t(K("summary.sampleDoc"))}</span>
+                    <span className={styles.sampleBadge}>{summaryResult ? t(K("summary.generated")) : t(K("summary.sample"))}</span>
+                    <span>{selectedFile?.name ?? t(K("summary.sampleDoc"))}</span>
                   </div>
                   <div className={styles.summaryDocumentHeading}>
                     <small>{t(K(`summary.${summaryStyle}`)).toUpperCase()}</small>
-                    <h3>{t(K("summary.docTitle"))}</h3>
-                    <p>{t(K("summary.leadBefore"))}<strong>{t(K("summary.leadValue"))}</strong>{t(K("summary.leadAfter"))}</p>
+                    <h3>{summaryResult?.title ?? t(K("summary.docTitle"))}</h3>
+                    <p>{summaryResult?.executiveSummary ?? `${t(K("summary.leadBefore"))}${t(K("summary.leadValue"))}${t(K("summary.leadAfter"))}`}</p>
                   </div>
-                  <div className={styles.summaryMetric}>
+                  {!summaryResult && <div className={styles.summaryMetric}>
                     <span><small>{t(K("summary.totalRevenue"))}</small><strong>$8.42M</strong><em>{t(K("summary.vsQ1"), { value: "+18.6%" })}</em></span>
                     <span><small>{t(K("summary.netProfit"))}</small><strong>$1.68M</strong><em>{t(K("summary.vsQ1"), { value: "+34.4%" })}</em></span>
                     <span><small>{t(K("summary.grossProfit"))}</small><strong>$3.92M</strong><em>{t(K("summary.vsQ1"), { value: "+22.1%" })}</em></span>
-                  </div>
-                  <div className={styles.summaryTakeaways}>
+                  </div>}
+                  {(summaryResult?.keyTakeaways.length ?? 2) > 0 && <div className={styles.summaryTakeaways}>
                     <h4>{t(K("summary.takeawaysHeading"))}</h4>
-                    <ul>
-                      <li>{t(K("summary.takeaway1"))}</li>
-                      <li>{t(K("summary.takeaway2"))}</li>
-                    </ul>
-                  </div>
-                  <div className={styles.summaryDocumentFooter}>{t(K("summary.footer"))}</div>
+                    <ul>{(summaryResult?.keyTakeaways ?? [t(K("summary.takeaway1")), t(K("summary.takeaway2"))]).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
+                  </div>}
+                  {summaryResult?.actionItems.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.actionItems"))}</h4><ul>{summaryResult.actionItems.map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul></div> : null}
+                  {summaryResult?.decisions.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.decisions"))}</h4><ul>{summaryResult.decisions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul></div> : null}
+                  {summaryResult?.importantDates.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.importantDates"))}</h4><ul>{summaryResult.importantDates.map((item, index) => <li key={`${index}-${item.date}-${item.event}`}>{item.date} · {item.event}</li>)}</ul></div> : null}
+                  <div className={styles.summaryDocumentFooter}>{summaryResult ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
                 </article>
+                {isSummarizing && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("summary.loading"))}</strong><span>{t(K("summary.loadingHint"))}</span></div>}
               </div>
             ) : (
               <>
@@ -291,9 +376,9 @@ export function DocumentGenerationPage() {
 
           {isSummarize ? (
             <div className={styles.summaryOutputCards}>
-              <article><div><NotebookPen size={13} /><strong>{t(K("summary.cardExecutive"))}</strong></div><p>{t(K("summary.cardExecutiveBody"))}</p></article>
-              <article><div><ListChecks size={13} /><strong>{t(K("summary.takeawaysHeading"))}</strong></div><p>{t(K("summary.cardTakeawaysBody"))}</p></article>
-              <article><div><Sparkles size={13} /><strong>{t(K("summary.cardNext"))}</strong></div><p>{t(K("summary.cardNextBody"))}</p></article>
+              <article><div><NotebookPen size={13} /><strong>{t(K("summary.cardExecutive"))}</strong></div><p>{summaryResult?.executiveSummary ?? t(K("summary.cardExecutiveBody"))}</p></article>
+              <article><div><ListChecks size={13} /><strong>{t(K("summary.takeawaysHeading"))}</strong></div><p>{summaryResult?.keyTakeaways.join(" · ") ?? t(K("summary.cardTakeawaysBody"))}</p></article>
+              <article><div><Sparkles size={13} /><strong>{summaryResult ? t(K("summary.actionItems")) : t(K("summary.cardNext"))}</strong></div><p>{summaryResult ? [...summaryResult.actionItems.map((item) => item.task), ...summaryResult.importantDates.map((item) => `${item.date}: ${item.event}`)].join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardNextBody"))}</p></article>
             </div>
           ) : (
             <div className={styles.outputCards}>
@@ -313,10 +398,10 @@ export function DocumentGenerationPage() {
           <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
           <div className={styles.settingGroup}>
             <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
-            <div className={styles.modelCards}>
+            {isSummarize ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("summary.modelName"))}</strong><small>{t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
               <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("settings.standard"))}</strong><small>{t(K("settings.standardHint"))}</small></div>
               <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
-            </div>
+            </div>}
           </div>
           <div className={styles.settingGroup}>
             <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
@@ -328,26 +413,28 @@ export function DocumentGenerationPage() {
               ))}
             </div>
           </div>
-          <SelectPlaceholder label={t(K("settings.language"))} value={t(K("settings.languageValue"))} />
           {isSummarize ? (
             <>
-              <SelectPlaceholder label={t(K("summary.length"))} value={t(K("summary.lengthValue"))} />
-              <SelectPlaceholder label={t(K("summary.focus"))} value={t(K("summary.focusValue"))} />
+              <SelectControl label={t(K("settings.language"))} value={summaryLanguage} onChange={(value) => setSummaryLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
+              <SelectControl label={t(K("summary.length"))} value={summaryLength} onChange={(value) => setSummaryLength(value as "brief" | "standard" | "detailed")} options={[{ value: "brief", label: t(K("summary.lengthBrief")) }, { value: "standard", label: t(K("summary.lengthStandard")) }, { value: "detailed", label: t(K("summary.lengthDetailed")) }]} />
+              <div className={styles.summaryFocusNote}>{t(K("summary.focus"))}: {[focusAreas.keyTakeaways && t(K("summary.focusTakeaways")), focusAreas.actionItems && t(K("summary.focusActions")), focusAreas.importantDates && t(K("summary.focusDates"))].filter(Boolean).join(", ") || t(K("summary.focusGeneral"))}</div>
               <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("summary.toneValue"))} />
             </>
-          ) : (
-            <>
+            ) : (
+              <>
+              <SelectPlaceholder label={t(K("settings.language"))} value={t(K("settings.languageValue"))} />
               <SelectPlaceholder label={t(K("settings.pageRange"))} value={t(K("source.allPages"))} />
               <SelectPlaceholder label={t(K("settings.depth"))} value={t(K("settings.depthValue"))} />
               <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
             </>
           )}
-          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{t(K("settings.credits"))}</strong></div>
-          <button className={styles.generateButton} type="button" disabled>
-            <span>{isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
+          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : t(K("settings.credits"))}</strong></div>
+          <button className={styles.generateButton} type="button" disabled={!isSummarize || !selectedFile || isSummarizing} onClick={() => void generateSummary()}>
+            <span>{isSummarizing ? t(K("summary.generating")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
             <Sparkles size={17} aria-hidden="true" />
           </button>
-          <div className={styles.secureNote}><span />{t(K("settings.secure"))}</div>
+          {summaryError && <div className={styles.summaryError} role="alert">{summaryError}</div>}
+          <div className={styles.secureNote}><span />{isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
           </aside>
         }
       />
