@@ -573,11 +573,17 @@
 .outputCards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .outputCard { min-width: 0; min-height: 96px; border: 1px solid #eceae7; border-radius: 8px; background: #fff; padding: 11px; }
 .summaryOutputCards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
-.summaryOutputCards article { min-width: 0; min-height: 96px; border: 1px solid #eceae7; border-radius: 8px; background: #fff; padding: 11px; }
+.summaryOutputCards article { display: flex; min-width: 0; min-height: 96px; flex-direction: column; align-items: flex-start; border: 1px solid #eceae7; border-radius: 8px; background: #fff; padding: 11px; }
 .summaryOutputCards article > div { display: flex; align-items: center; gap: 4px; color: #5d6670; }
 .summaryOutputCards article svg { flex: none; color: #e9703c; }
 .summaryOutputCards article strong { overflow: hidden; font-size: 10px; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
-.summaryOutputCards article p { margin: 9px 0 0; color: #808890; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+.summaryOutputCards article p { display: -webkit-box; margin: 9px 0 0; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; color: #808890; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; white-space: normal; }
+.summaryOutputCards article[data-expanded="true"] { grid-column: 1 / -1; }
+.summaryOutputCards article[data-expanded="true"] p { display: block; overflow: visible; -webkit-line-clamp: unset; line-clamp: unset; white-space: pre-wrap; }
+.summaryCardToggle { display: inline-flex; align-items: center; gap: 3px; margin-top: 7px; border: 0; background: transparent; padding: 0; color: #e76b3c; cursor: pointer; font: inherit; font-size: 9px; font-weight: 750; }
+.summaryCardToggle svg { transition: transform 160ms ease; }
+.summaryOutputCards article[data-expanded="true"] .summaryCardToggle svg { transform: rotate(180deg); }
+.summaryCardToggle:focus-visible { border-radius: 3px; outline: 2px solid #f6a17d; outline-offset: 3px; }
 
 .historySection { display: grid; gap: 14px; min-width: 0; border: 1px solid var(--doc-line); border-radius: 12px; background: #fff; padding: 18px; }
 .historyHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; }

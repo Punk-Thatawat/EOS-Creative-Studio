@@ -128,6 +128,7 @@ export function DocumentGenerationPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [summaryPrompt, setSummaryPrompt] = useState("");
   const [summaryResult, setSummaryResult] = useState<DocumentSummary | null>(null);
+  const [expandedSummaryCard, setExpandedSummaryCard] = useState<"executive" | "takeaways" | "actions" | null>(null);
   const [summaryFilename, setSummaryFilename] = useState("");
   const [summaryError, setSummaryError] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -186,6 +187,7 @@ export function DocumentGenerationPage() {
     }
     setSelectedFile(file);
     setSummaryResult(null);
+    setExpandedSummaryCard(null);
     setSummaryFilename(file.name);
     setSelectedHistoryId(null);
     setSummaryError("");
@@ -194,6 +196,7 @@ export function DocumentGenerationPage() {
   const generateSummary = async () => {
     if (!selectedFile || isSummarizing) return;
     setIsSummarizing(true);
+    setExpandedSummaryCard(null);
     setSummaryError("");
     try {
       const response = await summarizeDocument({
@@ -226,6 +229,7 @@ export function DocumentGenerationPage() {
     setSelectedFile(null);
     setSummaryFilename(saved.filename);
     setSummaryResult(saved.summary);
+    setExpandedSummaryCard(null);
     setSummaryError("");
     setSelectedHistoryId(item.id);
     setSummaryPrompt(saved.options.prompt ?? "");
@@ -473,9 +477,26 @@ export function DocumentGenerationPage() {
 
           {isSummarize ? (
             <div className={styles.summaryOutputCards}>
-              <article><div><NotebookPen size={13} /><strong>{t(K("summary.cardExecutive"))}</strong></div><p>{summaryResult?.executiveSummary ?? t(K("summary.cardExecutiveBody"))}</p></article>
-              <article><div><ListChecks size={13} /><strong>{t(K("summary.takeawaysHeading"))}</strong></div><p>{summaryResult?.keyTakeaways.join(" · ") ?? t(K("summary.cardTakeawaysBody"))}</p></article>
-              <article><div><Sparkles size={13} /><strong>{summaryResult ? t(K("summary.actionItems")) : t(K("summary.cardNext"))}</strong></div><p>{summaryResult ? [...summaryResult.actionItems.map((item) => item.task), ...summaryResult.importantDates.map((item) => `${item.date}: ${item.event}`)].join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardNextBody"))}</p></article>
+              {([
+                { id: "executive", icon: NotebookPen, title: t(K("summary.cardExecutive")), text: summaryResult?.executiveSummary ?? t(K("summary.cardExecutiveBody")) },
+                { id: "takeaways", icon: ListChecks, title: t(K("summary.takeawaysHeading")), text: summaryResult ? summaryResult.keyTakeaways.join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardTakeawaysBody")) },
+                { id: "actions", icon: Sparkles, title: summaryResult ? t(K("summary.actionItems")) : t(K("summary.cardNext")), text: summaryResult ? [...summaryResult.actionItems.map((item) => item.task), ...summaryResult.importantDates.map((item) => `${item.date}: ${item.event}`)].join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardNextBody")) },
+              ] as const).map((card) => {
+                const Icon = card.icon;
+                const expanded = expandedSummaryCard === card.id;
+                return (
+                  <article key={card.id} data-expanded={expanded}>
+                    <div><Icon size={13} /><strong>{card.title}</strong></div>
+                    <p id={`summary-highlight-${card.id}`}>{card.text}</p>
+                    {card.text.length > 48 ? (
+                      <button type="button" className={styles.summaryCardToggle} aria-expanded={expanded} aria-controls={`summary-highlight-${card.id}`} onClick={() => setExpandedSummaryCard(expanded ? null : card.id)}>
+                        {t(K(expanded ? "summary.collapse" : "summary.readFull"))}
+                        <ChevronDown size={12} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </article>
+                );
+              })}
             </div>
           ) : isTranslate ? (
             <div className={styles.translationResultCard}>
