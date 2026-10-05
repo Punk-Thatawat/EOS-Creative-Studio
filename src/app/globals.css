@@ -742,15 +742,15 @@ body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0
   .auth-heading-mobile, .auth-brush-mobile { display:block; }
 }
 
-/* The audio studio owns the full canvas below the shared workspace header. */
-body:has(.audio-studio-page) .eos-studio-right-rail { display: none !important; }
-body:has(.audio-studio-page) .page-gutter { max-width: none; gap: 0; padding-inline: 0; padding-top: 0; padding-bottom: 0; }
-body:has(.audio-studio-page) .page-gutter > main { width: 100%; }
+/* The audio and document studios own the full canvas below the shared workspace header. */
+body:has(:is(.audio-studio-page, .document-studio-page)) .eos-studio-right-rail { display: none !important; }
+body:has(:is(.audio-studio-page, .document-studio-page)) .page-gutter { max-width: none; gap: 0; padding-inline: 0; padding-top: 0; padding-bottom: 0; }
+body:has(:is(.audio-studio-page, .document-studio-page)) .page-gutter > main { width: 100%; }
 @media (max-width: 767.98px) {
   /* Bottom space is NOT set here: this rule sits after the two central ones
      above and would win, and the audio studio floats an action dock that
      needs 15rem, not the 6rem a page with only the bottom bar needs. */
-  body:has(.audio-studio-page) .page-gutter { padding-inline: 12px; }
+  body:has(:is(.audio-studio-page, .document-studio-page)) .page-gutter { padding-inline: 12px; }
 }
 @media (max-width: 800px) {
   .auth-modal-panel { top:auto; bottom:3%; max-height:calc(100% - 24px); padding-bottom:30px; }

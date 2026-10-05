@@ -20,40 +20,57 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
+import type { TranslationKey } from "@/lib/i18n/dictionary";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import styles from "./document-generation-page.module.css";
 
-const modes = [
-  { label: "OCR & Extract", icon: ScanText },
-  { label: "Summarize", icon: NotebookPen },
-  { label: "Translate", icon: Languages },
-  { label: "Contract Review", icon: FileCheck2 },
-  { label: "Report Builder", icon: BarChart3 },
-  { label: "Form Reader", icon: ListChecks },
+const K = (key: string) => `create.document.${key}` as TranslationKey;
+
+type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
+type SummaryStyle = "executive" | "bullets";
+
+const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
+  { id: "ocr", icon: ScanText, available: true },
+  { id: "summarize", icon: NotebookPen, available: true },
+  { id: "translate", icon: Languages },
+  { id: "contract", icon: FileCheck2 },
+  { id: "report", icon: BarChart3 },
+  { id: "form", icon: ListChecks },
 ];
 
 const outputs = [
-  { label: "Summary", icon: NotebookPen },
-  { label: "Key fields", icon: ListChecks },
-  { label: "Extracted table", icon: Table2 },
-  { label: "Translated version", icon: Languages },
-  { label: "AI notes", icon: Sparkles },
+  { key: K("output.summary"), icon: NotebookPen },
+  { key: K("output.keyFields"), icon: ListChecks },
+  { key: K("output.table"), icon: Table2 },
+  { key: K("output.translated"), icon: Languages },
+  { key: K("output.notes"), icon: Sparkles },
 ];
 
 const guides = [
-  { title: "OCR quick start", detail: "Extract text in minutes", time: "03:21", tone: "orange" },
-  { title: "Contract review", detail: "Find risks instantly", time: "04:35", tone: "pink" },
-  { title: "Prompt like a pro", detail: "Get better results", time: "05:12", tone: "yellow" },
-  { title: "Build reports fast", detail: "Turn data into insight", time: "06:08", tone: "blue" },
+  { title: K("guide.ocr"), detail: K("guide.ocrDetail"), time: "03:21", tone: "orange" },
+  { title: K("guide.contract"), detail: K("guide.contractDetail"), time: "04:35", tone: "pink" },
+  { title: K("guide.prompt"), detail: K("guide.promptDetail"), time: "05:12", tone: "yellow" },
+  { title: K("guide.reports"), detail: K("guide.reportsDetail"), time: "06:08", tone: "blue" },
 ];
 
 const documentTools = [
-  { title: "OCR Extractor", detail: "Extract text and data", icon: ScanText },
-  { title: "Contract Analyzer", detail: "Review clauses and risks", icon: FileCheck2 },
-  { title: "Meeting Notes", detail: "Transcribe and summarize", icon: NotebookPen },
-  { title: "Report Builder", detail: "Create reports from data", icon: BarChart3 },
+  { title: K("tool.ocr"), detail: K("tool.ocrDetail"), icon: ScanText },
+  { title: K("tool.contract"), detail: K("tool.contractDetail"), icon: FileCheck2 },
+  { title: K("tool.meeting"), detail: K("tool.meetingDetail"), icon: NotebookPen },
+  { title: K("tool.report"), detail: K("tool.reportDetail"), icon: BarChart3 },
 ];
+
+/** Renders a translated string, turning "\n" into line breaks (used by the hero artwork). */
+function Lines({ text }: { text: string }) {
+  return text.split("\n").map((line, index) => (
+    <Fragment key={index}>
+      {index > 0 ? <br /> : null}
+      {line}
+    </Fragment>
+  ));
+}
 
 function PanelHeading({ step, children }: { step: string; children: string }) {
   return (
@@ -77,27 +94,28 @@ function SelectPlaceholder({ label, value }: { label: string; value: string }) {
 }
 
 export function DocumentGenerationPage() {
-  const [activeMode, setActiveMode] = useState("OCR & Extract");
-  const [summaryStyle, setSummaryStyle] = useState("Executive brief");
-  const isSummarize = activeMode === "Summarize";
+  const { t } = useLocale();
+  const [activeMode, setActiveMode] = useState<ModeId>("ocr");
+  const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("executive");
+  const isSummarize = activeMode === "summarize";
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} document-studio-page`}>
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
           <span className={styles.heroEyebrow}>EOS CREATIVE STUDIO</span>
           <h1>GEN DOCUMENT</h1>
-          <div className={styles.heroStamp}>AI DOCUMENT GENERATION STUDIO</div>
-          <p>Turn files into insight.</p>
+          <div className={styles.heroStamp}>{t(K("hero.stamp"))}</div>
+          <p>{t(K("hero.tagline"))}</p>
         </div>
         <div className={styles.heroArtwork} aria-hidden="true">
-          <div className={styles.heroBrush}>TURN FILES<br />INTO INSIGHT.</div>
+          <div className={styles.heroBrush}><Lines text={t(K("hero.brush"))} /></div>
           <div className={`${styles.paper} ${styles.paperBack}`}>
-            <span>Q2 BUSINESS REPORT</span>
+            <span>{t(K("hero.paper"))}</span>
             <i /><i /><i />
             <div className={styles.miniChart}><b /><b /><b /><b /><b /></div>
           </div>
-          <div className={styles.smartSticker}>MAKE<br />IT SMART.</div>
+          <div className={styles.smartSticker}><Lines text={t(K("hero.sticker"))} /></div>
           <div className={`${styles.paper} ${styles.paperFront}`}>
             <span>OCR</span>
             <i /><i /><i /><i />
@@ -109,54 +127,54 @@ export function DocumentGenerationPage() {
 
       <CreatorWorkspaceLayout
         tabs={
-          <nav className={styles.modeTabs} aria-label="Document tools">
-            {modes.map(({ label, icon: Icon }) => {
-              const isAvailable = label === "OCR & Extract" || label === "Summarize";
-              const isActive = activeMode === label;
+          <nav className={styles.modeTabs} aria-label={t(K("a11y.tools"))}>
+            {modes.map(({ id, icon: Icon, available }) => {
+              const isActive = activeMode === id;
+              const label = t(K(`mode.${id}`));
               return (
-              <button
-                key={label}
-                type="button"
-                className={`${styles.modeTab} ${isActive ? styles.modeTabActive : ""} ${!isAvailable ? styles.modeTabDisabled : ""}`}
-                aria-pressed={isActive}
-                aria-disabled={!isAvailable}
-                title={isAvailable ? label : `${label} — coming soon`}
-                onClick={() => isAvailable && setActiveMode(label)}
-              >
-                <Icon size={16} strokeWidth={2} aria-hidden="true" />
-                <span>{label}</span>
-              </button>
+                <button
+                  key={id}
+                  type="button"
+                  className={`${styles.modeTab} ${isActive ? styles.modeTabActive : ""} ${!available ? styles.modeTabDisabled : ""}`}
+                  aria-pressed={isActive}
+                  aria-disabled={!available}
+                  title={available ? label : t(K("mode.comingSoon"), { label })}
+                  onClick={() => available && setActiveMode(id)}
+                >
+                  <Icon size={16} strokeWidth={2} aria-hidden="true" />
+                  <span>{label}</span>
+                </button>
               );
             })}
           </nav>
         }
         left={
-          <aside className={styles.sourcePanel} aria-label="Document source and instructions">
-          <PanelHeading step="1" >SOURCE</PanelHeading>
+          <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
+          <PanelHeading step="1">{t(K("source.heading"))}</PanelHeading>
           <div className={styles.dropzone}>
             <CloudUpload size={29} strokeWidth={1.7} aria-hidden="true" />
-            <strong>Drop files here</strong>
-            <span>or click to upload</span>
-            <small>PDF, DOCX, PNG, JPG · Max 50 MB</small>
+            <strong>{t(K("source.dropTitle"))}</strong>
+            <span>{t(K("source.dropHint"))}</span>
+            <small>{t(K("source.dropTypes"))}</small>
           </div>
           <div className={styles.filePlaceholder}>
             <span className={styles.fileIcon}><FileText size={17} aria-hidden="true" /></span>
-            <span className={styles.fileCopy}><strong>Your files will appear here</strong><small>Upload a document to begin</small></span>
+            <span className={styles.fileCopy}><strong>{t(K("source.filesTitle"))}</strong><small>{t(K("source.filesHint"))}</small></span>
             <Plus size={16} aria-hidden="true" />
           </div>
-          <SelectPlaceholder label="Pages" value="All pages" />
+          <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />
           <div className={styles.sectionRule} />
-          <PanelHeading step="2">{isSummarize ? "SUMMARY GOAL" : "INSTRUCTIONS"}</PanelHeading>
+          <PanelHeading step="2">{isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
           {isSummarize ? (
             <>
               <div className={styles.summaryPrompt}>
-                <textarea aria-label="Summary instructions" maxLength={600} placeholder="Example: Summarize the main findings, decisions, and action items…" />
+                <textarea aria-label={t(K("summary.promptLabel"))} maxLength={600} placeholder={t(K("summary.promptPlaceholder"))} />
                 <small>0 / 600</small>
               </div>
               <div className={styles.summaryFormatGroup}>
-                <span>Summary format</span>
+                <span>{t(K("summary.format"))}</span>
                 <div className={styles.summaryFormatChoices}>
-                  {["Executive brief", "Bullet points"].map((style) => (
+                  {(["executive", "bullets"] as const).map((style) => (
                     <button
                       key={style}
                       type="button"
@@ -164,8 +182,8 @@ export function DocumentGenerationPage() {
                       aria-pressed={summaryStyle === style}
                       onClick={() => setSummaryStyle(style)}
                     >
-                      {style === "Executive brief" ? <NotebookPen size={14} aria-hidden="true" /> : <ListChecks size={14} aria-hidden="true" />}
-                      {style}
+                      {style === "executive" ? <NotebookPen size={14} aria-hidden="true" /> : <ListChecks size={14} aria-hidden="true" />}
+                      {t(K(`summary.${style}`))}
                     </button>
                   ))}
                 </div>
@@ -173,40 +191,40 @@ export function DocumentGenerationPage() {
             </>
           ) : (
             <div className={styles.instructionPlaceholder}>
-              <span>Describe what you want to find or create…</span>
+              <span>{t(K("instructions.placeholder"))}</span>
               <small>0 / 600</small>
             </div>
           )}
           <div className={styles.checkList}>
             {isSummarize ? (
               <>
-                <div><i className={styles.checkedBox} />Include key takeaways</div>
-                <div><i className={styles.checkedBox} />Highlight action items</div>
-                <div><i className={styles.checkedBox} />Keep important dates</div>
+                <div><i className={styles.checkedBox} />{t(K("summary.checkTakeaways"))}</div>
+                <div><i className={styles.checkedBox} />{t(K("summary.checkActions"))}</div>
+                <div><i className={styles.checkedBox} />{t(K("summary.checkDates"))}</div>
               </>
             ) : (
               <>
-                <div><i className={styles.checkedBox} />Extract tables</div>
-                <div><i className={styles.checkedBox} />Detect handwriting</div>
-                <div><i className={styles.checkedBox} />Preserve document layout</div>
+                <div><i className={styles.checkedBox} />{t(K("instructions.extractTables"))}</div>
+                <div><i className={styles.checkedBox} />{t(K("instructions.handwriting"))}</div>
+                <div><i className={styles.checkedBox} />{t(K("instructions.layout"))}</div>
               </>
             )}
           </div>
           </aside>
         }
         preview={
-          <main className={styles.previewPanel} aria-label="Document preview">
+          <main className={styles.previewPanel} aria-label={t(K("a11y.preview"))}>
           <div className={styles.previewHeader}>
-            <div><span>PREVIEW</span><small>{isSummarize ? "Summary workspace" : "Document canvas"}</small></div>
-            <div className={styles.previewToolbar} aria-label="Preview controls">
+            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : t(K("preview.canvas"))}</small></div>
+            <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
               <ZoomIn size={14} aria-hidden="true" />
               <ZoomOut size={14} aria-hidden="true" />
               <span>100% <ChevronDown size={12} /></span>
               <Hand size={14} aria-hidden="true" />
               <span className={styles.toolbarDivider} />
-              <span>Compare</span>
-              <span>Annotate</span>
-              <span><Download size={13} />Export</span>
+              <span>{t(K("preview.compare"))}</span>
+              <span>{t(K("preview.annotate"))}</span>
+              <span><Download size={13} />{t(K("preview.export"))}</span>
             </div>
           </div>
 
@@ -215,27 +233,27 @@ export function DocumentGenerationPage() {
               <div className={styles.summaryStage}>
                 <article className={styles.summaryDocument}>
                   <div className={styles.summaryDocumentTopline}>
-                    <span className={styles.sampleBadge}>SAMPLE OUTPUT</span>
-                    <span>Q2 Business Report · 8 pages</span>
+                    <span className={styles.sampleBadge}>{t(K("summary.sample"))}</span>
+                    <span>{t(K("summary.sampleDoc"))}</span>
                   </div>
                   <div className={styles.summaryDocumentHeading}>
-                    <small>{summaryStyle.toUpperCase()}</small>
-                    <h3>Q2 Business Report</h3>
-                    <p>Revenue reached <strong>$8.42M</strong>, growing 18.6% quarter over quarter as product adoption and strategic partnerships expanded.</p>
+                    <small>{t(K(`summary.${summaryStyle}`)).toUpperCase()}</small>
+                    <h3>{t(K("summary.docTitle"))}</h3>
+                    <p>{t(K("summary.leadBefore"))}<strong>{t(K("summary.leadValue"))}</strong>{t(K("summary.leadAfter"))}</p>
                   </div>
                   <div className={styles.summaryMetric}>
-                    <span><small>Total revenue</small><strong>$8.42M</strong><em>+18.6% vs Q1</em></span>
-                    <span><small>Net profit</small><strong>$1.68M</strong><em>+34.4% vs Q1</em></span>
-                    <span><small>Gross profit</small><strong>$3.92M</strong><em>+22.1% vs Q1</em></span>
+                    <span><small>{t(K("summary.totalRevenue"))}</small><strong>$8.42M</strong><em>{t(K("summary.vsQ1"), { value: "+18.6%" })}</em></span>
+                    <span><small>{t(K("summary.netProfit"))}</small><strong>$1.68M</strong><em>{t(K("summary.vsQ1"), { value: "+34.4%" })}</em></span>
+                    <span><small>{t(K("summary.grossProfit"))}</small><strong>$3.92M</strong><em>{t(K("summary.vsQ1"), { value: "+22.1%" })}</em></span>
                   </div>
                   <div className={styles.summaryTakeaways}>
-                    <h4>Key takeaways</h4>
+                    <h4>{t(K("summary.takeawaysHeading"))}</h4>
                     <ul>
-                      <li>Product adoption was the strongest driver of revenue growth.</li>
-                      <li>Net profit grew faster than revenue, improving overall margins.</li>
+                      <li>{t(K("summary.takeaway1"))}</li>
+                      <li>{t(K("summary.takeaway2"))}</li>
                     </ul>
                   </div>
-                  <div className={styles.summaryDocumentFooter}>Example only · Upload a document to generate your own summary</div>
+                  <div className={styles.summaryDocumentFooter}>{t(K("summary.footer"))}</div>
                 </article>
               </div>
             ) : (
@@ -250,7 +268,7 @@ export function DocumentGenerationPage() {
                 </div>
                 <div className={styles.canvas}>
                   <div className={styles.documentSheet} aria-hidden="true">
-                    <div className={styles.sheetTopline}><span /><span>DOCUMENT PREVIEW</span></div>
+                    <div className={styles.sheetTopline}><span /><span>{t(K("preview.sheetLabel"))}</span></div>
                     <div className={styles.sheetTitle} />
                     <div className={styles.sheetSubtitle} />
                     <div className={styles.sheetParagraph}><i /><i /><i /><i /></div>
@@ -262,10 +280,10 @@ export function DocumentGenerationPage() {
                   </div>
                   <div className={styles.canvasEmptyState}>
                     <span><FileText size={22} aria-hidden="true" /></span>
-                    <strong>Your document preview will appear here</strong>
-                    <small>Upload a file to see pages, annotations, and extracted content</small>
+                    <strong>{t(K("preview.emptyTitle"))}</strong>
+                    <small>{t(K("preview.emptyHint"))}</small>
                   </div>
-                  <div className={styles.canvasPageNumber}>Page 1 of 1</div>
+                  <div className={styles.canvasPageNumber}>{t(K("preview.pageOf"))}</div>
                 </div>
               </>
             )}
@@ -273,17 +291,17 @@ export function DocumentGenerationPage() {
 
           {isSummarize ? (
             <div className={styles.summaryOutputCards}>
-              <article><div><NotebookPen size={13} /><strong>Executive summary</strong></div><p>Q2 revenue increased 18.6% to $8.42M, led by product adoption and strategic partnerships.</p></article>
-              <article><div><ListChecks size={13} /><strong>Key takeaways</strong></div><p>Profit grew faster than revenue and margins improved across key segments.</p></article>
-              <article><div><Sparkles size={13} /><strong>Suggested next steps</strong></div><p>Monitor operating costs and continue investment in top-performing segments.</p></article>
+              <article><div><NotebookPen size={13} /><strong>{t(K("summary.cardExecutive"))}</strong></div><p>{t(K("summary.cardExecutiveBody"))}</p></article>
+              <article><div><ListChecks size={13} /><strong>{t(K("summary.takeawaysHeading"))}</strong></div><p>{t(K("summary.cardTakeawaysBody"))}</p></article>
+              <article><div><Sparkles size={13} /><strong>{t(K("summary.cardNext"))}</strong></div><p>{t(K("summary.cardNextBody"))}</p></article>
             </div>
           ) : (
             <div className={styles.outputCards}>
-              {outputs.map(({ label, icon: Icon }) => (
-                <div className={styles.outputCard} key={label}>
-                  <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{label}</strong></div>
+              {outputs.map(({ key, icon: Icon }) => (
+                <div className={styles.outputCard} key={key}>
+                  <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{t(key)}</strong></div>
                   <i /><i /><i />
-                  <small>Results appear after processing</small>
+                  <small>{t(K("output.pending"))}</small>
                 </div>
               ))}
             </div>
@@ -291,17 +309,17 @@ export function DocumentGenerationPage() {
           </main>
         }
         right={
-          <aside className={styles.settingsPanel} aria-label="Document settings">
-          <PanelHeading step="3">SETTINGS</PanelHeading>
+          <aside className={styles.settingsPanel} aria-label={t(K("a11y.settings"))}>
+          <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
           <div className={styles.settingGroup}>
-            <div className={styles.settingLabel}>Model <span>ⓘ</span></div>
+            <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
             <div className={styles.modelCards}>
-              <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>Standard</strong><small>Balanced speed &amp; accuracy</small></div>
-              <div className={styles.modelCard}><i /><strong>Premium</strong><small>Higher accuracy for complex docs</small></div>
+              <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("settings.standard"))}</strong><small>{t(K("settings.standardHint"))}</small></div>
+              <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
             </div>
           </div>
           <div className={styles.settingGroup}>
-            <div className={styles.settingLabel}>Output format</div>
+            <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
             <div className={styles.formatCards}>
               {["DOCX", "PDF", "TXT", "JSON"].map((format, index) => (
                 <div key={format} className={`${styles.formatCard} ${index === 0 ? styles.formatCardActive : ""}`}>
@@ -310,57 +328,57 @@ export function DocumentGenerationPage() {
               ))}
             </div>
           </div>
-          <SelectPlaceholder label="Language" value="English (US)" />
+          <SelectPlaceholder label={t(K("settings.language"))} value={t(K("settings.languageValue"))} />
           {isSummarize ? (
             <>
-              <SelectPlaceholder label="Summary length" value="Standard · 1–2 pages" />
-              <SelectPlaceholder label="Focus areas" value="Takeaways, decisions, actions" />
-              <SelectPlaceholder label="Tone / Style" value="Executive & concise" />
+              <SelectPlaceholder label={t(K("summary.length"))} value={t(K("summary.lengthValue"))} />
+              <SelectPlaceholder label={t(K("summary.focus"))} value={t(K("summary.focusValue"))} />
+              <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("summary.toneValue"))} />
             </>
           ) : (
             <>
-              <SelectPlaceholder label="Page range" value="All pages" />
-              <SelectPlaceholder label="Extraction depth" value="Advanced (Tables, Forms, Notes)" />
-              <SelectPlaceholder label="Tone / Style" value="Professional & Clear" />
+              <SelectPlaceholder label={t(K("settings.pageRange"))} value={t(K("source.allPages"))} />
+              <SelectPlaceholder label={t(K("settings.depth"))} value={t(K("settings.depthValue"))} />
+              <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
             </>
           )}
-          <div className={styles.estimate}><span>Estimated credits</span><strong>— Credits</strong></div>
+          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{t(K("settings.credits"))}</strong></div>
           <button className={styles.generateButton} type="button" disabled>
-            <span>{isSummarize ? "GENERATE SUMMARY" : "GENERATE DOCUMENT"}</span>
+            <span>{isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
             <Sparkles size={17} aria-hidden="true" />
           </button>
-          <div className={styles.secureNote}><span />Your documents stay private and secure</div>
+          <div className={styles.secureNote}><span />{t(K("settings.secure"))}</div>
           </aside>
         }
       />
 
-      <section className={styles.resourceShelf} aria-label="Document learning and tools">
+      <section className={styles.resourceShelf} aria-label={t(K("a11y.shelf"))}>
         <div className={styles.learnArea}>
           <div className={styles.shelfHeading}>
-            <div><h2>LEARN &amp; MASTER DOCUMENT AI</h2><p>Short guides to get more from your documents</p></div>
-            <a href="#document-guides">View all <ArrowUpRight size={13} aria-hidden="true" /></a>
+            <div><h2>{t(K("learn.heading"))}</h2><p>{t(K("learn.subheading"))}</p></div>
+            <a href="#document-guides">{t(K("learn.viewAll"))} <ArrowUpRight size={13} aria-hidden="true" /></a>
           </div>
           <div className={styles.guideCards} id="document-guides">
             {guides.map((guide) => (
-              <div className={styles.guideCard} key={guide.title}>
+              <div className={styles.guideCard} key={guide.time}>
                 <div className={`${styles.guideThumb} ${styles[`guideTone_${guide.tone}`]}`}>
-                  <span>{guide.title}</span><Play size={14} fill="currentColor" aria-hidden="true" />
+                  <span>{t(guide.title)}</span><Play size={14} fill="currentColor" aria-hidden="true" />
                 </div>
-                <strong>{guide.title}</strong>
-                <small>{guide.detail}</small>
+                <strong>{t(guide.title)}</strong>
+                <small>{t(guide.detail)}</small>
                 <em>{guide.time}</em>
               </div>
             ))}
           </div>
         </div>
         <div className={styles.toolsArea}>
-          <div className={styles.shelfHeading}><div><h2>POWERFUL DOCUMENT TOOLS</h2><p>More ways to work with files</p></div></div>
+          <div className={styles.shelfHeading}><div><h2>{t(K("tools.heading"))}</h2><p>{t(K("tools.subheading"))}</p></div></div>
           <div className={styles.documentToolCards}>
             {documentTools.map(({ title, detail, icon: Icon }) => (
               <div className={styles.documentToolCard} key={title}>
                 <span><Icon size={20} aria-hidden="true" /></span>
-                <strong>{title}</strong>
-                <small>{detail}</small>
+                <strong>{t(title)}</strong>
+                <small>{t(detail)}</small>
               </div>
             ))}
           </div>
