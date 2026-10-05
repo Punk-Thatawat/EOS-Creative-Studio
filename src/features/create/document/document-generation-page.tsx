@@ -18,6 +18,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import styles from "./document-generation-page.module.css";
 
 const modes = [
@@ -99,17 +100,19 @@ export function DocumentGenerationPage() {
         </div>
       </header>
 
-      <nav className={styles.modeTabs} aria-label="Document tools">
-        {modes.map(({ label, icon: Icon, active }) => (
-          <div key={label} className={`${styles.modeTab} ${active ? styles.modeTabActive : ""}`} aria-current={active ? "page" : undefined}>
-            <Icon size={16} strokeWidth={2} aria-hidden="true" />
-            <span>{label}</span>
-          </div>
-        ))}
-      </nav>
-
-      <section className={styles.workspace} aria-label="Document workspace">
-        <aside className={styles.sourcePanel}>
+      <CreatorWorkspaceLayout
+        tabs={
+          <nav className={styles.modeTabs} aria-label="Document tools">
+            {modes.map(({ label, icon: Icon, active }) => (
+              <div key={label} className={`${styles.modeTab} ${active ? styles.modeTabActive : ""}`} aria-current={active ? "page" : undefined}>
+                <Icon size={16} strokeWidth={2} aria-hidden="true" />
+                <span>{label}</span>
+              </div>
+            ))}
+          </nav>
+        }
+        left={
+          <aside className={styles.sourcePanel} aria-label="Document source and instructions">
           <PanelHeading step="1" >SOURCE</PanelHeading>
           <div className={styles.dropzone}>
             <CloudUpload size={29} strokeWidth={1.7} aria-hidden="true" />
@@ -134,9 +137,10 @@ export function DocumentGenerationPage() {
             <div><i className={styles.checkedBox} />Detect handwriting</div>
             <div><i className={styles.checkedBox} />Preserve document layout</div>
           </div>
-        </aside>
-
-        <main className={styles.previewPanel}>
+          </aside>
+        }
+        preview={
+          <main className={styles.previewPanel} aria-label="Document preview">
           <div className={styles.previewHeader}>
             <div><span>PREVIEW</span><small>Document canvas</small></div>
             <div className={styles.previewToolbar} aria-label="Preview controls">
@@ -190,9 +194,10 @@ export function DocumentGenerationPage() {
               </div>
             ))}
           </div>
-        </main>
-
-        <aside className={styles.settingsPanel}>
+          </main>
+        }
+        right={
+          <aside className={styles.settingsPanel} aria-label="Document settings">
           <PanelHeading step="3">SETTINGS</PanelHeading>
           <div className={styles.settingGroup}>
             <div className={styles.settingLabel}>Model <span>ⓘ</span></div>
@@ -218,8 +223,9 @@ export function DocumentGenerationPage() {
           <div className={styles.estimate}><span>Estimated credits</span><strong>— Credits</strong></div>
           <div className={styles.generateButton} aria-disabled="true"><span>GENERATE DOCUMENT</span><Sparkles size={17} aria-hidden="true" /></div>
           <div className={styles.secureNote}><span />Your documents stay private and secure</div>
-        </aside>
-      </section>
+          </aside>
+        }
+      />
 
       <section className={styles.resourceShelf} aria-label="Document learning and tools">
         <div className={styles.learnArea}>

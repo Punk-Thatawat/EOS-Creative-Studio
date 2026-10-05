@@ -249,22 +249,11 @@
 .modeTabActive { color: var(--doc-orange); }
 .modeTabActive svg { color: var(--doc-orange); }
 
-.workspace {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(230px, 0.92fr) minmax(0, 2.95fr) minmax(240px, 0.92fr);
-  overflow: hidden;
-  border: 1px solid var(--doc-line);
-  border-radius: 12px;
-  background: #fff;
-}
-
 .sourcePanel,
 .previewPanel,
 .settingsPanel { min-width: 0; }
 
 .sourcePanel {
-  border-right: 1px solid var(--doc-line);
   padding: 14px;
 }
 
@@ -276,7 +265,6 @@
 }
 
 .settingsPanel {
-  border-left: 1px solid var(--doc-line);
   padding: 14px;
 }
 
@@ -567,8 +555,6 @@
 
 @media (max-width: 1199px) {
   .hero { grid-template-columns: minmax(0, 1fr) minmax(290px, 0.8fr); }
-  .workspace { grid-template-columns: minmax(230px, 0.9fr) minmax(0, 1.9fr); }
-  .settingsPanel { grid-column: 1 / -1; border-top: 1px solid var(--doc-line); border-left: 0; }
   .settingsPanel .modelCards { max-width: 420px; }
   .settingsPanel .formatCards { max-width: 380px; }
   .settingsPanel > .selectField { display: inline-grid; width: calc(25% - 8px); margin-right: 8px; vertical-align: top; }
@@ -591,12 +577,8 @@
   .heroStamp { max-width: 90%; font-size: 8px; }
   .heroCopy p { max-width: 55%; font-size: 10px; }
   .modeTab { min-height: 39px; padding: 0 12px; font-size: 9px; }
-  .workspace { grid-template-columns: minmax(0, 1fr); }
-  .sourcePanel,
-  .previewPanel,
-  .settingsPanel { border-right: 0; border-left: 0; }
   .sourcePanel { padding: 13px; }
-  .previewPanel { min-height: 385px; border-top: 1px solid var(--doc-line); border-bottom: 1px solid var(--doc-line); padding: 0 10px 10px; }
+  .previewPanel { min-height: 385px; padding: 0 10px 10px; }
   .previewToolbar { gap: 7px; }
   .previewToolbar > span:nth-last-child(2),
   .previewToolbar > span:nth-last-child(3) { display: none; }
@@ -606,7 +588,7 @@
   .documentSheet { min-height: 200px; padding: 15px; }
   .outputCards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .outputCard:last-child { display: none; }
-  .settingsPanel { grid-column: auto; border-top: 0; padding: 13px; }
+  .settingsPanel { padding: 13px; }
   .settingsPanel > .selectField { display: grid; width: auto; margin-right: 0; }
   .settingsPanel .estimate,
   .settingsPanel .generateButton { max-width: none; }
