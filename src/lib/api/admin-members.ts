@@ -8,7 +8,7 @@ const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`
 export type AdminMemberRole = "user" | "admin";
 export type AdminMemberStatus = "active" | "suspended";
 export type QuickPlaybookType = "creator" | "marketing" | "agency" | "sme_owner" | "corporate" | "beginner" | "ai_power_user";
-export type InviteAdminMemberInput = { email: string; role: AdminMemberRole; display_name?: string; recipient_name?: string; quick_playbooks: QuickPlaybookType[]; initial_credits?: number };
+export type InviteAdminMemberInput = { email: string; role: AdminMemberRole; display_name?: string; recipient_name?: string; test_start_date: string; test_end_date: string; quick_playbooks: QuickPlaybookType[]; initial_credits?: number };
 export type AdminMember = {
   id: string;
   email: string;
