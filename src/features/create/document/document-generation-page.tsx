@@ -471,23 +471,7 @@ export function DocumentGenerationPage() {
             )}
           </div>
 
-          {isSummarize ? (
-            <div className={styles.summaryOutputCards}>
-              {([
-                { id: "executive", icon: NotebookPen, title: t(K("summary.cardExecutive")), text: summaryResult?.executiveSummary ?? t(K("summary.cardExecutiveBody")) },
-                { id: "takeaways", icon: ListChecks, title: t(K("summary.takeawaysHeading")), text: summaryResult ? summaryResult.keyTakeaways.join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardTakeawaysBody")) },
-                { id: "actions", icon: Sparkles, title: summaryResult ? t(K("summary.actionItems")) : t(K("summary.cardNext")), text: summaryResult ? [...summaryResult.actionItems.map((item) => item.task), ...summaryResult.importantDates.map((item) => `${item.date}: ${item.event}`)].join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardNextBody")) },
-              ] as const).map((card) => {
-                const Icon = card.icon;
-                return (
-                  <article key={card.id}>
-                    <div><Icon size={13} /><strong>{card.title}</strong></div>
-                    <p className={styles.summaryCardBody} tabIndex={card.text.length > 48 ? 0 : undefined} aria-label={card.title}>{card.text}</p>
-                  </article>
-                );
-              })}
-            </div>
-          ) : isTranslate ? (
+          {isSummarize ? null : isTranslate ? (
             <div className={styles.translationResultCard}>
               <div><Languages size={14} aria-hidden="true" /><strong>{t(K("output.translated"))}</strong></div>
               <p>{t(K("translate.resultHint"))}</p>
