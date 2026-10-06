@@ -38,6 +38,9 @@ const K = (key: string) => `create.document.${key}` as TranslationKey;
 
 type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
 type SummaryStyle = "executive" | "bullets";
+type DocumentOutputFormat = "DOCX" | "PDF" | "TXT" | "JSON";
+
+const documentOutputFormats: DocumentOutputFormat[] = ["DOCX", "PDF", "TXT", "JSON"];
 
 const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "ocr", icon: ScanText, available: true },
@@ -502,11 +505,20 @@ export function DocumentGenerationPage() {
           <div className={styles.settingGroup}>
             <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
             <div className={styles.formatCards}>
-              {["DOCX", "PDF", "TXT", "JSON"].map((format, index) => (
-                <div key={format} className={`${styles.formatCard} ${index === 0 ? styles.formatCardActive : ""}`}>
-                  <FileText size={18} aria-hidden="true" /><span>{format}</span>
-                </div>
-              ))}
+              {(isTranslate ? ["TXT"] : documentOutputFormats).map((format) => {
+                const selected = isTranslate ? format === "TXT" : outputFormat === format;
+                return (
+                  <button
+                    key={format}
+                    className={`${styles.formatCard} ${selected ? styles.formatCardActive : ""}`}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => { if (!isTranslate) setOutputFormat(format as DocumentOutputFormat); }}
+                  >
+                    <FileText size={18} aria-hidden="true" /><span>{format}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           {isSummarize ? (

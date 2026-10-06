@@ -623,9 +623,11 @@
 .modelCardActive > i { border: 3px solid var(--doc-orange); }
 
 .formatCards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.formatCard { display: grid; min-height: 62px; place-items: center; gap: 4px; border: 1px solid #e8e6e3; border-radius: 7px; color: #7c858d; }
+.formatCard { display: grid; min-height: 62px; place-items: center; gap: 4px; border: 1px solid #e8e6e3; border-radius: 7px; background: #fff; padding: 0; color: #7c858d; cursor: pointer; transition: border-color 140ms ease, background 140ms ease, color 140ms ease; }
 .formatCard svg { color: #818a92; }
 .formatCard span { font-size: 10px; font-weight: 850; }
+.formatCard:hover { border-color: #f4a27f; }
+.formatCard:focus-visible { outline: 2px solid #f6a17d; outline-offset: 2px; }
 .formatCardActive { border-color: #f47541; background: #fff8f4; color: #df602d; }
 .formatCardActive svg { color: #e86a35; }
 .settingsPanel .selectField { margin-top: 18px; }
