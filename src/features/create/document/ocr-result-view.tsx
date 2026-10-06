@@ -240,16 +240,43 @@ export function OcrResultView({ result, fileName, showConfidence, exportFormat, 
                 </section>
               ))}
               {missing.length > 0 && <p className={styles.ocrMissing}>{t(K("ocr.notFound"), { fields: missing.map(([key]) => fieldLabel(key, locale)).join(", ") })}</p>}
-              {doc.raw !== undefined && doc.raw !== null && (
-                <details className={`${styles.ocrCard} ${styles.ocrRaw}`} open>
-                  <summary>{t(K("ocr.fullText"))}</summary>
-                  <p className={styles.ocrRawHint}>{t(K("ocr.fullTextHint"))}</p>
-                  <pre>{rawOcrText(doc.raw)}</pre>
-                </details>
-              )}
             </Fragment>
           );
         })
+      )}
+    </div>
+  );
+}
+
+/** The "Full text" tab: everything OCR read from the document, including what no field covers. */
+export function OcrFullTextView({ result }: { result: DocumentOcrResult }) {
+  const { t } = useLocale();
+  const sections: Array<{ title?: string; text: string }> = [];
+  if (result.layout?.length) {
+    for (const page of result.layout) sections.push({ title: t(K("ocr.pageN"), { n: page.page }), text: page.components.map((component) => component.text).join("\n\n") });
+  } else if (result.text.length) {
+    result.text.forEach((page, index) => sections.push({ ...(result.text.length > 1 ? { title: t(K("ocr.pageN"), { n: index + 1 }) } : {}), text: page }));
+  } else {
+    result.documents.forEach((doc, index) => {
+      const text = doc.raw === undefined || doc.raw === null ? "" : rawOcrText(doc.raw).trim();
+      if (text) sections.push({ ...(result.documents.length > 1 ? { title: t(K("ocr.documentN"), { n: index + 1 }) } : {}), text });
+    });
+  }
+
+  return (
+    <div className={styles.ocrResult}>
+      {sections.length === 0 ? (
+        <p className={styles.ocrMissing}>{t(K("ocr.fullTextNone"))}</p>
+      ) : (
+        <>
+          {result.documents.length > 0 && <p className={styles.ocrRawHint}>{t(K("ocr.fullTextHint"))}</p>}
+          {sections.map((section, index) => (
+            <section className={styles.ocrCard} key={index}>
+              {section.title && <h4>{section.title}</h4>}
+              <pre className={styles.ocrText}>{section.text}</pre>
+            </section>
+          ))}
+        </>
       )}
     </div>
   );

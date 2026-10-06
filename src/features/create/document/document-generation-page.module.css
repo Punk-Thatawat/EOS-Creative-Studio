@@ -802,13 +802,15 @@
 .ocrBlockType { border-radius: 6px; background: #f6f4f2; padding: 2px 6px; color: #6b747c; font-size: 10px; font-weight: 800; text-align: center; overflow-wrap: anywhere; }
 
 /* Real document preview: thumbnails of the uploaded pages beside the selected page */
-.previewStageDocument { grid-template-columns: 96px minmax(0, 1fr); max-height: 640px; }
-.previewStageDocument .pageRail { overflow-y: auto; }
+/* A fixed height, so the page area inside is what scrolls (up/down as well as sideways) instead of growing with the
+   picture and being clipped by the stage. */
+.previewStageDocument { flex: none; grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: clamp(380px, 75vh, 680px); min-height: 0; }
+.previewStageDocument .pageRail { min-height: 0; overflow-y: auto; }
 .pageThumbButton { width: 100%; border: 0; background: transparent; padding: 0; font: inherit; cursor: pointer; }
 .pageThumbButton > div { display: block; min-height: 0; padding: 0; overflow: hidden; }
 .pageThumbButton img { display: block; width: 100%; height: auto; }
 .pageThumbButton:focus-visible { outline: 2px solid #f6a17d; outline-offset: 2px; }
-.previewStageDocument .canvas { overflow: auto; place-items: start; }
+.previewStageDocument .canvas { min-height: 0; overflow: auto; place-items: start; }
 .previewPageFrame { position: relative; width: calc(min(100%, 760px) * var(--preview-zoom, 1)); margin-inline: auto; flex: none; user-select: none; }
 .previewPagePanning { cursor: grab; touch-action: none; }
 .previewPagePanning:active { cursor: grabbing; }
@@ -845,7 +847,7 @@
   .previewToolbar { width: 100%; flex: 1 1 100%; justify-content: space-between; gap: 2px; }
   .previewToolbar .toolbarButton { min-width: 32px; min-height: 32px; justify-content: center; }
   .toolbarLabel { display: none; }
-  .previewStageDocument { grid-template-columns: 60px minmax(0, 1fr); max-height: 520px; }
+  .previewStageDocument { grid-template-columns: 60px minmax(0, 1fr); height: clamp(300px, 70vh, 520px); }
   .previewStageDocument .pageRail { padding: 8px 4px; }
   .previewStageDocument .canvas { padding: 10px; }
   .previewCompare { width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); }
@@ -869,3 +871,12 @@
 .outputCardBody > span { display: -webkit-box; overflow: hidden; overflow-wrap: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .outputCardMuted { color: #98a0a7; }
 .ocrRawHint { margin: 6px 0 0; color: #8d949b; font-size: 11px; line-height: 1.5; }
+
+/* Segmented tabs, styled like the image page's "Latest result / Model preview / Library" switch */
+.previewTabs { display: flex; gap: 4px; margin-top: 12px; padding: 3px; background: #f5f4f3; border-radius: 8px; }
+.previewTabs button { flex: 1; min-height: 34px; min-width: 0; padding: 7px 10px; color: #747b84; background: transparent; border: 0; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.previewTabs button:hover:not(:disabled) { color: #ed5c2d; }
+.previewTabs button:focus-visible { outline: 2px solid #f6a17d; outline-offset: 1px; }
+.previewTabs button:disabled { opacity: 0.45; cursor: not-allowed; }
+.previewTabs button.previewTabActive { color: #202124; background: #fff; box-shadow: 0 1px 4px rgba(43, 35, 28, 0.12); }
+.previewTabs + .ocrResultsPanel, .previewTabs + .previewStage { margin-top: 12px; }

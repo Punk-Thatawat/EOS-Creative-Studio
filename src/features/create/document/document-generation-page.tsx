@@ -33,7 +33,7 @@ import { DEFAULT_OCR_EXTENSIONS, DEFAULT_OCR_MAX_MEGABYTES, OCR_DOCUMENT_TYPE_OP
 import { canPreviewFile, DocumentPreview } from "./document-preview";
 import { buildOcrCards } from "./ocr-cards";
 import { downloadOcrResult, ocrResultToText } from "./ocr-download";
-import { OcrResultView } from "./ocr-result-view";
+import { OcrFullTextView, OcrResultView } from "./ocr-result-view";
 import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -149,6 +149,7 @@ export function DocumentGenerationPage() {
   const [pdfInfo, setPdfInfo] = useState<{ file: File; count: number } | null>(null);
   const [ocrDepth, setOcrDepth] = useState<OcrDepth>("basic");
   const [ocrZoom, setOcrZoom] = useState(100);
+  const [ocrTab, setOcrTab] = useState<"preview" | "result" | "text">("preview");
   const [ocrPan, setOcrPan] = useState(false);
   const [ocrCompare, setOcrCompare] = useState(false);
   const [ocrAnnotate, setOcrAnnotate] = useState(false);
@@ -160,7 +161,6 @@ export function DocumentGenerationPage() {
   const [ocrError, setOcrError] = useState("");
   const [isOcrRunning, setIsOcrRunning] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
-  const ocrResultsRef = useRef<HTMLDivElement>(null);
   const isSummarize = activeMode === "summarize";
   const isOcr = activeMode === "ocr";
   const ocrTypeInfo = ocrTypes.find((type) => type.id === ocrType);
@@ -237,6 +237,7 @@ export function DocumentGenerationPage() {
     setSummaryResult(null);
     setSummaryError("");
     setOcrResult(null);
+    setOcrTab("preview");
     setOcrError("");
   };
 
@@ -265,6 +266,7 @@ export function DocumentGenerationPage() {
   const changeOcrType = (id: OcrDocumentTypeId) => {
     setOcrType(id);
     setOcrResult(null);
+    setOcrTab("preview");
     setOcrError("");
     const info = ocrTypes.find((type) => type.id === id);
     if (info && !info.outputFormats.includes(ocrFormat)) setOcrFormat("txt");
@@ -314,10 +316,11 @@ export function DocumentGenerationPage() {
     setIsOcrRunning(true);
     setOcrError("");
     setOcrResult(null);
+    setOcrTab("preview");
     setOcrResultPages(pageRange ? pagesInRange(pageRange) : null);
     try {
       const supports = ocrTypeInfo?.supports;
-      setOcrResult(await runDocumentOcr({
+      const result = await runDocumentOcr({
         file: selectedFile,
         documentType: ocrType,
         ...(supports?.targetLang ? { targetLang: ocrLanguage } : {}),
@@ -327,7 +330,9 @@ export function DocumentGenerationPage() {
         ...(pageRange ? { pageRange } : {}),
         ...(ocrDepth === "advanced" ? { depth: ocrDepth } : {}),
         ...(ocrStyle !== "original" && ocrDepth === "basic" ? { style: ocrStyle } : {}),
-      }));
+      });
+      setOcrResult(result);
+      setOcrTab("result");
     } catch (error) {
       setOcrError(error instanceof Error ? error.message : t(K("ocr.errorGeneral")));
     } finally {
@@ -503,6 +508,8 @@ export function DocumentGenerationPage() {
             <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : t(K("preview.canvas"))}</small></div>
             {isOcr ? (
               <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
+                {ocrTab === "preview" && (
+                  <>
                 <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomIn"))} title={hasPreview ? t(K("ocr.tool.zoomIn")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom >= 300} onClick={() => setOcrZoom((zoom) => Math.min(300, zoom + 25))}>
                   <ZoomIn size={14} aria-hidden="true" />
                 </button>
@@ -532,6 +539,8 @@ export function DocumentGenerationPage() {
                 <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); }}>
                   <MessageSquarePlus size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.annotate"))}</span>
                 </button>
+                  </>
+                )}
                 <button type="button" className={styles.toolbarButton} aria-label={t(K("preview.export"))} title={ocrResult ? t(K("ocr.tool.exportHint")) : t(K("ocr.tool.needResult"))} disabled={!ocrResult || isToolbarExporting} onClick={() => void exportFromToolbar()}>
                   <Download size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{isToolbarExporting ? t(K("ocr.exporting")) : t(K("preview.export"))}</span>
                 </button>
@@ -550,6 +559,16 @@ export function DocumentGenerationPage() {
             )}
           </div>
 
+          {isOcr && (
+            <div className={styles.previewTabs} role="tablist" aria-label={t(K("ocr.tab.label"))}>
+              <button type="button" role="tab" aria-selected={ocrTab === "preview"} className={ocrTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("preview")}>{t(K("ocr.tab.preview"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "result"} className={ocrTab === "result" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("result")}>{t(K("ocr.tab.result"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "text"} className={ocrTab === "text" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("text")}>{t(K("ocr.tab.text"))}</button>
+            </div>
+          )}
+
+          {(!isOcr || ocrTab === "preview") && (
+            <>
           <div className={`${styles.previewStage} ${isSummarize ? styles.previewStageSummary : ""} ${isOcr && selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : ""}`}>
             {isSummarize ? (
               <div className={styles.summaryStage}>
@@ -637,11 +656,11 @@ export function DocumentGenerationPage() {
                       className={`${styles.outputCard} ${styles.outputCardFilled}`}
                       key={card.slot}
                       title={t(K("cards.openResult"))}
-                      onClick={() => ocrResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                      onClick={() => setOcrTab("result")}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
-                          ocrResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          setOcrTab("result");
                         }
                       }}
                     >
@@ -661,8 +680,15 @@ export function DocumentGenerationPage() {
               ))}
             </div>
           )}
-          {isOcr && ocrResult && (
-            <div className={styles.ocrResultsPanel} ref={ocrResultsRef}>
+            </>
+          )}
+          {isOcr && ocrTab === "text" && ocrResult && (
+            <div className={styles.ocrResultsPanel}>
+              <OcrFullTextView result={ocrResult} />
+            </div>
+          )}
+          {isOcr && ocrTab === "result" && ocrResult && (
+            <div className={styles.ocrResultsPanel}>
               <div className={styles.ocrStats}>
                 <article><small>{t(K("ocr.statPages"))}</small><strong>{ocrResult.pages}</strong></article>
                 <article><small>{t(K("ocr.statDocuments"))}</small><strong>{ocrResult.text.length ? ocrResult.text.length : ocrResult.documents.length}</strong></article>
