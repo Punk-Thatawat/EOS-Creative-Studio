@@ -25,7 +25,7 @@ import {
 import { Fragment, useEffect, useRef, useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
-import { listDocumentOcrTypes, runDocumentOcr, type DocumentOcrResult, type OcrDocumentTypeId, type OcrDepth, type OcrDocumentTypeInfo, type OcrOutputFormat, type OcrStyleChoice } from "@/lib/api/document-ocr";
+import { listDocumentOcrTypes, runDocumentOcr, type DocumentOcrResult, type OcrDocumentTypeId, type OcrDepth, type OcrDocumentTypeInfo, type OcrHistoryItem, type OcrOutputFormat, type OcrStyleChoice } from "@/lib/api/document-ocr";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -33,6 +33,7 @@ import { DEFAULT_OCR_EXTENSIONS, DEFAULT_OCR_MAX_MEGABYTES, OCR_DOCUMENT_TYPE_OP
 import { canPreviewFile, DocumentPreview } from "./document-preview";
 import { buildOcrCards } from "./ocr-cards";
 import { downloadOcrResult, ocrResultToText } from "./ocr-download";
+import { OcrHistoryPanel } from "./ocr-history";
 import { OcrFullTextView, OcrResultView } from "./ocr-result-view";
 import styles from "./document-generation-page.module.css";
 
@@ -149,7 +150,11 @@ export function DocumentGenerationPage() {
   const [pdfInfo, setPdfInfo] = useState<{ file: File; count: number } | null>(null);
   const [ocrDepth, setOcrDepth] = useState<OcrDepth>("basic");
   const [ocrZoom, setOcrZoom] = useState(100);
-  const [ocrTab, setOcrTab] = useState<"preview" | "result" | "text">("preview");
+  const [ocrTab, setOcrTab] = useState<"preview" | "result" | "text" | "history">("preview");
+  const [historyKey, setHistoryKey] = useState(0);
+  /** Name of the file the shown result came from; a result opened from history has no file selected. */
+  const [ocrResultName, setOcrResultName] = useState("");
+  const [ocrFromHistory, setOcrFromHistory] = useState(false);
   const [ocrPan, setOcrPan] = useState(false);
   const [ocrCompare, setOcrCompare] = useState(false);
   const [ocrAnnotate, setOcrAnnotate] = useState(false);
@@ -171,7 +176,7 @@ export function DocumentGenerationPage() {
   const hasPreview = isOcr && !!selectedFile && canPreviewFile(selectedFile);
   const preferStyled = ocrShowStyled && !!ocrResult?.styledText?.length;
   /** The extracted text for one page of the uploaded document, shown beside it by the Compare tool. */
-  const compareText = hasPreview && ocrCompare && ocrResult ? (page: number): string => {
+  const compareText = hasPreview && ocrCompare && ocrResult && !ocrFromHistory ? (page: number): string => {
     const index = ocrResultPages ? ocrResultPages.indexOf(page) : page - 1;
     if (index < 0) return t(K("ocr.compareOutOfRange"));
     if (ocrResult.layout?.length) return ocrResult.layout[index]?.components.map((component) => component.text).join("\n\n") ?? "";
@@ -182,7 +187,7 @@ export function DocumentGenerationPage() {
     if (!ocrResult || isToolbarExporting) return;
     setIsToolbarExporting(true);
     try {
-      await downloadOcrResult({ result: ocrResult, fileName: selectedFile?.name ?? "", format: ocrFormat, preferStyled, locale, t });
+      await downloadOcrResult({ result: ocrResult, fileName: ocrResultName, format: ocrFormat, preferStyled, locale, t });
     } catch {
       setOcrError(t(K("ocr.exportFailed")));
     } finally {
@@ -293,6 +298,17 @@ export function DocumentGenerationPage() {
     return [...pages].sort((a, b) => a - b);
   };
 
+  /** Shows a result saved in history. Its file is not stored, so there is nothing to preview or compare. */
+  const openFromHistory = (result: DocumentOcrResult, item: OcrHistoryItem) => {
+    setOcrType(result.documentType);
+    setOcrResult(result);
+    setOcrResultName(item.fileName);
+    setOcrFromHistory(true);
+    setOcrCompare(false);
+    setOcrError("");
+    setOcrTab("result");
+  };
+
   const runOcr = async () => {
     if (!selectedFile || isOcrRunning) return;
     const problem = ocrFileProblem(selectedFile, ocrExtensions, ocrMaxMegabytes);
@@ -332,7 +348,10 @@ export function DocumentGenerationPage() {
         ...(ocrStyle !== "original" && ocrDepth === "basic" ? { style: ocrStyle } : {}),
       });
       setOcrResult(result);
+      setOcrResultName(selectedFile.name);
+      setOcrFromHistory(false);
       setOcrTab("result");
+      setHistoryKey((key) => key + 1);
     } catch (error) {
       setOcrError(error instanceof Error ? error.message : t(K("ocr.errorGeneral")));
     } finally {
@@ -533,7 +552,7 @@ export function DocumentGenerationPage() {
                   <Hand size={14} aria-hidden="true" />
                 </button>
                 <span className={styles.toolbarDivider} />
-                <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !ocrResult ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !ocrResult} onClick={() => setOcrCompare((value) => !value)}>
+                <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !ocrResult ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !ocrResult || ocrFromHistory} onClick={() => setOcrCompare((value) => !value)}>
                   <Columns2 size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.compare"))}</span>
                 </button>
                 <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); }}>
@@ -564,6 +583,7 @@ export function DocumentGenerationPage() {
               <button type="button" role="tab" aria-selected={ocrTab === "preview"} className={ocrTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("preview")}>{t(K("ocr.tab.preview"))}</button>
               <button type="button" role="tab" aria-selected={ocrTab === "result"} className={ocrTab === "result" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("result")}>{t(K("ocr.tab.result"))}</button>
               <button type="button" role="tab" aria-selected={ocrTab === "text"} className={ocrTab === "text" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("text")}>{t(K("ocr.tab.text"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "history"} className={ocrTab === "history" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("history")}>{t(K("ocr.tab.history"))}</button>
             </div>
           )}
 
@@ -682,6 +702,12 @@ export function DocumentGenerationPage() {
           )}
             </>
           )}
+          {isOcr && ocrFromHistory && ocrResult && (ocrTab === "result" || ocrTab === "text") && <div className={styles.ocrNotice} role="status">{t(K("ocr.history.notice"))}</div>}
+          {isOcr && ocrTab === "history" && (
+            <div className={styles.ocrResultsPanel}>
+              <OcrHistoryPanel refreshKey={historyKey} onOpen={openFromHistory} />
+            </div>
+          )}
           {isOcr && ocrTab === "text" && ocrResult && (
             <div className={styles.ocrResultsPanel}>
               <OcrFullTextView result={ocrResult} />
@@ -695,7 +721,7 @@ export function DocumentGenerationPage() {
                 <article><small>{t(K("ocr.statCredits"))}</small><strong>{ocrResult.creditsUsed + (ocrResult.styleCreditsUsed ?? 0)}</strong></article>
                 <article><small>{t(K("ocr.statTime"))}</small><strong>{ocrResult.processMs !== undefined ? `${(ocrResult.processMs / 1000).toFixed(1)}s` : "—"}</strong></article>
               </div>
-              <OcrResultView result={ocrResult} fileName={selectedFile?.name ?? ""} showConfidence={ocrConfidence} exportFormat={ocrFormat} showStyled={ocrShowStyled} onShowStyledChange={setOcrShowStyled} />
+              <OcrResultView result={ocrResult} fileName={ocrResultName} showConfidence={ocrConfidence} exportFormat={ocrFormat} showStyled={ocrShowStyled} onShowStyledChange={setOcrShowStyled} />
             </div>
           )}
           </main>

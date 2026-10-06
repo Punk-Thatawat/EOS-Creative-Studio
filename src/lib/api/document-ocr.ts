@@ -76,6 +76,8 @@ export type DocumentOcrResult = {
   styleFailed?: boolean;
   /** The generated DOCX / searchable PDF, when one of those outputs was requested. */
   file?: { filename: string; mimeType: string; base64: string };
+  /** Id of the history entry this run was saved as. */
+  historyId?: string;
   processMs?: number;
   creditsUsed: number;
 };
@@ -161,4 +163,55 @@ export async function exportDocumentOcr(input: {
   const payload = await response.json().catch(() => null) as { data?: { filename: string; mimeType: string; base64: string }; message?: string | string[] } | null;
   if (!response.ok || !payload?.data) throw new Error(errorMessage(payload?.message, 'Could not create the file'));
   return payload.data;
+}
+
+export type OcrHistoryItem = {
+  id: string;
+  documentType: OcrDocumentTypeId;
+  fileName: string;
+  fileSizeBytes: number;
+  pages: number;
+  creditsUsed: number;
+  outputFormat: OcrOutputFormat;
+  depth: OcrDepth;
+  fieldCount?: number;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export type OcrHistoryPage = { items: OcrHistoryItem[]; total: number; retentionDays: number };
+
+async function historyRequest<T>(path: string, init: RequestInit = {}): Promise<T | null> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error('Please sign in to see your history');
+  const response = await fetch(`${backendApiUrl}/documents/ocr/history${path}`, {
+    ...init,
+    headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}`, ...init.headers },
+    cache: 'no-store',
+  });
+  if (response.status === 204) return null;
+  const payload = await response.json().catch(() => null) as { data?: T; message?: string | string[] } | null;
+  if (!response.ok || payload?.data === undefined) throw new Error(errorMessage(payload?.message, 'Could not load your history'));
+  return payload.data;
+}
+
+export async function listDocumentOcrHistory(input: { limit: number; offset: number }): Promise<OcrHistoryPage> {
+  const page = await historyRequest<OcrHistoryPage>(`?limit=${input.limit}&offset=${input.offset}`);
+  if (!page) throw new Error('Could not load your history');
+  return page;
+}
+
+/** The full stored result of one history entry. */
+export async function getDocumentOcrHistory(id: string): Promise<{ item: OcrHistoryItem; result: DocumentOcrResult }> {
+  const found = await historyRequest<{ item: OcrHistoryItem; result: DocumentOcrResult }>(`/${encodeURIComponent(id)}`);
+  if (!found) throw new Error('This history item could not be opened');
+  return found;
+}
+
+export async function deleteDocumentOcrHistoryItem(id: string): Promise<void> {
+  await historyRequest(`/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function clearDocumentOcrHistory(): Promise<void> {
+  await historyRequest('', { method: 'DELETE' });
 }

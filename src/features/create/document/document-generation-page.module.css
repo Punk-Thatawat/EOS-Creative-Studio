@@ -880,3 +880,39 @@
 .previewTabs button:disabled { opacity: 0.45; cursor: not-allowed; }
 .previewTabs button.previewTabActive { color: #202124; background: #fff; box-shadow: 0 1px 4px rgba(43, 35, 28, 0.12); }
 .previewTabs + .ocrResultsPanel, .previewTabs + .previewStage { margin-top: 12px; }
+
+/* OCR history */
+.ocrHistoryBar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: #343b42; font-size: 12px; font-weight: 700; }
+.ocrHistoryClear, .ocrHistoryMore, .ocrHistoryConfirm button { min-height: 28px; border: 1px solid #e2e3e5; border-radius: 7px; background: #fff; padding: 0 11px; color: #59626b; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.ocrHistoryClear:hover, .ocrHistoryMore:hover, .ocrHistoryConfirm button:hover { border-color: #f6a17d; color: var(--doc-orange); }
+.ocrHistoryMore { justify-self: center; min-height: 34px; padding: 0 18px; }
+.ocrHistoryConfirm { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #b13c2e; font-size: 11px; font-weight: 700; }
+.ocrHistoryList { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ocrHistoryItem { display: flex; align-items: center; gap: 6px; border: 1px solid #ece9e6; border-radius: 10px; background: #fff; padding-right: 8px; }
+.ocrHistoryItem:hover { border-color: #f6a17d; }
+.ocrHistoryOpen { display: flex; min-width: 0; flex: 1; align-items: center; gap: 12px; border: 0; background: transparent; padding: 12px; text-align: left; font: inherit; cursor: pointer; }
+.ocrHistoryOpen:disabled { cursor: progress; opacity: 0.6; }
+.ocrHistoryIcon { display: grid; width: 38px; height: 38px; flex: none; place-items: center; border-radius: 9px; background: #fff1e9; color: var(--doc-orange); }
+.ocrHistoryText { display: grid; min-width: 0; gap: 3px; }
+.ocrHistoryText strong { overflow: hidden; color: #252a2f; font-size: 13px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.ocrHistoryText small { overflow: hidden; color: #8d949b; font-size: 11px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.ocrHistoryDelete { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #8c959c; cursor: pointer; }
+.ocrHistoryDelete:hover:not(:disabled) { background: #fdeceb; color: #b13c2e; }
+@media (max-width: 767px) {
+  .ocrHistoryText strong, .ocrHistoryText small { white-space: normal; overflow-wrap: anywhere; }
+  .ocrHistoryItem { align-items: flex-start; }
+  .ocrHistoryDelete { margin-top: 10px; }
+}
+.ocrHistoryActions { display: flex; flex: none; align-items: center; gap: 2px; }
+.ocrHistoryDownload { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border: 0; border-radius: 8px; background: transparent; color: #8c959c; cursor: pointer; }
+.ocrHistoryDownload:hover:not(:disabled) { background: #fff1e9; color: var(--doc-orange); }
+.ocrHistoryDownload:disabled, .ocrHistoryDelete:disabled { cursor: progress; opacity: 0.5; }
+.ocrHistoryFormats { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 5px; color: #59626b; font-size: 11px; font-weight: 700; }
+.ocrHistoryFormats button { min-height: 28px; border: 1px solid #e2e3e5; border-radius: 7px; background: #fff; padding: 0 9px; color: #59626b; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.ocrHistoryFormats button:hover { border-color: #f6a17d; color: var(--doc-orange); }
+@media (max-width: 767px) {
+  .ocrHistoryActions { margin-top: 10px; }
+  .ocrHistoryActions .ocrHistoryDelete { margin-top: 0; }
+}
+.ocrHistoryItem { flex-wrap: wrap; }
+.ocrHistoryItem > .ocrHistoryFormats, .ocrHistoryItem > .ocrHistoryConfirm { flex: 1 0 100%; padding: 0 12px 10px 62px; }
