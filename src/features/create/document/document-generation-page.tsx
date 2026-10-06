@@ -39,6 +39,13 @@ import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
 
+const EXPORT_CHOICES: ReadonlyArray<{ id: OcrOutputFormat; label: string }> = [
+  { id: "docx", label: "DOCX" },
+  { id: "pdf", label: "PDF" },
+  { id: "txt", label: "TXT" },
+  { id: "json", label: "JSON" },
+];
+
 type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
 type SummaryStyle = "executive" | "bullets";
 
@@ -161,6 +168,8 @@ export function DocumentGenerationPage() {
   const [ocrShowStyled, setOcrShowStyled] = useState(true);
   const [ocrResultPages, setOcrResultPages] = useState<number[] | null>(null);
   const [isToolbarExporting, setIsToolbarExporting] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLSpanElement>(null);
   const [ocrStyle, setOcrStyle] = useState<OcrStyleChoice>("original");
   const [ocrResult, setOcrResult] = useState<DocumentOcrResult | null>(null);
   const [ocrError, setOcrError] = useState("");
@@ -183,11 +192,15 @@ export function DocumentGenerationPage() {
     const pages = preferStyled ? ocrResult.styledText ?? ocrResult.text : ocrResult.text;
     return pages.length ? pages[index] ?? "" : ocrResultToText(ocrResult, locale, t);
   } : null;
-  const exportFromToolbar = async () => {
+  const exportFromToolbar = async (format: OcrOutputFormat) => {
     if (!ocrResult || isToolbarExporting) return;
+    setExportMenuOpen(false);
     setIsToolbarExporting(true);
     try {
-      await downloadOcrResult({ result: ocrResult, fileName: ocrResultName, format: ocrFormat, preferStyled, locale, t });
+      // The Word / PDF iApp drew is only right for the format it was made in; any other choice is built from the result.
+      const result = { ...ocrResult };
+      if (result.outputFormat !== format) delete result.file;
+      await downloadOcrResult({ result, fileName: ocrResultName, format, preferStyled, locale, t });
     } catch {
       setOcrError(t(K("ocr.exportFailed")));
     } finally {
@@ -215,6 +228,19 @@ export function DocumentGenerationPage() {
     }).catch(() => undefined);
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !exportMenuRef.current?.contains(event.target as Node)) setExportMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [exportMenuOpen]);
 
   const setFileFromList = (files: FileList | null) => {
     const file = files?.[0];
@@ -560,9 +586,41 @@ export function DocumentGenerationPage() {
                 </button>
                   </>
                 )}
-                <button type="button" className={styles.toolbarButton} aria-label={t(K("preview.export"))} title={ocrResult ? t(K("ocr.tool.exportHint")) : t(K("ocr.tool.needResult"))} disabled={!ocrResult || isToolbarExporting} onClick={() => void exportFromToolbar()}>
-                  <Download size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{isToolbarExporting ? t(K("ocr.exporting")) : t(K("preview.export"))}</span>
-                </button>
+                <span className={styles.exportMenuWrap} ref={exportMenuRef}>
+                  <button type="button" className={`${styles.toolbarButton} ${exportMenuOpen ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.export"))} aria-haspopup="menu" aria-expanded={exportMenuOpen} title={ocrResult ? t(K("ocr.tool.exportHint")) : t(K("ocr.tool.needResult"))} disabled={isToolbarExporting} onClick={() => setExportMenuOpen((open) => !open)}>
+                    <Download size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{isToolbarExporting ? t(K("ocr.exporting")) : t(K("preview.export"))}</span>
+                  </button>
+                  {exportMenuOpen && (
+                    <div className={styles.exportMenu} role="menu" aria-label={t(K("ocr.exportAs"))}>
+                      <small>{t(K("ocr.exportAs"))}</small>
+                      <div className={styles.exportChoices}>
+                        {EXPORT_CHOICES.map((choice) => {
+                          // Before a document is read, a choice sets the format the next run will produce instead.
+                          const unavailable = !ocrResult && !!ocrTypeInfo && !ocrTypeInfo.outputFormats.includes(choice.id);
+                          return (
+                            <button
+                              key={choice.id}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={ocrFormat === choice.id}
+                              disabled={unavailable}
+                              className={`${styles.formatCard} ${styles.formatButton} ${ocrFormat === choice.id ? styles.formatCardActive : ""}`}
+                              title={t(K(`ocr.exportAs.${choice.id}`))}
+                              onClick={() => {
+                                if (ocrResult) return void exportFromToolbar(choice.id);
+                                setOcrFormat(choice.id);
+                                setExportMenuOpen(false);
+                              }}
+                            >
+                              <FileText size={18} aria-hidden="true" /><span>{choice.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {!ocrResult && <p className={styles.exportMenuHint} role="status">{t(K("ocr.exportNeedResult"))}</p>}
+                    </div>
+                  )}
+                </span>
               </div>
             ) : (
               <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
@@ -736,33 +794,19 @@ export function DocumentGenerationPage() {
               <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
             </div>}
           </div>
-          <div className={styles.settingGroup}>
-            <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
-            <div className={styles.formatCards}>
-              {["DOCX", "PDF", "TXT", "JSON"].map((format, index) => {
-                if (!isOcr) {
-                  return (
-                    <div key={format} className={`${styles.formatCard} ${index === 0 ? styles.formatCardActive : ""}`}>
-                      <FileText size={18} aria-hidden="true" /><span>{format}</span>
-                    </div>
-                  );
-                }
-                const formatId = format.toLowerCase() as OcrOutputFormat;
-                const selected = ocrFormat === formatId;
-                return (
-                  <button
-                    key={format}
-                    type="button"
-                    className={`${styles.formatCard} ${styles.formatButton} ${selected ? styles.formatCardActive : ""}`}
-                    aria-pressed={selected}
-                    onClick={() => setOcrFormat(formatId)}
-                  >
+          {/* Gen Document picks its file format from the Export button instead of here. */}
+          {!isOcr && (
+            <div className={styles.settingGroup}>
+              <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
+              <div className={styles.formatCards}>
+                {["DOCX", "PDF", "TXT", "JSON"].map((format, index) => (
+                  <div key={format} className={`${styles.formatCard} ${index === 0 ? styles.formatCardActive : ""}`}>
                     <FileText size={18} aria-hidden="true" /><span>{format}</span>
-                  </button>
-                );
-              })}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           {isOcr ? (
             <>
               {ocrTypeInfo?.supports.targetLang && (
