@@ -868,3 +868,4 @@
 .outputCardBody { display: grid; gap: 4px; margin-top: 8px; color: #4d555e; font-size: 12px; line-height: 1.45; text-align: left; }
 .outputCardBody > span { display: -webkit-box; overflow: hidden; overflow-wrap: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .outputCardMuted { color: #98a0a7; }
+.ocrRawHint { margin: 6px 0 0; color: #8d949b; font-size: 11px; line-height: 1.5; }

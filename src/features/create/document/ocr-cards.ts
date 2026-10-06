@@ -60,6 +60,17 @@ function averageConfidence(result: DocumentOcrResult): number | undefined {
 }
 
 /**
+ * A structured result where most fields are blank or zero usually means the wrong document type was chosen (an NCB
+ * report read as a credit card statement), so the user is told to check it.
+ */
+export function looksLikeWrongType(result: DocumentOcrResult): boolean {
+  const fields = Object.values(topFields(result));
+  if (fields.length < 6) return false;
+  const blank = fields.filter((value) => isEmpty(value) || value === 0).length;
+  return blank / fields.length >= 0.55;
+}
+
+/**
  * The five cards under the preview, filled from the extracted result itself. Nothing here calls an AI: every line
  * is read straight from what OCR returned (or derived from its confidence scores).
  */
@@ -132,9 +143,11 @@ export function buildOcrCards(result: DocumentOcrResult, locale: Locale, t: Tran
     const doubtful = Object.entries(confidence)
       .filter(([, score]) => typeof score === "number" && score > 0 && score < LOW_CONFIDENCE)
       .map(([key]) => fieldLabel(key, locale));
-    const lines = doubtful.length
-      ? [t(K("cards.recheck"), { fields: doubtful.slice(0, 4).join(", ") })]
-      : [t(K(isStructured && Object.keys(confidence).length ? "cards.allConfident" : "cards.ocrCaution"))];
+    const lines = looksLikeWrongType(result)
+      ? [t(K("ocr.wrongType"))]
+      : doubtful.length
+        ? [t(K("cards.recheck"), { fields: doubtful.slice(0, 4).join(", ") })]
+        : [t(K(isStructured && Object.keys(confidence).length ? "cards.allConfident" : "cards.ocrCaution"))];
     cards.push({ slot: "notes", title: t(K("cards.notesTitle")), lines });
   }
   return cards;

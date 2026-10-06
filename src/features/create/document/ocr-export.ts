@@ -1,7 +1,7 @@
 import type { DocumentOcrResult, OcrExportBlock } from "@/lib/api/document-ocr";
 import type { Locale, TranslationKey } from "@/lib/i18n/dictionary";
 import { fieldLabel } from "./ocr-field-labels";
-import { formatPrimitive, isEmpty, isRecord, valueToLines } from "./ocr-format";
+import { formatPrimitive, isEmpty, isRecord, rawOcrText, valueToLines } from "./ocr-format";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
 
@@ -63,7 +63,7 @@ export function buildOcrExport(result: DocumentOcrResult, fileName: string, loca
       if (result.documents.length > 1) blocks.push({ type: "heading", text: t(K("ocr.documentN"), { n: index + 1 }) });
       blocks.push(...fieldBlocks(doc.fields, locale));
       if (doc.raw !== undefined && doc.raw !== null) {
-        blocks.push({ type: "heading", text: t(K("ocr.rawText")) }, { type: "paragraph", text: typeof doc.raw === "string" ? doc.raw : JSON.stringify(doc.raw, null, 2) });
+        blocks.push({ type: "heading", text: t(K("ocr.fullText")) }, { type: "paragraph", text: rawOcrText(doc.raw) });
       }
     });
   }

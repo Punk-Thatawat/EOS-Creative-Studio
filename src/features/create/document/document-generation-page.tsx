@@ -142,7 +142,7 @@ export function DocumentGenerationPage() {
   const [ocrTypes, setOcrTypes] = useState<OcrDocumentTypeInfo[]>([]);
   const [ocrLanguage, setOcrLanguage] = useState<"th" | "en">(locale === "en" ? "en" : "th");
   const [ocrConfidence, setOcrConfidence] = useState(true);
-  const [ocrReturnRaw, setOcrReturnRaw] = useState(false);
+  const [ocrReturnRaw, setOcrReturnRaw] = useState(true);
   const [ocrFormat, setOcrFormat] = useState<OcrOutputFormat>("txt");
   const [ocrPageRange, setOcrPageRange] = useState("");
   const [ocrPageRangeMode, setOcrPageRangeMode] = useState<"all" | "custom">("all");

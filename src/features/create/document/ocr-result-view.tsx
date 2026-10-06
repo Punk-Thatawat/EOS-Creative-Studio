@@ -5,9 +5,10 @@ import { Fragment, useState } from "react";
 import type { DocumentOcrResult, OcrOutputFormat } from "@/lib/api/document-ocr";
 import type { Locale, TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { looksLikeWrongType } from "./ocr-cards";
 import { downloadGeneratedFile, downloadOcrResult, ocrResultToText } from "./ocr-download";
 import { fieldLabel } from "./ocr-field-labels";
-import { formatPrimitive, isEmpty, isRecord } from "./ocr-format";
+import { formatPrimitive, isEmpty, isRecord, rawOcrText } from "./ocr-format";
 import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -177,6 +178,7 @@ export function OcrResultView({ result, fileName, showConfidence, exportFormat, 
         </div>
       </div>}
 
+      {looksLikeWrongType(result) && <div className={styles.ocrNotice} role="status">{t(K("ocr.wrongType"))}</div>}
       {exportFailed && <div className={styles.ocrNotice} role="alert">{t(K("ocr.exportFailed"))}</div>}
       {result.styleFailed && <div className={styles.ocrNotice} role="status">{t(K("ocr.styleFailed"))}</div>}
       {styledAvailable && (
@@ -239,9 +241,10 @@ export function OcrResultView({ result, fileName, showConfidence, exportFormat, 
               ))}
               {missing.length > 0 && <p className={styles.ocrMissing}>{t(K("ocr.notFound"), { fields: missing.map(([key]) => fieldLabel(key, locale)).join(", ") })}</p>}
               {doc.raw !== undefined && doc.raw !== null && (
-                <details className={`${styles.ocrCard} ${styles.ocrRaw}`}>
-                  <summary>{t(K("ocr.rawText"))}</summary>
-                  <pre>{typeof doc.raw === "string" ? doc.raw : JSON.stringify(doc.raw, null, 2)}</pre>
+                <details className={`${styles.ocrCard} ${styles.ocrRaw}`} open>
+                  <summary>{t(K("ocr.fullText"))}</summary>
+                  <p className={styles.ocrRawHint}>{t(K("ocr.fullTextHint"))}</p>
+                  <pre>{rawOcrText(doc.raw)}</pre>
                 </details>
               )}
             </Fragment>
