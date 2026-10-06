@@ -39,6 +39,7 @@ const K = (key: string) => `create.document.${key}` as TranslationKey;
 type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
 type SummaryStyle = "executive" | "bullets";
 type DocumentOutputFormat = "DOCX" | "PDF" | "TXT" | "JSON";
+type SourcePageRange = "all" | "first-5" | "first-10" | "first-20";
 
 const documentOutputFormats: DocumentOutputFormat[] = ["DOCX", "PDF", "TXT", "JSON"];
 
@@ -128,6 +129,7 @@ export function DocumentGenerationPage() {
   const { t } = useLocale();
   const [activeMode, setActiveMode] = useState<ModeId>("ocr");
   const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("executive");
+  const [sourcePageRange, setSourcePageRange] = useState<SourcePageRange>("all");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [summaryPrompt, setSummaryPrompt] = useState("");
   const [summaryResult, setSummaryResult] = useState<DocumentSummary | null>(null);
@@ -199,9 +201,13 @@ export function DocumentGenerationPage() {
     setIsSummarizing(true);
     setSummaryError("");
     try {
+      const selectedPageCount = sourcePageRange === "all" ? null : Number(sourcePageRange.split("-")[1]);
+      const pageRangeInstruction = selectedPageCount
+        ? t(K("summary.pageRangeInstruction"), { count: selectedPageCount })
+        : "";
       const response = await summarizeDocument({
         file: selectedFile,
-        prompt: summaryPrompt,
+        prompt: [pageRangeInstruction, summaryPrompt.trim()].filter(Boolean).join("\n\n"),
         summaryStyle,
         summaryLength,
         language: summaryLanguage,
@@ -315,7 +321,17 @@ export function DocumentGenerationPage() {
             <span className={styles.fileCopy}><strong>{selectedFile?.name ?? t(K("source.filesTitle"))}</strong><small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("source.filesHint"))}</small></span>
             <button type="button" className={styles.replaceFileButton} aria-label={t(K("source.chooseFile"))} onClick={() => uploadInputRef.current?.click()}><Plus size={16} aria-hidden="true" /></button>
           </div>
-          <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />
+          <SelectControl
+            label={t(K("source.pages"))}
+            value={sourcePageRange}
+            onChange={(value) => setSourcePageRange(value as SourcePageRange)}
+            options={[
+              { value: "all", label: t(K("source.allPages")) },
+              { value: "first-5", label: t(K("source.first5Pages")) },
+              { value: "first-10", label: t(K("source.first10Pages")) },
+              { value: "first-20", label: t(K("source.first20Pages")) },
+            ]}
+          />
           <div className={styles.sectionRule} />
           <PanelHeading step="2">{isSummarize ? t(K("summary.goal")) : isTranslate ? t(K("translate.workflow")) : t(K("instructions.heading"))}</PanelHeading>
           {isSummarize ? (
