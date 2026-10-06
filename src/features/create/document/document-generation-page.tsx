@@ -28,6 +28,7 @@ import {
 import Link from "next/link";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
+import { Dropdown } from "@/components/ui/dropdown";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
@@ -321,17 +322,25 @@ export function DocumentGenerationPage() {
             <span className={styles.fileCopy}><strong>{selectedFile?.name ?? t(K("source.filesTitle"))}</strong><small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("source.filesHint"))}</small></span>
             <button type="button" className={styles.replaceFileButton} aria-label={t(K("source.chooseFile"))} onClick={() => uploadInputRef.current?.click()}><Plus size={16} aria-hidden="true" /></button>
           </div>
-          <SelectControl
-            label={t(K("source.pages"))}
-            value={sourcePageRange}
-            onChange={(value) => setSourcePageRange(value as SourcePageRange)}
-            options={[
-              { value: "all", label: t(K("source.allPages")) },
-              { value: "first-5", label: t(K("source.first5Pages")) },
-              { value: "first-10", label: t(K("source.first10Pages")) },
-              { value: "first-20", label: t(K("source.first20Pages")) },
-            ]}
-          />
+          <div className={styles.selectField}>
+            <span>{t(K("source.pages"))}</span>
+            <Dropdown
+              className={styles.pageRangeDropdown}
+              triggerClassName={styles.pageRangeTrigger}
+              menuClassName={styles.pageRangeMenu}
+              optionClassName={styles.pageRangeOption}
+              value={sourcePageRange}
+              onChange={(value) => setSourcePageRange(value as SourcePageRange)}
+              options={[
+                { value: "all", label: t(K("source.allPages")) },
+                { value: "first-5", label: t(K("source.first5Pages")) },
+                { value: "first-10", label: t(K("source.first10Pages")) },
+                { value: "first-20", label: t(K("source.first20Pages")) },
+              ]}
+              ariaLabel={t(K("source.pages"))}
+              menuPosition="fixed"
+            />
+          </div>
           <div className={styles.sectionRule} />
           <PanelHeading step="2">{isSummarize ? t(K("summary.goal")) : isTranslate ? t(K("translate.workflow")) : t(K("instructions.heading"))}</PanelHeading>
           {isSummarize ? (
