@@ -40,7 +40,7 @@ const K = (key: string) => `create.document.${key}` as TranslationKey;
 type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
 type SummaryPurpose = "general" | "meeting" | "decision" | "report" | "learning";
 type SummaryAudience = "general" | "executive" | "team" | "client" | "specialist";
-type SummaryStyle = "executive" | "bullets" | "actions";
+type SummaryStyle = "executive" | "bullets";
 type SummaryWorkspaceTab = "latest" | "examples";
 type DocumentOutputFormat = "DOCX" | "PDF" | "TXT" | "JSON";
 type SourcePageRange = "all" | "first-5" | "first-10" | "first-20";
@@ -57,7 +57,7 @@ function restoreSummaryContext(prompt: string | undefined, fallbackStyle: "execu
     prompt: prompt?.replace(summaryContextPattern, "").trim() ?? "",
     purpose: (match?.[1] as SummaryPurpose | undefined) ?? "general",
     audience: (match?.[2] as SummaryAudience | undefined) ?? "general",
-    style: (match?.[3] as SummaryStyle | undefined) ?? fallbackStyle,
+    style: match?.[3] === "actions" ? "bullets" : (match?.[3] as SummaryStyle | undefined) ?? fallbackStyle,
   };
 }
 
@@ -249,7 +249,7 @@ export function DocumentGenerationPage() {
       const response = await summarizeDocument({
         file: selectedFile,
         prompt: [pageRangeInstruction, summaryContext, summaryPrompt.trim()].filter(Boolean).join("\n\n"),
-        summaryStyle: summaryStyle === "actions" ? "bullets" : summaryStyle,
+        summaryStyle,
         summaryLength,
         language: summaryLanguage,
         includeKeyTakeaways: focusAreas.keyTakeaways,
@@ -433,7 +433,7 @@ export function DocumentGenerationPage() {
               <div className={styles.summaryFormatGroup}>
                 <span>{t(K("summary.format"))}</span>
                 <div className={styles.summaryFormatChoices}>
-                  {(["executive", "bullets", "actions"] as const).map((style) => (
+                  {(["executive", "bullets"] as const).map((style) => (
                     <button
                       key={style}
                       type="button"
@@ -441,10 +441,9 @@ export function DocumentGenerationPage() {
                       aria-pressed={summaryStyle === style}
                       onClick={() => {
                         setSummaryStyle(style);
-                        if (style === "actions") setFocusAreas((current) => ({ ...current, actionItems: true }));
                       }}
                     >
-                      {style === "executive" ? <NotebookPen size={14} aria-hidden="true" /> : style === "bullets" ? <ListChecks size={14} aria-hidden="true" /> : <Table2 size={14} aria-hidden="true" />}
+                      {style === "executive" ? <NotebookPen size={14} aria-hidden="true" /> : <ListChecks size={14} aria-hidden="true" />}
                       <span>{t(K(`summary.${style}`))}</span>
                     </button>
                   ))}
@@ -521,20 +520,10 @@ export function DocumentGenerationPage() {
                     <h4>{t(K("summary.takeawaysHeading"))}</h4>
                     <ul>{(displayedSummary?.keyTakeaways ?? [t(K("summary.takeaway1")), t(K("summary.takeaway2"))]).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
                   </div>}
-                  {(displayedSummary?.actionItems.length || (!displayedSummary && summaryStyle === "actions")) ? <div className={styles.summaryTakeaways}>
+                  {displayedSummary?.actionItems.length ? <div className={styles.summaryTakeaways}>
                     <h4>{t(K("summary.actionItems"))}</h4>
-                    {summaryStyle === "actions" ? (
-                      <div className={styles.summaryActionTableWrap}>
-                        <table className={styles.summaryActionTable}>
-                          <thead><tr><th scope="col">{t(K("summary.actionTask"))}</th><th scope="col">{t(K("summary.actionOwner"))}</th><th scope="col">{t(K("summary.actionDueDate"))}</th></tr></thead>
-                          <tbody>{(displayedSummary?.actionItems ?? [
-                            { task: t(K("summary.sampleActionTask1")), owner: t(K("summary.sampleActionOwner1")), dueDate: t(K("summary.sampleActionDate")) },
-                            { task: t(K("summary.sampleActionTask2")), owner: t(K("summary.sampleActionOwner2")), dueDate: t(K("summary.sampleActionDate")) },
-                          ]).map((item, index) => <tr key={`${index}-${item.task}`}><td>{item.task}</td><td>{item.owner || "—"}</td><td>{item.dueDate || "—"}</td></tr>)}</tbody>
-                        </table>
-                      </div>
-                    ) : <ul>{(displayedSummary?.actionItems ?? []).map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul>}
-                  </div> : summaryStyle === "actions" && displayedSummary && focusAreas.actionItems ? <p className={styles.summaryEmptyActions}>{t(K("summary.noActionItems"))}</p> : null}
+                    <ul>{displayedSummary.actionItems.map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul>
+                  </div> : null}
                   {displayedSummary?.decisions.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.decisions"))}</h4><ul>{displayedSummary.decisions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul></div> : null}
                   {displayedSummary?.importantDates.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.importantDates"))}</h4><ul>{displayedSummary.importantDates.map((item, index) => <li key={`${index}-${item.date}-${item.event}`}>{item.date} · {item.event}</li>)}</ul></div> : null}
                   <div className={styles.summaryDocumentFooter}>{displayedSummary ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
