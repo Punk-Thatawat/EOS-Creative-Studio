@@ -445,7 +445,7 @@ export function DocumentGenerationPage() {
                       }}
                     >
                       {style === "executive" ? <NotebookPen size={14} aria-hidden="true" /> : style === "bullets" ? <ListChecks size={14} aria-hidden="true" /> : <Table2 size={14} aria-hidden="true" />}
-                      {t(K(`summary.${style}`))}
+                      <span>{t(K(`summary.${style}`))}</span>
                     </button>
                   ))}
                 </div>

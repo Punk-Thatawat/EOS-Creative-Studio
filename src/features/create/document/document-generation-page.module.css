@@ -411,21 +411,26 @@
 .summaryFormatGroup { display: grid; gap: 8px; margin-top: 16px; color: #515961; font-size: 11px; font-weight: 750; }
 .summaryFormatChoices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .summaryFormatChoices button {
-  display: flex;
-  min-height: 48px;
+  display: grid;
+  min-height: 64px;
   min-width: 0;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  grid-template-rows: 16px minmax(2.5em, auto);
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
   border: 1px solid #e6e3df;
   border-radius: 8px;
   background: #fff;
   color: #69727b;
   font: inherit;
-  font-size: 9px;
+  font-size: 10px;
+  line-height: 1.25;
+  padding: 7px 6px;
+  text-align: center;
   cursor: pointer;
 }
-.summaryFormatChoices button svg { color: #899199; }
+.summaryFormatChoices button svg { align-self: center; color: #899199; }
+.summaryFormatChoices button > span { display: flex; min-width: 0; min-height: 2.5em; align-items: center; justify-content: center; overflow-wrap: anywhere; text-align: center; }
 .summaryFormatChoices button.summaryFormatActive { border-color: #f47541; background: #fff8f4; color: #df602d; }
 .summaryFormatChoices button.summaryFormatActive svg { color: #df602d; }
 
