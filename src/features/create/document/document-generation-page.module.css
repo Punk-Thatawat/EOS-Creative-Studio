@@ -407,11 +407,13 @@
 .summaryPrompt textarea::placeholder { color: #989da3; }
 .summaryPrompt small { align-self: flex-end; color: #a5a9ae; font-size: 10px; }
 
+.summarySelectField { display: grid; gap: 6px; margin-bottom: 12px; color: #515961; font-size: 10px; font-weight: 750; }
 .summaryFormatGroup { display: grid; gap: 8px; margin-top: 16px; color: #515961; font-size: 11px; font-weight: 750; }
-.summaryFormatChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.summaryFormatChoices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .summaryFormatChoices button {
   display: flex;
-  min-height: 44px;
+  min-height: 48px;
+  min-width: 0;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -420,7 +422,7 @@
   background: #fff;
   color: #69727b;
   font: inherit;
-  font-size: 10px;
+  font-size: 9px;
   cursor: pointer;
 }
 .summaryFormatChoices button svg { color: #899199; }
@@ -478,6 +480,13 @@
 .summaryTakeaways h4 { margin: 0 0 8px; color: #343b42; font-size: 10px; font-weight: 850; }
 .summaryTakeaways ul { display: grid; gap: 6px; margin: 0; padding-left: 16px; color: #68717a; font-size: 10px; line-height: 1.35; }
 .summaryTakeaways li::marker { color: #ed6b39; }
+.summaryActionTableWrap { overflow-x: auto; border: 1px solid #ece8e4; border-radius: 7px; }
+.summaryActionTable { width: 100%; border-collapse: collapse; color: #59626b; font-size: 9px; line-height: 1.4; text-align: left; }
+.summaryActionTable th { background: #fff8f4; color: #454c53; font-weight: 800; }
+.summaryActionTable th, .summaryActionTable td { min-width: 76px; border-bottom: 1px solid #efedeb; padding: 8px 9px; vertical-align: top; }
+.summaryActionTable td:first-child { min-width: 180px; }
+.summaryActionTable tbody tr:last-child td { border-bottom: 0; }
+.summaryEmptyActions { margin: 0; border: 1px dashed #e8e1dc; border-radius: 7px; padding: 12px; color: #858d94; font-size: 9px; text-align: center; }
 .summaryDocumentFooter { margin-top: 16px; border-top: 1px solid #efedeb; padding-top: 10px; color: #a0a6ab; font-size: 9px; }
 
 .pageRail {
