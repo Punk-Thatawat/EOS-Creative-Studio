@@ -6,6 +6,7 @@ const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, '')}/api/v1`
 export type DocumentSummary = {
   title: string;
   executiveSummary: string;
+  sections?: Array<{ heading: string; items: string[] }>;
   keyTakeaways: string[];
   actionItems: Array<{ task: string; owner?: string; dueDate?: string }>;
   decisions: string[];

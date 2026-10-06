@@ -238,7 +238,10 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
               <span><FileText size={16} /> สรุปเอกสาร</span>
               <h3>{item.documentSummary.summary.title}</h3>
               <p>{item.documentSummary.summary.executiveSummary}</p>
-              {item.documentSummary.summary.keyTakeaways.length > 0 && <>
+              {item.documentSummary.summary.sections?.length ? item.documentSummary.summary.sections.map((section, sectionIndex) => <section key={`${sectionIndex}-${section.heading}`}>
+                <h4>{section.heading}</h4>
+                <ul>{section.items.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
+              </section>) : item.documentSummary.summary.keyTakeaways.length > 0 && <>
                 <h4>ประเด็นสำคัญ</h4>
                 <ul>{item.documentSummary.summary.keyTakeaways.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
               </>}
@@ -279,23 +282,28 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
           {item.documentSummary && <section className={s.documentDetails} aria-label="รายละเอียดสรุปเอกสาร">
             <h3>บทสรุปผู้บริหาร</h3>
             <p>{item.documentSummary.summary.executiveSummary}</p>
-            {item.documentSummary.summary.keyTakeaways.length > 0 && <>
-              <h3>ประเด็นสำคัญ</h3>
-              <ul>{item.documentSummary.summary.keyTakeaways.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
-            </>}
-            {item.documentSummary.summary.actionItems.length > 0 && <>
-              <h3>สิ่งที่ต้องดำเนินการ</h3>
-              <ul>{item.documentSummary.summary.actionItems.map((entry, index) => <li key={`${index}-${entry.task}`}>
-                {entry.task}{entry.owner ? ` · ${entry.owner}` : ""}{entry.dueDate ? ` · ${entry.dueDate}` : ""}
-              </li>)}</ul>
-            </>}
-            {item.documentSummary.summary.decisions.length > 0 && <>
-              <h3>มติและข้อสรุป</h3>
-              <ul>{item.documentSummary.summary.decisions.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
-            </>}
-            {item.documentSummary.summary.importantDates.length > 0 && <>
-              <h3>วันที่สำคัญ</h3>
-              <ul>{item.documentSummary.summary.importantDates.map((entry, index) => <li key={`${index}-${entry.date}-${entry.event}`}><b>{entry.date}</b> · {entry.event}</li>)}</ul>
+            {item.documentSummary.summary.sections?.length ? item.documentSummary.summary.sections.map((section, sectionIndex) => <div key={`${sectionIndex}-${section.heading}`}>
+              <h3>{section.heading}</h3>
+              <ul>{section.items.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
+            </div>) : <>
+              {item.documentSummary.summary.keyTakeaways.length > 0 && <>
+                <h3>ประเด็นสำคัญ</h3>
+                <ul>{item.documentSummary.summary.keyTakeaways.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
+              </>}
+              {item.documentSummary.summary.actionItems.length > 0 && <>
+                <h3>สิ่งที่ต้องดำเนินการ</h3>
+                <ul>{item.documentSummary.summary.actionItems.map((entry, index) => <li key={`${index}-${entry.task}`}>
+                  {entry.task}{entry.owner ? ` · ${entry.owner}` : ""}{entry.dueDate ? ` · ${entry.dueDate}` : ""}
+                </li>)}</ul>
+              </>}
+              {item.documentSummary.summary.decisions.length > 0 && <>
+                <h3>มติและข้อสรุป</h3>
+                <ul>{item.documentSummary.summary.decisions.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
+              </>}
+              {item.documentSummary.summary.importantDates.length > 0 && <>
+                <h3>วันที่สำคัญ</h3>
+                <ul>{item.documentSummary.summary.importantDates.map((entry, index) => <li key={`${index}-${entry.date}-${entry.event}`}><b>{entry.date}</b> · {entry.event}</li>)}</ul>
+              </>}
             </>}
           </section>}
           {item.errorMessage && (

@@ -13,6 +13,7 @@ export type HistoryDocumentSummary = {
   summary: {
     title: string;
     executiveSummary: string;
+    sections?: Array<{ heading: string; items: string[] }>;
     keyTakeaways: string[];
     actionItems: Array<{ task: string; owner?: string; dueDate?: string }>;
     decisions: string[];

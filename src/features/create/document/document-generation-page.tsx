@@ -159,23 +159,12 @@ export function DocumentGenerationPage() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryLength, setSummaryLength] = useState<"brief" | "standard" | "detailed">("standard");
   const [summaryLanguage, setSummaryLanguage] = useState<"auto" | "English" | "Thai">("auto");
-  const [focusAreas, setFocusAreas] = useState({ keyTakeaways: true, actionItems: true, importantDates: true });
   const [summaryOptions, setSummaryOptions] = useState({ model: "google/gemini-3.5-flash", credits: 1 });
   const [documentHistory, setDocumentHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [historyRefresh, setHistoryRefresh] = useState(0);
 
-  const changeSummaryPurpose = (purpose: SummaryPurpose) => {
-    setSummaryPurpose(purpose);
-    setFocusAreas({
-      general: { keyTakeaways: true, actionItems: true, importantDates: true },
-      meeting: { keyTakeaways: true, actionItems: true, importantDates: true },
-      decision: { keyTakeaways: true, actionItems: true, importantDates: true },
-      report: { keyTakeaways: true, actionItems: false, importantDates: true },
-      learning: { keyTakeaways: true, actionItems: false, importantDates: false },
-    }[purpose]);
-  };
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [translationSourceLanguage, setTranslationSourceLanguage] = useState("auto");
   const [translationTargetLanguage, setTranslationTargetLanguage] = useState("Thai");
@@ -243,6 +232,7 @@ export function DocumentGenerationPage() {
         t(K(`summary.purposeInstruction.${summaryPurpose}`)),
         t(K(`summary.audienceInstruction.${summaryAudience}`)),
         t(K(`summary.styleInstruction.${summaryStyle}`)),
+        t(K("summary.autoSectionsInstruction")),
         t(K("summary.groundingInstruction")),
         "[[/EOS_SUMMARY_CONTEXT]]",
       ].join("\n");
@@ -252,9 +242,11 @@ export function DocumentGenerationPage() {
         summaryStyle,
         summaryLength,
         language: summaryLanguage,
-        includeKeyTakeaways: focusAreas.keyTakeaways,
-        includeActionItems: focusAreas.actionItems,
-        includeImportantDates: focusAreas.importantDates,
+        // Keep every structured result field available; Gemini chooses which
+        // sections are relevant and leaves unrelated sections empty.
+        includeKeyTakeaways: true,
+        includeActionItems: true,
+        includeImportantDates: true,
       });
       setSummaryResult(response.summary);
       setSummaryFilename(selectedFile.name);
@@ -287,11 +279,6 @@ export function DocumentGenerationPage() {
     setSummaryStyle(restoredContext.style);
     setSummaryLength(saved.options.summaryLength);
     setSummaryLanguage(saved.options.language);
-    setFocusAreas({
-      keyTakeaways: saved.options.includeKeyTakeaways,
-      actionItems: saved.options.includeActionItems,
-      importantDates: saved.options.includeImportantDates,
-    });
     setSummaryOptions((current) => ({ ...current, model: item.model ?? current.model, credits: item.creditCost ?? current.credits }));
   };
 
@@ -398,7 +385,7 @@ export function DocumentGenerationPage() {
                   menuClassName={styles.pageRangeMenu}
                   optionClassName={styles.pageRangeOption}
                   value={summaryPurpose}
-                  onChange={(value) => changeSummaryPurpose(value as SummaryPurpose)}
+                  onChange={(value) => setSummaryPurpose(value as SummaryPurpose)}
                   options={summaryPurposes.map((purpose) => ({
                     value: purpose,
                     label: t(K(`summary.purposeOption.${purpose}`)),
@@ -465,21 +452,11 @@ export function DocumentGenerationPage() {
               <small>0 / 600</small>
             </div>
           )}
-          <div className={styles.checkList}>
-            {isSummarize ? (
-              <>
-                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.keyTakeaways} onChange={(event) => setFocusAreas((current) => ({ ...current, keyTakeaways: event.target.checked }))} />{t(K("summary.checkTakeaways"))}</label>
-                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.actionItems} onChange={(event) => setFocusAreas((current) => ({ ...current, actionItems: event.target.checked }))} />{t(K("summary.checkActions"))}</label>
-                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.importantDates} onChange={(event) => setFocusAreas((current) => ({ ...current, importantDates: event.target.checked }))} />{t(K("summary.checkDates"))}</label>
-              </>
-            ) : isTranslate ? null : (
-              <>
-                <div><i className={styles.checkedBox} />{t(K("instructions.extractTables"))}</div>
-                <div><i className={styles.checkedBox} />{t(K("instructions.handwriting"))}</div>
-                <div><i className={styles.checkedBox} />{t(K("instructions.layout"))}</div>
-              </>
-            )}
-          </div>
+          {!isSummarize && !isTranslate && <div className={styles.checkList}>
+            <div><i className={styles.checkedBox} />{t(K("instructions.extractTables"))}</div>
+            <div><i className={styles.checkedBox} />{t(K("instructions.handwriting"))}</div>
+            <div><i className={styles.checkedBox} />{t(K("instructions.layout"))}</div>
+          </div>}
           </aside>
         }
         preview={
@@ -516,16 +493,24 @@ export function DocumentGenerationPage() {
                     <span><small>{t(K("summary.netProfit"))}</small><strong>$1.68M</strong><em>{t(K("summary.vsQ1"), { value: "+34.4%" })}</em></span>
                     <span><small>{t(K("summary.grossProfit"))}</small><strong>$3.92M</strong><em>{t(K("summary.vsQ1"), { value: "+22.1%" })}</em></span>
                   </div>}
-                  {(displayedSummary?.keyTakeaways.length ?? 2) > 0 && <div className={styles.summaryTakeaways}>
+                  {displayedSummary?.sections?.length ? displayedSummary.sections.map((section, index) => <div className={styles.summaryTakeaways} key={`${index}-${section.heading}`}>
+                    <h4>{section.heading}</h4>
+                    <ul>{section.items.map((item, itemIndex) => <li key={`${itemIndex}-${item}`}>{item}</li>)}</ul>
+                  </div>) : displayedSummary ? <>
+                    {displayedSummary.keyTakeaways.length > 0 && <div className={styles.summaryTakeaways}>
+                      <h4>{t(K("summary.takeawaysHeading"))}</h4>
+                      <ul>{displayedSummary.keyTakeaways.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
+                    </div>}
+                    {displayedSummary.actionItems.length > 0 && <div className={styles.summaryTakeaways}>
+                      <h4>{t(K("summary.actionItems"))}</h4>
+                      <ul>{displayedSummary.actionItems.map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul>
+                    </div>}
+                    {displayedSummary.decisions.length > 0 && <div className={styles.summaryTakeaways}><h4>{t(K("summary.decisions"))}</h4><ul>{displayedSummary.decisions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul></div>}
+                    {displayedSummary.importantDates.length > 0 && <div className={styles.summaryTakeaways}><h4>{t(K("summary.importantDates"))}</h4><ul>{displayedSummary.importantDates.map((item, index) => <li key={`${index}-${item.date}-${item.event}`}>{item.date} · {item.event}</li>)}</ul></div>}
+                  </> : <div className={styles.summaryTakeaways}>
                     <h4>{t(K("summary.takeawaysHeading"))}</h4>
-                    <ul>{(displayedSummary?.keyTakeaways ?? [t(K("summary.takeaway1")), t(K("summary.takeaway2"))]).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
+                    <ul>{[t(K("summary.takeaway1")), t(K("summary.takeaway2"))].map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
                   </div>}
-                  {displayedSummary?.actionItems.length ? <div className={styles.summaryTakeaways}>
-                    <h4>{t(K("summary.actionItems"))}</h4>
-                    <ul>{displayedSummary.actionItems.map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul>
-                  </div> : null}
-                  {displayedSummary?.decisions.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.decisions"))}</h4><ul>{displayedSummary.decisions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul></div> : null}
-                  {displayedSummary?.importantDates.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.importantDates"))}</h4><ul>{displayedSummary.importantDates.map((item, index) => <li key={`${index}-${item.date}-${item.event}`}>{item.date} · {item.event}</li>)}</ul></div> : null}
                   <div className={styles.summaryDocumentFooter}>{displayedSummary ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
                 </article>
                 {isSummarizing && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("summary.loading"))}</strong><span>{t(K("summary.loadingHint"))}</span></div>}
@@ -700,7 +685,6 @@ export function DocumentGenerationPage() {
             <>
               <SelectControl label={t(K("settings.language"))} value={summaryLanguage} onChange={(value) => setSummaryLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
               <SelectControl label={t(K("summary.length"))} value={summaryLength} onChange={(value) => setSummaryLength(value as "brief" | "standard" | "detailed")} options={[{ value: "brief", label: t(K("summary.lengthBrief")) }, { value: "standard", label: t(K("summary.lengthStandard")) }, { value: "detailed", label: t(K("summary.lengthDetailed")) }]} />
-              <div className={styles.summaryFocusNote}>{t(K("summary.focus"))}: {[focusAreas.keyTakeaways && t(K("summary.focusTakeaways")), focusAreas.actionItems && t(K("summary.focusActions")), focusAreas.importantDates && t(K("summary.focusDates"))].filter(Boolean).join(", ") || t(K("summary.focusGeneral"))}</div>
               <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("summary.toneValue"))} />
             </>
             ) : isTranslate ? null : (
