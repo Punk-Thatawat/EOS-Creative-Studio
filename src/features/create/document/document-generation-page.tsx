@@ -41,6 +41,7 @@ type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form"
 type SummaryPurpose = "general" | "meeting" | "decision" | "report" | "learning";
 type SummaryAudience = "general" | "executive" | "team" | "client" | "specialist";
 type SummaryStyle = "executive" | "bullets" | "actions";
+type SummaryWorkspaceTab = "latest" | "examples";
 type DocumentOutputFormat = "DOCX" | "PDF" | "TXT" | "JSON";
 type SourcePageRange = "all" | "first-5" | "first-10" | "first-20";
 
@@ -148,6 +149,7 @@ export function DocumentGenerationPage() {
   const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("executive");
   const [summaryPurpose, setSummaryPurpose] = useState<SummaryPurpose>("general");
   const [summaryAudience, setSummaryAudience] = useState<SummaryAudience>("general");
+  const [summaryWorkspaceTab, setSummaryWorkspaceTab] = useState<SummaryWorkspaceTab>("latest");
   const [sourcePageRange, setSourcePageRange] = useState<SourcePageRange>("all");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [summaryPrompt, setSummaryPrompt] = useState("");
@@ -256,6 +258,7 @@ export function DocumentGenerationPage() {
       setSummaryResult(response.summary);
       setSummaryFilename(selectedFile.name);
       setSelectedHistoryId(response.id);
+      setSummaryWorkspaceTab("latest");
       setHistoryRefresh((current) => current + 1);
       setSummaryOptions((current) => ({ ...current, model: response.model, credits: response.creditsUsed }));
     } catch (error) {
@@ -275,6 +278,7 @@ export function DocumentGenerationPage() {
     setSummaryResult(saved.summary);
     setSummaryError("");
     setSelectedHistoryId(item.id);
+    setSummaryWorkspaceTab("latest");
     const restoredContext = restoreSummaryContext(saved.options.prompt, saved.options.summaryStyle);
     setSummaryPrompt(restoredContext.prompt);
     setSummaryPurpose(restoredContext.purpose);
@@ -591,7 +595,84 @@ export function DocumentGenerationPage() {
             )}
           </div>
 
-          {isSummarize ? null : isTranslate ? (
+          {isSummarize ? (
+            <section className={styles.summaryTabbedWorkspace}>
+              <div className={styles.summaryWorkspaceTabs} role="tablist" aria-label={t(K("summary.workspaceTabs"))}>
+                <button id="summary-results-tab" type="button" role="tab" aria-selected={summaryWorkspaceTab === "latest"} aria-controls="summary-results-panel" className={summaryWorkspaceTab === "latest" ? styles.summaryWorkspaceTabActive : ""} onClick={() => setSummaryWorkspaceTab("latest")}>
+                  {t(K("summary.tabLatest"))}
+                </button>
+                <button id="summary-examples-tab" type="button" role="tab" aria-selected={summaryWorkspaceTab === "examples"} aria-controls="summary-examples-panel" className={summaryWorkspaceTab === "examples" ? styles.summaryWorkspaceTabActive : ""} onClick={() => setSummaryWorkspaceTab("examples")}>
+                  {t(K("summary.tabExamples"))}
+                </button>
+              </div>
+              <div id="summary-results-panel" className={styles.summaryWorkspacePanel} role="tabpanel" aria-labelledby="summary-results-tab" hidden={summaryWorkspaceTab !== "latest"}>
+                {summaryWorkspaceTab === "latest" ? (
+                  <section className={styles.historySection} aria-labelledby="document-history-heading">
+                    <header className={styles.historyHeader}>
+                      <div className={styles.historyTitle}>
+                        <span><HistoryIcon size={16} aria-hidden="true" /></span>
+                        <div><h2 id="document-history-heading">{t(K("summary.historyHeading"))}</h2><p>{t(K("summary.historyDescription"))}</p></div>
+                      </div>
+                      <div className={styles.historyActions}>
+                        <button type="button" onClick={() => setHistoryRefresh((current) => current + 1)} disabled={historyLoading} aria-label={t(K("summary.refreshHistory"))}>
+                          <RefreshCw size={15} className={historyLoading ? styles.historySpin : undefined} /> {t(K("summary.refreshHistory"))}
+                        </button>
+                        <Link href="/history?type=document">{t(K("summary.allHistory"))} <ArrowRight size={14} aria-hidden="true" /></Link>
+                      </div>
+                    </header>
+                    {historyError ? <p className={styles.historyMessage} role="alert">{historyError}</p> : historyLoading ? (
+                      <div className={styles.historyMessage} role="status"><LoaderCircle size={16} className={styles.historySpin} /> {t(K("summary.historyLoading"))}</div>
+                    ) : documentHistory.length ? (
+                      <div className={styles.historyGrid}>
+                        {documentHistory.map((item) => {
+                          const saved = item.documentSummary;
+                          if (!saved) return null;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={`${styles.historyCard} ${selectedHistoryId === item.id ? styles.historyCardActive : ""}`}
+                              aria-pressed={selectedHistoryId === item.id}
+                              onClick={() => openDocumentHistory(item)}
+                            >
+                              <span className={styles.historyCardHeading}>
+                                <span className={styles.historyFileIcon}><FileText size={18} aria-hidden="true" /></span>
+                                <span className={styles.historyCardNames}><strong>{saved.summary.title || item.title}</strong><small>{saved.filename}</small></span>
+                                <ArrowUpRight size={15} aria-hidden="true" />
+                              </span>
+                              <span className={styles.historyExcerpt}>{saved.summary.executiveSummary}</span>
+                              <span className={styles.historyMeta}><Clock3 size={12} aria-hidden="true" />{historyDate(item.createdAt)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className={styles.historyEmpty}>
+                        <FileText size={22} aria-hidden="true" />
+                        <div><strong>{t(K("summary.historyEmpty"))}</strong><span>{t(K("summary.historyEmptyHint"))}</span></div>
+                      </div>
+                    )}
+                  </section>
+                ) : null}
+              </div>
+              <div id="summary-examples-panel" className={styles.summaryWorkspacePanel} role="tabpanel" aria-labelledby="summary-examples-tab" hidden={summaryWorkspaceTab !== "examples"}>
+                {summaryWorkspaceTab === "examples" ? (
+                  <div className={styles.summaryExamplesGrid}>
+                    {[
+                      { icon: NotebookPen, title: K("summary.cardExecutive"), body: K("summary.cardExecutiveBody") },
+                      { icon: ListChecks, title: K("summary.takeawaysHeading"), body: K("summary.cardTakeawaysBody") },
+                      { icon: Sparkles, title: K("summary.cardNext"), body: K("summary.cardNextBody") },
+                    ].map(({ icon: Icon, title, body }) => (
+                      <article className={styles.summaryExampleCard} key={title}>
+                        <div><Icon size={14} aria-hidden="true" /><strong>{t(title)}</strong></div>
+                        <p>{t(body)}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : isTranslate ? (
             <div className={styles.translationResultCard}>
               <div><Languages size={14} aria-hidden="true" /><strong>{t(K("output.translated"))}</strong></div>
               <p>{t(K("translate.resultHint"))}</p>
@@ -663,55 +744,6 @@ export function DocumentGenerationPage() {
           </aside>
         }
       />
-
-      {isSummarize && (
-        <section className={styles.historySection} aria-labelledby="document-history-heading">
-          <header className={styles.historyHeader}>
-            <div className={styles.historyTitle}>
-              <span><HistoryIcon size={16} aria-hidden="true" /></span>
-              <div><h2 id="document-history-heading">ประวัติสรุปเอกสาร</h2><p>เปิดดูผลสรุปที่สร้างไว้ในช่วง 7 วันที่ผ่านมา</p></div>
-            </div>
-            <div className={styles.historyActions}>
-              <button type="button" onClick={() => setHistoryRefresh((current) => current + 1)} disabled={historyLoading} aria-label="รีเฟรชประวัติเอกสาร">
-                <RefreshCw size={15} className={historyLoading ? styles.historySpin : undefined} /> รีเฟรช
-              </button>
-              <Link href="/history?type=document">ประวัติทั้งหมด <ArrowRight size={14} aria-hidden="true" /></Link>
-            </div>
-          </header>
-          {historyError ? <p className={styles.historyMessage} role="alert">{historyError}</p> : historyLoading ? (
-            <div className={styles.historyMessage} role="status"><LoaderCircle size={16} className={styles.historySpin} /> กำลังโหลดประวัติ…</div>
-          ) : documentHistory.length ? (
-            <div className={styles.historyGrid}>
-              {documentHistory.map((item) => {
-                const saved = item.documentSummary;
-                if (!saved) return null;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`${styles.historyCard} ${selectedHistoryId === item.id ? styles.historyCardActive : ""}`}
-                    aria-pressed={selectedHistoryId === item.id}
-                    onClick={() => openDocumentHistory(item)}
-                  >
-                    <span className={styles.historyCardHeading}>
-                      <span className={styles.historyFileIcon}><FileText size={18} aria-hidden="true" /></span>
-                      <span className={styles.historyCardNames}><strong>{saved.summary.title || item.title}</strong><small>{saved.filename}</small></span>
-                      <ArrowUpRight size={15} aria-hidden="true" />
-                    </span>
-                    <span className={styles.historyExcerpt}>{saved.summary.executiveSummary}</span>
-                    <span className={styles.historyMeta}><Clock3 size={12} aria-hidden="true" />{historyDate(item.createdAt)}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className={styles.historyEmpty}>
-              <FileText size={22} aria-hidden="true" />
-              <div><strong>ยังไม่มีประวัติสรุปเอกสาร</strong><span>เมื่อสร้างสรุปสำเร็จ รายการจะปรากฏที่นี่และเปิดดูได้ภายหลัง</span></div>
-            </div>
-          )}
-        </section>
-      )}
 
       <section className={styles.resourceShelf} aria-label={t(K("a11y.shelf"))}>
         <div className={styles.learnArea}>
