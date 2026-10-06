@@ -2883,7 +2883,7 @@ const th: Record<keyof typeof en, string> = {
   "create.document.summary.pageRangeInstruction": "สรุปเฉพาะเนื้อหาจาก {count} หน้าแรกของเอกสารที่อัปโหลด",
   "create.document.summary.workspaceTabs": "มุมมองผลสรุป",
   "create.document.summary.tabLatest": "ผลลัพธ์ล่าสุด",
-  "create.document.summary.tabExamples": "ตัวอย่างโมเดล",
+  "create.document.summary.tabExamples": "ตัวอย่าง",
   "create.document.summary.exampleShowsAbove": "ตัวอย่างจากโมเดลแสดงในพื้นที่ตัวอย่างด้านบนแล้ว",
   "create.document.summary.historyHeading": "สรุปล่าสุด",
   "create.document.summary.historyDescription": "เปิดผลสรุปที่สร้างไว้ในช่วง 7 วันที่ผ่านมา",
