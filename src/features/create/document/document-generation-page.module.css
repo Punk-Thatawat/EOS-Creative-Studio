@@ -862,10 +862,9 @@
   .annotationClear { top: 6px; right: 8px; }
 }
 .ocrMissing { margin: 0; color: #9aa1a8; font-size: 11px; line-height: 1.5; }
-.outputCardFilled { display: block; width: 100%; text-align: left; font: inherit; cursor: pointer; }
+.outputCardFilled { cursor: pointer; }
 .outputCardFilled:hover { border-color: #f6a17d; }
 .outputCardFilled:focus-visible { outline: 2px solid #f6a17d; outline-offset: 1px; }
-.outputCardBody { margin: 8px 0 0; padding: 0; list-style: none; color: #4d555e; font-size: 11px; line-height: 1.45; }
-.outputCardBody li { display: -webkit-box; margin-top: 3px; overflow: hidden; overflow-wrap: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-.outputCardBody li:first-child { margin-top: 0; }
+.outputCardBody { display: grid; gap: 4px; margin-top: 8px; color: #4d555e; font-size: 12px; line-height: 1.45; text-align: left; }
+.outputCardBody > span { display: -webkit-box; overflow: hidden; overflow-wrap: break-word; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
 .outputCardMuted { color: #98a0a7; }

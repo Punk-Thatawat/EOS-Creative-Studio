@@ -629,18 +629,27 @@ export function DocumentGenerationPage() {
                 buildOcrCards(ocrResult, locale, t).map((card, index) => {
                   const Icon = outputs[index]?.icon ?? Sparkles;
                   return (
-                    <button
-                      type="button"
+                    // A div, not a button: buttons centre their content vertically and the page-wide text floor
+                    // forces buttons and list items to a larger size than the rest of the card.
+                    <div
+                      role="button"
+                      tabIndex={0}
                       className={`${styles.outputCard} ${styles.outputCardFilled}`}
                       key={card.slot}
                       title={t(K("cards.openResult"))}
                       onClick={() => ocrResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          ocrResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }}
                     >
                       <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{card.title}</strong></div>
-                      <ul className={`${styles.outputCardBody} ${card.muted ? styles.outputCardMuted : ""}`}>
-                        {card.lines.map((line, lineIndex) => <li key={lineIndex}>{line}</li>)}
-                      </ul>
-                    </button>
+                      <div className={`${styles.outputCardBody} ${card.muted ? styles.outputCardMuted : ""}`}>
+                        {card.lines.map((line, lineIndex) => <span key={lineIndex}>{line}</span>)}
+                      </div>
+                    </div>
                   );
                 })
               ) : outputs.map(({ key, icon: Icon }) => (
