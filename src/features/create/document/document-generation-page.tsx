@@ -125,12 +125,20 @@ function SelectPlaceholder({ label, value }: { label: string; value: string }) {
 
 function SelectControl({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
   return (
-    <label className={styles.selectField}>
+    <div className={styles.selectField}>
       <span>{label}</span>
-      <select className={styles.controlSelect} value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    </label>
+      <Dropdown
+        className={styles.controlDropdown}
+        triggerClassName={styles.controlDropdownTrigger}
+        menuClassName={styles.controlDropdownMenu}
+        optionClassName={styles.controlDropdownOption}
+        value={value}
+        options={options}
+        onChange={onChange}
+        ariaLabel={label}
+        menuPosition="fixed"
+      />
+    </div>
   );
 }
 

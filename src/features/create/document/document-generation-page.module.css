@@ -747,9 +747,11 @@
 .fileInput { display: none; }
 .replaceFileButton { display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: #8c959c; cursor: pointer; }
 .replaceFileButton:hover { background: #fff2ea; color: var(--doc-orange); }
-.controlSelect { width: 100%; min-height: 31px; border: 1px solid #e2e3e5; border-radius: 7px; background: #fff; padding: 0 9px; color: #555e67; font: inherit; font-size: 9px; font-weight: 500; }
-.controlSelect:focus-visible { outline: 2px solid #f6a17d; outline-offset: 1px; }
-.settingsPanel .controlSelect { min-height: 29px; font-size: 8px; }
+.controlDropdown { width: 100%; }
+.controlDropdownTrigger { min-height: 31px !important; border-radius: 7px !important; border-color: #e2e3e5 !important; padding: 0 9px !important; color: #555e67 !important; font-size: 9px !important; font-weight: 500 !important; }
+.controlDropdownMenu { border-radius: 7px !important; padding: 4px !important; }
+.controlDropdownOption { border-radius: 5px !important; padding: 7px 9px !important; font-size: 9px !important; }
+.settingsPanel .controlDropdownTrigger { min-height: 29px !important; font-size: 8px !important; }
 .pageRangeDropdown { width: 100%; }
 .pageRangeTrigger { min-height: 38px !important; border-radius: 8px !important; border-color: #dfe2e7 !important; padding-right: 11px !important; padding-left: 11px !important; color: #555e67 !important; font-size: 11px !important; font-weight: 500 !important; }
 .pageRangeMenu { border-radius: 8px !important; padding: 4px !important; }
