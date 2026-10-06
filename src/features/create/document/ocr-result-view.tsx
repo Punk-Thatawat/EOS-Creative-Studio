@@ -23,43 +23,91 @@ function ConfidenceBadge({ score, label }: { score: unknown; label: string }) {
   return <span className={`${styles.ocrConfidence} ${confidenceTone(score)}`} title={label}>{Math.round(score * 100)}%</span>;
 }
 
+/** A list of short items reads best as chips; sentences read best as bullets. */
+const SHORT_ITEM = 40;
+/** A table only works when every cell is short; anything longer is shown as one card per row. */
+const SHORT_CELL = 40;
+
+function isPlain(value: unknown): boolean {
+  return !isRecord(value) && !Array.isArray(value);
+}
+
+function isPlainList(value: unknown): value is unknown[] {
+  return Array.isArray(value) && value.length > 0 && value.every(isPlain);
+}
+
+function plainLength(value: unknown): number {
+  return typeof value === "string" ? value.length : String(value ?? "").length;
+}
+
+/** Fields shown together in one summary card: single values and short lists. Everything else gets its own card. */
+function isSimpleValue(value: unknown): boolean {
+  if (isEmpty(value) || isPlain(value)) return true;
+  return isPlainList(value) && value.length <= 3 && value.every((item) => plainLength(item) <= SHORT_ITEM);
+}
+
+function RecordFields({ value, locale }: { value: Record<string, unknown>; locale: Locale }) {
+  return (
+    <dl className={styles.ocrDl}>
+      {Object.entries(value).map(([key, child]) => {
+        // Nested objects and long lists take the full width under their label, so every level keeps its room
+        // instead of squeezing the next one into a sliver.
+        const full = !isSimpleValue(child);
+        return (
+          <Fragment key={key}>
+            <dt className={full ? styles.ocrFull : undefined}>{fieldLabel(key, locale)}</dt>
+            <dd className={full ? styles.ocrFull : undefined}><FieldValue name={key} value={child} locale={locale} /></dd>
+          </Fragment>
+        );
+      })}
+    </dl>
+  );
+}
+
 function FieldValue({ name, value, locale }: { name: string; value: unknown; locale: Locale }) {
   if (isEmpty(value)) return <span className={styles.ocrEmpty}>—</span>;
+
   if (Array.isArray(value)) {
-    if (value.every((item) => !isRecord(item) && !Array.isArray(item))) {
-      return <ul className={styles.ocrList}>{value.map((item, index) => <li key={`${index}-${String(item)}`}>{formatPrimitive(item, name, locale)}</li>)}</ul>;
+    if (isPlainList(value)) {
+      const short = value.every((item) => plainLength(item) <= SHORT_ITEM);
+      return short
+        ? <ul className={styles.ocrList}>{value.map((item, index) => <li key={`${index}-${String(item)}`}>{formatPrimitive(item, name, locale)}</li>)}</ul>
+        : <ul className={styles.ocrBullets}>{value.map((item, index) => <li key={`${index}-${String(item)}`}>{formatPrimitive(item, name, locale)}</li>)}</ul>;
     }
     if (value.every(isRecord)) {
       const columns = [...new Set(value.flatMap((row) => Object.keys(row)))];
+      const tabular = columns.length <= 6 && value.every((row) => columns.every((column) => {
+        const cell = row[column];
+        return isEmpty(cell) || (isPlain(cell) && plainLength(cell) <= SHORT_CELL);
+      }));
+      if (tabular) {
+        return (
+          <div className={styles.ocrTableWrap}>
+            <table className={styles.ocrTable}>
+              <thead><tr>{columns.map((column) => <th key={column}>{fieldLabel(column, locale)}</th>)}</tr></thead>
+              <tbody>
+                {value.map((row, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {columns.map((column) => <td key={column}>{formatPrimitive(row[column], column, locale)}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
       return (
-        <div className={styles.ocrTableWrap}>
-          <table className={styles.ocrTable}>
-            <thead><tr>{columns.map((column) => <th key={column}>{fieldLabel(column, locale)}</th>)}</tr></thead>
-            <tbody>
-              {value.map((row, rowIndex) => (
-                <tr key={rowIndex}>
-                  {columns.map((column) => <td key={column}><FieldValue name={column} value={row[column]} locale={locale} /></td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className={styles.ocrItems}>
+          {value.map((row, rowIndex) => (
+            <article className={styles.ocrItem} key={rowIndex}><RecordFields value={row} locale={locale} /></article>
+          ))}
         </div>
       );
     }
-    return <div className={styles.ocrNested}>{value.map((item, index) => <FieldValue key={index} name={name} value={item} locale={locale} />)}</div>;
+    return <div className={styles.ocrItems}>{value.map((item, index) => <FieldValue key={index} name={name} value={item} locale={locale} />)}</div>;
   }
-  if (isRecord(value)) {
-    return (
-      <dl className={styles.ocrNested}>
-        {Object.entries(value).map(([key, child]) => (
-          <Fragment key={key}>
-            <dt>{fieldLabel(key, locale)}</dt>
-            <dd><FieldValue name={key} value={child} locale={locale} /></dd>
-          </Fragment>
-        ))}
-      </dl>
-    );
-  }
+
+  if (isRecord(value)) return <div className={styles.ocrIndent}><RecordFields value={value} locale={locale} /></div>;
   return <span className={styles.ocrValue}>{formatPrimitive(value, name, locale)}</span>;
 }
 
@@ -160,28 +208,45 @@ export function OcrResultView({ result, fileName, showConfidence, exportFormat, 
           </section>
         ))
       ) : (
-        result.documents.map((doc, index) => (
-          <section className={styles.ocrCard} key={index}>
-            {result.documents.length > 1 && <h4>{t(K("ocr.documentN"), { n: index + 1 })}</h4>}
-            <dl className={styles.ocrFields}>
-              {Object.entries(doc.fields).map(([key, value]) => (
-                <Fragment key={key}>
-                  <dt>
-                    {fieldLabel(key, locale)}
-                    {showConfidence && <ConfidenceBadge score={doc.confidence?.[key]} label={t(K("ocr.confidenceLabel"))} />}
-                  </dt>
-                  <dd><FieldValue name={key} value={value} locale={locale} /></dd>
-                </Fragment>
+        result.documents.map((doc, index) => {
+          const entries = Object.entries(doc.fields);
+          // Fields iApp found nothing for are listed in one line at the end instead of taking up rows and cards.
+          const missing = entries.filter(([, value]) => isEmpty(value));
+          const present = entries.filter(([, value]) => !isEmpty(value));
+          const simple = present.filter(([, value]) => isSimpleValue(value));
+          const sections = present.filter(([, value]) => !isSimpleValue(value));
+          const badge = (key: string) => (showConfidence ? <ConfidenceBadge score={doc.confidence?.[key]} label={t(K("ocr.confidenceLabel"))} /> : null);
+          return (
+            <Fragment key={index}>
+              {result.documents.length > 1 && <h4 className={styles.ocrDocumentHeading}>{t(K("ocr.documentN"), { n: index + 1 })}</h4>}
+              {simple.length > 0 && (
+                <section className={styles.ocrCard}>
+                  <dl className={styles.ocrFields}>
+                    {simple.map(([key, value]) => (
+                      <Fragment key={key}>
+                        <dt>{fieldLabel(key, locale)}{badge(key)}</dt>
+                        <dd><FieldValue name={key} value={value} locale={locale} /></dd>
+                      </Fragment>
+                    ))}
+                  </dl>
+                </section>
+              )}
+              {sections.map(([key, value]) => (
+                <section className={styles.ocrCard} key={key}>
+                  <h4 className={styles.ocrSectionTitle}>{fieldLabel(key, locale)}{badge(key)}</h4>
+                  <FieldValue name={key} value={value} locale={locale} />
+                </section>
               ))}
-            </dl>
-            {doc.raw !== undefined && doc.raw !== null && (
-              <details className={styles.ocrRaw}>
-                <summary>{t(K("ocr.rawText"))}</summary>
-                <pre>{typeof doc.raw === "string" ? doc.raw : JSON.stringify(doc.raw, null, 2)}</pre>
-              </details>
-            )}
-          </section>
-        ))
+              {missing.length > 0 && <p className={styles.ocrMissing}>{t(K("ocr.notFound"), { fields: missing.map(([key]) => fieldLabel(key, locale)).join(", ") })}</p>}
+              {doc.raw !== undefined && doc.raw !== null && (
+                <details className={`${styles.ocrCard} ${styles.ocrRaw}`}>
+                  <summary>{t(K("ocr.rawText"))}</summary>
+                  <pre>{typeof doc.raw === "string" ? doc.raw : JSON.stringify(doc.raw, null, 2)}</pre>
+                </details>
+              )}
+            </Fragment>
+          );
+        })
       )}
     </div>
   );

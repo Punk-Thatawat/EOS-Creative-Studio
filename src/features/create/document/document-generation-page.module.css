@@ -736,15 +736,25 @@
 .ocrActions button { display: inline-flex; min-height: 30px; align-items: center; gap: 5px; border: 1px solid #e2e3e5; border-radius: 7px; background: #fff; padding: 0 10px; color: #4d555e; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
 .ocrActions button:hover { border-color: #f6a17d; color: var(--doc-orange); }
 .ocrCard { min-width: 0; border: 1px solid #ece9e6; border-radius: 10px; background: #fff; padding: 14px 16px; }
-.ocrCard > h4 { margin: 0 0 10px; color: #343b42; font-size: 12px; font-weight: 850; }
-.ocrFields, .ocrNested { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr); gap: 10px 16px; margin: 0; }
-.ocrNested { grid-template-columns: minmax(90px, 160px) minmax(0, 1fr); gap: 6px 12px; }
-.ocrFields > dt, .ocrNested > dt { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; color: #7a838b; font-size: 11px; font-weight: 700; }
-.ocrFields > dd, .ocrNested > dd { min-width: 0; margin: 0; color: #2b3138; font-size: 12px; overflow-wrap: anywhere; }
-.ocrValue { white-space: pre-wrap; }
+.ocrCard > h4 { margin: 0 0 12px; color: #343b42; font-size: 12px; font-weight: 850; }
+.ocrFields, .ocrDl { display: grid; grid-template-columns: minmax(110px, 190px) minmax(0, 1fr); gap: 8px 16px; margin: 0; }
+.ocrFields > dt, .ocrDl > dt { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; color: #7a838b; font-size: 11px; font-weight: 700; }
+.ocrFields > dd, .ocrDl > dd { min-width: 0; margin: 0; color: #2b3138; font-size: 12px; line-height: 1.55; overflow-wrap: break-word; }
+.ocrDl > .ocrFull { grid-column: 1 / -1; }
+.ocrDl > dt.ocrFull { margin-top: 6px; color: #4d555e; font-size: 11px; }
+.ocrDl > dd.ocrFull { margin-top: -4px; }
+.ocrIndent { min-width: 0; border-left: 2px solid #f1ede9; padding-left: 12px; }
+.ocrSectionTitle { display: flex; align-items: center; gap: 8px; }
+.ocrDocumentHeading { margin: 6px 0 0; color: #343b42; font-size: 12px; font-weight: 850; }
+.ocrItems { display: grid; min-width: 0; gap: 8px; }
+.ocrItem { min-width: 0; border: 1px solid #efece9; border-radius: 8px; background: #fcfbfa; padding: 10px 12px; }
+.ocrBullets { margin: 0; padding-left: 18px; color: #2b3138; font-size: 12px; line-height: 1.6; }
+.ocrBullets li { overflow-wrap: break-word; }
+.ocrBullets li::marker { color: #ed6b39; }
+.ocrValue { white-space: pre-wrap; overflow-wrap: break-word; }
 .ocrEmpty { color: #b3b8bd; }
 .ocrList { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.ocrList li { border-radius: 6px; background: #f6f4f2; padding: 3px 8px; font-size: 11px; }
+.ocrList li { border-radius: 6px; background: #f6f4f2; padding: 3px 8px; font-size: 11px; overflow-wrap: break-word; }
 .ocrTableWrap { max-width: 100%; overflow-x: auto; border: 1px solid #eeece9; border-radius: 8px; }
 .ocrTable { width: 100%; border-collapse: collapse; font-size: 11px; }
 .ocrTable th { background: #faf8f6; padding: 7px 10px; color: #6b747c; font-weight: 800; text-align: left; white-space: nowrap; }
@@ -754,7 +764,7 @@
 .ocrConfidenceHigh { background: #e7f6ee; color: #1f8a5b; }
 .ocrConfidenceMid { background: #fff4dc; color: #a56a0a; }
 .ocrConfidenceLow { background: #fdeceb; color: #b13c2e; }
-.ocrRaw { margin-top: 12px; color: #6b747c; font-size: 11px; }
+.ocrRaw { color: #6b747c; font-size: 11px; }
 .ocrRaw summary { cursor: pointer; font-weight: 700; }
 .ocrRaw pre { max-height: 240px; margin: 8px 0 0; overflow: auto; border-radius: 8px; background: #f8f7f5; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ocrStats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
@@ -764,8 +774,9 @@
 
 @media (max-width: 767px) {
   .ocrStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ocrFields, .ocrNested { grid-template-columns: minmax(0, 1fr); gap: 2px; }
-  .ocrFields > dd, .ocrNested > dd { margin-bottom: 8px; }
+  .ocrFields, .ocrDl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .ocrFields > dd, .ocrDl > dd { margin-bottom: 8px; }
+  .ocrDl > dd.ocrFull { margin-top: 0; }
 }
 
 .selectFieldDisabled { opacity: 0.5; }
@@ -850,3 +861,4 @@
   .ocrFileCard button { width: 100%; justify-content: center; }
   .annotationClear { top: 6px; right: 8px; }
 }
+.ocrMissing { margin: 0; color: #9aa1a8; font-size: 11px; line-height: 1.5; }
