@@ -183,6 +183,7 @@ export function DocumentGenerationPage() {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const isSummarize = activeMode === "summarize";
   const isTranslate = activeMode === "translate";
+  const displayedSummary = summaryWorkspaceTab === "examples" ? null : summaryResult;
 
   useEffect(() => {
     let mounted = true;
@@ -503,40 +504,40 @@ export function DocumentGenerationPage() {
               <div className={styles.summaryStage}>
                 <article className={styles.summaryDocument}>
                   <div className={styles.summaryDocumentTopline}>
-                    <span className={styles.sampleBadge}>{summaryResult ? t(K("summary.generated")) : t(K("summary.sample"))}</span>
-                    <span>{summaryFilename || selectedFile?.name || t(K("summary.sampleDoc"))}</span>
+                    <span className={styles.sampleBadge}>{displayedSummary ? t(K("summary.generated")) : t(K("summary.sample"))}</span>
+                    <span>{summaryWorkspaceTab === "examples" ? t(K("summary.sampleDoc")) : summaryFilename || selectedFile?.name || t(K("summary.sampleDoc"))}</span>
                   </div>
                   <div className={styles.summaryDocumentHeading}>
                     <small>{t(K(`summary.${summaryStyle}`)).toUpperCase()}</small>
-                    <h3>{summaryResult?.title ?? t(K("summary.docTitle"))}</h3>
-                    <p>{summaryResult?.executiveSummary ?? `${t(K("summary.leadBefore"))}${t(K("summary.leadValue"))}${t(K("summary.leadAfter"))}`}</p>
+                    <h3>{displayedSummary?.title ?? t(K("summary.docTitle"))}</h3>
+                    <p>{displayedSummary?.executiveSummary ?? `${t(K("summary.leadBefore"))}${t(K("summary.leadValue"))}${t(K("summary.leadAfter"))}`}</p>
                   </div>
-                  {!summaryResult && <div className={styles.summaryMetric}>
+                  {!displayedSummary && <div className={styles.summaryMetric}>
                     <span><small>{t(K("summary.totalRevenue"))}</small><strong>$8.42M</strong><em>{t(K("summary.vsQ1"), { value: "+18.6%" })}</em></span>
                     <span><small>{t(K("summary.netProfit"))}</small><strong>$1.68M</strong><em>{t(K("summary.vsQ1"), { value: "+34.4%" })}</em></span>
                     <span><small>{t(K("summary.grossProfit"))}</small><strong>$3.92M</strong><em>{t(K("summary.vsQ1"), { value: "+22.1%" })}</em></span>
                   </div>}
-                  {(summaryResult?.keyTakeaways.length ?? 2) > 0 && <div className={styles.summaryTakeaways}>
+                  {(displayedSummary?.keyTakeaways.length ?? 2) > 0 && <div className={styles.summaryTakeaways}>
                     <h4>{t(K("summary.takeawaysHeading"))}</h4>
-                    <ul>{(summaryResult?.keyTakeaways ?? [t(K("summary.takeaway1")), t(K("summary.takeaway2"))]).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
+                    <ul>{(displayedSummary?.keyTakeaways ?? [t(K("summary.takeaway1")), t(K("summary.takeaway2"))]).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
                   </div>}
-                  {(summaryResult?.actionItems.length || (!summaryResult && summaryStyle === "actions")) ? <div className={styles.summaryTakeaways}>
+                  {(displayedSummary?.actionItems.length || (!displayedSummary && summaryStyle === "actions")) ? <div className={styles.summaryTakeaways}>
                     <h4>{t(K("summary.actionItems"))}</h4>
                     {summaryStyle === "actions" ? (
                       <div className={styles.summaryActionTableWrap}>
                         <table className={styles.summaryActionTable}>
                           <thead><tr><th scope="col">{t(K("summary.actionTask"))}</th><th scope="col">{t(K("summary.actionOwner"))}</th><th scope="col">{t(K("summary.actionDueDate"))}</th></tr></thead>
-                          <tbody>{(summaryResult?.actionItems ?? [
+                          <tbody>{(displayedSummary?.actionItems ?? [
                             { task: t(K("summary.sampleActionTask1")), owner: t(K("summary.sampleActionOwner1")), dueDate: t(K("summary.sampleActionDate")) },
                             { task: t(K("summary.sampleActionTask2")), owner: t(K("summary.sampleActionOwner2")), dueDate: t(K("summary.sampleActionDate")) },
                           ]).map((item, index) => <tr key={`${index}-${item.task}`}><td>{item.task}</td><td>{item.owner || "—"}</td><td>{item.dueDate || "—"}</td></tr>)}</tbody>
                         </table>
                       </div>
-                    ) : <ul>{(summaryResult?.actionItems ?? []).map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul>}
-                  </div> : summaryStyle === "actions" && summaryResult && focusAreas.actionItems ? <p className={styles.summaryEmptyActions}>{t(K("summary.noActionItems"))}</p> : null}
-                  {summaryResult?.decisions.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.decisions"))}</h4><ul>{summaryResult.decisions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul></div> : null}
-                  {summaryResult?.importantDates.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.importantDates"))}</h4><ul>{summaryResult.importantDates.map((item, index) => <li key={`${index}-${item.date}-${item.event}`}>{item.date} · {item.event}</li>)}</ul></div> : null}
-                  <div className={styles.summaryDocumentFooter}>{summaryResult ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
+                    ) : <ul>{(displayedSummary?.actionItems ?? []).map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul>}
+                  </div> : summaryStyle === "actions" && displayedSummary && focusAreas.actionItems ? <p className={styles.summaryEmptyActions}>{t(K("summary.noActionItems"))}</p> : null}
+                  {displayedSummary?.decisions.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.decisions"))}</h4><ul>{displayedSummary.decisions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul></div> : null}
+                  {displayedSummary?.importantDates.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.importantDates"))}</h4><ul>{displayedSummary.importantDates.map((item, index) => <li key={`${index}-${item.date}-${item.event}`}>{item.date} · {item.event}</li>)}</ul></div> : null}
+                  <div className={styles.summaryDocumentFooter}>{displayedSummary ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
                 </article>
                 {isSummarizing && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("summary.loading"))}</strong><span>{t(K("summary.loadingHint"))}</span></div>}
               </div>
@@ -656,20 +657,7 @@ export function DocumentGenerationPage() {
                 ) : null}
               </div>
               <div id="summary-examples-panel" className={styles.summaryWorkspacePanel} role="tabpanel" aria-labelledby="summary-examples-tab" hidden={summaryWorkspaceTab !== "examples"}>
-                {summaryWorkspaceTab === "examples" ? (
-                  <div className={styles.summaryExamplesGrid}>
-                    {[
-                      { icon: NotebookPen, title: K("summary.cardExecutive"), body: K("summary.cardExecutiveBody") },
-                      { icon: ListChecks, title: K("summary.takeawaysHeading"), body: K("summary.cardTakeawaysBody") },
-                      { icon: Sparkles, title: K("summary.cardNext"), body: K("summary.cardNextBody") },
-                    ].map(({ icon: Icon, title, body }) => (
-                      <article className={styles.summaryExampleCard} key={title}>
-                        <div><Icon size={14} aria-hidden="true" /><strong>{t(title)}</strong></div>
-                        <p>{t(body)}</p>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
+                {summaryWorkspaceTab === "examples" ? <p className={styles.summaryExampleNote}>{t(K("summary.exampleShowsAbove"))}</p> : null}
               </div>
             </section>
           ) : isTranslate ? (
