@@ -31,6 +31,7 @@ import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { DEFAULT_OCR_EXTENSIONS, DEFAULT_OCR_MAX_MEGABYTES, OCR_DOCUMENT_TYPE_OPTIONS } from "./ocr-document-types";
 import { canPreviewFile, DocumentPreview } from "./document-preview";
+import { buildOcrCards } from "./ocr-cards";
 import { downloadOcrResult, ocrResultToText } from "./ocr-download";
 import { OcrResultView } from "./ocr-result-view";
 import styles from "./document-generation-page.module.css";
@@ -159,6 +160,7 @@ export function DocumentGenerationPage() {
   const [ocrError, setOcrError] = useState("");
   const [isOcrRunning, setIsOcrRunning] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const ocrResultsRef = useRef<HTMLDivElement>(null);
   const isSummarize = activeMode === "summarize";
   const isOcr = activeMode === "ocr";
   const ocrTypeInfo = ocrTypes.find((type) => type.id === ocrType);
@@ -623,7 +625,25 @@ export function DocumentGenerationPage() {
             </div>
           ) : (
             <div className={styles.outputCards}>
-              {outputs.map(({ key, icon: Icon }) => (
+              {isOcr && ocrResult ? (
+                buildOcrCards(ocrResult, locale, t).map((card, index) => {
+                  const Icon = outputs[index]?.icon ?? Sparkles;
+                  return (
+                    <button
+                      type="button"
+                      className={`${styles.outputCard} ${styles.outputCardFilled}`}
+                      key={card.slot}
+                      title={t(K("cards.openResult"))}
+                      onClick={() => ocrResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                    >
+                      <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{card.title}</strong></div>
+                      <ul className={`${styles.outputCardBody} ${card.muted ? styles.outputCardMuted : ""}`}>
+                        {card.lines.map((line, lineIndex) => <li key={lineIndex}>{line}</li>)}
+                      </ul>
+                    </button>
+                  );
+                })
+              ) : outputs.map(({ key, icon: Icon }) => (
                 <div className={styles.outputCard} key={key}>
                   <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{t(key)}</strong></div>
                   <i /><i /><i />
@@ -633,7 +653,7 @@ export function DocumentGenerationPage() {
             </div>
           )}
           {isOcr && ocrResult && (
-            <div className={styles.ocrResultsPanel}>
+            <div className={styles.ocrResultsPanel} ref={ocrResultsRef}>
               <div className={styles.ocrStats}>
                 <article><small>{t(K("ocr.statPages"))}</small><strong>{ocrResult.pages}</strong></article>
                 <article><small>{t(K("ocr.statDocuments"))}</small><strong>{ocrResult.text.length ? ocrResult.text.length : ocrResult.documents.length}</strong></article>
