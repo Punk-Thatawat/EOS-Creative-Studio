@@ -60,6 +60,7 @@ export async function summarizeDocument(input: {
   return payload.data;
 }
 
+
 function errorMessage(message: unknown, fallback: string): string {
   if (Array.isArray(message)) return message.join(', ');
   return typeof message === 'string' ? message : fallback;

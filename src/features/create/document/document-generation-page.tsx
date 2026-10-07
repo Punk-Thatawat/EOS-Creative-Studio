@@ -10,7 +10,6 @@ import {
   Download,
   FileCheck2,
   FileText,
-  Hand,
   History as HistoryIcon,
   LoaderCircle,
   Languages,
@@ -25,11 +24,14 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
+import { translateDocument, type DocumentTranslation, type TranslationLanguage } from "@/lib/api/document-translate";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -69,6 +71,10 @@ const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "report", icon: BarChart3 },
   { id: "form", icon: ListChecks },
 ];
+
+function isModeId(value: string | null): value is ModeId {
+  return value !== null && modes.some((mode) => mode.id === value && mode.available);
+}
 
 const outputs = [
   { key: K("output.summary"), icon: NotebookPen },
@@ -151,9 +157,132 @@ function historyDate(value: string): string {
   return Number.isNaN(date.getTime()) ? "ไม่ทราบวันที่" : new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+function escapeXml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[character] ?? character);
+}
+
+function safeFileName(value: string): string {
+  return value.replace(/\.[^/.]+$/, "").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").trim() || "document-summary";
+}
+
+type SummaryExportLabels = { takeawaysHeading: string; actionItems: string; decisions: string; importantDates: string; notes: string };
+
+function summaryText(summary: DocumentSummary, note: string, labels: SummaryExportLabels): string {
+  const lines = [summary.title, "", summary.executiveSummary];
+  if (summary.sections?.length) {
+    for (const section of summary.sections) lines.push("", section.heading, ...section.items.map((item) => `• ${item}`));
+  } else if (summary.keyTakeaways.length) {
+    lines.push("", labels.takeawaysHeading, ...summary.keyTakeaways.map((item) => `• ${item}`));
+  }
+  if (summary.actionItems.length) lines.push("", labels.actionItems, ...summary.actionItems.map((item) => `• ${item.task}${item.owner ? ` · ${item.owner}` : ""}${item.dueDate ? ` · ${item.dueDate}` : ""}`));
+  if (summary.decisions.length) lines.push("", labels.decisions, ...summary.decisions.map((item) => `• ${item}`));
+  if (summary.importantDates.length) lines.push("", labels.importantDates, ...summary.importantDates.map((item) => `• ${item.date} · ${item.event}`));
+  if (note.trim()) lines.push("", labels.notes, note.trim());
+  return lines.join("\n");
+}
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function concatenateBytes(parts: Uint8Array[]): Uint8Array {
+  const result = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  return result;
+}
+
+function createStoredZip(files: Array<{ name: string; contents: string }>): Blob {
+  const encoder = new TextEncoder();
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  let localOffset = 0;
+  for (const file of files) {
+    const name = encoder.encode(file.name);
+    const contents = encoder.encode(file.contents);
+    const checksum = crc32(contents);
+    const localHeader = new Uint8Array(30);
+    const localView = new DataView(localHeader.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(10, 0, true);
+    localView.setUint16(12, 0x21, true);
+    localView.setUint32(14, checksum, true);
+    localView.setUint32(18, contents.length, true);
+    localView.setUint32(22, contents.length, true);
+    localView.setUint16(26, name.length, true);
+    localParts.push(localHeader, name, contents);
+
+    const centralHeader = new Uint8Array(46);
+    const centralView = new DataView(centralHeader.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(12, 0, true);
+    centralView.setUint16(14, 0x21, true);
+    centralView.setUint32(16, checksum, true);
+    centralView.setUint32(20, contents.length, true);
+    centralView.setUint32(24, contents.length, true);
+    centralView.setUint16(28, name.length, true);
+    centralView.setUint32(42, localOffset, true);
+    centralParts.push(centralHeader, name);
+    localOffset += localHeader.length + name.length + contents.length;
+  }
+  const centralDirectory = concatenateBytes(centralParts);
+  const endRecord = new Uint8Array(22);
+  const endView = new DataView(endRecord.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralDirectory.length, true);
+  endView.setUint32(16, localOffset, true);
+  const zipBytes = concatenateBytes([...localParts, centralDirectory, endRecord]);
+  const blobBytes = new ArrayBuffer(zipBytes.length);
+  new Uint8Array(blobBytes).set(zipBytes);
+  return new Blob([blobBytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+function createDocxBlob(summary: DocumentSummary, note: string, labels: SummaryExportLabels): Blob {
+  const paragraph = (text: string, heading = false) => `<w:p>${heading ? "<w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr>" : ""}<w:r>${heading ? "<w:rPr><w:b/><w:sz w:val=\"30\"/></w:rPr>" : ""}<w:t xml:space=\"preserve\">${escapeXml(text)}</w:t></w:r></w:p>`;
+  const paragraphs = [paragraph(summary.title, true), paragraph(summary.executiveSummary)];
+  if (summary.sections?.length) for (const section of summary.sections) paragraphs.push(paragraph(section.heading, true), ...section.items.map((item) => paragraph(`• ${item}`)));
+  else if (summary.keyTakeaways.length) paragraphs.push(paragraph(labels.takeawaysHeading, true), ...summary.keyTakeaways.map((item) => paragraph(`• ${item}`)));
+  if (summary.actionItems.length) paragraphs.push(paragraph(labels.actionItems, true), ...summary.actionItems.map((item) => paragraph(`• ${item.task}${item.owner ? ` · ${item.owner}` : ""}${item.dueDate ? ` · ${item.dueDate}` : ""}`)));
+  if (summary.decisions.length) paragraphs.push(paragraph(labels.decisions, true), ...summary.decisions.map((item) => paragraph(`• ${item}`)));
+  if (summary.importantDates.length) paragraphs.push(paragraph(labels.importantDates, true), ...summary.importantDates.map((item) => paragraph(`• ${item.date} · ${item.event}`)));
+  if (note.trim()) paragraphs.push(paragraph(labels.notes, true), ...note.trim().split(/\r?\n/).map((line) => paragraph(line)));
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs.join("")}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>`;
+  return createStoredZip([
+    { name: "[Content_Types].xml", contents: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>` },
+    { name: "_rels/.rels", contents: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>` },
+    { name: "word/document.xml", contents: documentXml },
+  ]);
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export function DocumentGenerationPage() {
   const { t } = useLocale();
-  const [activeMode, setActiveMode] = useState<ModeId>("ocr");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedMode = searchParams.get("tab");
+  const activeMode: ModeId = isModeId(requestedMode) ? requestedMode : "ocr";
   const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("executive");
   const [summaryPurpose, setSummaryPurpose] = useState<SummaryPurpose>("general");
   const [summaryAudience, setSummaryAudience] = useState<SummaryAudience>("general");
@@ -174,13 +303,51 @@ export function DocumentGenerationPage() {
   const [historyRefresh, setHistoryRefresh] = useState(0);
 
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
-  const [translationSourceLanguage, setTranslationSourceLanguage] = useState("auto");
-  const [translationTargetLanguage, setTranslationTargetLanguage] = useState("Thai");
-  const [outputFormat, setOutputFormat] = useState("DOCX");
+  const [translationSourceLanguage, setTranslationSourceLanguage] = useState<TranslationLanguage>("auto");
+  const [translationTargetLanguage, setTranslationTargetLanguage] = useState<Exclude<TranslationLanguage, "auto">>("Thai");
+  const [outputFormat, setOutputFormat] = useState<DocumentOutputFormat>("DOCX");
+  const [translationResult, setTranslationResult] = useState<DocumentTranslation | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [summaryZoom, setSummaryZoom] = useState(100);
+  const [isComparingSource, setIsComparingSource] = useState(false);
+  const [compareSourceFile, setCompareSourceFile] = useState<File | null>(null);
+  const [isSummaryNoteOpen, setIsSummaryNoteOpen] = useState(false);
+  const [summaryNote, setSummaryNote] = useState("");
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const compareSourceInputRef = useRef<HTMLInputElement>(null);
   const isSummarize = activeMode === "summarize";
   const isTranslate = activeMode === "translate";
   const displayedSummary = summaryWorkspaceTab === "examples" ? null : summaryResult;
+  const sourceFileForPreview = compareSourceFile ?? selectedFile;
+  const sourceFileName = sourceFileForPreview?.name ?? summaryFilename;
+  const isPdfSource = Boolean(sourceFileForPreview && (sourceFileForPreview.type === "application/pdf" || sourceFileForPreview.name.toLowerCase().endsWith(".pdf")));
+  const isImageSource = Boolean(sourceFileForPreview && (sourceFileForPreview.type.startsWith("image/") || /\.(png|jpe?g)$/i.test(sourceFileForPreview.name)));
+  const canCompareSource = Boolean(displayedSummary && ((sourceFileForPreview && (isPdfSource || isImageSource)) || (!sourceFileForPreview && /\.(pdf|png|jpe?g)$/i.test(summaryFilename))));
+
+  const changeActiveMode = (mode: ModeId) => {
+    if (mode === "summarize") {
+      setHistoryLoading(true);
+      setHistoryError("");
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    if (mode === "ocr") params.delete("tab");
+    else params.set("tab", mode);
+    const query = params.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+  };
+
+  const refreshDocumentHistory = () => {
+    setHistoryLoading(true);
+    setHistoryError("");
+    setHistoryRefresh((current) => current + 1);
+  };
+
+  const sourcePreviewUrl = useMemo(() => sourceFileForPreview ? URL.createObjectURL(sourceFileForPreview) : "", [sourceFileForPreview]);
+
+  useEffect(() => {
+    if (!sourcePreviewUrl) return;
+    return () => URL.revokeObjectURL(sourcePreviewUrl);
+  }, [sourcePreviewUrl]);
 
   useEffect(() => {
     let mounted = true;
@@ -191,9 +358,8 @@ export function DocumentGenerationPage() {
   }, []);
 
   useEffect(() => {
+    if (!isSummarize) return;
     const controller = new AbortController();
-    setHistoryLoading(true);
-    setHistoryError("");
     void fetchHistory({ type: "document", status: "completed", limit: 6, signal: controller.signal })
       .then((response) => {
         setDocumentHistory(response.items.filter((item) => item.documentSummary));
@@ -205,7 +371,7 @@ export function DocumentGenerationPage() {
         if (!controller.signal.aborted) setHistoryLoading(false);
       });
     return () => controller.abort();
-  }, [historyRefresh]);
+  }, [historyRefresh, isSummarize]);
 
   const setFileFromList = (files: FileList | null) => {
     const file = files?.[0];
@@ -220,10 +386,33 @@ export function DocumentGenerationPage() {
       return;
     }
     setSelectedFile(file);
+    setCompareSourceFile(null);
     setSummaryResult(null);
+    setTranslationResult(null);
     setSummaryFilename(file.name);
     setSelectedHistoryId(null);
     setSummaryError("");
+    setSummaryNote("");
+    setIsSummaryNoteOpen(false);
+    setIsComparingSource(false);
+  };
+
+  const setCompareFileFromList = (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const isImage = file.type.startsWith("image/") || /\.(png|jpe?g)$/i.test(file.name);
+    if (!isPdf && !isImage) {
+      setSummaryError(t(K("summary.errorType")));
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setSummaryError(t(K("summary.errorSize")));
+      return;
+    }
+    setCompareSourceFile(file);
+    setSummaryError("");
+    setIsComparingSource(true);
   };
 
   const generateSummary = async () => {
@@ -260,7 +449,10 @@ export function DocumentGenerationPage() {
       setSummaryFilename(selectedFile.name);
       setSelectedHistoryId(response.id);
       setSummaryWorkspaceTab("latest");
-      setHistoryRefresh((current) => current + 1);
+      setSummaryNote("");
+      setIsSummaryNoteOpen(false);
+      setIsComparingSource(false);
+      refreshDocumentHistory();
       setSummaryOptions((current) => ({ ...current, model: response.model, credits: response.creditsUsed }));
     } catch (error) {
       setSummaryError(error instanceof Error ? error.message : t(K("summary.errorGeneral")));
@@ -269,17 +461,106 @@ export function DocumentGenerationPage() {
     }
   };
 
+  const generateTranslation = async () => {
+    if (!selectedFile || isTranslating) return;
+    setIsTranslating(true);
+    setSummaryError("");
+    setTranslationResult(null);
+    try {
+      const response = await translateDocument({
+        file: selectedFile,
+        sourceLanguage: translationSourceLanguage,
+        targetLanguage: translationTargetLanguage,
+      });
+      setTranslationResult(response);
+      setSummaryOptions((current) => ({ ...current, model: response.model, credits: response.creditsUsed }));
+    } catch (error) {
+      setSummaryError(error instanceof Error ? error.message : t(K("translate.error")));
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const downloadTranslation = () => {
+    if (!translationResult) return;
+    const blob = new Blob([translationResult.translatedText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${selectedFile?.name.replace(/\.[^.]+$/, "") ?? "translation"}-${translationTargetLanguage.toLowerCase()}.txt`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const toggleSourceComparison = () => {
+    if (!displayedSummary) return;
+    if (!sourceFileForPreview) {
+      compareSourceInputRef.current?.click();
+      return;
+    }
+    setIsComparingSource((value) => !value);
+  };
+
+  const exportSummary = () => {
+    if (!displayedSummary) return;
+    const baseName = safeFileName(summaryFilename || selectedFile?.name || displayedSummary.title);
+    const labels: SummaryExportLabels = {
+      takeawaysHeading: t(K("summary.takeawaysHeading")),
+      actionItems: t(K("summary.actionItems")),
+      decisions: t(K("summary.decisions")),
+      importantDates: t(K("summary.importantDates")),
+      notes: t(K("summary.noteLabel")),
+    };
+    const text = summaryText(displayedSummary, summaryNote, labels);
+    if (outputFormat === "TXT") {
+      downloadBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), `${baseName}-summary.txt`);
+      return;
+    }
+    if (outputFormat === "JSON") {
+      downloadBlob(new Blob([JSON.stringify({ ...displayedSummary, ...(summaryNote.trim() ? { note: summaryNote.trim() } : {}) }, null, 2)], { type: "application/json;charset=utf-8" }), `${baseName}-summary.json`);
+      return;
+    }
+    if (outputFormat === "DOCX") {
+      downloadBlob(createDocxBlob(displayedSummary, summaryNote, labels), `${baseName}-summary.docx`);
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setSummaryError(t(K("summary.exportPopupBlocked")));
+      return;
+    }
+    const sections = displayedSummary.sections?.length
+      ? displayedSummary.sections.map((section) => `<section><h2>${escapeXml(section.heading)}</h2><ul>${section.items.map((item) => `<li>${escapeXml(item)}</li>`).join("")}</ul></section>`).join("")
+      : displayedSummary.keyTakeaways.length
+        ? `<section><h2>${escapeXml(t(K("summary.takeawaysHeading")))}</h2><ul>${displayedSummary.keyTakeaways.map((item) => `<li>${escapeXml(item)}</li>`).join("")}</ul></section>`
+        : "";
+    const actions = displayedSummary.actionItems.length ? `<section><h2>${escapeXml(t(K("summary.actionItems")))}</h2><ul>${displayedSummary.actionItems.map((item) => `<li>${escapeXml(`${item.task}${item.owner ? ` · ${item.owner}` : ""}${item.dueDate ? ` · ${item.dueDate}` : ""}`)}</li>`).join("")}</ul></section>` : "";
+    const decisions = displayedSummary.decisions.length ? `<section><h2>${escapeXml(t(K("summary.decisions")))}</h2><ul>${displayedSummary.decisions.map((item) => `<li>${escapeXml(item)}</li>`).join("")}</ul></section>` : "";
+    const dates = displayedSummary.importantDates.length ? `<section><h2>${escapeXml(t(K("summary.importantDates")))}</h2><ul>${displayedSummary.importantDates.map((item) => `<li>${escapeXml(`${item.date} · ${item.event}`)}</li>`).join("")}</ul></section>` : "";
+    const note = summaryNote.trim() ? `<section><h2>${escapeXml(t(K("summary.noteLabel")))}</h2><p>${escapeXml(summaryNote.trim()).replace(/\r?\n/g, "<br>")}</p></section>` : "";
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeXml(baseName)}</title><style>body{max-width:760px;margin:48px auto;padding:0 32px;color:#252a2f;font:16px/1.65 Arial,sans-serif}h1{font-size:28px}h2{margin:28px 0 8px;font-size:18px}p,li{color:#4d5660}section{break-inside:avoid}@media print{body{margin:0 auto;padding:0 12mm}}</style></head><body><h1>${escapeXml(displayedSummary.title)}</h1><p>${escapeXml(displayedSummary.executiveSummary)}</p>${sections}${actions}${decisions}${dates}${note}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 300);
+  };
+
   const openDocumentHistory = (item: HistoryItem) => {
     const saved = item.documentSummary;
     if (!saved) return;
     if (uploadInputRef.current) uploadInputRef.current.value = "";
-    setActiveMode("summarize");
+    changeActiveMode("summarize");
     setSelectedFile(null);
+    setCompareSourceFile(null);
+    setCompareSourceFile(null);
     setSummaryFilename(saved.filename);
     setSummaryResult(saved.summary);
     setSummaryError("");
     setSelectedHistoryId(item.id);
     setSummaryWorkspaceTab("latest");
+    setSummaryNote("");
+    setIsSummaryNoteOpen(false);
+    setIsComparingSource(false);
     const restoredContext = restoreSummaryContext(saved.options.prompt, saved.options.summaryStyle);
     setSummaryPrompt(restoredContext.prompt);
     setSummaryPurpose(restoredContext.purpose);
@@ -330,7 +611,7 @@ export function DocumentGenerationPage() {
                   aria-pressed={isActive}
                   aria-disabled={!available}
                   title={available ? label : t(K("mode.comingSoon"), { label })}
-                  onClick={() => available && setActiveMode(id)}
+                  onClick={() => available && changeActiveMode(id)}
                 >
                   <Icon size={16} strokeWidth={2} aria-hidden="true" />
                   <span>{label}</span>
@@ -357,6 +638,7 @@ export function DocumentGenerationPage() {
             <small>{t(K("source.dropTypes"), { max: 25 })}</small>
           </div>
           <input ref={uploadInputRef} className={styles.fileInput} type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg" onChange={(event) => setFileFromList(event.currentTarget.files)} />
+          <input ref={compareSourceInputRef} className={styles.fileInput} type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" onChange={(event) => { setCompareFileFromList(event.currentTarget.files); event.currentTarget.value = ""; }} />
           <div className={styles.filePlaceholder}>
             <span className={styles.fileIcon}><FileText size={17} aria-hidden="true" /></span>
             <span className={styles.fileCopy}><strong>{selectedFile?.name ?? t(K("source.filesTitle"))}</strong><small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("source.filesHint"))}</small></span>
@@ -472,20 +754,29 @@ export function DocumentGenerationPage() {
           <div className={styles.previewHeader}>
             <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isTranslate ? t(K("translate.workspace")) : t(K("preview.canvas"))}</small></div>
             <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
-              <ZoomIn size={14} aria-hidden="true" />
-              <ZoomOut size={14} aria-hidden="true" />
-              <span>100% <ChevronDown size={12} /></span>
-              <Hand size={14} aria-hidden="true" />
-              <span className={styles.toolbarDivider} />
-              <span>{t(K("preview.compare"))}</span>
-              <span>{t(K("preview.annotate"))}</span>
-              <span><Download size={13} />{t(K("preview.export"))}</span>
+              {isSummarize ? <>
+                <button type="button" className={styles.previewToolButton} onClick={() => setSummaryZoom((zoom) => Math.max(60, zoom - 10))} disabled={summaryZoom <= 60} aria-label={t(K("preview.zoomOut"))} title={t(K("preview.zoomOut"))}><ZoomOut size={14} aria-hidden="true" /></button>
+                <button type="button" className={`${styles.previewToolButton} ${styles.previewZoomValue}`} onClick={() => setSummaryZoom(100)} aria-label={t(K("preview.zoomReset"))} title={t(K("preview.zoomReset"))}>{summaryZoom}%</button>
+                <button type="button" className={styles.previewToolButton} onClick={() => setSummaryZoom((zoom) => Math.min(160, zoom + 10))} disabled={summaryZoom >= 160} aria-label={t(K("preview.zoomIn"))} title={t(K("preview.zoomIn"))}><ZoomIn size={14} aria-hidden="true" /></button>
+                <span className={styles.toolbarDivider} />
+                <button type="button" className={`${styles.previewToolButton} ${isComparingSource ? styles.previewToolButtonActive : ""}`} onClick={toggleSourceComparison} disabled={!canCompareSource} aria-pressed={isComparingSource} title={canCompareSource ? sourceFileForPreview ? t(K("preview.compare")) : t(K("summary.compareChooseSource")) : t(K("preview.compareUnavailable"))}><FileText size={13} aria-hidden="true" />{t(K("preview.compare"))}</button>
+                <button type="button" className={`${styles.previewToolButton} ${isSummaryNoteOpen ? styles.previewToolButtonActive : ""}`} onClick={() => setIsSummaryNoteOpen((value) => !value)} disabled={!displayedSummary} aria-pressed={isSummaryNoteOpen} title={!displayedSummary ? t(K("summary.toolbarNeedsResult")) : t(K("preview.annotate"))}><NotebookPen size={13} aria-hidden="true" />{t(K("preview.annotate"))}</button>
+                <button type="button" className={styles.previewToolButton} onClick={exportSummary} disabled={!displayedSummary} title={!displayedSummary ? t(K("summary.toolbarNeedsResult")) : t(K("summary.exportFormat"), { format: outputFormat })}><Download size={13} aria-hidden="true" />{t(K("preview.export"))}</button>
+              </> : isTranslate && translationResult ? <button type="button" className={styles.previewToolButton} onClick={downloadTranslation}><Download size={13} aria-hidden="true" />{t(K("translate.downloadTxt"))}</button> : null}
             </div>
           </div>
 
-          <div className={`${styles.previewStage} ${isSummarize || isTranslate ? styles.previewStageSummary : ""}`}>
+          <div className={`${styles.previewStage} ${isSummarize || isTranslate ? styles.previewStageSummary : ""} ${isSummarize ? styles.previewStageSummaryDocument : ""}`}>
             {isSummarize ? (
-              <div className={styles.summaryStage}>
+              <div className={`${styles.summaryStage} ${isComparingSource && canCompareSource ? styles.summaryStageComparing : ""}`} role="region" aria-label={t(K("summary.workspace"))} tabIndex={0}>
+                {isComparingSource && canCompareSource && sourceFileForPreview && <section className={styles.summarySourceCompare} aria-label={t(K("summary.sourcePreview"))}>
+                  <header><strong>{t(K("summary.sourcePreview"))}</strong><span title={sourceFileName}>{sourceFileName}</span></header>
+                  {sourcePreviewUrl ? isPdfSource
+                    ? <div className={styles.summaryPdfSourceNotice}><FileText size={24} aria-hidden="true" /><p>{t(K("summary.pdfPreviewNote"))}</p><a href={sourcePreviewUrl} target="_blank" rel="noreferrer">{t(K("summary.openSource"))}<ArrowUpRight size={13} aria-hidden="true" /></a></div>
+                    : <Image className={styles.summarySourceImage} src={sourcePreviewUrl} alt={sourceFileName} width={1600} height={1200} unoptimized />
+                    : <div className={styles.summarySourceLoading} role="status">{t(K("summary.sourceLoading"))}</div>}
+                </section>}
+                <div className={`${styles.summaryDocumentColumn} ${isComparingSource && canCompareSource ? styles.summaryCompareDocument : ""}`} style={{ zoom: `${summaryZoom}%` }}>
                 <article className={styles.summaryDocument}>
                   <div className={styles.summaryDocumentTopline}>
                     <span className={styles.sampleBadge}>{displayedSummary ? t(K("summary.generated")) : t(K("summary.sample"))}</span>
@@ -519,8 +810,13 @@ export function DocumentGenerationPage() {
                     <h4>{t(K("summary.takeawaysHeading"))}</h4>
                     <ul>{[t(K("summary.takeaway1")), t(K("summary.takeaway2"))].map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
                   </div>}
-                  <div className={styles.summaryDocumentFooter}>{displayedSummary ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
+                  {!displayedSummary && <div className={styles.summaryDocumentFooter}>{t(K("summary.footer"))}</div>}
                 </article>
+                {isSummaryNoteOpen && displayedSummary && <section className={styles.summaryAnnotation}>
+                  <label htmlFor="summary-annotation"><NotebookPen size={14} aria-hidden="true" />{t(K("summary.noteLabel"))}</label>
+                  <textarea id="summary-annotation" value={summaryNote} onChange={(event) => setSummaryNote(event.target.value)} placeholder={t(K("summary.notePlaceholder"))} />
+                </section>}
+                </div>
                 {isSummarizing && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("summary.loading"))}</strong><span>{t(K("summary.loadingHint"))}</span></div>}
               </div>
             ) : isTranslate ? (
@@ -540,10 +836,17 @@ export function DocumentGenerationPage() {
                     <span>{t(K("translate.outputReadyAfter"))}</span>
                   </article>
                 </div>
-                <div className={styles.translationPreviewNote}>
-                  <Languages size={16} aria-hidden="true" />
-                  <div><strong>{t(K("translate.previewTitle"))}</strong><span>{t(K(selectedFile ? "translate.previewHint" : "translate.uploadHint"))}</span></div>
-                </div>
+                {translationResult ? (
+                  <section className={styles.translationTextResult} aria-label={t(K("translate.previewTitle"))}>
+                    <header><div><Languages size={15} aria-hidden="true" /><strong>{t(K("translate.previewTitle"))} · {t(K(`translate.language.${translationTargetLanguage.toLowerCase()}`))}</strong></div><button type="button" onClick={downloadTranslation}><Download size={14} aria-hidden="true" />{t(K("translate.downloadTxt"))}</button></header>
+                    <pre>{translationResult.translatedText}</pre>
+                  </section>
+                ) : (
+                  <div className={styles.translationPreviewNote}>
+                    <Languages size={16} aria-hidden="true" />
+                    <div><strong>{t(K("translate.previewTitle"))}</strong><span>{t(K(selectedFile ? "translate.previewHint" : "translate.uploadHint"))}</span></div>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -597,7 +900,7 @@ export function DocumentGenerationPage() {
                         <div><h2 id="document-history-heading">{t(K("summary.historyHeading"))}</h2><p>{t(K("summary.historyDescription"))}</p></div>
                       </div>
                       <div className={styles.historyActions}>
-                        <button type="button" onClick={() => setHistoryRefresh((current) => current + 1)} disabled={historyLoading} aria-label={t(K("summary.refreshHistory"))}>
+                        <button type="button" onClick={refreshDocumentHistory} disabled={historyLoading} aria-label={t(K("summary.refreshHistory"))}>
                           <RefreshCw size={15} className={historyLoading ? styles.historySpin : undefined} /> {t(K("summary.refreshHistory"))}
                         </button>
                         <Link href="/history?type=document">{t(K("summary.allHistory"))} <ArrowRight size={14} aria-hidden="true" /></Link>
@@ -644,8 +947,8 @@ export function DocumentGenerationPage() {
             </section>
           ) : isTranslate ? (
             <div className={styles.translationResultCard}>
-              <div><Languages size={14} aria-hidden="true" /><strong>{t(K("output.translated"))}</strong></div>
-              <p>{t(K("translate.resultHint"))}</p>
+              <div><Languages size={14} aria-hidden="true" /><strong>{t(K(translationResult ? "translate.complete" : "output.translated"))}</strong></div>
+              <p>{translationResult ? t(K("translate.completedWith"), { model: translationResult.model, credits: translationResult.creditsUsed }) : t(K("translate.resultHint"))}</p>
             </div>
           ) : (
             <div className={styles.outputCards}>
@@ -664,8 +967,8 @@ export function DocumentGenerationPage() {
           <aside className={styles.settingsPanel} aria-label={t(K("a11y.settings"))}>
           <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
           <div className={styles.settingGroup}>
-            <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
-            {isSummarize ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("summary.modelName"))}</strong><small>{t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
+            <div className={styles.settingLabel}>{isTranslate ? t(K("translate.serviceLabel")) : t(K("settings.model"))} <span>ⓘ</span></div>
+            {isSummarize ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("summary.modelName"))}</strong><small>{t(K("summary.modelHint"))}</small></div></div> : isTranslate ? <div className={styles.translationServiceStatus}><span /><div><strong>{summaryOptions.model}</strong><small>{t(K("translate.modelCredits"), { credits: summaryOptions.credits })}</small></div></div> : <div className={styles.modelCards}>
               <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("settings.standard"))}</strong><small>{t(K("settings.standardHint"))}</small></div>
               <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
             </div>}
@@ -695,7 +998,15 @@ export function DocumentGenerationPage() {
               <SelectControl label={t(K("summary.length"))} value={summaryLength} onChange={(value) => setSummaryLength(value as "brief" | "standard" | "detailed")} options={[{ value: "brief", label: t(K("summary.lengthBrief")) }, { value: "standard", label: t(K("summary.lengthStandard")) }, { value: "detailed", label: t(K("summary.lengthDetailed")) }]} />
               <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("summary.toneValue"))} />
             </>
-            ) : isTranslate ? null : (
+            ) : isTranslate ? (
+              <div className={styles.translationLanguageSettings}>
+                <SelectControl label={t(K("translate.sourceLanguage"))} value={translationSourceLanguage} onChange={(value) => {
+                  setTranslationSourceLanguage(value as TranslationLanguage);
+                  if (value !== "auto" && value === translationTargetLanguage) setTranslationTargetLanguage(value === "Thai" ? "English" : "Thai");
+                }} options={[{ value: "auto", label: t(K("translate.detectAutomatically")) }, { value: "Thai", label: t(K("translate.language.thai")) }, { value: "English", label: t(K("translate.language.english")) }, { value: "Japanese", label: t(K("translate.language.japanese")) }, { value: "Chinese", label: t(K("translate.language.chinese")) }]} />
+                <SelectControl label={t(K("translate.targetLanguage"))} value={translationTargetLanguage} onChange={(value) => setTranslationTargetLanguage(value as Exclude<TranslationLanguage, "auto">)} options={[{ value: "Thai", label: t(K("translate.language.thai")) }, { value: "English", label: t(K("translate.language.english")) }, { value: "Japanese", label: t(K("translate.language.japanese")) }, { value: "Chinese", label: t(K("translate.language.chinese")) }].filter((option) => translationSourceLanguage === "auto" || option.value !== translationSourceLanguage)} />
+              </div>
+            ) : (
               <>
               <SelectPlaceholder label={t(K("settings.language"))} value={t(K("settings.languageValue"))} />
               <SelectPlaceholder label={t(K("settings.pageRange"))} value={t(K("source.allPages"))} />
@@ -703,13 +1014,13 @@ export function DocumentGenerationPage() {
               <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
             </>
           )}
-          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : t(K("settings.credits"))}</strong></div>
-          <button className={styles.generateButton} type="button" disabled={!isSummarize || !selectedFile || isSummarizing} onClick={() => void generateSummary()}>
-            <span>{isSummarizing ? t(K("summary.generating")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
+          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isSummarize || isTranslate ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : t(K("settings.credits"))}</strong></div>
+          <button className={styles.generateButton} type="button" disabled={isTranslate ? (!selectedFile || isTranslating) : (!isSummarize || !selectedFile || isSummarizing)} onClick={() => { if (isSummarize) void generateSummary(); else if (isTranslate) void generateTranslation(); }}>
+            <span>{isSummarizing ? t(K("summary.generating")) : isTranslating ? t(K("translate.translating")) : isSummarize ? t(K("summary.generate")) : isTranslate ? t(K("translate.generate")) : t(K("settings.generate"))}</span>
             <Sparkles size={17} aria-hidden="true" />
           </button>
           {summaryError && <div className={styles.summaryError} role="alert">{summaryError}</div>}
-          <div className={styles.secureNote}><span />{isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
+          <div className={styles.secureNote}><span />{isSummarize ? t(K("summary.processingNote")) : isTranslate ? t(K("translate.processingNote")) : t(K("settings.secure"))}</div>
           </aside>
         }
       />
