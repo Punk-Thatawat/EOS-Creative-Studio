@@ -733,7 +733,7 @@ export function DocumentGenerationPage() {
                 <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
               </div>
               {contractTab === "preview" && (
-                <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : ""}`}>
+                <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
                   {selectedFile && canPreviewFile(selectedFile) ? (
                     <DocumentPreview key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} file={selectedFile} running={isContractRunning} zoom={100} pan={false} annotate={false} compareText={null} />
                   ) : (

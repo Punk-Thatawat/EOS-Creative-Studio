@@ -930,3 +930,5 @@
 .contractPartyChoices button:hover { border-color: #f6a17d; }
 .contractPartyChoices button[aria-pressed="true"] { border-color: #f47541; background: #fff8f4; color: #df602d; }
 .contractStage { position: relative; }
+/* No page rail to show (nothing uploaded, or a file that cannot be previewed): one full-width column. Kept last so it also wins over the narrow-screen rule. */
+.previewStageSingle { grid-template-columns: minmax(0, 1fr); }
