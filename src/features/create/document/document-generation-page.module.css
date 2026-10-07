@@ -932,3 +932,6 @@
 .contractStage { position: relative; }
 /* No page rail to show (nothing uploaded, or a file that cannot be previewed): one full-width column. Kept last so it also wins over the narrow-screen rule. */
 .previewStageSingle { grid-template-columns: minmax(0, 1fr); }
+/* The loading card is absolutely positioned for the preview canvas; in the review tab it is centred in its own area instead. */
+.contractLoading { display: grid; min-height: clamp(260px, 50vh, 420px); place-items: center; }
+.contractLoading .summaryLoading { position: static; }

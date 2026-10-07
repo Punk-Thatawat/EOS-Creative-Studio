@@ -26,11 +26,12 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
 import { listDocumentOcrTypes, runDocumentOcr, type DocumentOcrResult, type OcrDocumentTypeId, type OcrDepth, type OcrDocumentTypeInfo, type OcrHistoryItem, type OcrOutputFormat, type OcrStyleChoice } from "@/lib/api/document-ocr";
-import { getContractOptions, reviewContract, type ContractReviewResult, type ContractTypeId } from "@/lib/api/document-contract";
+import { getContractOptions, reviewContract, type ContractHistoryItem, type ContractReviewResult, type ContractTypeId } from "@/lib/api/document-contract";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { CONTRACT_PARTIES, CONTRACT_TYPE_OPTIONS } from "./contract-types";
+import { ContractHistoryPanel } from "./contract-history";
 import { ContractReviewView } from "./contract-review-view";
 import { DEFAULT_OCR_EXTENSIONS, DEFAULT_OCR_MAX_MEGABYTES, OCR_DOCUMENT_TYPE_OPTIONS } from "./ocr-document-types";
 import { canPreviewFile, DocumentPreview } from "./document-preview";
@@ -197,7 +198,10 @@ export function DocumentGenerationPage() {
   const [contractResultName, setContractResultName] = useState("");
   const [contractError, setContractError] = useState("");
   const [isContractRunning, setIsContractRunning] = useState(false);
-  const [contractTab, setContractTab] = useState<"preview" | "review">("preview");
+  const [contractTab, setContractTab] = useState<"preview" | "review" | "history">("preview");
+  const [contractHistoryKey, setContractHistoryKey] = useState(0);
+  /** A review opened from history has no file behind it, so there is nothing to preview or compare. */
+  const [contractFromHistory, setContractFromHistory] = useState(false);
   const [contractCredits, setContractCredits] = useState(3);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const isSummarize = activeMode === "summarize";
@@ -211,7 +215,7 @@ export function DocumentGenerationPage() {
   const hasPreview = (isOcr || isContract) && !!selectedFile && canPreviewFile(selectedFile);
   /** The preview tools (zoom, hand, compare, notes) only apply while the document itself is on show. */
   const showPreviewTools = isOcr ? ocrTab === "preview" : isContract && contractTab === "preview";
-  const compareReady = isContract ? !!contractResult : !!ocrResult && !ocrFromHistory;
+  const compareReady = isContract ? !!contractResult && !contractFromHistory : !!ocrResult && !ocrFromHistory;
   const preferStyled = ocrShowStyled && !!ocrResult?.styledText?.length;
   /** The extracted text for one page of the uploaded document, shown beside it by the Compare tool. */
   const compareText: ((page: number) => string) | null = !hasPreview || !ocrCompare || !compareReady ? null : isContract ? (page: number): string => {
@@ -434,6 +438,16 @@ export function DocumentGenerationPage() {
     setContractParty("");
   };
 
+  /** Shows a review saved in history; its contract is not kept, so only the review itself can be shown. */
+  const openContractFromHistory = (result: ContractReviewResult, item: ContractHistoryItem) => {
+    setContractResult(result);
+    setContractResultName(item.fileName);
+    setContractFromHistory(true);
+    setOcrCompare(false);
+    setContractError("");
+    setContractTab("review");
+  };
+
   const runContract = async () => {
     if (!selectedFile || isContractRunning) return;
     setIsContractRunning(true);
@@ -444,7 +458,9 @@ export function DocumentGenerationPage() {
       const result = await reviewContract({ file: selectedFile, contractType, language: contractLanguage, ...(contractParty ? { party: contractParty } : {}) });
       setContractResult(result);
       setContractResultName(selectedFile.name);
+      setContractFromHistory(false);
       setContractCredits(result.creditsUsed);
+      setContractHistoryKey((key) => key + 1);
     } catch (error) {
       setContractTab("preview");
       setContractError(error instanceof Error ? error.message : t(K("contract.errorGeneral")));
@@ -723,6 +739,7 @@ export function DocumentGenerationPage() {
               <div className={styles.previewTabs} role="tablist" aria-label={t(K("contract.tab.label"))}>
                 <button type="button" role="tab" aria-selected={contractTab === "preview"} className={contractTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setContractTab("preview")}>{t(K("contract.tab.preview"))}</button>
                 <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
+                <button type="button" role="tab" aria-selected={contractTab === "history"} className={contractTab === "history" ? styles.previewTabActive : undefined} onClick={() => setContractTab("history")}>{t(K("contract.tab.history"))}</button>
               </div>
               {contractTab === "preview" && (
                 <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
@@ -742,12 +759,22 @@ export function DocumentGenerationPage() {
               {contractTab === "review" && (
                 <div className={styles.ocrResultsPanel}>
                   {isContractRunning ? (
-                    <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("contract.loading"))}</strong><span>{t(K("contract.loadingHint"))}</span></div>
+                    <div className={styles.contractLoading}>
+                      <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("contract.loading"))}</strong><span>{t(K("contract.loadingHint"))}</span></div>
+                    </div>
                   ) : contractResult ? (
-                    <ContractReviewView review={contractResult.review} fileName={contractResultName} creditsUsed={contractResult.creditsUsed} />
+                    <>
+                      {contractFromHistory && <div className={styles.ocrNotice} role="status">{t(K("contract.history.notice"))}</div>}
+                      <ContractReviewView review={contractResult.review} fileName={contractResultName} creditsUsed={contractResult.creditsUsed} />
+                    </>
                   ) : (
                     <p className={styles.ocrMissing}>{t(K("contract.reviewEmpty"))}</p>
                   )}
+                </div>
+              )}
+              {contractTab === "history" && (
+                <div className={styles.ocrResultsPanel}>
+                  <ContractHistoryPanel refreshKey={contractHistoryKey} onOpen={openContractFromHistory} />
                 </div>
               )}
             </>
