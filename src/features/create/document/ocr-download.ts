@@ -35,7 +35,7 @@ export function ocrResultToJson(result: DocumentOcrResult): string {
   }, null, 2);
 }
 
-function downloadBlob(filename: string, blob: Blob) {
+export function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

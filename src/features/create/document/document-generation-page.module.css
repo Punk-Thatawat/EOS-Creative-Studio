@@ -922,3 +922,11 @@
 .exportChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .exportChoices .formatCard { min-height: 58px; }
 .exportMenuHint { margin: 0; color: #59626b; font-size: 12px; line-height: 1.5; }
+.contractParty { display: grid; gap: 8px; margin-top: 14px; }
+.contractParty > strong { color: #343b42; font-size: 12px; font-weight: 800; }
+.contractParty > small { color: #8d949b; font-size: 11px; line-height: 1.5; }
+.contractPartyChoices { display: flex; flex-wrap: wrap; gap: 8px; }
+.contractPartyChoices button { min-height: 34px; border: 1px solid #e6e3df; border-radius: 999px; background: #fff; padding: 0 14px; color: #4d555e; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.contractPartyChoices button:hover { border-color: #f6a17d; }
+.contractPartyChoices button[aria-pressed="true"] { border-color: #f47541; background: #fff8f4; color: #df602d; }
+.contractStage { position: relative; }

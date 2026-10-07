@@ -26,9 +26,12 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
 import { listDocumentOcrTypes, runDocumentOcr, type DocumentOcrResult, type OcrDocumentTypeId, type OcrDepth, type OcrDocumentTypeInfo, type OcrHistoryItem, type OcrOutputFormat, type OcrStyleChoice } from "@/lib/api/document-ocr";
+import { getContractOptions, reviewContract, type ContractReviewResult, type ContractTypeId } from "@/lib/api/document-contract";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { CONTRACT_PARTIES, CONTRACT_TYPE_OPTIONS } from "./contract-types";
+import { ContractReviewView } from "./contract-review-view";
 import { DEFAULT_OCR_EXTENSIONS, DEFAULT_OCR_MAX_MEGABYTES, OCR_DOCUMENT_TYPE_OPTIONS } from "./ocr-document-types";
 import { canPreviewFile, DocumentPreview } from "./document-preview";
 import { buildOcrCards } from "./ocr-cards";
@@ -53,7 +56,7 @@ const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "ocr", icon: ScanText, available: true },
   { id: "summarize", icon: NotebookPen, available: true },
   { id: "translate", icon: Languages },
-  { id: "contract", icon: FileCheck2 },
+  { id: "contract", icon: FileCheck2, available: true },
   { id: "report", icon: BarChart3 },
   { id: "form", icon: ListChecks },
 ];
@@ -174,9 +177,19 @@ export function DocumentGenerationPage() {
   const [ocrResult, setOcrResult] = useState<DocumentOcrResult | null>(null);
   const [ocrError, setOcrError] = useState("");
   const [isOcrRunning, setIsOcrRunning] = useState(false);
+  const [contractType, setContractType] = useState<ContractTypeId>("auto");
+  const [contractParty, setContractParty] = useState("");
+  const [contractLanguage, setContractLanguage] = useState<"auto" | "English" | "Thai">(locale === "en" ? "English" : "Thai");
+  const [contractResult, setContractResult] = useState<ContractReviewResult | null>(null);
+  const [contractResultName, setContractResultName] = useState("");
+  const [contractError, setContractError] = useState("");
+  const [isContractRunning, setIsContractRunning] = useState(false);
+  const [contractTab, setContractTab] = useState<"preview" | "review">("preview");
+  const [contractCredits, setContractCredits] = useState(3);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const isSummarize = activeMode === "summarize";
   const isOcr = activeMode === "ocr";
+  const isContract = activeMode === "contract";
   const ocrTypeInfo = ocrTypes.find((type) => type.id === ocrType);
   const ocrExtensions: readonly string[] = ocrTypeInfo?.extensions ?? DEFAULT_OCR_EXTENSIONS;
   const ocrMaxMegabytes = ocrTypeInfo?.maxMegabytes ?? DEFAULT_OCR_MAX_MEGABYTES;
@@ -223,6 +236,14 @@ export function DocumentGenerationPage() {
 
   useEffect(() => {
     let mounted = true;
+    void getContractOptions().then((options) => {
+      if (mounted) setContractCredits(options.credits);
+    }).catch(() => undefined);
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
     void listDocumentOcrTypes().then((types) => {
       if (mounted) setOcrTypes(types);
     }).catch(() => undefined);
@@ -253,12 +274,13 @@ export function DocumentGenerationPage() {
         return;
       }
     } else {
+      const reportProblem = isContract ? setContractError : setSummaryError;
       if (!extension || !["pdf", "docx", "png", "jpg", "jpeg"].includes(extension)) {
-        setSummaryError(t(K("summary.errorType")));
+        reportProblem(t(K("summary.errorType")));
         return;
       }
       if (file.size > 25 * 1024 * 1024) {
-        setSummaryError(t(K("summary.errorSize")));
+        reportProblem(t(K("summary.errorSize")));
         return;
       }
     }
@@ -270,6 +292,9 @@ export function DocumentGenerationPage() {
     setOcrResult(null);
     setOcrTab("preview");
     setOcrError("");
+    setContractResult(null);
+    setContractTab("preview");
+    setContractError("");
   };
 
   useEffect(() => {
@@ -385,6 +410,31 @@ export function DocumentGenerationPage() {
     }
   };
 
+  const changeContractType = (id: ContractTypeId) => {
+    setContractType(id);
+    // The sides depend on the kind of contract, so a side picked for another kind no longer applies.
+    setContractParty("");
+  };
+
+  const runContract = async () => {
+    if (!selectedFile || isContractRunning) return;
+    setIsContractRunning(true);
+    setContractError("");
+    setContractResult(null);
+    setContractTab("review");
+    try {
+      const result = await reviewContract({ file: selectedFile, contractType, language: contractLanguage, ...(contractParty ? { party: contractParty } : {}) });
+      setContractResult(result);
+      setContractResultName(selectedFile.name);
+      setContractCredits(result.creditsUsed);
+    } catch (error) {
+      setContractTab("preview");
+      setContractError(error instanceof Error ? error.message : t(K("contract.errorGeneral")));
+    } finally {
+      setIsContractRunning(false);
+    }
+  };
+
   const generateSummary = async () => {
     if (!selectedFile || isSummarizing) return;
     setIsSummarizing(true);
@@ -481,9 +531,9 @@ export function DocumentGenerationPage() {
             <span className={styles.fileCopy}><strong>{selectedFile?.name ?? t(K("source.filesTitle"))}</strong><small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("source.filesHint"))}</small></span>
             <button type="button" className={styles.replaceFileButton} aria-label={t(K("source.chooseFile"))} onClick={() => uploadInputRef.current?.click()}><Plus size={16} aria-hidden="true" /></button>
           </div>
-          {!isOcr && <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />}
+          {!isOcr && !isContract && <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />}
           <div className={styles.sectionRule} />
-          <PanelHeading step="2">{isOcr ? t(K("ocr.typeHeading")) : isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
+          <PanelHeading step="2">{isOcr ? t(K("ocr.typeHeading")) : isContract ? t(K("contract.typeHeading")) : isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
           {isOcr ? (
             <div className={styles.ocrTypeGrid} role="radiogroup" aria-label={t(K("ocr.typeHeading"))}>
               {OCR_DOCUMENT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => (
@@ -500,6 +550,37 @@ export function DocumentGenerationPage() {
                 </button>
               ))}
             </div>
+          ) : isContract ? (
+            <>
+              <div className={styles.ocrTypeGrid} role="radiogroup" aria-label={t(K("contract.typeHeading"))}>
+                {CONTRACT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={contractType === id}
+                    className={`${styles.ocrTypeButton} ${contractType === id ? styles.ocrTypeActive : ""}`}
+                    onClick={() => changeContractType(id)}
+                  >
+                    <TypeIcon size={15} aria-hidden="true" />
+                    <span>{t(K(`contract.type.${id}`))}</span>
+                  </button>
+                ))}
+              </div>
+              {CONTRACT_PARTIES[contractType].length > 0 && (
+                <div className={styles.contractParty}>
+                  <strong>{t(K("contract.partyHeading"))}</strong>
+                  <small>{t(K("contract.partyHint"))}</small>
+                  <div className={styles.contractPartyChoices}>
+                    <button type="button" aria-pressed={contractParty === ""} onClick={() => setContractParty("")}>{t(K("contract.partyAny"))}</button>
+                    {CONTRACT_PARTIES[contractType].map((party) => {
+                      const label = t(K(`contract.party.${party}`));
+                      return <button key={party} type="button" aria-pressed={contractParty === label} onClick={() => setContractParty(label)}>{label}</button>;
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
           ) : isSummarize ? (
             <>
               <div className={styles.summaryPrompt}>
@@ -530,7 +611,7 @@ export function DocumentGenerationPage() {
               <small>0 / 600</small>
             </div>
           )}
-          {!isOcr && <div className={styles.checkList}>
+          {!isOcr && !isContract && <div className={styles.checkList}>
             {isSummarize ? (
               <>
                 <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.keyTakeaways} onChange={(event) => setFocusAreas((current) => ({ ...current, keyTakeaways: event.target.checked }))} />{t(K("summary.checkTakeaways"))}</label>
@@ -550,8 +631,8 @@ export function DocumentGenerationPage() {
         preview={
           <main className={styles.previewPanel} aria-label={t(K("a11y.preview"))}>
           <div className={styles.previewHeader}>
-            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : t(K("preview.canvas"))}</small></div>
-            {isOcr ? (
+            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : isContract ? t(K("contract.workspace")) : t(K("preview.canvas"))}</small></div>
+            {isContract ? null : isOcr ? (
               <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
                 {ocrTab === "preview" && (
                   <>
@@ -645,7 +726,42 @@ export function DocumentGenerationPage() {
             </div>
           )}
 
-          {(!isOcr || ocrTab === "preview") && (
+          {isContract && (
+            <>
+              <div className={styles.previewTabs} role="tablist" aria-label={t(K("contract.tab.label"))}>
+                <button type="button" role="tab" aria-selected={contractTab === "preview"} className={contractTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setContractTab("preview")}>{t(K("contract.tab.preview"))}</button>
+                <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
+              </div>
+              {contractTab === "preview" && (
+                <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : ""}`}>
+                  {selectedFile && canPreviewFile(selectedFile) ? (
+                    <DocumentPreview key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} file={selectedFile} running={isContractRunning} zoom={100} pan={false} annotate={false} compareText={null} />
+                  ) : (
+                    <div className={styles.canvas}>
+                      <div className={styles.canvasEmptyState}>
+                        <span><FileText size={22} aria-hidden="true" /></span>
+                        <strong>{selectedFile ? selectedFile.name : t(K("contract.emptyTitle"))}</strong>
+                        <small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("contract.emptyHint"))}</small>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {contractTab === "review" && (
+                <div className={styles.ocrResultsPanel}>
+                  {isContractRunning ? (
+                    <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("contract.loading"))}</strong><span>{t(K("contract.loadingHint"))}</span></div>
+                  ) : contractResult ? (
+                    <ContractReviewView review={contractResult.review} fileName={contractResultName} creditsUsed={contractResult.creditsUsed} />
+                  ) : (
+                    <p className={styles.ocrMissing}>{t(K("contract.reviewEmpty"))}</p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {!isContract && (!isOcr || ocrTab === "preview") && (
             <>
           <div className={`${styles.previewStage} ${isSummarize ? styles.previewStageSummary : ""} ${isOcr && selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : ""}`}>
             {isSummarize ? (
@@ -789,13 +905,13 @@ export function DocumentGenerationPage() {
           <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
           <div className={styles.settingGroup}>
             <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
-            {isSummarize || isOcr ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{isOcr ? t(K("ocr.modelName")) : t(K("summary.modelName"))}</strong><small>{isOcr ? t(K("ocr.modelHint")) : t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
+            {isSummarize || isOcr || isContract ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{isOcr ? t(K("ocr.modelName")) : isContract ? t(K("contract.modelName")) : t(K("summary.modelName"))}</strong><small>{isOcr ? t(K("ocr.modelHint")) : isContract ? t(K("contract.modelHint")) : t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
               <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("settings.standard"))}</strong><small>{t(K("settings.standardHint"))}</small></div>
               <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
             </div>}
           </div>
           {/* Gen Document picks its file format from the Export button instead of here. */}
-          {!isOcr && (
+          {!isOcr && !isContract && (
             <div className={styles.settingGroup}>
               <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
               <div className={styles.formatCards}>
@@ -872,6 +988,8 @@ export function DocumentGenerationPage() {
                 </label>
               )}
             </>
+          ) : isContract ? (
+            <SelectControl label={t(K("settings.language"))} value={contractLanguage} onChange={(value) => setContractLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
           ) : isSummarize ? (
             <>
               <SelectControl label={t(K("settings.language"))} value={summaryLanguage} onChange={(value) => setSummaryLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
@@ -887,14 +1005,14 @@ export function DocumentGenerationPage() {
               <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
             </>
           )}
-          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
+          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isContract ? t(K("contract.credits"), { value: contractCredits }) : isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
           {isOcr && showStyleCredits && <div className={styles.summaryFocusNote}>{t(K("ocr.styleCreditsNote"), { value: ocrTypeInfo?.styleCredits ?? 0 })}</div>}
-          <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr) || !selectedFile || isSummarizing || isOcrRunning} onClick={() => void (isOcr ? runOcr() : generateSummary())}>
-            <span>{isOcrRunning ? t(K("ocr.running")) : isSummarizing ? t(K("summary.generating")) : isOcr ? t(K("ocr.run")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
+          <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr && !isContract) || !selectedFile || isSummarizing || isOcrRunning || isContractRunning} title={isContract && !selectedFile ? t(K("contract.needFile")) : undefined} onClick={() => void (isOcr ? runOcr() : isContract ? runContract() : generateSummary())}>
+            <span>{isOcrRunning ? t(K("ocr.running")) : isContractRunning ? t(K("contract.running")) : isSummarizing ? t(K("summary.generating")) : isOcr ? t(K("ocr.run")) : isContract ? t(K("contract.run")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
             <Sparkles size={17} aria-hidden="true" />
           </button>
-          {(isOcr ? ocrError : summaryError) && <div className={styles.summaryError} role="alert">{isOcr ? ocrError : summaryError}</div>}
-          <div className={styles.secureNote}><span />{isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
+          {(isOcr ? ocrError : isContract ? contractError : summaryError) && <div className={styles.summaryError} role="alert">{isOcr ? ocrError : isContract ? contractError : summaryError}</div>}
+          <div className={styles.secureNote}><span />{isContract ? t(K("contract.secure")) : isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
           </aside>
         }
       />
