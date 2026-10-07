@@ -5,19 +5,6 @@
 .headText small { color: #8d949b; font-size: 11px; overflow-wrap: anywhere; }
 .badge { justify-self: start; border-radius: 999px; background: #fff1e9; padding: 3px 10px; color: var(--doc-orange, #df602d); font-size: 11px; font-weight: 800; }
 
-.exportWrap { position: relative; display: inline-flex; flex: none; }
-.exportButton { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; border: 1px solid #e2e3e5; border-radius: 8px; background: #fff; padding: 0 12px; color: #59626b; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-.exportButton:hover:not(:disabled) { border-color: #f6a17d; color: var(--doc-orange, #df602d); }
-.exportButton:disabled { cursor: progress; opacity: 0.6; }
-.menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; display: grid; width: 260px; max-width: calc(100vw - 32px); gap: 6px; border: 1px solid #ece9e6; border-radius: 10px; background: #fff; padding: 10px; box-shadow: 0 10px 28px rgb(37 42 47 / 14%); }
-.menu small { color: #8d949b; font-size: 11px; font-weight: 700; }
-.menuChoices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.menuChoices button { display: grid; min-height: 58px; place-items: center; gap: 4px; border: 1px solid #e8e6e3; border-radius: 7px; background: #fff; color: #7c858d; font: inherit; cursor: pointer; }
-.menuChoices button:hover { border-color: #f6a17d; color: var(--doc-orange, #df602d); }
-.menuChoices span { font-size: 11px; font-weight: 850; }
-
-.error { border: 1px solid #f2d9a6; border-radius: 8px; background: #fff9ec; padding: 10px 12px; color: #8a6414; font-size: 12px; }
-
 .card { min-width: 0; border: 1px solid #ece9e6; border-radius: 10px; background: #fff; padding: 14px 16px; }
 .card h4 { margin: 0 0 10px; color: #343b42; font-size: 12px; font-weight: 850; }
 .summary { margin: 0; color: #343b42; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }

@@ -34,6 +34,8 @@ import { CONTRACT_PARTIES, CONTRACT_TYPE_OPTIONS } from "./contract-types";
 import { ContractReviewView } from "./contract-review-view";
 import { DEFAULT_OCR_EXTENSIONS, DEFAULT_OCR_MAX_MEGABYTES, OCR_DOCUMENT_TYPE_OPTIONS } from "./ocr-document-types";
 import { canPreviewFile, DocumentPreview } from "./document-preview";
+import { contractToText, downloadContractReview } from "./contract-export";
+import { ExportMenu } from "./export-menu";
 import { buildOcrCards } from "./ocr-cards";
 import { downloadOcrResult, ocrResultToText } from "./ocr-download";
 import { OcrHistoryPanel } from "./ocr-history";
@@ -41,13 +43,6 @@ import { OcrFullTextView, OcrResultView } from "./ocr-result-view";
 import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
-
-const EXPORT_CHOICES: ReadonlyArray<{ id: OcrOutputFormat; label: string }> = [
-  { id: "docx", label: "DOCX" },
-  { id: "pdf", label: "PDF" },
-  { id: "txt", label: "TXT" },
-  { id: "json", label: "JSON" },
-];
 
 type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
 type SummaryStyle = "executive" | "bullets";
@@ -92,6 +87,10 @@ function Lines({ text }: { text: string }) {
     </Fragment>
   ));
 }
+
+/** Which tool is open lives in the URL (`?mode=contract`), so a refresh or a shared link comes back to the same tool. */
+const MODE_PARAM = "mode";
+const modeFromId = (value: string | null) => modes.find((mode) => mode.id === value && mode.available)?.id;
 
 function PanelHeading({ step, children }: { step: string; children: string }) {
   return (
@@ -139,6 +138,21 @@ function formatFileSize(bytes: number): string {
 export function DocumentGenerationPage() {
   const { locale, t } = useLocale();
   const [activeMode, setActiveMode] = useState<ModeId>("ocr");
+
+  // The URL is only known in the browser, so the saved tool is picked up right after the first render.
+  useEffect(() => {
+    const saved = modeFromId(new URLSearchParams(window.location.search).get(MODE_PARAM));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved) setActiveMode(saved);
+  }, []);
+
+  const selectMode = (id: ModeId) => {
+    setActiveMode(id);
+    const url = new URL(window.location.href);
+    if (id === "ocr") url.searchParams.delete(MODE_PARAM);
+    else url.searchParams.set(MODE_PARAM, id);
+    window.history.replaceState(window.history.state, "", url);
+  };
   const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("executive");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [summaryPrompt, setSummaryPrompt] = useState("");
@@ -171,8 +185,7 @@ export function DocumentGenerationPage() {
   const [ocrShowStyled, setOcrShowStyled] = useState(true);
   const [ocrResultPages, setOcrResultPages] = useState<number[] | null>(null);
   const [isToolbarExporting, setIsToolbarExporting] = useState(false);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const exportMenuRef = useRef<HTMLSpanElement>(null);
+  const [isContractExporting, setIsContractExporting] = useState(false);
   const [ocrStyle, setOcrStyle] = useState<OcrStyleChoice>("original");
   const [ocrResult, setOcrResult] = useState<DocumentOcrResult | null>(null);
   const [ocrError, setOcrError] = useState("");
@@ -195,19 +208,26 @@ export function DocumentGenerationPage() {
   const ocrMaxMegabytes = ocrTypeInfo?.maxMegabytes ?? DEFAULT_OCR_MAX_MEGABYTES;
   const selectedIsPdf = selectedFile?.name.toLowerCase().endsWith(".pdf") ?? true;
   const pdfPageCount = pdfInfo && pdfInfo.file === selectedFile ? pdfInfo.count : null;
-  const hasPreview = isOcr && !!selectedFile && canPreviewFile(selectedFile);
+  const hasPreview = (isOcr || isContract) && !!selectedFile && canPreviewFile(selectedFile);
+  /** The preview tools (zoom, hand, compare, notes) only apply while the document itself is on show. */
+  const showPreviewTools = isOcr ? ocrTab === "preview" : isContract && contractTab === "preview";
+  const compareReady = isContract ? !!contractResult : !!ocrResult && !ocrFromHistory;
   const preferStyled = ocrShowStyled && !!ocrResult?.styledText?.length;
   /** The extracted text for one page of the uploaded document, shown beside it by the Compare tool. */
-  const compareText = hasPreview && ocrCompare && ocrResult && !ocrFromHistory ? (page: number): string => {
+  const compareText: ((page: number) => string) | null = !hasPreview || !ocrCompare || !compareReady ? null : isContract ? (page: number): string => {
+    // A contract review is about the whole document, so it sits beside the first page.
+    if (page !== 1 || !contractResult) return t(K("contract.compareOtherPages"));
+    return contractToText(contractResult.review, t);
+  } : (page: number): string => {
+    if (!ocrResult) return "";
     const index = ocrResultPages ? ocrResultPages.indexOf(page) : page - 1;
     if (index < 0) return t(K("ocr.compareOutOfRange"));
     if (ocrResult.layout?.length) return ocrResult.layout[index]?.components.map((component) => component.text).join("\n\n") ?? "";
     const pages = preferStyled ? ocrResult.styledText ?? ocrResult.text : ocrResult.text;
     return pages.length ? pages[index] ?? "" : ocrResultToText(ocrResult, locale, t);
-  } : null;
+  };
   const exportFromToolbar = async (format: OcrOutputFormat) => {
     if (!ocrResult || isToolbarExporting) return;
-    setExportMenuOpen(false);
     setIsToolbarExporting(true);
     try {
       // The Word / PDF iApp drew is only right for the format it was made in; any other choice is built from the result.
@@ -218,6 +238,17 @@ export function DocumentGenerationPage() {
       setOcrError(t(K("ocr.exportFailed")));
     } finally {
       setIsToolbarExporting(false);
+    }
+  };
+  const exportContract = async (format: OcrOutputFormat) => {
+    if (!contractResult || isContractExporting) return;
+    setIsContractExporting(true);
+    try {
+      await downloadContractReview({ review: contractResult.review, fileName: contractResultName, format, t });
+    } catch {
+      setContractError(t(K("ocr.exportFailed")));
+    } finally {
+      setIsContractExporting(false);
     }
   };
   // iApp itself produces DOCX / PDF for plain general OCR (it keeps the scan's layout). Every other combination is
@@ -249,19 +280,6 @@ export function DocumentGenerationPage() {
     }).catch(() => undefined);
     return () => { mounted = false; };
   }, []);
-
-  useEffect(() => {
-    if (!exportMenuOpen) return;
-    const close = (event: Event) => {
-      if (event instanceof KeyboardEvent ? event.key === "Escape" : !exportMenuRef.current?.contains(event.target as Node)) setExportMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-    };
-  }, [exportMenuOpen]);
 
   const setFileFromList = (files: FileList | null) => {
     const file = files?.[0];
@@ -499,7 +517,7 @@ export function DocumentGenerationPage() {
                   aria-pressed={isActive}
                   aria-disabled={!available}
                   title={available ? label : t(K("mode.comingSoon"), { label })}
-                  onClick={() => available && setActiveMode(id)}
+                  onClick={() => available && selectMode(id)}
                 >
                   <Icon size={16} strokeWidth={2} aria-hidden="true" />
                   <span>{label}</span>
@@ -632,9 +650,9 @@ export function DocumentGenerationPage() {
           <main className={styles.previewPanel} aria-label={t(K("a11y.preview"))}>
           <div className={styles.previewHeader}>
             <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : isContract ? t(K("contract.workspace")) : t(K("preview.canvas"))}</small></div>
-            {isContract ? null : isOcr ? (
+            {isOcr || isContract ? (
               <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
-                {ocrTab === "preview" && (
+                {showPreviewTools && (
                   <>
                 <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomIn"))} title={hasPreview ? t(K("ocr.tool.zoomIn")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom >= 300} onClick={() => setOcrZoom((zoom) => Math.min(300, zoom + 25))}>
                   <ZoomIn size={14} aria-hidden="true" />
@@ -659,7 +677,7 @@ export function DocumentGenerationPage() {
                   <Hand size={14} aria-hidden="true" />
                 </button>
                 <span className={styles.toolbarDivider} />
-                <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !ocrResult ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !ocrResult || ocrFromHistory} onClick={() => setOcrCompare((value) => !value)}>
+                <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !compareReady ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !compareReady} onClick={() => setOcrCompare((value) => !value)}>
                   <Columns2 size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.compare"))}</span>
                 </button>
                 <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); }}>
@@ -667,41 +685,15 @@ export function DocumentGenerationPage() {
                 </button>
                   </>
                 )}
-                <span className={styles.exportMenuWrap} ref={exportMenuRef}>
-                  <button type="button" className={`${styles.toolbarButton} ${exportMenuOpen ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.export"))} aria-haspopup="menu" aria-expanded={exportMenuOpen} title={ocrResult ? t(K("ocr.tool.exportHint")) : t(K("ocr.tool.needResult"))} disabled={isToolbarExporting} onClick={() => setExportMenuOpen((open) => !open)}>
-                    <Download size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{isToolbarExporting ? t(K("ocr.exporting")) : t(K("preview.export"))}</span>
-                  </button>
-                  {exportMenuOpen && (
-                    <div className={styles.exportMenu} role="menu" aria-label={t(K("ocr.exportAs"))}>
-                      <small>{t(K("ocr.exportAs"))}</small>
-                      <div className={styles.exportChoices}>
-                        {EXPORT_CHOICES.map((choice) => {
-                          // Before a document is read, a choice sets the format the next run will produce instead.
-                          const unavailable = !ocrResult && !!ocrTypeInfo && !ocrTypeInfo.outputFormats.includes(choice.id);
-                          return (
-                            <button
-                              key={choice.id}
-                              type="button"
-                              role="menuitemradio"
-                              aria-checked={ocrFormat === choice.id}
-                              disabled={unavailable}
-                              className={`${styles.formatCard} ${styles.formatButton} ${ocrFormat === choice.id ? styles.formatCardActive : ""}`}
-                              title={t(K(`ocr.exportAs.${choice.id}`))}
-                              onClick={() => {
-                                if (ocrResult) return void exportFromToolbar(choice.id);
-                                setOcrFormat(choice.id);
-                                setExportMenuOpen(false);
-                              }}
-                            >
-                              <FileText size={18} aria-hidden="true" /><span>{choice.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {!ocrResult && <p className={styles.exportMenuHint} role="status">{t(K("ocr.exportNeedResult"))}</p>}
-                    </div>
-                  )}
-                </span>
+                <ExportMenu
+                  hasResult={isContract ? !!contractResult : !!ocrResult}
+                  busy={isContract ? isContractExporting : isToolbarExporting}
+                  {...(isOcr ? { active: ocrFormat } : {})}
+                  // Before a document is read, an OCR card sets the format the next run will produce instead.
+                  isUnavailable={(format) => (isContract ? !contractResult : !ocrResult && !!ocrTypeInfo && !ocrTypeInfo.outputFormats.includes(format))}
+                  hint={isContract ? t(K("contract.exportNeedResult")) : t(K("ocr.exportNeedResult"))}
+                  onPick={(format) => (isContract ? void exportContract(format) : ocrResult ? void exportFromToolbar(format) : setOcrFormat(format))}
+                />
               </div>
             ) : (
               <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
@@ -735,7 +727,7 @@ export function DocumentGenerationPage() {
               {contractTab === "preview" && (
                 <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
                   {selectedFile && canPreviewFile(selectedFile) ? (
-                    <DocumentPreview key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} file={selectedFile} running={isContractRunning} zoom={100} pan={false} annotate={false} compareText={null} />
+                    <DocumentPreview key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} file={selectedFile} running={isContractRunning} zoom={ocrZoom} pan={ocrPan} annotate={ocrAnnotate} compareText={compareText} />
                   ) : (
                     <div className={styles.canvas}>
                       <div className={styles.canvasEmptyState}>
