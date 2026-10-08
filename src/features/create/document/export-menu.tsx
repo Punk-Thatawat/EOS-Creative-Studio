@@ -8,7 +8,7 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
-const FORMATS: ReadonlyArray<{ id: OcrOutputFormat; label: string }> = [
+const DEFAULT_FORMATS: ReadonlyArray<{ id: OcrOutputFormat; label: string }> = [
   { id: "docx", label: "DOCX" },
   { id: "pdf", label: "PDF" },
   { id: "txt", label: "TXT" },
@@ -19,22 +19,25 @@ const FORMATS: ReadonlyArray<{ id: OcrOutputFormat; label: string }> = [
  * The "Export" button of the preview toolbar: always clickable, it opens an "Export as" menu with one card per file
  * format. What a card does is up to the caller (download a result, or remember the choice before there is one).
  */
-export function ExportMenu({
+export function ExportMenu<F extends string = OcrOutputFormat>({
   hasResult,
   busy,
   active,
   isUnavailable,
   hint,
   onPick,
+  formats = DEFAULT_FORMATS as unknown as ReadonlyArray<{ id: F; label: string }>,
 }: {
   hasResult: boolean;
   busy: boolean;
   /** The format to highlight, if the menu is also a way of choosing one. */
-  active?: OcrOutputFormat;
-  isUnavailable?: (format: OcrOutputFormat) => boolean;
+  active?: F;
+  isUnavailable?: (format: F) => boolean;
   /** Explains what the menu can do while there is nothing to export yet. */
   hint: string;
-  onPick: (format: OcrOutputFormat) => void;
+  onPick: (format: F) => void;
+  /** The cards to offer; DOCX, PDF, TXT and JSON unless a tool exports something else too. */
+  formats?: ReadonlyArray<{ id: F; label: string }>;
 }) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
@@ -72,7 +75,7 @@ export function ExportMenu({
         <div className={styles.exportMenu} role="menu" aria-label={t(K("ocr.exportAs"))}>
           <small>{t(K("ocr.exportAs"))}</small>
           <div className={styles.exportChoices}>
-            {FORMATS.map((format) => (
+            {formats.map((format) => (
               <button
                 key={format.id}
                 type="button"

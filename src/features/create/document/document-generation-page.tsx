@@ -27,23 +27,39 @@ import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-la
 import { Dropdown } from "@/components/ui/dropdown";
 import { listDocumentOcrTypes, runDocumentOcr, type DocumentOcrResult, type OcrDocumentTypeId, type OcrDepth, type OcrDocumentTypeInfo, type OcrHistoryItem, type OcrOutputFormat, type OcrStyleChoice } from "@/lib/api/document-ocr";
 import { getContractOptions, reviewContract, type ContractHistoryItem, type ContractReviewResult, type ContractTypeId } from "@/lib/api/document-contract";
+import { getFormDocument, getFormOptions, readForm, saveFormEdits, type FormBox, type FormField, type FormHistoryItem, type FormReadResult } from "@/lib/api/document-form";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { CONTRACT_PARTIES, CONTRACT_TYPE_OPTIONS } from "./contract-types";
 import { ContractHistoryPanel } from "./contract-history";
+import { downloadFormResult, formToJson, formToText, LOW_CONFIDENCE, type FormExportFormat } from "./form-export";
+import { FormToolbar, type FitMode, type FormTool } from "./form-toolbar";
+import { FormHistoryPanel } from "./form-history";
+import { FormResultsView } from "./form-results-view";
+import { jpegPagesToFile, pagesToDocx } from "./edited-document";
+import { DEFAULT_HIGHLIGHT, DEFAULT_MARK_STYLE, marksToPdf, type MarkStyle, type MarkTool, type PageMark, type PreviewHandle } from "./preview-marks";
+import { SignaturePad } from "./signature-pad";
 import { ContractReviewView } from "./contract-review-view";
 import { DEFAULT_OCR_EXTENSIONS, DEFAULT_OCR_MAX_MEGABYTES, OCR_DOCUMENT_TYPE_OPTIONS } from "./ocr-document-types";
-import { canPreviewFile, DocumentPreview } from "./document-preview";
+import { canPreviewFile, DocumentPreview, type PreviewOverlayBox, type PreviewRotation } from "./document-preview";
 import { contractToText, downloadContractReview } from "./contract-export";
 import { ExportMenu } from "./export-menu";
 import { buildOcrCards } from "./ocr-cards";
-import { downloadOcrResult, ocrResultToText } from "./ocr-download";
+import { downloadBlob, downloadOcrResult, ocrResultToText } from "./ocr-download";
 import { OcrHistoryPanel } from "./ocr-history";
 import { OcrFullTextView, OcrResultView } from "./ocr-result-view";
 import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
+
+const FORM_EXPORT_FORMATS: ReadonlyArray<{ id: FormExportFormat; label: string }> = [
+  { id: "docx", label: "DOCX" },
+  { id: "pdf", label: "PDF" },
+  { id: "csv", label: "CSV" },
+  { id: "txt", label: "TXT" },
+  { id: "json", label: "JSON" },
+];
 
 type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
 type SummaryStyle = "executive" | "bullets";
@@ -54,7 +70,7 @@ const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "translate", icon: Languages },
   { id: "contract", icon: FileCheck2, available: true },
   { id: "report", icon: BarChart3 },
-  { id: "form", icon: ListChecks },
+  { id: "form", icon: ListChecks, available: true },
 ];
 
 const outputs = [
@@ -203,18 +219,75 @@ export function DocumentGenerationPage() {
   /** A review opened from history has no file behind it, so there is nothing to preview or compare. */
   const [contractFromHistory, setContractFromHistory] = useState(false);
   const [contractCredits, setContractCredits] = useState(3);
+  const [formOptions, setFormOptions] = useState({ credits: 3, maxPages: 5 });
+  const [formHow, setFormHow] = useState<"auto" | "custom">("auto");
+  const [formFieldNames, setFormFieldNames] = useState("");
+  const [formResult, setFormResult] = useState<FormReadResult | null>(null);
+  /** The fields as the user has corrected them; the exports and the history download use these. */
+  const [formFields, setFormFields] = useState<FormField[]>([]);
+  const [formResultName, setFormResultName] = useState("");
+  /** A reading opened from history has no form behind it, so there is nothing to show boxes on. */
+  const [formFromHistory, setFormFromHistory] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [isFormRunning, setIsFormRunning] = useState(false);
+  const [isFormExporting, setIsFormExporting] = useState(false);
+  const [formTab, setFormTab] = useState<"preview" | "results" | "history">("preview");
+  /** Whether the values read are written inside their boxes on the form. */
+  const [formShowValues, setFormShowValues] = useState(false);
+  const [formHistoryKey, setFormHistoryKey] = useState(0);
+  const [formSelectedId, setFormSelectedId] = useState<string | null>(null);
+  /** What the pointer does on the form page; one thing at a time, like a PDF reader. */
+  const [formTool, setFormTool] = useState<FormTool>("select");
+  const formDraw = formTool === "draw";
+  const setFormDraw = (on: boolean) => setFormTool((current) => (on ? "draw" : current === "draw" ? "select" : current));
+  const [formFit, setFormFit] = useState<{ mode: FitMode; nonce: number }>({ mode: "width", nonce: 0 });
+  const [formReflow, setFormReflow] = useState(false);
+  /** Signed once, placed as often as needed. */
+  const [formSignature, setFormSignature] = useState<{ url: string; ratio: number } | null>(null);
+  const [signaturePadOpen, setSignaturePadOpen] = useState(false);
+  const [isSavingMarks, setIsSavingMarks] = useState(false);
+  /** The history entry the changes are saved into, and whether its pages are already kept there. */
+  const [formHistoryId, setFormHistoryId] = useState<string | null>(null);
+  const [formDocumentSaved, setFormDocumentSaved] = useState(false);
+  /** Marks saved earlier, put back on the form when it is opened from history. */
+  const [formInitialMarks, setFormInitialMarks] = useState<PageMark[]>([]);
+  const [formNotice, setFormNotice] = useState("");
+  const formNoticeTimer = useRef<number | undefined>(undefined);
+  const formPreviewRef = useRef<PreviewHandle>(null);
+  /** The font, size and colour the next typed text starts with; changing it also restyles the text that is selected. */
+  const [textStyle, setTextStyle] = useState<MarkStyle>(DEFAULT_MARK_STYLE);
+  const [highlightColor, setHighlightColor] = useState<string>(DEFAULT_HIGHLIGHT);
+  const changeHighlightColor = (color: string) => {
+    setHighlightColor(color);
+    formPreviewRef.current?.applyHighlight(color);
+  };
+  const changeTextStyle = (patch: Partial<MarkStyle>) => {
+    setTextStyle((current) => ({ ...current, ...patch }));
+    formPreviewRef.current?.applyStyle(patch);
+  };
+  const [formRotation, setFormRotation] = useState<PreviewRotation>(0);
+  const [formGoToPage, setFormGoToPage] = useState<{ page: number; nonce: number } | undefined>(undefined);
+  const [formRegion, setFormRegion] = useState<FormBox | null>(null);
+  const [formRegionLabel, setFormRegionLabel] = useState("");
+  const [formRegionValue, setFormRegionValue] = useState("");
+  const nextUserField = useRef(1);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  // On a narrow screen the row of modes scrolls sideways, so the one that is open is brought into view.
+  useEffect(() => {
+    document.querySelector<HTMLElement>('nav[class*="modeTabs"] [aria-pressed="true"]')?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [activeMode]);
   const isSummarize = activeMode === "summarize";
   const isOcr = activeMode === "ocr";
   const isContract = activeMode === "contract";
+  const isForm = activeMode === "form";
   const ocrTypeInfo = ocrTypes.find((type) => type.id === ocrType);
   const ocrExtensions: readonly string[] = ocrTypeInfo?.extensions ?? DEFAULT_OCR_EXTENSIONS;
   const ocrMaxMegabytes = ocrTypeInfo?.maxMegabytes ?? DEFAULT_OCR_MAX_MEGABYTES;
   const selectedIsPdf = selectedFile?.name.toLowerCase().endsWith(".pdf") ?? true;
   const pdfPageCount = pdfInfo && pdfInfo.file === selectedFile ? pdfInfo.count : null;
-  const hasPreview = (isOcr || isContract) && !!selectedFile && canPreviewFile(selectedFile);
+  const hasPreview = (isOcr || isContract || isForm) && !!selectedFile && canPreviewFile(selectedFile);
   /** The preview tools (zoom, hand, compare, notes) only apply while the document itself is on show. */
-  const showPreviewTools = isOcr ? ocrTab === "preview" : isContract && contractTab === "preview";
+  const showPreviewTools = isOcr ? ocrTab === "preview" : isContract ? contractTab === "preview" : false;
   const compareReady = isContract ? !!contractResult && !contractFromHistory : !!ocrResult && !ocrFromHistory;
   const preferStyled = ocrShowStyled && !!ocrResult?.styledText?.length;
   /** The extracted text for one page of the uploaded document, shown beside it by the Compare tool. */
@@ -279,6 +352,14 @@ export function DocumentGenerationPage() {
 
   useEffect(() => {
     let mounted = true;
+    void getFormOptions().then((options) => {
+      if (mounted) setFormOptions({ credits: options.creditsPerPage, maxPages: options.maxPages });
+    }).catch(() => undefined);
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
     void listDocumentOcrTypes().then((types) => {
       if (mounted) setOcrTypes(types);
     }).catch(() => undefined);
@@ -296,9 +377,9 @@ export function DocumentGenerationPage() {
         return;
       }
     } else {
-      const reportProblem = isContract ? setContractError : setSummaryError;
-      if (!extension || !["pdf", "docx", "png", "jpg", "jpeg"].includes(extension)) {
-        reportProblem(t(K("summary.errorType")));
+      const reportProblem = isForm ? setFormError : isContract ? setContractError : setSummaryError;
+      if (!extension || !["pdf", "docx", "png", "jpg", "jpeg"].includes(extension) || (isForm && extension === "docx")) {
+        reportProblem(isForm ? t(K("form.errorType")) : t(K("summary.errorType")));
         return;
       }
       if (file.size > 25 * 1024 * 1024) {
@@ -317,6 +398,19 @@ export function DocumentGenerationPage() {
     setContractResult(null);
     setContractTab("preview");
     setContractError("");
+    setFormResult(null);
+    setFormFields([]);
+    setFormFromHistory(false);
+    setFormTab("preview");
+    setFormError("");
+    setFormSelectedId(null);
+    setFormRegion(null);
+    setFormTool("select");
+    setFormRotation(0);
+    setFormReflow(false);
+    setFormHistoryId(null);
+    setFormDocumentSaved(false);
+    setFormInitialMarks([]);
   };
 
   useEffect(() => {
@@ -432,6 +526,213 @@ export function DocumentGenerationPage() {
     }
   };
 
+  /** The boxes drawn on the form: one per field, the selected one highlighted, plus the region being picked. */
+  const formOverlay: PreviewOverlayBox[] = formFromHistory ? [] : [
+    ...formFields.flatMap((field, index) => field.boxes.map((box): PreviewOverlayBox => ({
+      id: field.id,
+      page: box.page,
+      left: box.left,
+      top: box.top,
+      right: box.right,
+      bottom: box.bottom,
+      label: index + 1,
+      state: field.id === formSelectedId ? "selected" : field.confidence < LOW_CONFIDENCE ? "low" : "normal",
+      // A value shows on the form when "show values" is on, and always once the person has corrected it.
+      ...((formShowValues && field.value) || (field.original !== undefined && field.original !== field.value) ? { value: field.value } : {}),
+    }))),
+    ...(formRegion ? [{ id: "region", ...formRegion, label: "+", state: "region" as const }] : []),
+  ];
+
+  /** The text the OCR found inside a box, in reading order. */
+  const textInBox = (box: FormBox): string => {
+    const inside = (formResult?.blocks ?? []).filter((block) => {
+      const x = (block.left + block.right) / 2;
+      const y = (block.top + block.bottom) / 2;
+      return block.page === box.page && x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+    });
+    return inside.sort((a, b) => a.top - b.top || a.left - b.left).map((block) => block.text).join(" ");
+  };
+
+  const handleFormDrawn = (page: number, box: { left: number; top: number; right: number; bottom: number }) => {
+    const region = { page, ...box };
+    setFormRegion(region);
+    setFormRegionLabel("");
+    setFormRegionValue(textInBox(region));
+    setFormSelectedId(null);
+    setFormDraw(false);
+  };
+
+  const addRegionField = () => {
+    const label = formRegionLabel.trim();
+    if (!formRegion || !label) return;
+    const id = `u${nextUserField.current++}`;
+    // The person drew this box and typed this name, so there is nothing for the AI to be unsure about.
+    setFormFields((current) => [...current, { id, label, value: formRegionValue.trim(), type: "text", confidence: 1, boxes: [formRegion] }]);
+    setFormSelectedId(id);
+    setFormRegion(null);
+  };
+
+  const changeFormValue = (id: string, value: string) => {
+    // The first correction remembers what was read, which is how an edited field is told from an untouched one.
+    setFormFields((current) => current.map((field) => (field.id === id ? { ...field, value, original: field.original ?? field.value } : field)));
+  };
+
+  const locateFormField = (id: string) => {
+    const box = formFields.find((field) => field.id === id)?.boxes[0];
+    setFormSelectedId(id);
+    setFormTab("preview");
+    if (box) setFormGoToPage({ page: box.page, nonce: Date.now() });
+  };
+
+  /**
+   * Shows a reading saved in history. One whose changes were saved comes back as the edited document (its pages and
+   * marks); any other keeps only its fields, since the form itself is not stored.
+   */
+  const openFormFromHistory = async (result: FormReadResult, item: FormHistoryItem) => {
+    setFormSelectedId(null);
+    setFormRegion(null);
+    setFormDraw(false);
+    setFormError("");
+    setFormHistoryId(item.id);
+    setFormResultName(item.fileName);
+    if (item.hasDocument) {
+      try {
+        const saved = await getFormDocument(item.id);
+        const file = await jpegPagesToFile(saved.pages, item.fileName);
+        const rotation = [90, 180, 270].includes(saved.edits.rotation) ? (saved.edits.rotation as PreviewRotation) : 0;
+        setSelectedFile(file);
+        setOcrZoom(100);
+        setFormInitialMarks(saved.edits.marks as PageMark[]);
+        setFormRotation(rotation);
+        setFormResult({ ...result, blocks: [] });
+        setFormFields(result.fields);
+        setFormFromHistory(false);
+        setFormDocumentSaved(true);
+        setFormReflow(false);
+        setFormTool("select");
+        setFormTab("preview");
+        return;
+      } catch {
+        showFormNotice(t(K("form.history.documentFailed")));
+      }
+    }
+    setFormResult(result);
+    setFormFields(result.fields);
+    setFormFromHistory(true);
+    setFormDocumentSaved(false);
+    setFormTab("results");
+  };
+
+  const runForm = async () => {
+    if (!selectedFile || isFormRunning) return;
+    if (formHow === "custom" && !formFieldNames.trim()) {
+      setFormError(t(K("form.errorFields")));
+      return;
+    }
+    setIsFormRunning(true);
+    setFormError("");
+    setFormResult(null);
+    setFormFields([]);
+    setFormRegion(null);
+    setFormSelectedId(null);
+    setFormTab("preview");
+    try {
+      const result = await readForm({ file: selectedFile, ...(formHow === "custom" ? { fields: formFieldNames } : {}) });
+      setFormResult(result);
+      setFormFields(result.fields);
+      setFormResultName(selectedFile.name);
+      setFormFromHistory(false);
+      setFormHistoryId(result.historyId ?? null);
+      setFormDocumentSaved(false);
+      if (result.pages.length) setFormOptions((current) => ({ ...current, credits: result.creditsUsed / result.pages.length }));
+      setFormHistoryKey((key) => key + 1);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : t(K("form.errorGeneral")));
+    } finally {
+      setIsFormRunning(false);
+    }
+  };
+
+  const exportForm = async (format: FormExportFormat) => {
+    if (!formFields.length || isFormExporting) return;
+    setIsFormExporting(true);
+    try {
+      // Word and PDF are the document itself with everything done to it: turned, marked, filled in. Without the form on
+      // screen (a reading opened from history) there is nothing to draw on, so they hold the fields instead.
+      const edited = (format === "docx" || format === "pdf") && !formFromHistory ? await formPreviewRef.current?.exportPages() : null;
+      if (edited) {
+        const baseName = (selectedFile?.name ?? formResultName).replace(/\.[^.]+$/, "") || "form";
+        downloadBlob(`${baseName}-edited.${format}`, format === "pdf" ? await marksToPdf(edited) : pagesToDocx(edited));
+        return;
+      }
+      await downloadFormResult({
+        fields: formFields,
+        fileName: formResultName,
+        format,
+        t,
+        // A reading opened from history no longer has the pages' text, so it is saved as the fields only.
+        ...(formResult && !formFromHistory ? { blocks: formResult.blocks, pages: formResult.pages.length } : {}),
+      });
+    } catch {
+      setFormError(t(K("ocr.exportFailed")));
+    } finally {
+      setIsFormExporting(false);
+    }
+  };
+
+  const showFormNotice = (message: string) => {
+    setFormNotice(message);
+    window.clearTimeout(formNoticeTimer.current);
+    formNoticeTimer.current = window.setTimeout(() => setFormNotice(""), 4500);
+  };
+
+  /** Picks a tool. The signature tool needs a signature first, so it asks for one the first time. */
+  const selectFormTool = (tool: FormTool) => {
+    if (tool === "signature" && !formSignature) {
+      setSignaturePadOpen(true);
+      return;
+    }
+    setFormTool(tool);
+  };
+
+  const copyFormFields = async (kind: "text" | "table" | "json") => {
+    const cell = (value: string) => value.replace(/[\t\r\n]+/g, " ");
+    const text = kind === "text" ? formToText(formFields) : kind === "json" ? formToJson(formFields) : formFields.map((field) => [field.label, field.value, `${Math.round(field.confidence * 100)}%`].map(cell).join("\t")).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      showFormNotice(t(K("form.clipboard.copied")));
+    } catch {
+      showFormNotice(t(K("form.clipboard.failed")));
+    }
+  };
+
+  /**
+   * Saves the changes into the reading's history entry: the corrected fields and the marks, and (the first time) the
+   * pages, so opening it from history brings the edited document back. Downloading is what "export" is for.
+   */
+  const saveFormChanges = async () => {
+    if (isSavingMarks || !formHistoryId) return;
+    setIsSavingMarks(true);
+    try {
+      const handle = formPreviewRef.current;
+      const pages = handle && !formDocumentSaved ? await handle.sourcePages() : null;
+      const saved = await saveFormEdits(formHistoryId, { fields: formFields, rotation: formRotation, marks: handle?.getMarks() ?? formInitialMarks, ...(pages ? { pages } : {}) });
+      if (saved.hasDocument) setFormDocumentSaved(true);
+      setFormHistoryKey((key) => key + 1);
+      showFormNotice(t(K("form.save.done")));
+    } catch {
+      showFormNotice(t(K("form.save.failed")));
+    } finally {
+      setIsSavingMarks(false);
+    }
+  };
+
+  /** The text of the page as the OCR read it, in reading order: what "reflow" shows instead of the picture. */
+  const reflowText = (page: number): string => {
+    const lines = (formResult?.blocks ?? []).filter((block) => block.page === page).sort((a, b) => a.top - b.top || a.left - b.left);
+    return lines.map((block) => block.text).join("\n");
+  };
+
   const changeContractType = (id: ContractTypeId) => {
     setContractType(id);
     // The sides depend on the kind of contract, so a side picked for another kind no longer applies.
@@ -520,6 +821,7 @@ export function DocumentGenerationPage() {
       </header>
 
       <CreatorWorkspaceLayout
+        className={styles.docShell}
         tabs={
           <nav className={styles.modeTabs} aria-label={t(K("a11y.tools"))}>
             {modes.map(({ id, icon: Icon, available }) => {
@@ -557,17 +859,17 @@ export function DocumentGenerationPage() {
             <CloudUpload size={29} strokeWidth={1.7} aria-hidden="true" />
             <strong>{selectedFile ? t(K("source.dropReplace")) : t(K("source.dropTitle"))}</strong>
             <span>{t(K("source.dropHint"))}</span>
-            <small>{isOcr ? t(K("ocr.dropTypes"), { types: ocrExtensions.join(", ").toUpperCase(), max: ocrMaxMegabytes }) : t(K("source.dropTypes"), { max: 25 })}</small>
+            <small>{isOcr ? t(K("ocr.dropTypes"), { types: ocrExtensions.join(", ").toUpperCase(), max: ocrMaxMegabytes }) : isForm ? t(K("ocr.dropTypes"), { types: "PDF, JPG, JPEG, PNG", max: 25 }) : t(K("source.dropTypes"), { max: 25 })}</small>
           </div>
-          <input ref={uploadInputRef} className={styles.fileInput} type="file" accept={isOcr ? ocrExtensions.map((extension) => `.${extension}`).join(",") : ".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"} onChange={(event) => setFileFromList(event.currentTarget.files)} />
+          <input ref={uploadInputRef} className={styles.fileInput} type="file" accept={isOcr ? ocrExtensions.map((extension) => `.${extension}`).join(",") : isForm ? ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" : ".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"} onChange={(event) => setFileFromList(event.currentTarget.files)} />
           <div className={styles.filePlaceholder}>
             <span className={styles.fileIcon}><FileText size={17} aria-hidden="true" /></span>
             <span className={styles.fileCopy}><strong>{selectedFile?.name ?? t(K("source.filesTitle"))}</strong><small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("source.filesHint"))}</small></span>
             <button type="button" className={styles.replaceFileButton} aria-label={t(K("source.chooseFile"))} onClick={() => uploadInputRef.current?.click()}><Plus size={16} aria-hidden="true" /></button>
           </div>
-          {!isOcr && !isContract && <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />}
+          {!isOcr && !isContract && !isForm && <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />}
           <div className={styles.sectionRule} />
-          <PanelHeading step="2">{isOcr ? t(K("ocr.typeHeading")) : isContract ? t(K("contract.typeHeading")) : isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
+          <PanelHeading step="2">{isOcr ? t(K("ocr.typeHeading")) : isContract ? t(K("contract.typeHeading")) : isForm ? t(K("form.howHeading")) : isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
           {isOcr ? (
             <div className={styles.ocrTypeGrid} role="radiogroup" aria-label={t(K("ocr.typeHeading"))}>
               {OCR_DOCUMENT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => (
@@ -615,6 +917,25 @@ export function DocumentGenerationPage() {
                 </div>
               )}
             </>
+          ) : isForm ? (
+            <>
+              <div className={styles.formWays} role="radiogroup" aria-label={t(K("form.howHeading"))}>
+                <button type="button" role="radio" aria-checked={formHow === "auto"} className={`${styles.ocrTypeButton} ${formHow === "auto" ? styles.ocrTypeActive : ""}`} onClick={() => setFormHow("auto")}>
+                  <Sparkles size={15} aria-hidden="true" />
+                  <span><strong>{t(K("form.how.auto"))}</strong><small>{t(K("form.how.autoHint"))}</small></span>
+                </button>
+                <button type="button" role="radio" aria-checked={formHow === "custom"} className={`${styles.ocrTypeButton} ${formHow === "custom" ? styles.ocrTypeActive : ""}`} onClick={() => setFormHow("custom")}>
+                  <ListChecks size={15} aria-hidden="true" />
+                  <span><strong>{t(K("form.how.custom"))}</strong><small>{t(K("form.how.customHint"))}</small></span>
+                </button>
+              </div>
+              {formHow === "custom" && (
+                <div className={styles.summaryPrompt}>
+                  <textarea aria-label={t(K("form.fieldsLabel"))} maxLength={600} value={formFieldNames} onChange={(event) => setFormFieldNames(event.target.value)} placeholder={t(K("form.fieldsPlaceholder"))} />
+                  <small>{formFieldNames.length} / 600</small>
+                </div>
+              )}
+            </>
           ) : isSummarize ? (
             <>
               <div className={styles.summaryPrompt}>
@@ -645,7 +966,7 @@ export function DocumentGenerationPage() {
               <small>0 / 600</small>
             </div>
           )}
-          {!isOcr && !isContract && <div className={styles.checkList}>
+          {!isOcr && !isContract && !isForm && <div className={styles.checkList}>
             {isSummarize ? (
               <>
                 <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.keyTakeaways} onChange={(event) => setFocusAreas((current) => ({ ...current, keyTakeaways: event.target.checked }))} />{t(K("summary.checkTakeaways"))}</label>
@@ -665,8 +986,8 @@ export function DocumentGenerationPage() {
         preview={
           <main className={styles.previewPanel} aria-label={t(K("a11y.preview"))}>
           <div className={styles.previewHeader}>
-            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : isContract ? t(K("contract.workspace")) : t(K("preview.canvas"))}</small></div>
-            {isOcr || isContract ? (
+            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : isContract ? t(K("contract.workspace")) : isForm ? t(K("form.workspace")) : t(K("preview.canvas"))}</small></div>
+            {isOcr || isContract || isForm ? (
               <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
                 {showPreviewTools && (
                   <>
@@ -689,27 +1010,40 @@ export function DocumentGenerationPage() {
                     optionClassName="px-2.5 py-1.5 text-[11px]"
                   />
                 </span>
-                <button type="button" className={`${styles.toolbarButton} ${ocrPan ? styles.toolbarButtonActive : ""}`} aria-label={t(K("ocr.tool.pan"))} aria-pressed={ocrPan} title={hasPreview ? t(K("ocr.tool.pan")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrPan((value) => !value); setOcrAnnotate(false); }}>
+                <button type="button" className={`${styles.toolbarButton} ${ocrPan ? styles.toolbarButtonActive : ""}`} aria-label={t(K("ocr.tool.pan"))} aria-pressed={ocrPan} title={hasPreview ? t(K("ocr.tool.pan")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrPan((value) => !value); setOcrAnnotate(false); setFormDraw(false); }}>
                   <Hand size={14} aria-hidden="true" />
                 </button>
                 <span className={styles.toolbarDivider} />
-                <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !compareReady ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !compareReady} onClick={() => setOcrCompare((value) => !value)}>
-                  <Columns2 size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.compare"))}</span>
-                </button>
-                <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); }}>
+                {!isForm && (
+                  <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !compareReady ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !compareReady} onClick={() => setOcrCompare((value) => !value)}>
+                    <Columns2 size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.compare"))}</span>
+                  </button>
+                )}
+                <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); setFormDraw(false); }}>
                   <MessageSquarePlus size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.annotate"))}</span>
                 </button>
                   </>
                 )}
-                <ExportMenu
-                  hasResult={isContract ? !!contractResult : !!ocrResult}
-                  busy={isContract ? isContractExporting : isToolbarExporting}
-                  {...(isOcr ? { active: ocrFormat } : {})}
-                  // Before a document is read, an OCR card sets the format the next run will produce instead.
-                  isUnavailable={(format) => (isContract ? !contractResult : !ocrResult && !!ocrTypeInfo && !ocrTypeInfo.outputFormats.includes(format))}
-                  hint={isContract ? t(K("contract.exportNeedResult")) : t(K("ocr.exportNeedResult"))}
-                  onPick={(format) => (isContract ? void exportContract(format) : ocrResult ? void exportFromToolbar(format) : setOcrFormat(format))}
-                />
+                {isForm ? (
+                  <ExportMenu
+                    formats={FORM_EXPORT_FORMATS}
+                    hasResult={formFields.length > 0}
+                    busy={isFormExporting}
+                    isUnavailable={() => formFields.length === 0}
+                    hint={t(K("form.exportNeedResult"))}
+                    onPick={(format) => void exportForm(format)}
+                  />
+                ) : (
+                  <ExportMenu
+                    hasResult={isContract ? !!contractResult : !!ocrResult}
+                    busy={isContract ? isContractExporting : isToolbarExporting}
+                    {...(isOcr ? { active: ocrFormat } : {})}
+                    // Before a document is read, an OCR card sets the format the next run will produce instead.
+                    isUnavailable={(format) => (isContract ? !contractResult : !ocrResult && !!ocrTypeInfo && !ocrTypeInfo.outputFormats.includes(format))}
+                    hint={isContract ? t(K("contract.exportNeedResult")) : t(K("ocr.exportNeedResult"))}
+                    onPick={(format) => (isContract ? void exportContract(format) : ocrResult ? void exportFromToolbar(format) : setOcrFormat(format))}
+                  />
+                )}
               </div>
             ) : (
               <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
@@ -780,7 +1114,130 @@ export function DocumentGenerationPage() {
             </>
           )}
 
-          {!isContract && (!isOcr || ocrTab === "preview") && (
+          {isForm && signaturePadOpen && (
+            <SignaturePad
+              onCancel={() => setSignaturePadOpen(false)}
+              onDone={(signature) => {
+                setFormSignature(signature);
+                setSignaturePadOpen(false);
+                setFormTool("signature");
+              }}
+            />
+          )}
+          {isForm && (
+            <>
+              <div className={styles.previewTabs} role="tablist" aria-label={t(K("form.tab.label"))}>
+                <button type="button" role="tab" aria-selected={formTab === "preview"} className={formTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setFormTab("preview")}>{t(K("form.tab.preview"))}</button>
+                <button type="button" role="tab" aria-selected={formTab === "results"} className={formTab === "results" ? styles.previewTabActive : undefined} disabled={formFields.length === 0} title={formFields.length ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setFormTab("results")}>{t(K("form.tab.results"))}</button>
+                <button type="button" role="tab" aria-selected={formTab === "history"} className={formTab === "history" ? styles.previewTabActive : undefined} onClick={() => setFormTab("history")}>{t(K("form.tab.history"))}</button>
+              </div>
+              {/* Kept mounted when another tab is open, so the marks made on the form are still there and can be exported. */}
+              <div style={{ display: formTab === "preview" ? "contents" : "none" }}>
+                <>
+                  <FormToolbar
+                    tool={formTool}
+                    onTool={selectFormTool}
+                    zoom={ocrZoom}
+                    onZoom={setOcrZoom}
+                    fit={formFit.mode}
+                    onFit={(mode) => setFormFit({ mode, nonce: Date.now() })}
+                    reflow={formReflow}
+                    onReflow={() => setFormReflow((value) => !value)}
+                    reflowDisabled={!hasPreview || !formResult?.blocks?.length || formFromHistory}
+                    showValues={formShowValues}
+                    onShowValues={() => setFormShowValues((value) => !value)}
+                    onRotate={(direction) => setFormRotation((value) => ((value + (direction === 1 ? 90 : 270)) % 360) as PreviewRotation)}
+                    hasPreview={hasPreview}
+                    hasFields={formFields.length > 0}
+                    canDraw={!!formResult && !formFromHistory}
+                    canSave={!!formHistoryId}
+                    saving={isSavingMarks}
+                    onSave={() => void saveFormChanges()}
+                    onCopy={(kind) => void copyFormFields(kind)}
+                    hasSignature={!!formSignature}
+                    onNewSignature={() => setSignaturePadOpen(true)}
+                    textStyle={textStyle}
+                    onTextStyle={changeTextStyle}
+                    highlightColor={highlightColor}
+                    onHighlightColor={changeHighlightColor}
+                  />
+                  {formNotice && <div className={styles.formNotice} role="status">{formNotice}</div>}
+                  <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
+                    {selectedFile && canPreviewFile(selectedFile) ? (
+                      <DocumentPreview
+                        key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`}
+                        file={selectedFile}
+                        running={isFormRunning}
+                        zoom={ocrZoom}
+                        pan={formTool === "hand"}
+                        annotate={formTool === "notes"}
+                        compareText={formReflow && formResult?.blocks?.length && !formFromHistory ? reflowText : null}
+                        textOnly={formReflow}
+                        overlay={formOverlay}
+                        onOverlaySelect={setFormSelectedId}
+                        draw={formDraw}
+                        onDrawn={handleFormDrawn}
+                        rotation={formRotation}
+                        {...(formGoToPage ? { goToPage: formGoToPage } : {})}
+                        markTool={(["text", "highlight", "check", "cross", "date", "signature", "snapshot"] as const).includes(formTool as MarkTool) ? (formTool as MarkTool) : null}
+                        markStyle={textStyle}
+                        highlightColor={highlightColor}
+                        signature={formSignature}
+                        handleRef={formPreviewRef}
+                        initialMarks={formInitialMarks}
+                        onNotice={showFormNotice}
+                        {...(formFit.nonce ? { fit: formFit } : {})}
+                        onFitZoom={setOcrZoom}
+                      />
+                    ) : (
+                      <div className={styles.canvas}>
+                        <div className={styles.canvasEmptyState}>
+                          <span><FileText size={22} aria-hidden="true" /></span>
+                          <strong>{selectedFile ? selectedFile.name : t(K("form.emptyTitle"))}</strong>
+                          <small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("form.emptyHint"))}</small>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {selectedFile && !formResult && !isFormRunning && <div className={styles.ocrNotice} role="status" style={{ marginTop: 10 }}>{t(K("form.beforeRead"))}</div>}
+                  {formRegion && (
+                    <div className={styles.formStrip}>
+                      <h5>{t(K("form.region.title"))}</h5>
+                      <div className={styles.formStripRow}>
+                        <label>{t(K("form.region.label"))}<input value={formRegionLabel} maxLength={120} onChange={(event) => setFormRegionLabel(event.target.value)} /></label>
+                        <label>{t(K("form.region.value"))}<input value={formRegionValue} maxLength={1000} onChange={(event) => setFormRegionValue(event.target.value)} /></label>
+                      </div>
+                      {!formRegionValue && <p className={styles.formStripNote}>{t(K("form.region.noText"))}</p>}
+                      <div className={styles.formStripRow}>
+                        <button type="button" className={styles.formStripPrimary} disabled={!formRegionLabel.trim()} onClick={addRegionField}>{t(K("form.region.add"))}</button>
+                        <button type="button" onClick={() => setFormRegion(null)}>{t(K("form.region.cancel"))}</button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              </div>
+              {formTab === "results" && (
+                <div className={styles.ocrResultsPanel}>
+                  {formFromHistory && <div className={styles.ocrNotice} role="status">{t(K("form.history.notice"))}</div>}
+                  <FormResultsView
+                    fields={formFields}
+                    selectedId={formSelectedId}
+                    onSelect={setFormSelectedId}
+                    onChange={changeFormValue}
+                    title={formResult ? selectedFile?.name ?? undefined : undefined}
+                    {...(hasPreview && !formFromHistory ? { onLocate: locateFormField } : {})}
+                  />
+                </div>
+              )}
+              {formTab === "history" && (
+                <div className={styles.ocrResultsPanel}>
+                  <FormHistoryPanel refreshKey={formHistoryKey} onOpen={openFormFromHistory} />
+                </div>
+              )}
+            </>
+          )}
+
+          {!isContract && !isForm && (!isOcr || ocrTab === "preview") && (
             <>
           <div className={`${styles.previewStage} ${isSummarize ? styles.previewStageSummary : ""} ${isOcr && selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : ""}`}>
             {isSummarize ? (
@@ -924,13 +1381,13 @@ export function DocumentGenerationPage() {
           <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
           <div className={styles.settingGroup}>
             <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
-            {isSummarize || isOcr || isContract ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{isOcr ? t(K("ocr.modelName")) : isContract ? t(K("contract.modelName")) : t(K("summary.modelName"))}</strong><small>{isOcr ? t(K("ocr.modelHint")) : isContract ? t(K("contract.modelHint")) : t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
+            {isSummarize || isOcr || isContract || isForm ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{isOcr ? t(K("ocr.modelName")) : isContract ? t(K("contract.modelName")) : isForm ? t(K("form.modelName")) : t(K("summary.modelName"))}</strong><small>{isOcr ? t(K("ocr.modelHint")) : isContract ? t(K("contract.modelHint")) : isForm ? t(K("form.modelHint")) : t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
               <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("settings.standard"))}</strong><small>{t(K("settings.standardHint"))}</small></div>
               <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
             </div>}
           </div>
           {/* Gen Document picks its file format from the Export button instead of here. */}
-          {!isOcr && !isContract && (
+          {!isOcr && !isContract && !isForm && (
             <div className={styles.settingGroup}>
               <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
               <div className={styles.formatCards}>
@@ -1007,6 +1464,8 @@ export function DocumentGenerationPage() {
                 </label>
               )}
             </>
+          ) : isForm ? (
+            <div className={styles.summaryFocusNote}>{t(K("form.pagesNote"), { max: formOptions.maxPages })}</div>
           ) : isContract ? (
             <SelectControl label={t(K("settings.language"))} value={contractLanguage} onChange={(value) => setContractLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
           ) : isSummarize ? (
@@ -1024,14 +1483,14 @@ export function DocumentGenerationPage() {
               <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
             </>
           )}
-          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isContract ? t(K("contract.credits"), { value: contractCredits }) : isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
+          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isForm ? t(K("form.credits"), { value: formOptions.credits }) : isContract ? t(K("contract.credits"), { value: contractCredits }) : isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
           {isOcr && showStyleCredits && <div className={styles.summaryFocusNote}>{t(K("ocr.styleCreditsNote"), { value: ocrTypeInfo?.styleCredits ?? 0 })}</div>}
-          <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr && !isContract) || !selectedFile || isSummarizing || isOcrRunning || isContractRunning} title={isContract && !selectedFile ? t(K("contract.needFile")) : undefined} onClick={() => void (isOcr ? runOcr() : isContract ? runContract() : generateSummary())}>
-            <span>{isOcrRunning ? t(K("ocr.running")) : isContractRunning ? t(K("contract.running")) : isSummarizing ? t(K("summary.generating")) : isOcr ? t(K("ocr.run")) : isContract ? t(K("contract.run")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
+          <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr && !isContract && !isForm) || !selectedFile || isSummarizing || isOcrRunning || isContractRunning || isFormRunning} title={!selectedFile ? (isForm ? t(K("form.needFile")) : isContract ? t(K("contract.needFile")) : undefined) : undefined} onClick={() => void (isOcr ? runOcr() : isContract ? runContract() : isForm ? runForm() : generateSummary())}>
+            <span>{isOcrRunning ? t(K("ocr.running")) : isFormRunning ? t(K("form.running")) : isContractRunning ? t(K("contract.running")) : isSummarizing ? t(K("summary.generating")) : isOcr ? t(K("ocr.run")) : isContract ? t(K("contract.run")) : isForm ? t(K("form.run")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
             <Sparkles size={17} aria-hidden="true" />
           </button>
-          {(isOcr ? ocrError : isContract ? contractError : summaryError) && <div className={styles.summaryError} role="alert">{isOcr ? ocrError : isContract ? contractError : summaryError}</div>}
-          <div className={styles.secureNote}><span />{isContract ? t(K("contract.secure")) : isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
+          {(isOcr ? ocrError : isContract ? contractError : isForm ? formError : summaryError) && <div className={styles.summaryError} role="alert">{isOcr ? ocrError : isContract ? contractError : isForm ? formError : summaryError}</div>}
+          <div className={styles.secureNote}><span />{isForm ? t(K("form.secure")) : isContract ? t(K("contract.secure")) : isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
           </aside>
         }
       />

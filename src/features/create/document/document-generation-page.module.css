@@ -935,3 +935,192 @@
 /* The loading card is absolutely positioned for the preview canvas; in the review tab it is centred in its own area instead. */
 .contractLoading { display: grid; min-height: clamp(260px, 50vh, 420px); place-items: center; }
 .contractLoading .summaryLoading { position: static; }
+/* Form reader: a box on the page for every field, the strip under the page, and the "how to read" choices */
+.fieldBox { position: absolute; box-sizing: border-box; border: 1.5px dashed #e8864f; border-radius: 3px; cursor: pointer; }
+.fieldBox:focus-visible { outline: 2px solid #df602d; outline-offset: 2px; }
+.fieldBox em { position: absolute; left: -9px; top: -9px; display: grid; min-width: 18px; height: 18px; place-items: center; border-radius: 999px; background: #df602d; padding: 0 4px; color: #fff; font-size: 11px; font-style: normal; font-weight: 800; line-height: 1; }
+.fieldBoxFilled { container-type: size; background: rgb(255 255 255 / 90%); }
+.fieldValue { display: flex; height: 100%; align-items: center; overflow: hidden; padding: 0 0.2em; color: #1a3a8a; font-size: min(65cqh, calc(100cqw / (var(--value-em, 1) + 0.5))); line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
+.fieldBox_low { border-color: #ba7517; background: rgb(250 199 117 / 25%); }
+.fieldBox_low em { background: #ba7517; }
+.fieldBox_selected { z-index: 2; border: 1.5px solid #ba7517; background: rgb(250 199 117 / 55%); }
+.fieldBox_selected em { background: #ba7517; }
+.fieldBox_region { z-index: 2; border: 1.5px dashed #378add; background: rgb(55 138 221 / 15%); cursor: default; }
+.fieldBox_region em { background: #378add; }
+.formStrip { display: grid; gap: 8px; margin-top: 10px; border: 1px solid #ece9e6; border-radius: 10px; background: #fff; padding: 10px 12px; }
+.formStrip h5 { margin: 0; color: #343b42; font-size: 12px; font-weight: 800; }
+.formStripRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.formStripRow label { display: grid; flex: 1 1 160px; gap: 3px; color: #6f7780; font-size: 11px; font-weight: 700; }
+.formStrip input { min-height: 32px; border: 1px solid #e2e3e5; border-radius: 7px; background: #fff; padding: 0 9px; color: #252a2f; font: inherit; font-size: 13px; }
+.formStrip input:focus { border-color: #f6a17d; outline: 0; box-shadow: 0 0 0 3px rgb(246 161 125 / 22%); }
+.formStrip button { min-height: 32px; border: 1px solid #e2e3e5; border-radius: 8px; background: #fff; padding: 0 14px; color: #59626b; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.formStrip button:hover:not(:disabled) { border-color: #f6a17d; color: var(--doc-orange); }
+.formStrip button:disabled { cursor: not-allowed; opacity: 0.5; }
+.formStripPrimary { border-color: #df602d !important; background: #df602d !important; color: #fff !important; }
+.formStripNote { margin: 0; color: #8d949b; font-size: 11px; line-height: 1.5; }
+.formWays { display: grid; gap: 8px; }
+.formWays .ocrTypeButton { align-items: flex-start; }
+.formWays .ocrTypeButton span { display: grid; gap: 2px; }
+.formWays .ocrTypeButton strong { font-weight: 800; }
+.formWays .ocrTypeButton small { color: #8d949b; font-size: 11px; font-weight: 500; }
+.formWays .ocrTypeActive small { color: #b9582f; }
+/* Form reader: the tool row, the marks a person puts on the page, and the signature pad */
+.previewPageFrame { container-type: inline-size; }
+.formToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; border: 1px solid #ece9e6; border-radius: 12px; background: #fff; padding: 10px 12px; }
+.toolGroup { display: flex; align-items: center; gap: 4px; }
+/* Two rows that fill the width: looking at the page (select, copy, zoom) on top, then turning and marking it below. */
+.toolRow { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+@media (min-width: 1440px) {
+  .desktopIconOnly { display: none; }
+}
+.formToolbar .toolbarButton { min-height: 34px; gap: 7px; border-radius: 8px; padding: 0 11px; font-size: 12px; }
+.toolbarSave { flex: none; margin-left: auto; background: #df602d; color: #fff; white-space: nowrap; }
+.formToolbarStyle .toolbarSave { margin-left: auto; }
+.toolbarSave:hover:not(:disabled) { background: #c4501f; color: #fff; }
+.toolMenuWrap { position: relative; display: inline-flex; }
+.toolMenu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; display: grid; min-width: 190px; gap: 2px; border: 1px solid #ece9e6; border-radius: 10px; background: #fff; padding: 5px; box-shadow: 0 10px 28px rgb(37 42 47 / 14%); }
+.toolMenu button { display: flex; align-items: center; gap: 9px; border: 0; border-radius: 7px; background: transparent; padding: 7px 9px; color: #343b42; font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.toolMenu button:hover:not(:disabled) { background: #fff2ea; }
+.toolMenu button:disabled { opacity: 0.45; cursor: not-allowed; }
+.toolMenuGap { width: 14px; flex: none; }
+.previewReflow { width: 100%; max-width: 760px; margin: 0 auto; padding: 14px 16px; background: #fff; border-radius: 8px; white-space: pre-wrap; font-size: 13px; line-height: 1.7; }
+.mark { position: absolute; z-index: 3; }
+.markHighlight { mix-blend-mode: multiply; cursor: move; touch-action: none; }
+.markText { width: max-content; transform: translate(0, calc(-0.65em - 1px)); }
+.markTextField { display: grid; }
+.markTextField::after, .markTextField textarea { grid-area: 1 / 1; min-width: 8ch; border: 1px dashed transparent; padding: 0 0.4cqw; font: inherit; line-height: 1.3; overflow-wrap: anywhere; white-space: pre-wrap; }
+.markTextField::after { content: attr(data-value) " "; visibility: hidden; pointer-events: none; }
+/* The page-wide minimum font size for inputs must not apply: the text has to scale with the page, like the saved file. */
+.markTextField textarea { font-size: inherit !important; width: 100%; resize: none; overflow: hidden; background: transparent; color: inherit; }
+.markTextField textarea:hover, .markTextField textarea:focus { border-color: #e8864f; outline: 0; background: rgb(255 255 255 / 70%); }
+.markSymbol { display: grid; aspect-ratio: 1; place-items: center; transform: translate(-50%, -50%); font-weight: 800; line-height: 1; }
+.markSign { transform: translate(-50%, -50%); }
+.markSign img { display: block; width: 100%; height: auto; }
+.markRemove { position: absolute; top: -9px; right: -9px; display: none; width: 18px; height: 18px; place-items: center; border: 0; border-radius: 50%; background: #343b42; color: #fff; cursor: pointer; }
+.mark:hover .markRemove, .mark:focus-within .markRemove { display: grid; }
+.signatureDialog { width: min(92vw, 540px); border: 0; border-radius: 14px; padding: 18px; box-shadow: 0 20px 60px rgb(0 0 0 / 28%); }
+.signatureDialog::backdrop { background: rgb(0 0 0 / 40%); }
+.signatureDialog h4 { margin: 0 0 10px; color: #252a2f; font-size: 15px; font-weight: 800; }
+.signatureCanvas { display: block; width: 100%; height: auto; aspect-ratio: 8 / 3; border: 1px dashed #c8ccd0; border-radius: 10px; background: #fff; touch-action: none; cursor: crosshair; }
+.signatureDialog p { margin: 8px 0 12px; color: #8d949b; font-size: 12px; }
+.signatureActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.signatureActions button { min-height: 34px; border: 1px solid #e2e3e5; border-radius: 8px; background: #fff; padding: 0 14px; color: #59626b; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.signatureActions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.formNotice { margin-top: 8px; border-radius: 8px; background: #eaf5ec; padding: 8px 12px; color: #2f7d46; font-size: 12px; }
+/* Phones and tablets: sixteen tools in equal columns (eight across, four on a phone), so every tool is the same width, rows line up and nothing is left over at the end of a row. A wide tablet has room for the names. */
+@media (max-width: 1439.98px) {
+  .formToolbar .toolbarLabel { display: none; }
+  .toolbarSave .toolbarLabel { display: inline; }
+  .formToolbar { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; padding: 8px; }
+  .formToolbar .toolRow,
+  .formToolbar .toolGroup { display: contents; }
+  /* Drawing a box and adding a note close the first row on a desktop; in the grid they come last, after the marking tools. */
+  .formToolbar .toolGroupMarkup > * { order: 1; }
+  .formToolbar .formToolbarStyle,
+  .formToolbar .toolRow > .toolbarSave { order: 2; }
+  .formToolbar .toolbarButton { width: 100%; justify-content: center; }
+  .formToolbar .toolMenuWrap { display: flex; }
+  .formToolbar .zoomDropdown { display: flex; }
+  .formToolbar .zoomDropdown > * { width: 100%; }
+  .formToolbar .zoomDropdown button { width: 100% !important; gap: 2px !important; padding: 0 6px !important; font-size: 11px !important; }
+  /* A finger scrolls the page by itself, so the hand tool is left out: that makes sixteen tools, four full rows. */
+  .formToolbar .phoneHidden { display: none; }
+  .formToolbar .formToolbarStyle { grid-column: 1 / -1; margin-top: 4px; }
+  .formToolbar .toolRow > .toolbarSave { grid-column: 1 / -1; justify-self: end; margin-left: 0; width: auto; }
+  .formToolbar .formToolbarStyle .toolbarSave { width: auto; margin-left: auto; padding: 0 18px; }
+}
+@media (min-width: 900px) and (max-width: 1439.98px) {
+  .formToolbar .toolbarLabel { display: inline; }
+}
+@media (max-width: 599.98px) {
+  .formToolbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* The font and size share the first line; bold, italic and the colours fill the second, evenly spread. */
+  .formToolbarStyle { gap: 10px; }
+  .formToolbarStyle > span:first-child { flex: 1 1 100%; }
+  .formToolbarStyle .markStyleBar { flex: 1 1 100%; gap: 8px; }
+  .formToolbarStyle .markStyleBar > div:first-child { flex: 1 1 0; }
+  .formToolbarStyle .markStyleBar > div:first-child button { width: 100% !important; }
+  .formToolbarStyle .markStyleRest { flex: 1 1 100%; justify-content: space-between; }
+  .formToolbarStyle .formToolbarGap { margin-left: 0; flex: none; }
+  .formToolbarStyle .highlightGroup { display: flex; flex: 1 1 100%; }
+  .formToolbarStyle .highlightSwatches { flex: 1 1 0; justify-content: space-between; }
+  /* Without a form on screen the save button is alone in the grid: let it span the row instead of one narrow column. */
+  .formToolbar .formToolbarStyle .toolbarSave { flex: 1 1 100%; margin-left: 0; }
+  .formToolbar .formToolbarStyle .toolbarSave { flex: 1 1 100%; width: 100%; margin-left: 0; }
+  .formToolbar .toolRow > .toolbarSave { justify-self: stretch; width: 100%; }
+}
+.markSelected { z-index: 6; }
+.markStyleBar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: #343b42; font-family: var(--font-sans), Arial, sans-serif; font-size: 12px; font-style: normal; font-weight: 400; line-height: 1.2; }
+.markStyleRest { display: inline-flex; align-items: center; gap: 4px; }
+.markStyleButton { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid #e2e3e5; border-radius: 6px; background: #fff; color: #343b42; font: inherit; font-size: 13px; cursor: pointer; }
+.markStyleButton:hover { border-color: #f6a17d; }
+.markStyleButtonOn { border-color: #df602d; background: #fff2ea; color: #b9582f; }
+.markSwatch { width: 20px; height: 20px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px #d4d7da; cursor: pointer; }
+.markSwatchOn { box-shadow: 0 0 0 2px #df602d; }
+.formToolbarStyle { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; border-top: 1px solid #f0eeec; padding: 12px 2px 2px; }
+.formToolbarStyle > span { color: #6f7780; font-size: 11px; font-weight: 700; }
+.highlightGroup { display: inline-flex; align-items: center; gap: 10px; }
+.highlightGroup > span:first-child { color: #6f7780; font-size: 11px; font-weight: 700; }
+.markPicked { z-index: 6; outline: 1.5px solid #df602d; outline-offset: 1px; }
+.markPicked textarea { border-color: #e8864f; background: rgb(255 255 255 / 70%); }
+.markSymbol, .markSign { cursor: move; touch-action: none; }
+.markGrip { position: absolute; top: 0.65em; left: -18px; display: none; width: 16px; height: 22px; place-items: center; transform: translateY(-50%); border-radius: 5px; background: #343b42; color: #fff; cursor: move; touch-action: none; }
+.markText:hover .markGrip, .markPicked .markGrip { display: grid; }
+.markResize { position: absolute; right: -6px; bottom: -6px; width: 11px; height: 11px; border: 2px solid #fff; border-radius: 3px; background: #df602d; box-shadow: 0 0 0 1px #df602d; cursor: nwse-resize; touch-action: none; }
+.markWidth { position: absolute; top: 0.65em; right: -7px; width: 8px; height: 22px; transform: translateY(-50%); border: 2px solid #fff; border-radius: 4px; background: #df602d; box-shadow: 0 0 0 1px #df602d; cursor: ew-resize; touch-action: none; }
+.formToolbarGap { margin-left: 8px; }
+
+/*
+ * Screen sizes. The shared workspace shell puts the settings beside the preview from 768px up, which leaves a tablet in
+ * portrait a preview column too narrow for the form tools. So below 1440px (every tablet, and 1280px smart displays such
+ * as the Nest Hub Max, whose sidebar leaves only about 1090px) everything stacks in one column like on an iPad.
+ */
+@media (max-width: 1439.98px) {
+  [data-creator-workspace].docShell { --creator-workspace-columns: minmax(0, 1fr); }
+  [data-creator-workspace].docShell aside,
+  [data-creator-workspace].docShell main { border-left: 0; border-right: 0; }
+  [data-creator-workspace].docShell main { border-top: 1px solid #e5e2df; border-bottom: 1px solid #e5e2df; }
+  /* From 1280px the shell lays the row of modes over two of its three columns; with one column it takes the whole width. */
+  [data-creator-workspace].docShell > [class*="creator-workspace-layout_tabs"] > * { grid-column: 1 / -1; }
+  [data-creator-workspace].docShell > [class*="creator-workspace-layout_tabs"]::after { display: none; }
+  [data-creator-workspace].docShell aside:last-child { grid-column: 1 / -1; }
+  /* Stacked, the panels are as tall as what they hold: the 660px they keep side by side would leave empty space below. */
+  .sourcePanel,
+  .previewPanel,
+  .settingsPanel { min-height: 0; }
+  /* The settings would otherwise stretch across the whole width. */
+  .settingsPanel .modelCards { max-width: 420px; }
+  .settingsPanel .formatCards { max-width: 380px; }
+}
+/* Narrow phones: three tabs share the width, so their labels get less padding to wrap onto two lines, not three. */
+@media (max-width: 479.98px) {
+  .previewTabs button { padding: 7px 3px; line-height: 1.25; }
+  .previewTabs { gap: 2px; }
+}
+/*
+ * Laptops from 1440px (with the app's own sidebar taking about 190px of it): the shell's default columns leave the form
+ * too little room for its tools, so the two side panels give it some of theirs.
+ */
+@media (min-width: 1440px) and (max-width: 1599.98px) {
+  [data-creator-workspace].docShell { --creator-workspace-columns: minmax(230px, 0.6fr) minmax(0, 2fr) minmax(230px, 0.65fr); }
+  /* The row of modes would no longer fit in the first two columns, so it takes the whole width. */
+  [data-creator-workspace].docShell > [class*="creator-workspace-layout_tabs"] > * { grid-column: 1 / -1; }
+  [data-creator-workspace].docShell > [class*="creator-workspace-layout_tabs"]::after { display: none; }
+}
+/*
+ * Stacked on a tablet or a smart display, the settings would be one narrow strip along a wide page. They are laid out in
+ * two columns instead: what to read the form with on the left, and the cost and the button to start on the right, like
+ * the summary beside a checkout.
+ */
+@media (min-width: 768px) and (max-width: 1439.98px) {
+  .settingsPanel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); grid-auto-flow: row dense; column-gap: 32px; align-content: start; align-items: start; }
+  .settingsPanel > * { grid-column: 1; }
+  .settingsPanel > :first-child { grid-column: 1 / -1; }
+  .settingsPanel > .estimate,
+  .settingsPanel > .generateButton,
+  .settingsPanel > .summaryError,
+  .settingsPanel > .secureNote { grid-column: 2; }
+  .settingsPanel .estimate,
+  .settingsPanel .generateButton,
+  .settingsPanel .modelCards { max-width: none; }
+}

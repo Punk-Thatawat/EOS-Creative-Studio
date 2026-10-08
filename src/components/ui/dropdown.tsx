@@ -70,8 +70,16 @@ export function Dropdown({ value, options, onChange, placeholder = "Select an op
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const viewportHeight = window.innerHeight;
+      // A sticky page header is on top of the page, so the room above the trigger starts under it, not at the screen edge.
+      const topLimit = Math.max(0, document.querySelector("header.eos-studio-header")?.getBoundingClientRect().bottom ?? 0);
+      if (rect.bottom <= topLimit) {
+        // The trigger has scrolled out from under the header; a menu hanging from a button nobody can see helps no one.
+        setOpen(false);
+        setFixedMenuStyle(null);
+        return;
+      }
       const spaceBelow = viewportHeight - rect.bottom;
-      const spaceAbove = rect.top;
+      const spaceAbove = rect.top - topLimit;
       const openUpward = spaceBelow < 200 && spaceAbove > spaceBelow;
       const maxHeight = Math.max(120, (openUpward ? spaceAbove : spaceBelow) - 12);
       setFixedMenuStyle(
