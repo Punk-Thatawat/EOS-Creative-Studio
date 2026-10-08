@@ -76,11 +76,11 @@ export function MobileNavigation() {
 
   return (
     <>
-      <button type="button" className="flex size-11 items-center justify-center rounded-xl border border-border bg-white text-foreground shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-muted xl:hidden" aria-label={locale === "th" ? "เปิดเมนูนำทาง" : "Open navigation menu"} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(true)}>
+      <button type="button" className="flex size-11 items-center justify-center rounded-xl border border-border bg-white text-foreground shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-muted min-[1440px]:hidden" aria-label={locale === "th" ? "เปิดเมนูนำทาง" : "Open navigation menu"} aria-expanded={open} aria-controls="mobile-navigation" onClick={() => setOpen(true)}>
         <Menu size={21} strokeWidth={2.4} />
       </button>
       {rendered ? (
-        <div className="fixed inset-0 z-[60] xl:hidden">
+        <div className="fixed inset-0 z-[60] min-[1440px]:hidden">
           <button
             type="button"
             className={`absolute inset-0 bg-[#201d1b]/40 transition-opacity duration-[260ms] ease-out ${visible ? "opacity-100" : "opacity-0"}`}
