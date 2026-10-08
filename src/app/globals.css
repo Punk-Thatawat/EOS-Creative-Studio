@@ -1029,3 +1029,10 @@ body:has(:is(.audio-studio-page, .document-studio-page)) .page-gutter > main { w
     min-height: 115px;
   }
 }
+
+/* A 1280-1439px screen (a smart display such as the Nest Hub Max, a small laptop) works like a tablet: no fixed sidebar,
+   the page has the whole width, and the hamburger in the header slides the menu in over the page (MobileNavigation). */
+@media (min-width: 1280px) and (max-width: 1439.98px) {
+  [data-app-sidebar] { display: none; }
+  .xl\:pl-\[var\(--sidebar-width\)\] { padding-left: 0; }
+}

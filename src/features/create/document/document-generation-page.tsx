@@ -35,6 +35,7 @@ import { translateDocument, type DocumentTranslation, type TranslationLanguage }
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { DocumentFeatureGenerationPage } from "./document-feature-generation-page";
 import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -276,7 +277,7 @@ function downloadBlob(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function DocumentGenerationPage() {
+function SummaryTranslationPage() {
   const { t } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -1059,4 +1060,13 @@ export function DocumentGenerationPage() {
       </section>
     </div>
   );
+}
+
+export function DocumentGenerationPage() {
+  const searchParams = useSearchParams();
+  const mode = searchParams.get("tab");
+  if (mode === "ocr" || mode === "contract" || mode === "form" || mode === null) {
+    return <DocumentFeatureGenerationPage />;
+  }
+  return <SummaryTranslationPage />;
 }
