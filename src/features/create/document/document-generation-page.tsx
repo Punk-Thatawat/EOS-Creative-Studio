@@ -34,6 +34,7 @@ import { fetchHistory, fetchOriginalDocumentFile, fetchTranslatedDocumentFile, t
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { VideoModelDropdown } from "../video-model-dropdown";
+import { DocumentFeatureGenerationPage } from "./document-feature-generation-page";
 import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -306,7 +307,7 @@ async function blobBase64(blob: Blob): Promise<string> {
   return window.btoa(binary);
 }
 
-export function DocumentGenerationPage() {
+function SummaryTranslationPage() {
   const { t } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -1340,4 +1341,13 @@ export function DocumentGenerationPage() {
 
     </div>
   );
+}
+
+export function DocumentGenerationPage() {
+  const searchParams = useSearchParams();
+  const mode = searchParams.get("tab");
+  if (mode === "ocr" || mode === "contract" || mode === "form" || mode === null) {
+    return <DocumentFeatureGenerationPage />;
+  }
+  return <SummaryTranslationPage />;
 }

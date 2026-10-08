@@ -349,6 +349,7 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
   return (
     <Sidebar
       collapsible="none"
+      data-app-sidebar
       className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 xl:flex xl:px-5"
     >
       <SidebarHeader className="mb-8 items-center px-2">
@@ -394,6 +395,7 @@ export function SidebarNavigation() {
   return (
     <Sidebar
       collapsible="none"
+      data-app-sidebar
       className="fixed inset-y-0 left-0 z-20 hidden w-[var(--sidebar-width)] border-r border-border bg-surface px-3 py-5 xl:flex xl:px-5"
     >
       <WorkspaceSidebarHeader />
