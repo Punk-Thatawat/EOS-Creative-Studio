@@ -6,6 +6,9 @@ const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, '')}/api/v1`
 export type DocumentSummary = {
   title: string;
   executiveSummary: string;
+  reportType?: string;
+  reportTypeLabel?: string;
+  reportTypeConfidence?: number;
   sections?: Array<{ heading: string; items: string[] }>;
   keyTakeaways: string[];
   actionItems: Array<{ task: string; owner?: string; dueDate?: string }>;
@@ -29,18 +32,21 @@ export async function getDocumentSummaryOptions(): Promise<DocumentSummaryOption
 
 export async function summarizeDocument(input: {
   file: File;
+  model?: string;
   prompt: string;
   summaryStyle: 'executive' | 'bullets';
-  summaryLength: 'brief' | 'standard' | 'detailed';
+  summaryLength: 'auto' | 'brief' | 'standard' | 'detailed';
   language: 'auto' | 'English' | 'Thai';
   includeKeyTakeaways: boolean;
   includeActionItems: boolean;
   includeImportantDates: boolean;
+  reportType?: 'auto';
 }): Promise<{ id: string; model: string; summary: DocumentSummary; creditsUsed: number }> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error('Please sign in to summarize a document');
   const form = new FormData();
   form.append('file', input.file);
+  if (input.model) form.append('model', input.model);
   form.append('prompt', input.prompt);
   form.append('summaryStyle', input.summaryStyle);
   form.append('summaryLength', input.summaryLength);
@@ -48,6 +54,7 @@ export async function summarizeDocument(input: {
   form.append('includeKeyTakeaways', String(input.includeKeyTakeaways));
   form.append('includeActionItems', String(input.includeActionItems));
   form.append('includeImportantDates', String(input.includeImportantDates));
+  if (input.reportType) form.append('reportType', input.reportType);
 
   const response = await fetch(`${backendApiUrl}/documents/summarize`, {
     method: 'POST',

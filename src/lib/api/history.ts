@@ -21,7 +21,7 @@ export type HistoryDocumentSummary = {
   };
   options: {
     summaryStyle: "executive" | "bullets";
-    summaryLength: "brief" | "standard" | "detailed";
+    summaryLength: "auto" | "brief" | "standard" | "detailed";
     language: "auto" | "English" | "Thai";
     includeKeyTakeaways: boolean;
     includeActionItems: boolean;
@@ -30,10 +30,22 @@ export type HistoryDocumentSummary = {
   };
 };
 
+export type HistoryDocumentTranslation = {
+  filename: string;
+  translatedText: string;
+  sourceLanguage: "auto" | "Thai" | "English" | "Japanese" | "Chinese";
+  targetLanguage: "Thai" | "English" | "Japanese" | "Chinese";
+  creditCost: number;
+  outputFilename?: string;
+  outputMimeType?: string;
+  hasOutputFile?: boolean;
+  hasSourceFile?: boolean;
+};
+
 export type HistoryItem = {
   settings?: Record<string, unknown>;
   id: string;
-  source: "generation" | "video-storyboard" | "audio" | "document-summary";
+  source: "generation" | "video-storyboard" | "audio" | "document-summary" | "document-translation";
   mediaKind: "image" | "video" | "audio" | "document";
   feature: string;
   title: string;
@@ -51,6 +63,7 @@ export type HistoryItem = {
   creditCost?: number;
   errorMessage?: string;
   documentSummary?: HistoryDocumentSummary;
+  documentTranslation?: HistoryDocumentTranslation;
   createdAt: string;
   updatedAt: string;
 };
@@ -72,7 +85,7 @@ function isCount(value: unknown): value is number {
 function isHistoryItem(value: unknown): value is HistoryItem {
   return isRecord(value)
     && ["id", "feature", "title", "createdAt", "updatedAt"].every((key) => typeof value[key] === "string")
-    && ["generation", "video-storyboard", "audio", "document-summary"].some((source) => source === value.source)
+    && ["generation", "video-storyboard", "audio", "document-summary", "document-translation"].some((source) => source === value.source)
     && ["image", "video", "audio", "document"].some((kind) => kind === value.mediaKind)
     && ["queued", "processing", "completed", "failed", "cancelled"].some((status) => status === value.status)
     && ["outputCount", "totalCount", "completedCount"].every((key) => isCount(value[key]));
@@ -138,4 +151,39 @@ export async function deleteHistoryItem(item: Pick<HistoryItem, "id" | "source">
       ? payload.message : "Unable to delete history item";
     throw new Error(message);
   }
+}
+
+export async function fetchTranslatedDocumentFile(id: string, format?: "PDF" | "DOCX" | "TXT" | "JSON"): Promise<{ blob: Blob; filename: string }> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in to download your translated document");
+  const query = format ? `?format=${encodeURIComponent(format)}` : "";
+  const response = await fetch(`${backendApiUrl}/documents/translate/${encodeURIComponent(id)}/file${query}`, {
+    method: "GET",
+    headers: { Accept: "application/pdf, application/octet-stream", Authorization: `Bearer ${accessToken}` },
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Translated file is no longer available");
+  const contentDisposition = response.headers.get("content-disposition") ?? "";
+  const filename = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    ? decodeURIComponent(contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)![1]!)
+    : `translated-document.${format?.toLowerCase() ?? "pdf"}`;
+  return { blob: await response.blob(), filename };
+}
+
+export async function fetchOriginalDocumentFile(id: string): Promise<{ blob: Blob; filename: string }> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in to view your original document");
+  const response = await fetch(`${backendApiUrl}/documents/translate/${encodeURIComponent(id)}/source-file`, {
+    method: "GET",
+    headers: { Accept: "application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, image/*, text/plain", Authorization: `Bearer ${accessToken}` },
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Original file is no longer available");
+  const contentDisposition = response.headers.get("content-disposition") ?? "";
+  const filename = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    ? decodeURIComponent(contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)![1]!)
+    : "original-document";
+  return { blob: await response.blob(), filename };
 }

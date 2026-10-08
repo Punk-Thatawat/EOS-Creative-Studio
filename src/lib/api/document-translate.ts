@@ -4,6 +4,7 @@ const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://loc
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, '')}/api/v1`;
 
 export type TranslationLanguage = 'auto' | 'Thai' | 'English' | 'Japanese' | 'Chinese';
+export type TranslationOutputFormat = 'PDF' | 'DOCX' | 'TXT' | 'JSON';
 export type DocumentTranslation = {
   id: string;
   model: string;
@@ -11,10 +12,16 @@ export type DocumentTranslation = {
   sourceLanguage: TranslationLanguage;
   targetLanguage: Exclude<TranslationLanguage, 'auto'>;
   creditsUsed: number;
+  outputFile?: {
+    filename: string;
+    mimeType: string;
+    data: string;
+  };
 };
 
 export async function translateDocument(input: {
   file: File;
+  model?: string;
   sourceLanguage: TranslationLanguage;
   targetLanguage: Exclude<TranslationLanguage, 'auto'>;
 }): Promise<DocumentTranslation> {
@@ -22,6 +29,7 @@ export async function translateDocument(input: {
   if (!accessToken) throw new Error('Please sign in to translate a document');
   const form = new FormData();
   form.append('file', input.file);
+  if (input.model) form.append('model', input.model);
   form.append('sourceLanguage', input.sourceLanguage);
   form.append('targetLanguage', input.targetLanguage);
   const response = await fetch(`${backendApiUrl}/documents/translate`, {

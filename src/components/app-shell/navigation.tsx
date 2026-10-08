@@ -117,9 +117,17 @@ const adminAudioFeatures = [
   { id: "audioCleanup", label: "Audio Cleanup" },
 ] as const;
 
+const adminDocumentFeatures = [
+  { id: "document-ocr", label: "OCR" },
+  { id: "document-summary", label: "Summarize" },
+  { id: "document-translate", label: "Translate" },
+  { id: "document-contract", label: "Contract" },
+  { id: "document-report", label: "Report" },
+  { id: "document-form", label: "Form" },
+] as const;
+
 const adminCreativeFeatures = [
   { id: "audio", label: "Audio", description: "Create audio and music", icon: AudioLines },
-  { id: "document", label: "Document", description: "Create documents and presentations", icon: FileText },
 ] as const;
 
 function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; hydrated: boolean }) {
@@ -129,6 +137,7 @@ function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; 
   const isImageFeature = adminImageFeatures.some((item) => item.id === selectedFeature);
   const isVideoFeature = adminVideoFeatures.some((item) => item.id === selectedFeature);
   const isAudioFeature = selectedFeature === "audio" || adminAudioFeatures.some((item) => item.id === selectedFeature);
+  const isDocumentFeature = adminDocumentFeatures.some((item) => item.id === selectedFeature);
 
   return (
     <SidebarGroup className="px-0">
@@ -213,6 +222,21 @@ function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; 
                     {item.label}
                   </Link>
                 );
+              })}
+            </div>
+          </details>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <details open={isDocumentFeature} className="group">
+            <summary className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isDocumentFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}>
+              <FileText size={18} strokeWidth={isDocumentFeature ? 2.5 : 2} />
+              <span>Document</span>
+              <span className="ml-auto"><ChevronDown size={15} className="transition-transform group-open:rotate-180" /></span>
+            </summary>
+            <div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">
+              {adminDocumentFeatures.map((item) => {
+                const active = pathname === "/admin/model-routes" && selectedFeature === item.id;
+                return <Link key={item.id} href={`/admin/model-routes?feature=${item.id}`} aria-current={active ? "page" : undefined} className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${active ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}>{item.label}</Link>;
               })}
             </div>
           </details>

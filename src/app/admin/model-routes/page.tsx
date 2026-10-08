@@ -66,9 +66,17 @@ const videoFunctions = [
   { id: "video-to-music", label: "Video to Music", description: "Generate music from a video" },
 ] as const;
 
+const documentFunctions = [
+  { id: "document-ocr", label: "OCR", description: "Extract text from documents" },
+  { id: "document-summary", label: "Summarize", description: "Create a structured document summary" },
+  { id: "document-translate", label: "Translate", description: "Translate document content" },
+  { id: "document-contract", label: "Contract", description: "Analyze contracts" },
+  { id: "document-report", label: "Report", description: "Create reports from documents" },
+  { id: "document-form", label: "Form", description: "Extract structured form data" },
+] as const;
+
 const features = [
   { id: "audio", label: "Audio", description: "Create audio and music", icon: AudioWaveform },
-  { id: "document", label: "Document", description: "Create documents and presentations", icon: FileText },
 ] as const;
 
 const aiBackgroundModes: Array<{ id: AiBackgroundMode; label: string; description: string }> = [
@@ -108,10 +116,10 @@ function sameVideoStoryboardModeRouteDraft(left?: VideoStoryboardModeRouteDraft,
   return left.enabledModels.every((model) => right.enabledModels.includes(model));
 }
 
-type FeatureId = (typeof imageFunctions)[number]["id"] | (typeof videoFunctions)[number]["id"] | (typeof features)[number]["id"];
+type FeatureId = (typeof imageFunctions)[number]["id"] | (typeof videoFunctions)[number]["id"] | (typeof documentFunctions)[number]["id"] | (typeof features)[number]["id"] | "document";
 
 function formatFeature(id: FeatureId) {
-  return imageFunctions.find((feature) => feature.id === id)?.label ?? videoFunctions.find((feature) => feature.id === id)?.label ?? features.find((feature) => feature.id === id)?.label ?? id;
+  return imageFunctions.find((feature) => feature.id === id)?.label ?? videoFunctions.find((feature) => feature.id === id)?.label ?? documentFunctions.find((feature) => feature.id === id)?.label ?? features.find((feature) => feature.id === id)?.label ?? id;
 }
 
 function ModelInitials({ name }: { name: string }) {
@@ -401,13 +409,16 @@ function modelKindForFeature(feature: FeatureId): string {
   if (feature === "video-to-sfx" || feature === "video-to-music") return "audio";
   if (videoFunctions.some((item) => item.id === feature)) return "video";
   if (feature === "audio") return "audio";
-  if (feature === "document") return "document";
+  if (feature === "document" || documentFunctions.some((item) => item.id === feature)) return "document";
   return "image";
 }
 
 function isFeatureCompatible(item: GenerationModelOption, feature: FeatureId): boolean {
-  if (item.kind !== modelKindForFeature(feature)) return false;
   const capabilities = item.capabilities;
+  const isDocumentFeature = feature === "document" || documentFunctions.some((documentFeature) => documentFeature.id === feature);
+  const isLlm = capabilities.providerType?.trim().toLowerCase() === "llm";
+  if (isDocumentFeature) return item.kind === "document" && isLlm;
+  if (item.kind !== modelKindForFeature(feature)) return false;
   if (feature === "text-to-image") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter);
   if (feature === "image-to-image") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && (capabilities.imageParameter || capabilities.referenceImagesParameter));
   if (feature === "image-to-video") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && (capabilities.imageParameter || capabilities.referenceImagesParameter));
@@ -485,14 +496,14 @@ function MultiTargetModelAssignmentDialog({
     <div className="flex max-h-[min(820px,calc(100vh-32px))] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]">
       <header className="border-b border-border bg-white px-5 py-4 sm:px-7 sm:py-5">
         <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Model assignment</p><h2 id="assign-models-title" className="mt-1 text-xl font-bold tracking-tight">Assign models to features</h2><p className="mt-1 text-xs text-muted-foreground">เลือกฟีเจอร์ปลายทาง แล้วลาก model เข้าไป หรือกด Add</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground" aria-label="Close dialog"><X size={19} /></button></div>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Assign to</span><select value={feature} onChange={(event) => handleFeatureChange(event.target.value as FeatureId)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><optgroup label="Image">{imageFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Video">{videoFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>{features.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{feature === "background-removal" ? <label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">AI Background mode</span><select value={backgroundMode} onChange={(event) => onBackgroundModeChange(event.target.value as AiBackgroundMode)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10">{aiBackgroundModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label> : null}</div>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Assign to</span><select value={feature} onChange={(event) => handleFeatureChange(event.target.value as FeatureId)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><optgroup label="Image">{imageFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Video">{videoFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Document">{documentFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>{features.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{feature === "background-removal" ? <label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">AI Background mode</span><select value={backgroundMode} onChange={(event) => onBackgroundModeChange(event.target.value as AiBackgroundMode)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10">{aiBackgroundModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label> : null}</div>
       </header>
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-white p-4" aria-label="Model catalog">
           <div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold">Model catalog</h3><p className="mt-1 text-[11px] text-muted-foreground">{compatibleModels.length} compatible model{compatibleModels.length === 1 ? "" : "s"} · {formatFeature(feature)}</p></div><GripVertical size={17} className="text-muted-foreground" /></div>
           <SearchInput size="compact" value={query} onValueChange={setQuery} placeholder="Search model" aria-label="Search model catalog" />
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{unassigned.length ? unassigned.map((item) => <div key={`${item.provider}:${item.model}`} draggable onDragStart={() => setDraggedModel(item.model)} onDragEnd={() => { setDraggedModel(null); setDragOver(false); }} className="flex cursor-grab items-center gap-3 rounded-xl border border-border bg-[#fcfaf8] p-3 transition hover:border-primary/50 active:cursor-grabbing"><GripVertical size={15} className="shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.displayName}</p><p className="truncate font-mono text-[10px] text-muted-foreground">{item.provider} · {item.model}</p></div><button type="button" onClick={() => onAdd(feature, item.model)} className="shrink-0 rounded-lg bg-[#fff0e9] px-2.5 py-1.5 text-[10px] font-bold text-primary hover:bg-primary hover:text-white">Add</button></div>) : <p className="rounded-xl border border-dashed border-[#d8d0ca] px-4 py-8 text-center text-xs text-muted-foreground">All compatible models are assigned.</p>}</div>
+          <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{unassigned.length ? unassigned.map((item) => <div key={`${item.provider}:${item.model}`} draggable onDragStart={() => setDraggedModel(item.model)} onDragEnd={() => { setDraggedModel(null); setDragOver(false); }} className="flex cursor-grab items-center gap-3 rounded-xl border border-border bg-[#fcfaf8] p-3 transition hover:border-primary/50 active:cursor-grabbing"><GripVertical size={15} className="shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.displayName}</p><p className="truncate font-mono text-[10px] text-muted-foreground">{item.provider} · {item.model}</p></div><button type="button" onClick={() => onAdd(feature, item.model)} className="shrink-0 rounded-lg bg-[#fff0e9] px-2.5 py-1.5 text-[10px] font-bold text-primary hover:bg-primary hover:text-white">Add</button></div>) : <p className="rounded-xl border border-dashed border-[#d8d0ca] px-4 py-8 text-center text-xs text-muted-foreground">All compatible models are assigned.</p>}</div>
         </section>
 
         <section className={`flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-dashed p-4 transition-colors ${dragOver ? "border-primary bg-[#fff0e9]" : "border-[#d8d0ca] bg-white"}`} onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(event) => { event.preventDefault(); if (draggedModel) onAdd(feature, draggedModel); setDraggedModel(null); setDragOver(false); }} aria-label="Assigned models drop zone">
@@ -1055,7 +1066,7 @@ function AdminModelRoutesContent() {
   const requestedFeature = searchParams.get("feature");
   const audioFeatureParam = audioFeatureProfileRows.some((item) => item.key === requestedFeature) ? requestedFeature as AdminAudioFeature : null;
   const featureParam = (requestedFeature === "video" ? "image-to-video" : audioFeatureParam ? "audio" : requestedFeature) as FeatureId | null;
-  const feature = featureParam && [...imageFunctions, ...videoFunctions, ...features].some((item) => item.id === featureParam) ? featureParam : imageFunctions[0].id;
+  const feature = featureParam && [...imageFunctions, ...videoFunctions, ...documentFunctions, ...features].some((item) => item.id === featureParam) ? featureParam : imageFunctions[0].id;
   const [backgroundMode, setBackgroundMode] = useState<AiBackgroundMode>("remove");
   const routeKey = feature === "background-removal" ? `background-removal:${backgroundMode}` : feature;
   const [models, setModels] = useState<GenerationModelOption[]>([]);
@@ -1121,7 +1132,7 @@ function AdminModelRoutesContent() {
   const enabledCount = enabledModels.length;
   const enabledChanged = enabledModels.length !== savedEnabledModels.length || enabledModels.some((model) => !savedEnabledModels.includes(model));
   const hasChanges = selectedModel !== savedModel || enabledChanged;
-  const activeFeature = imageFunctions.find((item) => item.id === feature) ?? videoFunctions.find((item) => item.id === feature) ?? features.find((item) => item.id === feature) ?? imageFunctions[0];
+  const activeFeature = imageFunctions.find((item) => item.id === feature) ?? videoFunctions.find((item) => item.id === feature) ?? documentFunctions.find((item) => item.id === feature) ?? features.find((item) => item.id === feature) ?? imageFunctions[0];
   const tutorialFeature = audioFeatureParam ?? feature;
   const tutorialFeatureName = audioFeatureParam ? audioFeatureProfileRows.find((item) => item.key === audioFeatureParam)?.label ?? activeFeature.label : activeFeature.label;
 
@@ -1176,7 +1187,7 @@ function AdminModelRoutesContent() {
     setAssignmentBackgroundMode(backgroundMode);
     const assignmentModels = [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()];
     setAssignmentCatalog(assignmentModels);
-    const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
+    const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...documentFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
     const drafts = Object.fromEntries(targetFeatures.map((target) => {
       const targetRouteKey = target === "background-removal" ? `background-removal:${backgroundMode}` : target;
       // Use the already loaded mode-specific list for the active feature. This
@@ -1203,7 +1214,7 @@ function AdminModelRoutesContent() {
     setAssignmentSaving(true);
     setError("");
     try {
-      const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
+      const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...documentFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
       for (const target of targetFeatures) {
         const draft = assignmentDrafts[target] ?? { assignedModelIds: [], defaultModel: "" };
         if (draft.assignedModelIds.length > 0 && !draft.defaultModel) throw new Error(`${formatFeature(target)} needs a default model`);
