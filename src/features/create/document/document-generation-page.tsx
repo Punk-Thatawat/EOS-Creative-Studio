@@ -77,9 +77,9 @@ const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "ocr", icon: ScanText, available: true },
   { id: "summarize", icon: NotebookPen, available: true },
   { id: "translate", icon: Languages, available: true },
-  { id: "contract", icon: FileCheck2 },
+  { id: "contract", icon: FileCheck2, available: true },
   { id: "report", icon: BarChart3, available: true },
-  { id: "form", icon: ListChecks },
+  { id: "form", icon: ListChecks, available: true },
 ];
 
 function isModeId(value: string | null): value is ModeId {

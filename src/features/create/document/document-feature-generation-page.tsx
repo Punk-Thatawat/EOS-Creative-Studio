@@ -23,6 +23,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
 import { listDocumentOcrTypes, runDocumentOcr, type DocumentOcrResult, type OcrDocumentTypeId, type OcrDepth, type OcrDocumentTypeInfo, type OcrHistoryItem, type OcrOutputFormat, type OcrStyleChoice } from "@/lib/api/document-ocr";
@@ -67,9 +68,9 @@ type SummaryStyle = "executive" | "bullets";
 const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "ocr", icon: ScanText, available: true },
   { id: "summarize", icon: NotebookPen, available: true },
-  { id: "translate", icon: Languages },
+  { id: "translate", icon: Languages, available: true },
   { id: "contract", icon: FileCheck2, available: true },
-  { id: "report", icon: BarChart3 },
+  { id: "report", icon: BarChart3, available: true },
   { id: "form", icon: ListChecks, available: true },
 ];
 
@@ -154,6 +155,9 @@ function formatFileSize(bytes: number): string {
 
 export function DocumentFeatureGenerationPage() {
   const { locale, t } = useLocale();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeMode, setActiveMode] = useState<ModeId>("ocr");
 
   // The URL is only known in the browser, so the saved tool is picked up right after the first render.
@@ -164,11 +168,20 @@ export function DocumentFeatureGenerationPage() {
   }, []);
 
   const selectMode = (id: ModeId) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id === "ocr") params.delete(MODE_PARAM);
+    else params.set(MODE_PARAM, id);
+    const query = params.toString();
+
+    // Summary, translation and report are rendered by the shared page. Route
+    // through the URL so the parent can switch away from the feature page.
+    if (id === "summarize" || id === "translate" || id === "report") {
+      router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+      return;
+    }
+
     setActiveMode(id);
-    const url = new URL(window.location.href);
-    if (id === "ocr") url.searchParams.delete(MODE_PARAM);
-    else url.searchParams.set(MODE_PARAM, id);
-    window.history.replaceState(window.history.state, "", url);
+    router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
   };
   const [summaryStyle, setSummaryStyle] = useState<SummaryStyle>("executive");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
