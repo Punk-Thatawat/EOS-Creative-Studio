@@ -1122,22 +1122,9 @@ export function DocumentFeatureGenerationPage() {
             )}
           </div>
 
-          {isOcr && (
-            <div className={styles.previewTabs} role="tablist" aria-label={t(K("ocr.tab.label"))}>
-              <button type="button" role="tab" aria-selected={ocrTab === "preview"} className={ocrTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("preview")}>{t(K("ocr.tab.preview"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "result"} className={ocrTab === "result" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("result")}>{t(K("ocr.tab.result"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "text"} className={ocrTab === "text" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("text")}>{t(K("ocr.tab.text"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "history"} className={ocrTab === "history" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("history")}>{t(K("ocr.tab.history"))}</button>
-            </div>
-          )}
 
           {isContract && (
             <>
-              <div className={styles.previewTabs} role="tablist" aria-label={t(K("contract.tab.label"))}>
-                <button type="button" role="tab" aria-selected={contractTab === "preview"} className={contractTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setContractTab("preview")}>{t(K("contract.tab.preview"))}</button>
-                <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
-                <button type="button" role="tab" aria-selected={contractTab === "history"} className={contractTab === "history" ? styles.previewTabActive : undefined} onClick={() => setContractTab("history")}>{t(K("contract.tab.history"))}</button>
-              </div>
               {contractTab === "preview" && (
                 <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
                   {selectedFile && canPreviewFile(selectedFile) ? (
@@ -1174,6 +1161,11 @@ export function DocumentFeatureGenerationPage() {
                   <ContractHistoryPanel refreshKey={contractHistoryKey} onOpen={openContractFromHistory} />
                 </div>
               )}
+              <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("contract.tab.label"))}>
+                <button type="button" role="tab" aria-selected={contractTab === "preview"} className={contractTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setContractTab("preview")}>{t(K("contract.tab.preview"))}</button>
+                <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
+                <button type="button" role="tab" aria-selected={contractTab === "history"} className={contractTab === "history" ? styles.previewTabActive : undefined} onClick={() => setContractTab("history")}>{t(K("contract.tab.history"))}</button>
+              </div>
             </>
           )}
 
@@ -1189,11 +1181,6 @@ export function DocumentFeatureGenerationPage() {
           )}
           {isForm && (
             <>
-              <div className={styles.previewTabs} role="tablist" aria-label={t(K("form.tab.label"))}>
-                <button type="button" role="tab" aria-selected={formTab === "preview"} className={formTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setFormTab("preview")}>{t(K("form.tab.preview"))}</button>
-                <button type="button" role="tab" aria-selected={formTab === "results"} className={formTab === "results" ? styles.previewTabActive : undefined} disabled={formFields.length === 0} title={formFields.length ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setFormTab("results")}>{t(K("form.tab.results"))}</button>
-                <button type="button" role="tab" aria-selected={formTab === "history"} className={formTab === "history" ? styles.previewTabActive : undefined} onClick={() => setFormTab("history")}>{t(K("form.tab.history"))}</button>
-              </div>
               {/* Kept mounted when another tab is open, so the marks made on the form are still there and can be exported. */}
               <div style={{ display: formTab === "preview" ? "contents" : "none" }}>
                 <>
@@ -1297,6 +1284,11 @@ export function DocumentFeatureGenerationPage() {
                   <FormHistoryPanel refreshKey={formHistoryKey} onOpen={openFormFromHistory} />
                 </div>
               )}
+              <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("form.tab.label"))}>
+                <button type="button" role="tab" aria-selected={formTab === "preview"} className={formTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setFormTab("preview")}>{t(K("form.tab.preview"))}</button>
+                <button type="button" role="tab" aria-selected={formTab === "results"} className={formTab === "results" ? styles.previewTabActive : undefined} disabled={formFields.length === 0} title={formFields.length ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setFormTab("results")}>{t(K("form.tab.results"))}</button>
+                <button type="button" role="tab" aria-selected={formTab === "history"} className={formTab === "history" ? styles.previewTabActive : undefined} onClick={() => setFormTab("history")}>{t(K("form.tab.history"))}</button>
+              </div>
             </>
           )}
 
@@ -1435,6 +1427,14 @@ export function DocumentFeatureGenerationPage() {
                 <article><small>{t(K("ocr.statTime"))}</small><strong>{ocrResult.processMs !== undefined ? `${(ocrResult.processMs / 1000).toFixed(1)}s` : "—"}</strong></article>
               </div>
               <OcrResultView result={ocrResult} fileName={ocrResultName} showConfidence={ocrConfidence} exportFormat={ocrFormat} showStyled={ocrShowStyled} onShowStyledChange={setOcrShowStyled} />
+            </div>
+          )}
+          {isOcr && (
+            <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("ocr.tab.label"))}>
+              <button type="button" role="tab" aria-selected={ocrTab === "preview"} className={ocrTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("preview")}>{t(K("ocr.tab.preview"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "result"} className={ocrTab === "result" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("result")}>{t(K("ocr.tab.result"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "text"} className={ocrTab === "text" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("text")}>{t(K("ocr.tab.text"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "history"} className={ocrTab === "history" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("history")}>{t(K("ocr.tab.history"))}</button>
             </div>
           )}
           </main>

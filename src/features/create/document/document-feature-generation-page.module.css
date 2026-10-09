@@ -1141,3 +1141,5 @@
 }
 .modelLoadError { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 7px 0 0; color: #c94d2e; font-size: 11px; line-height: 1.35; }
 .modelLoadError button { flex: none; border: 0; background: transparent; color: #e96833; cursor: pointer; font: inherit; font-weight: 800; text-decoration: underline; }
+/* OCR: the tabs sit under the preview and the results, like Summarize, so the page is what you see first. */
+.previewTabsBottom { margin-top: 14px; }
