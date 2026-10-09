@@ -983,9 +983,13 @@
 .formToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; border: 1px solid #ece9e6; border-radius: 12px; background: #fff; padding: 10px 12px; }
 .toolGroup { display: flex; align-items: center; gap: 4px; }
 /* Two rows that fill the width: looking at the page (select, copy, zoom) on top, then turning and marking it below. */
+.toolRowEnd { display: flex; flex: 1 0 100%; justify-content: flex-end; }
 .toolRow { display: flex; flex: 1 0 100%; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
 @media (min-width: 1440px) {
   .desktopIconOnly { display: none; }
+  /* Groups sit together from the left, set apart by a thin line, rather than spread to the edges with gaps between. */
+  .toolRow { justify-content: flex-start; gap: 8px 18px; }
+  .toolRow > .toolGroup + .toolGroup { padding-left: 18px; border-left: 1px solid #ece9e6; }
 }
 .formToolbar .toolbarButton { min-height: 34px; gap: 7px; border-radius: 8px; padding: 0 11px; font-size: 12px; }
 .toolbarSave { flex: none; margin-left: auto; background: #df602d; color: #fff; white-space: nowrap; }
@@ -1028,6 +1032,7 @@
   .formToolbar { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; padding: 8px; }
   .formToolbar .toolRow,
   .formToolbar .toolGroup { display: contents; }
+  .formToolbar .toolRowEnd { grid-column: 1 / -1; order: 2; }
   /* Drawing a box and adding a note close the first row on a desktop; in the grid they come last, after the marking tools. */
   .formToolbar .toolGroupMarkup > * { order: 1; }
   .formToolbar .formToolbarStyle,
@@ -1075,6 +1080,14 @@
 .formToolbarStyle > span { color: #6f7780; font-size: 11px; font-weight: 700; }
 .highlightGroup { display: inline-flex; align-items: center; gap: 10px; }
 .highlightGroup > span:first-child { color: #6f7780; font-size: 11px; font-weight: 700; }
+/* The font row: the name, the font controls and the highlighter each stay in one piece and wrap as pieces, never mid-control. */
+@media (min-width: 600px) {
+  .formToolbarStyle { row-gap: 10px; column-gap: 18px; }
+  .formToolbarStyle > .markStyleBar { flex: 0 0 auto; flex-wrap: nowrap; }
+  .formToolbarStyle .markStyleRest { flex: none; }
+  .formToolbarStyle .highlightGroup { flex: none; }
+  .formToolbarStyle .highlightSwatches { flex-wrap: nowrap; }
+}
 .markPicked { z-index: 6; outline: 1.5px solid #df602d; outline-offset: 1px; }
 .markPicked textarea { border-color: #e8864f; background: rgb(255 255 255 / 70%); }
 .markSymbol, .markSign { cursor: move; touch-action: none; }
@@ -1138,3 +1151,7 @@
   .settingsPanel .generateButton,
   .settingsPanel .modelCards { max-width: none; }
 }
+.modelLoadError { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 7px 0 0; color: #c94d2e; font-size: 11px; line-height: 1.35; }
+.modelLoadError button { flex: none; border: 0; background: transparent; color: #e96833; cursor: pointer; font: inherit; font-weight: 800; text-decoration: underline; }
+/* OCR: the tabs sit under the preview and the results, like Summarize, so the page is what you see first. */
+.previewTabsBottom { margin-top: 14px; }

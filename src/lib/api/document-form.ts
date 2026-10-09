@@ -57,12 +57,13 @@ export async function getFormOptions(): Promise<FormOptions> {
 }
 
 /** `fields` is the text the user typed (names separated by commas or new lines); empty lets the AI find every field. */
-export async function readForm(input: { file: File; fields?: string }): Promise<FormReadResult> {
+export async function readForm(input: { file: File; fields?: string; model?: string }): Promise<FormReadResult> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error('Please sign in to read a form');
   const form = new FormData();
   form.append('file', input.file);
   if (input.fields?.trim()) form.append('fields', input.fields.trim());
+  if (input.model) form.append('model', input.model);
 
   const response = await fetch(`${backendApiUrl}/documents/form/read`, {
     method: 'POST',

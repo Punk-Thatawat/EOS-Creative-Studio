@@ -26,6 +26,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
+import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { VideoModelDropdown } from "../video-model-dropdown";
 import { listDocumentOcrTypes, runDocumentOcr, type DocumentOcrResult, type OcrDocumentTypeId, type OcrDepth, type OcrDocumentTypeInfo, type OcrHistoryItem, type OcrOutputFormat, type OcrStyleChoice } from "@/lib/api/document-ocr";
 import { getContractOptions, reviewContract, type ContractHistoryItem, type ContractReviewResult, type ContractTypeId } from "@/lib/api/document-contract";
 import { getFormDocument, getFormOptions, readForm, saveFormEdits, type FormBox, type FormField, type FormHistoryItem, type FormReadResult } from "@/lib/api/document-form";
@@ -243,6 +245,18 @@ export function DocumentFeatureGenerationPage() {
   const [contractFromHistory, setContractFromHistory] = useState(false);
   const [contractCredits, setContractCredits] = useState(3);
   const [formOptions, setFormOptions] = useState({ credits: 3, maxPages: 5 });
+  /** The models the catalog enables for reading forms, and the one picked. */
+  const [formModels, setFormModels] = useState<GenerationModelOption[]>([]);
+  const [selectedFormModel, setSelectedFormModel] = useState("");
+  const [formModelsLoading, setFormModelsLoading] = useState(true);
+  const [formModelsError, setFormModelsError] = useState("");
+  const [formModelRetry, setFormModelRetry] = useState(0);
+  /** The same for contract review. */
+  const [contractModels, setContractModels] = useState<GenerationModelOption[]>([]);
+  const [selectedContractModel, setSelectedContractModel] = useState("");
+  const [contractModelsLoading, setContractModelsLoading] = useState(true);
+  const [contractModelsError, setContractModelsError] = useState("");
+  const [contractModelRetry, setContractModelRetry] = useState(0);
   const [formHow, setFormHow] = useState<"auto" | "custom">("auto");
   const [formFieldNames, setFormFieldNames] = useState("");
   const [formResult, setFormResult] = useState<FormReadResult | null>(null);
@@ -364,6 +378,42 @@ export function DocumentFeatureGenerationPage() {
     }).catch(() => undefined);
     return () => { mounted = false; };
   }, []);
+
+  // The models the catalog enables for reading forms and for reviewing contracts, loaded when each tab is open.
+  const loadModels = (feature: string, setModels: (items: GenerationModelOption[]) => void, setSelected: (update: (current: string) => string) => void, setLoading: (value: boolean) => void, setError: (value: string) => void) => {
+    const controller = new AbortController();
+    let active = true;
+    setLoading(true);
+    setError("");
+    void listGenerationModels(feature, undefined, { signal: controller.signal })
+      .then((items) => {
+        if (!active) return;
+        const eligible = items.filter((item) => item.enabled);
+        setModels(eligible);
+        setSelected((current) => (eligible.some((item) => item.model === current) ? current : eligible.find((item) => item.isDefault)?.model ?? eligible[0]?.model ?? ""));
+      })
+      .catch((error: unknown) => {
+        if (active && !controller.signal.aborted) setError(error instanceof Error ? error.message : t(K("summary.modelError")));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  };
+  useEffect(() => {
+    if (activeMode !== "form") return;
+    return loadModels("document-form", setFormModels, setSelectedFormModel, setFormModelsLoading, setFormModelsError);
+    // `t` only changes with the language; the list must not reload for that.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMode, formModelRetry]);
+  useEffect(() => {
+    if (activeMode !== "contract") return;
+    return loadModels("document-contract", setContractModels, setSelectedContractModel, setContractModelsLoading, setContractModelsError);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMode, contractModelRetry]);
 
   useEffect(() => {
     let mounted = true;
@@ -660,7 +710,7 @@ export function DocumentFeatureGenerationPage() {
     setFormSelectedId(null);
     setFormTab("preview");
     try {
-      const result = await readForm({ file: selectedFile, ...(formHow === "custom" ? { fields: formFieldNames } : {}) });
+      const result = await readForm({ file: selectedFile, ...(formHow === "custom" ? { fields: formFieldNames } : {}), ...(selectedFormModel ? { model: selectedFormModel } : {}) });
       setFormResult(result);
       setFormFields(result.fields);
       setFormResultName(selectedFile.name);
@@ -779,7 +829,7 @@ export function DocumentFeatureGenerationPage() {
     setContractResult(null);
     setContractTab("review");
     try {
-      const result = await reviewContract({ file: selectedFile, contractType, language: contractLanguage, ...(contractParty ? { party: contractParty } : {}) });
+      const result = await reviewContract({ file: selectedFile, contractType, language: contractLanguage, ...(contractParty ? { party: contractParty } : {}), ...(selectedContractModel ? { model: selectedContractModel } : {}) });
       setContractResult(result);
       setContractResultName(selectedFile.name);
       setContractFromHistory(false);
@@ -1083,22 +1133,9 @@ export function DocumentFeatureGenerationPage() {
             )}
           </div>
 
-          {isOcr && (
-            <div className={styles.previewTabs} role="tablist" aria-label={t(K("ocr.tab.label"))}>
-              <button type="button" role="tab" aria-selected={ocrTab === "preview"} className={ocrTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("preview")}>{t(K("ocr.tab.preview"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "result"} className={ocrTab === "result" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("result")}>{t(K("ocr.tab.result"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "text"} className={ocrTab === "text" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("text")}>{t(K("ocr.tab.text"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "history"} className={ocrTab === "history" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("history")}>{t(K("ocr.tab.history"))}</button>
-            </div>
-          )}
 
           {isContract && (
             <>
-              <div className={styles.previewTabs} role="tablist" aria-label={t(K("contract.tab.label"))}>
-                <button type="button" role="tab" aria-selected={contractTab === "preview"} className={contractTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setContractTab("preview")}>{t(K("contract.tab.preview"))}</button>
-                <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
-                <button type="button" role="tab" aria-selected={contractTab === "history"} className={contractTab === "history" ? styles.previewTabActive : undefined} onClick={() => setContractTab("history")}>{t(K("contract.tab.history"))}</button>
-              </div>
               {contractTab === "preview" && (
                 <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
                   {selectedFile && canPreviewFile(selectedFile) ? (
@@ -1135,6 +1172,11 @@ export function DocumentFeatureGenerationPage() {
                   <ContractHistoryPanel refreshKey={contractHistoryKey} onOpen={openContractFromHistory} />
                 </div>
               )}
+              <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("contract.tab.label"))}>
+                <button type="button" role="tab" aria-selected={contractTab === "preview"} className={contractTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setContractTab("preview")}>{t(K("contract.tab.preview"))}</button>
+                <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
+                <button type="button" role="tab" aria-selected={contractTab === "history"} className={contractTab === "history" ? styles.previewTabActive : undefined} onClick={() => setContractTab("history")}>{t(K("contract.tab.history"))}</button>
+              </div>
             </>
           )}
 
@@ -1150,11 +1192,6 @@ export function DocumentFeatureGenerationPage() {
           )}
           {isForm && (
             <>
-              <div className={styles.previewTabs} role="tablist" aria-label={t(K("form.tab.label"))}>
-                <button type="button" role="tab" aria-selected={formTab === "preview"} className={formTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setFormTab("preview")}>{t(K("form.tab.preview"))}</button>
-                <button type="button" role="tab" aria-selected={formTab === "results"} className={formTab === "results" ? styles.previewTabActive : undefined} disabled={formFields.length === 0} title={formFields.length ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setFormTab("results")}>{t(K("form.tab.results"))}</button>
-                <button type="button" role="tab" aria-selected={formTab === "history"} className={formTab === "history" ? styles.previewTabActive : undefined} onClick={() => setFormTab("history")}>{t(K("form.tab.history"))}</button>
-              </div>
               {/* Kept mounted when another tab is open, so the marks made on the form are still there and can be exported. */}
               <div style={{ display: formTab === "preview" ? "contents" : "none" }}>
                 <>
@@ -1258,6 +1295,11 @@ export function DocumentFeatureGenerationPage() {
                   <FormHistoryPanel refreshKey={formHistoryKey} onOpen={openFormFromHistory} />
                 </div>
               )}
+              <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("form.tab.label"))}>
+                <button type="button" role="tab" aria-selected={formTab === "preview"} className={formTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setFormTab("preview")}>{t(K("form.tab.preview"))}</button>
+                <button type="button" role="tab" aria-selected={formTab === "results"} className={formTab === "results" ? styles.previewTabActive : undefined} disabled={formFields.length === 0} title={formFields.length ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setFormTab("results")}>{t(K("form.tab.results"))}</button>
+                <button type="button" role="tab" aria-selected={formTab === "history"} className={formTab === "history" ? styles.previewTabActive : undefined} onClick={() => setFormTab("history")}>{t(K("form.tab.history"))}</button>
+              </div>
             </>
           )}
 
@@ -1398,6 +1440,14 @@ export function DocumentFeatureGenerationPage() {
               <OcrResultView result={ocrResult} fileName={ocrResultName} showConfidence={ocrConfidence} exportFormat={ocrFormat} showStyled={ocrShowStyled} onShowStyledChange={setOcrShowStyled} />
             </div>
           )}
+          {isOcr && (
+            <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("ocr.tab.label"))}>
+              <button type="button" role="tab" aria-selected={ocrTab === "preview"} className={ocrTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("preview")}>{t(K("ocr.tab.preview"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "result"} className={ocrTab === "result" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("result")}>{t(K("ocr.tab.result"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "text"} className={ocrTab === "text" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("text")}>{t(K("ocr.tab.text"))}</button>
+              <button type="button" role="tab" aria-selected={ocrTab === "history"} className={ocrTab === "history" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("history")}>{t(K("ocr.tab.history"))}</button>
+            </div>
+          )}
           </main>
         }
         right={
@@ -1405,7 +1455,33 @@ export function DocumentFeatureGenerationPage() {
           <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
           <div className={styles.settingGroup}>
             <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
-            {isSummarize || isOcr || isContract || isForm ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{isOcr ? t(K("ocr.modelName")) : isContract ? t(K("contract.modelName")) : isForm ? t(K("form.modelName")) : t(K("summary.modelName"))}</strong><small>{isOcr ? t(K("ocr.modelHint")) : isContract ? t(K("contract.modelHint")) : isForm ? t(K("form.modelHint")) : t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
+            {isContract ? <>
+              <VideoModelDropdown
+                models={contractModels}
+                value={selectedContractModel}
+                loading={contractModelsLoading}
+                ariaLabel={t(K("contract.modelOptions"))}
+                placeholder={t(K("summary.noModel"))}
+                onChange={setSelectedContractModel}
+              />
+              {contractModelsError ? <p className={styles.modelLoadError} role="alert">
+                {contractModelsError}
+                <button type="button" onClick={() => setContractModelRetry((current) => current + 1)}>{t("create.video.common.retry")}</button>
+              </p> : null}
+            </> : isForm ? <>
+              <VideoModelDropdown
+                models={formModels}
+                value={selectedFormModel}
+                loading={formModelsLoading}
+                ariaLabel={t(K("form.modelOptions"))}
+                placeholder={t(K("summary.noModel"))}
+                onChange={setSelectedFormModel}
+              />
+              {formModelsError ? <p className={styles.modelLoadError} role="alert">
+                {formModelsError}
+                <button type="button" onClick={() => setFormModelRetry((current) => current + 1)}>{t("create.video.common.retry")}</button>
+              </p> : null}
+            </> : isSummarize || isOcr || isContract ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{isOcr ? t(K("ocr.modelName")) : t(K("summary.modelName"))}</strong><small>{isOcr ? t(K("ocr.modelHint")) : t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
               <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("settings.standard"))}</strong><small>{t(K("settings.standardHint"))}</small></div>
               <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
             </div>}
