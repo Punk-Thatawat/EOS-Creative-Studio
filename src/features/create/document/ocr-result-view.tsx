@@ -9,7 +9,7 @@ import { looksLikeWrongType } from "./ocr-cards";
 import { downloadGeneratedFile, downloadOcrResult, ocrResultToText } from "./ocr-download";
 import { fieldLabel } from "./ocr-field-labels";
 import { formatPrimitive, isEmpty, isRecord, rawOcrText } from "./ocr-format";
-import styles from "./document-generation-page.module.css";
+import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
 

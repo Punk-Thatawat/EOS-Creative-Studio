@@ -16,7 +16,7 @@ import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { downloadOcrResult } from "./ocr-download";
 import { OCR_DOCUMENT_TYPE_OPTIONS } from "./ocr-document-types";
-import styles from "./document-generation-page.module.css";
+import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
 const PAGE_SIZE = 20;
