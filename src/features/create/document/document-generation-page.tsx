@@ -35,6 +35,7 @@ import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { VideoModelDropdown } from "../video-model-dropdown";
 import { DocumentFeatureGenerationPage } from "./document-feature-generation-page";
+import { ImageTutorialButton } from "../image-generation/components/image-tutorial-button";
 import styles from "./document-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -53,6 +54,15 @@ const documentModelFeatureByMode: Record<ModeId, string> = {
   translate: "document-translate",
   contract: "document-contract",
   report: "document-summary",
+  form: "document-form",
+};
+
+const documentTutorialFeatureByMode: Record<ModeId, string> = {
+  ocr: "document-ocr",
+  summarize: "document-summary",
+  translate: "document-translate",
+  contract: "document-contract",
+  report: "document-report",
   form: "document-form",
 };
 
@@ -945,6 +955,7 @@ function SummaryTranslationPage() {
         }
         left={
           <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
+          <div className={styles.tutorialTop}><ImageTutorialButton feature={documentTutorialFeatureByMode[activeMode]} featureName={t(K(`mode.${activeMode}`))} /></div>
           <PanelHeading step="1">{t(K("source.heading"))}</PanelHeading>
           <div
             className={styles.dropzone}

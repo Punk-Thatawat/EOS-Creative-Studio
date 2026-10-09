@@ -50,6 +50,7 @@ import { buildOcrCards } from "./ocr-cards";
 import { downloadBlob, downloadOcrResult, ocrResultToText } from "./ocr-download";
 import { OcrHistoryPanel } from "./ocr-history";
 import { OcrFullTextView, OcrResultView } from "./ocr-result-view";
+import { ImageTutorialButton } from "../image-generation/components/image-tutorial-button";
 import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -73,6 +74,15 @@ const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "report", icon: BarChart3, available: true },
   { id: "form", icon: ListChecks, available: true },
 ];
+
+const documentTutorialFeatureByMode: Record<ModeId, string> = {
+  ocr: "document-ocr",
+  summarize: "document-summary",
+  translate: "document-translate",
+  contract: "document-contract",
+  report: "document-report",
+  form: "document-form",
+};
 
 const outputs = [
   { key: K("output.summary"), icon: NotebookPen },
@@ -859,6 +869,7 @@ export function DocumentFeatureGenerationPage() {
         }
         left={
           <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
+          <div className={styles.tutorialTop}><ImageTutorialButton feature={documentTutorialFeatureByMode[activeMode]} featureName={t(K(`mode.${activeMode}`))} /></div>
           <PanelHeading step="1">{t(K("source.heading"))}</PanelHeading>
           <div
             className={styles.dropzone}

@@ -296,6 +296,18 @@
 .panelHeading > span { color: var(--doc-orange); }
 .panelHeading h2 { margin: 0; font: inherit; }
 
+.tutorialTop {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 8px;
+}
+
+.tutorialTop :global(.gen-tutorial-trigger) {
+  flex: 0 0 auto;
+}
+
 .dropzone {
   display: flex;
   min-height: 150px;
