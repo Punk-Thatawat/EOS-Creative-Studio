@@ -47,6 +47,7 @@ export async function reviewContract(input: {
   contractType: ContractTypeId;
   party?: string;
   language: 'auto' | 'English' | 'Thai';
+  model?: string;
 }): Promise<ContractReviewResult> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error('Please sign in to review a contract');
@@ -55,6 +56,7 @@ export async function reviewContract(input: {
   form.append('contractType', input.contractType);
   if (input.party?.trim()) form.append('party', input.party.trim());
   form.append('language', input.language);
+  if (input.model) form.append('model', input.model);
 
   const response = await fetch(`${backendApiUrl}/documents/contract/review`, {
     method: 'POST',
