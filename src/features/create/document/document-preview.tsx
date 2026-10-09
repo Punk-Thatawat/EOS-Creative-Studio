@@ -7,7 +7,7 @@ import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { DEFAULT_HIGHLIGHT, DEFAULT_MARK_STYLE, drawMarks, MarksLayer, valueWidthInEm, MAX_SYMBOL_WIDTH, MIN_SYMBOL_WIDTH, MIN_TEXT_WIDTH, newMark, turnMark, type MarkStyle, type MarkTool, type PageMark, type PreviewHandle } from "./preview-marks";
 import { fontById } from "./text-fonts";
-import styles from "./document-generation-page.module.css";
+import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
 

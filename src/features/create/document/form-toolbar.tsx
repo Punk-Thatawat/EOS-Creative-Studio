@@ -245,7 +245,6 @@ export function FormToolbar({
           </MenuButton>
 
         </div>
-        {!hasPreview && saveButton}
       </div>
       {hasPreview && (
         <div className={styles.formToolbarStyle}>
@@ -263,6 +262,8 @@ export function FormToolbar({
           {saveButton}
         </div>
       )}
+      {/* Without a form on screen the save button gets a row of its own, so the tools above stay where they are. */}
+      {!hasPreview && <div className={styles.toolRowEnd}>{saveButton}</div>}
     </div>
   );
 }
