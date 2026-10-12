@@ -988,8 +988,13 @@
 @media (min-width: 1440px) {
   .desktopIconOnly { display: none; }
   /* Groups sit together from the left, set apart by a thin line, rather than spread to the edges with gaps between. */
-  .toolRow { justify-content: flex-start; gap: 8px 18px; }
+  .toolRow { justify-content: flex-start; flex-wrap: nowrap; gap: 8px 18px; }
   .toolRow > .toolGroup + .toolGroup { padding-left: 18px; border-left: 1px solid #ece9e6; }
+  /* Each group takes its share of the row and spreads its tools evenly, so the rows run edge to edge. */
+  .toolRow > .toolGroup { flex: 1 1 0; justify-content: space-between; }
+  .toolRow > .toolGroup > .toolbarButton, .toolRow > .toolGroup > .toolMenuWrap { flex: 1 1 0; justify-content: center; }
+  .toolRow > .toolGroup > .toolMenuWrap > .toolbarButton { width: 30%; justify-content: center; }
+  .toolRow > .toolGroup > .zoomDropdown { flex: 1 1 0; }
 }
 .formToolbar .toolbarButton { min-height: 34px; gap: 7px; border-radius: 8px; padding: 0 11px; font-size: 12px; }
 .toolbarSave { flex: none; margin-left: auto; background: #df602d; color: #fff; white-space: nowrap; }
