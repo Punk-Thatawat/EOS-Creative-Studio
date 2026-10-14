@@ -3524,7 +3524,15 @@ export function AudioGenerationPage() {
     MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key),
   )?.key;
   const isModelLockedToClonedVoice = voiceMode === "cloned" && Boolean(clonedVoiceModelKey);
-  const selectedModel = isModelLockedToClonedVoice && clonedVoiceModelKey ? clonedVoiceModelKey : chosenModel;
+  // MiniMax is only used through cloned voices, so the tone-voice list offers the other models.
+  const toneVoiceModels = availableModels.filter((model) => !MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key));
+  const selectableModels = toneVoiceModels.length ? toneVoiceModels : availableModels;
+  const selectedModel =
+    isModelLockedToClonedVoice && clonedVoiceModelKey
+      ? clonedVoiceModelKey
+      : selectableModels.some((model) => model.key === chosenModel)
+        ? chosenModel
+        : (selectableModels[0]?.key ?? chosenModel);
   const [modelLoadState, setModelLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [selectedVoice, setSelectedVoice] = useState("");
   const [availableVoices, setAvailableVoices] = useState<AudioVoice[]>([]);
@@ -4949,10 +4957,10 @@ export function AudioGenerationPage() {
                   </div>
                   <div className={styles.settingBlock}>
                     <FieldLabel>{t("create.audio.voiceModel")}</FieldLabel>
-                    {availableModels.length > 1 && !isModelLockedToClonedVoice ? (
+                    {selectableModels.length > 1 && !isModelLockedToClonedVoice ? (
                       <Dropdown
                         value={selectedModel}
-                        options={availableModels.map((model) => ({ value: model.key, label: model.name }))}
+                        options={selectableModels.map((model) => ({ value: model.key, label: model.name }))}
                         onChange={setSelectedModel}
                         ariaLabel={t("create.audio.voiceModel")}
                         triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
@@ -4960,7 +4968,7 @@ export function AudioGenerationPage() {
                     ) : (
                       <div className={styles.fixedVoiceModel}>
                         {availableModels.find((model) => model.key === selectedModel)?.name ??
-                          availableModels[0]?.name ??
+                          selectableModels[0]?.name ??
                           "ElevenLabs · Eleven v3"}
                       </div>
                     )}
