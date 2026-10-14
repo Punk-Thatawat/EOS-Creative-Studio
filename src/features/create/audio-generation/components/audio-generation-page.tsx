@@ -4040,6 +4040,16 @@ export function AudioGenerationPage() {
     carouselVoices.slice(pageIndex * VOICE_PAGE_SIZE, pageIndex * VOICE_PAGE_SIZE + VOICE_PAGE_SIZE),
   );
   const carouselLoadState = voiceMode === "cloned" ? "ready" : voiceLoadState;
+  // The history also lists the newest cloned voices, the same way the Voice Clone tab does, newest first.
+  const historyRows = [
+    ...audioHistory.map((item) => ({ kind: "entry" as const, key: item.id, createdAt: item.createdAt, item })),
+    ...savedVoices.slice(0, AUDIO_HISTORY_LIMIT).map((voice) => ({
+      kind: "voice" as const,
+      key: `voice:${voice.voiceId}`,
+      createdAt: voice.createdAt,
+      voice,
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
   const isSceneMode = activeTab === "Podcast & Dialogue" && audioScenes.length > 0;
   const hasIncompleteScene = audioScenes.some((scene) => !scene.text.trim() || !scene.voice.trim());
   const isGenerating = status === "generating" || sceneGenerationStatus === "generating";
@@ -4941,59 +4951,86 @@ export function AudioGenerationPage() {
                         <History size={13} /> {t("create.audio.generationHistory")}
                       </h2>
                       <span className={styles.timelineHint}>
-                        {audioHistory.length
-                          ? audioHistory.length === 1
+                        {historyRows.length
+                          ? historyRows.length === 1
                             ? t("create.audio.resultCountOne")
-                            : t("create.audio.resultCountMany", { count: audioHistory.length })
+                            : t("create.audio.resultCountMany", { count: historyRows.length })
                           : t("create.audio.noResults")}
                       </span>
                     </div>
-                    {audioHistory.length ? (
+                    {historyRows.length ? (
                       <div className={styles.historyList}>
-                        {audioHistory.map((item) => (
-                          <div
-                            key={item.id}
-                            className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}
-                          >
-                            <button
-                              type="button"
-                              className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem}
-                              onClick={() => selectHistoryItem(item)}
-                              disabled={historyLoadingId === item.id}
-                              aria-busy={historyLoadingId === item.id}
+                        {historyRows.map((row) => {
+                          if (row.kind === "voice") {
+                            const voiceLabel = row.voice.name.trim() || t("create.audio.clone.unnamedVoice");
+                            return (
+                              <div key={row.key} className={styles.historyItemRow}>
+                                <button
+                                  type="button"
+                                  className={styles.historyItem}
+                                  onClick={() => {
+                                    setVoiceMode("cloned");
+                                    setSelectedVoice(row.voice.voiceId);
+                                  }}
+                                >
+                                  <span className={styles.historyPlay}>
+                                    <Mic2 size={13} />
+                                  </span>
+                                  <span className={styles.historyCopy}>
+                                    <strong>{voiceLabel}</strong>
+                                    <small>{formatAudioHistoryDate(row.voice.createdAt, locale)}</small>
+                                  </span>
+                                  <span className={styles.historyCurrent}>{t("create.audio.clone.historyVoice")}</span>
+                                </button>
+                              </div>
+                            );
+                          }
+                          const item = row.item;
+                          return (
+                            <div
+                              key={item.id}
+                              className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}
                             >
-                              <span
-                                className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}
+                              <button
+                                type="button"
+                                className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem}
+                                onClick={() => selectHistoryItem(item)}
+                                disabled={historyLoadingId === item.id}
+                                aria-busy={historyLoadingId === item.id}
                               >
-                                {historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? (
-                                  <Pause size={13} fill="currentColor" />
-                                ) : (
-                                  <Play size={13} fill="currentColor" />
-                                )}
-                              </span>
-                              <span className={styles.historyCopy}>
-                                <strong>{item.label}</strong>
-                                <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
-                              </span>
-                              <span className={styles.historyCurrent}>
-                                {item.url === audioUrl
-                                  ? t("create.audio.historyCurrent")
-                                  : t("create.audio.historyPlay")}
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.historyDelete}
-                              aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
-                              onClick={() => {
-                                setPendingHistoryDelete(item);
-                                setHistoryDeleteOpen(true);
-                              }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        ))}
+                                <span
+                                  className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}
+                                >
+                                  {historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? (
+                                    <Pause size={13} fill="currentColor" />
+                                  ) : (
+                                    <Play size={13} fill="currentColor" />
+                                  )}
+                                </span>
+                                <span className={styles.historyCopy}>
+                                  <strong>{item.label}</strong>
+                                  <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
+                                </span>
+                                <span className={styles.historyCurrent}>
+                                  {item.url === audioUrl
+                                    ? t("create.audio.historyCurrent")
+                                    : t("create.audio.historyPlay")}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.historyDelete}
+                                aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
+                                onClick={() => {
+                                  setPendingHistoryDelete(item);
+                                  setHistoryDeleteOpen(true);
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className={styles.historyEmpty}>
