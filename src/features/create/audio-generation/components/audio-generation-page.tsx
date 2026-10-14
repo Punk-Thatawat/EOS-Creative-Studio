@@ -1756,6 +1756,7 @@ function VoiceCloneLayout({
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [previewModel, setPreviewModel] = useState(VOICE_CLONE_MODEL_ID);
   const [cloneHistory, setCloneHistory] = useState<AudioHistoryEntry[]>([]);
+  const [cloneVoices, setCloneVoices] = useState<VoiceCloneListItem[]>([]);
   const [activeCloneHistoryId, setActiveCloneHistoryId] = useState<string | null>(null);
   const [cloneHistoryLoadingId, setCloneHistoryLoadingId] = useState<string | null>(null);
   const [pendingCloneHistoryDelete, setPendingCloneHistoryDelete] = useState<AudioHistoryEntry | null>(null);
@@ -1790,26 +1791,26 @@ function VoiceCloneLayout({
 
   useEffect(() => {
     let active = true;
-    // Speech made with a cloned voice is saved as Text to Speech, so keep the entries whose voice is one of the user's clones.
-    const loadSpeechWithClonedVoices = async () => {
-      const [items, clones] = await Promise.all([
-        listAudioHistory({ feature: "tts", limit: CLONE_HISTORY_SPEECH_SCAN_LIMIT }),
-        listVoiceClones(),
-      ]);
-      const cloneIds = new Set(clones.voices.map((voice) => voice.voiceId));
-      return items.filter((item) => Boolean(item.voice) && cloneIds.has(item.voice as string));
-    };
     void Promise.all([
       listAudioHistory({ feature: "voice-clone", limit: AUDIO_HISTORY_LIMIT }),
-      loadSpeechWithClonedVoices().catch(() => [] as AudioHistoryEntry[]),
+      listVoiceClones()
+        .then((result) => result.voices)
+        .catch(() => [] as VoiceCloneListItem[]),
+      // Speech made with a cloned voice is saved as Text to Speech, so scan it for entries that used one of the clones.
+      listAudioHistory({ feature: "tts", limit: CLONE_HISTORY_SPEECH_SCAN_LIMIT }).catch(
+        () => [] as AudioHistoryEntry[],
+      ),
     ])
-      .then(([previews, speech]) => {
+      .then(([previews, voices, speech]) => {
         if (!active) return;
-        const merged = [...previews, ...speech].filter(
+        const cloneIds = new Set(voices.map((voice) => voice.voiceId));
+        const speechWithClones = speech.filter((item) => Boolean(item.voice) && cloneIds.has(item.voice as string));
+        const merged = [...previews, ...speechWithClones].filter(
           (entry, index, all) => all.findIndex((other) => other.id === entry.id) === index,
         );
         merged.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
         setCloneHistory(merged.slice(0, AUDIO_HISTORY_LIMIT));
+        setCloneVoices(voices);
       })
       .catch(() => undefined);
     return () => {
@@ -2072,6 +2073,17 @@ function VoiceCloneLayout({
       });
   };
 
+  // The list shows what was made with cloning (previews and speech) together with the newest voices, newest first.
+  const historyRows = [
+    ...cloneHistory.map((entry) => ({ kind: "entry" as const, key: entry.id, createdAt: entry.createdAt, entry })),
+    ...cloneVoices.slice(0, AUDIO_HISTORY_LIMIT).map((voice) => ({
+      kind: "voice" as const,
+      key: `voice:${voice.voiceId}`,
+      createdAt: voice.createdAt,
+      voice,
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+
   return (
     <div className={styles.alternateLayout}>
       <section className={`${styles.alternatePanel} ${styles.alternateFormPanel}`}>
@@ -2328,16 +2340,39 @@ function VoiceCloneLayout({
               <History size={13} /> {t("create.audio.generationHistory")}
             </h2>
             <span className={styles.timelineHint}>
-              {cloneHistory.length
-                ? cloneHistory.length === 1
+              {historyRows.length
+                ? historyRows.length === 1
                   ? t("create.audio.resultCountOne")
-                  : t("create.audio.resultCountMany", { count: cloneHistory.length })
+                  : t("create.audio.resultCountMany", { count: historyRows.length })
                 : t("create.audio.noResults")}
             </span>
           </div>
-          {cloneHistory.length ? (
+          {historyRows.length ? (
             <div className={styles.historyList}>
-              {cloneHistory.map((item) => {
+              {historyRows.map((row) => {
+                if (row.kind === "voice") {
+                  const voiceLabel = row.voice.name.trim() || t("create.audio.clone.unnamedVoice");
+                  return (
+                    <div key={row.key} className={styles.historyItemRow}>
+                      <button
+                        type="button"
+                        className={styles.historyItem}
+                        onClick={() => onOpenInTextToSpeech?.(row.voice.voiceId)}
+                        disabled={!onOpenInTextToSpeech}
+                      >
+                        <span className={styles.historyPlay}>
+                          <Mic2 size={13} />
+                        </span>
+                        <span className={styles.historyCopy}>
+                          <strong>{voiceLabel}</strong>
+                          <small>{formatAudioHistoryDate(row.voice.createdAt, locale)}</small>
+                        </span>
+                        <span className={styles.historyCurrent}>{t("create.audio.clone.historyVoice")}</span>
+                      </button>
+                    </div>
+                  );
+                }
+                const item = row.entry;
                 const isActive = item.id === activeCloneHistoryId;
                 return (
                   <div key={item.id} className={isActive ? styles.historyItemRowActive : styles.historyItemRow}>
