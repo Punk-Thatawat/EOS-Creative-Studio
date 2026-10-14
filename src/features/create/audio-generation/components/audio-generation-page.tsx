@@ -3583,6 +3583,13 @@ export function AudioGenerationPage() {
   // Cloned voices are registered with MiniMax Speech 2.8 HD; when the model list is not loaded yet, pick it on load.
   const preferClonedVoiceModelRef = useRef(false);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
+  // The click handlers read this instead of the state above: state lags a render behind, so a quick second
+  // click on a playing voice would otherwise start it again rather than stop it.
+  const previewingVoiceKeyRef = useRef<string | null>(null);
+  const updatePreviewingVoiceKey = useCallback((key: string | null) => {
+    previewingVoiceKeyRef.current = key;
+    setPreviewingVoiceKey(key);
+  }, []);
   const [previewLoadingKey, setPreviewLoadingKey] = useState<string | null>(null);
   const clonePreviewUrlsRef = useRef(new Map<string, string>());
 
@@ -3708,27 +3715,32 @@ export function AudioGenerationPage() {
     }
   }, []);
 
-  const loadVoices = useCallback(async (modelId?: string) => {
-    voicePreviewAudioRef.current?.pause();
-    setPreviewingVoiceKey(null);
-    setVoiceLoadState("loading");
-    setVoiceError(null);
-    try {
-      const items = await listAudioVoices(modelId, "textToSpeech");
-      setAvailableVoices(items);
-      setSelectedVoice((current) => {
-        const isPreset = items.some((voice) => voice.key === current);
-        const isClonedVoice = savedVoicesRef.current.some((item) => item.voiceId === current);
-        return isPreset || isClonedVoice || current === pendingClonedVoiceRef.current ? current : (items[0]?.key ?? "");
-      });
-      setVoiceLoadState("ready");
-    } catch (error) {
-      setAvailableVoices([]);
-      setSelectedVoice("");
-      setVoiceLoadState("error");
-      setVoiceError(error instanceof Error ? error.message : "Unable to load voices");
-    }
-  }, []);
+  const loadVoices = useCallback(
+    async (modelId?: string) => {
+      voicePreviewAudioRef.current?.pause();
+      updatePreviewingVoiceKey(null);
+      setVoiceLoadState("loading");
+      setVoiceError(null);
+      try {
+        const items = await listAudioVoices(modelId, "textToSpeech");
+        setAvailableVoices(items);
+        setSelectedVoice((current) => {
+          const isPreset = items.some((voice) => voice.key === current);
+          const isClonedVoice = savedVoicesRef.current.some((item) => item.voiceId === current);
+          return isPreset || isClonedVoice || current === pendingClonedVoiceRef.current
+            ? current
+            : (items[0]?.key ?? "");
+        });
+        setVoiceLoadState("ready");
+      } catch (error) {
+        setAvailableVoices([]);
+        setSelectedVoice("");
+        setVoiceLoadState("error");
+        setVoiceError(error instanceof Error ? error.message : "Unable to load voices");
+      }
+    },
+    [updatePreviewingVoiceKey],
+  );
 
   const toggleBackgroundMusic = () => {
     if (backgroundMusic) {
@@ -3857,23 +3869,41 @@ export function AudioGenerationPage() {
     [],
   );
 
+  const stopVoicePreview = useCallback(
+    (audio: HTMLAudioElement) => {
+      audio.pause();
+      audio.currentTime = 0;
+      updatePreviewingVoiceKey(null);
+    },
+    [updatePreviewingVoiceKey],
+  );
+
+  const startVoicePreview = useCallback(
+    (audio: HTMLAudioElement, key: string, url: string) => {
+      audio.pause();
+      audio.src = url;
+      audio.currentTime = 0;
+      updatePreviewingVoiceKey(key);
+      void audio.play().catch((error: unknown) => {
+        // Stopping or starting another voice interrupts this request; only a real failure of the latest one resets the button.
+        const interrupted = error instanceof DOMException && error.name === "AbortError";
+        if (!interrupted && previewingVoiceKeyRef.current === key) updatePreviewingVoiceKey(null);
+      });
+    },
+    [updatePreviewingVoiceKey],
+  );
+
   const toggleVoicePreview = useCallback(
     (voice: AudioVoice) => {
       const audio = voicePreviewAudioRef.current;
       if (!audio || !voice.previewUrl) return;
-      if (previewingVoiceKey === voice.key && !audio.paused) {
-        audio.pause();
-        audio.currentTime = 0;
-        setPreviewingVoiceKey(null);
+      if (previewingVoiceKeyRef.current === voice.key) {
+        stopVoicePreview(audio);
         return;
       }
-      audio.pause();
-      audio.src = voice.previewUrl;
-      audio.currentTime = 0;
-      setPreviewingVoiceKey(voice.key);
-      void audio.play().catch(() => setPreviewingVoiceKey(null));
+      startVoicePreview(audio, voice.key, voice.previewUrl);
     },
-    [previewingVoiceKey],
+    [startVoicePreview, stopVoicePreview],
   );
 
   // Cloned voices have no stored sample, so generate a short one on first play and reuse it afterwards.
@@ -3881,13 +3911,12 @@ export function AudioGenerationPage() {
     async (voiceKey: string) => {
       const audio = voicePreviewAudioRef.current;
       if (!audio) return;
-      if (previewingVoiceKey === voiceKey && !audio.paused) {
-        audio.pause();
-        audio.currentTime = 0;
-        setPreviewingVoiceKey(null);
+      if (previewingVoiceKeyRef.current === voiceKey) {
+        stopVoicePreview(audio);
         return;
       }
       audio.pause();
+      updatePreviewingVoiceKey(null);
       let url = clonePreviewUrlsRef.current.get(voiceKey);
       if (!url) {
         setPreviewLoadingKey(voiceKey);
@@ -3906,12 +3935,9 @@ export function AudioGenerationPage() {
           setPreviewLoadingKey(null);
         }
       }
-      audio.src = url;
-      audio.currentTime = 0;
-      setPreviewingVoiceKey(voiceKey);
-      void audio.play().catch(() => setPreviewingVoiceKey(null));
+      startVoicePreview(audio, voiceKey, url);
     },
-    [previewingVoiceKey, language],
+    [language, startVoicePreview, stopVoicePreview, updatePreviewingVoiceKey],
   );
 
   useEffect(() => {
@@ -4026,7 +4052,7 @@ export function AudioGenerationPage() {
     durationRef.current = 0;
     setVolume(78);
     setHistoryLoadingId(null);
-    setPreviewingVoiceKey(null);
+    updatePreviewingVoiceKey(null);
     setCreditEstimate(null);
     setCreditEstimateError(null);
     setErrorMessage(null);
@@ -4766,8 +4792,8 @@ export function AudioGenerationPage() {
                     ref={voicePreviewAudioRef}
                     className={styles.hiddenAudio}
                     preload="none"
-                    onEnded={() => setPreviewingVoiceKey(null)}
-                    onError={() => setPreviewingVoiceKey(null)}
+                    onEnded={() => updatePreviewingVoiceKey(null)}
+                    onError={() => updatePreviewingVoiceKey(null)}
                     aria-hidden="true"
                   />
 
