@@ -1717,7 +1717,14 @@ function estimatePodcastLineSeconds(text: string): number {
   return Math.max(1, Math.round((text.trim().length / 18) * 10) / 10);
 }
 
-function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
+function VoiceCloneLayout({
+  onHistorySaved,
+  onOpenInTextToSpeech,
+}: {
+  onHistorySaved?: SaveHistoryCallback;
+  /** Opens the Text to Speech tab on the cloned-voice list, with this voice selected when it is given. */
+  onOpenInTextToSpeech?: (voiceId?: string | null) => void;
+}) {
   const { locale, t } = useLocale();
   const [sampleReady, setSampleReady] = useState(false);
   const [sampleFile, setSampleFile] = useState<File | null>(null);
@@ -1873,6 +1880,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
       setVoiceId(result.voiceId);
       setStatus("ready");
       finishAudioProgress("audio-voice-clone", requestId);
+      onOpenInTextToSpeech?.(result.voiceId);
     } catch (cause) {
       failAudioProgress("audio-voice-clone", requestId);
       setError(cause instanceof Error ? translateError(cause.message) : t("create.audio.clone.error.createFailed"));
@@ -2014,6 +2022,12 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
     } finally {
       setCloneHistoryLoadingId(null);
     }
+  };
+
+  // A history entry belongs to the voice it was made with, so picking one continues in Text to Speech with that voice.
+  const openCloneHistory = (item: AudioHistoryEntry) => {
+    if (onOpenInTextToSpeech) onOpenInTextToSpeech(item.voice);
+    else void playCloneHistory(item);
   };
 
   const confirmRemoveCloneHistory = () => {
@@ -2311,7 +2325,7 @@ function VoiceCloneLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCall
                     <button
                       type="button"
                       className={isActive ? styles.historyItemActive : styles.historyItem}
-                      onClick={() => void playCloneHistory(item)}
+                      onClick={() => openCloneHistory(item)}
                       disabled={cloneHistoryLoadingId === item.id}
                       aria-busy={cloneHistoryLoadingId === item.id}
                     >
@@ -3564,6 +3578,10 @@ export function AudioGenerationPage() {
   // Mirrors savedVoices so loadVoices (deps: []) can tell a cloned voice_id
   // apart from a stale preset selection without re-running on every refresh.
   const savedVoicesRef = useRef<VoiceCloneListItem[]>([]);
+  // A voice that was just opened from the Voice Clone tab; it can be missing from savedVoices until the list refreshes.
+  const pendingClonedVoiceRef = useRef<string | null>(null);
+  // Cloned voices are registered with MiniMax Speech 2.8 HD; when the model list is not loaded yet, pick it on load.
+  const preferClonedVoiceModelRef = useRef(false);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
   const [previewLoadingKey, setPreviewLoadingKey] = useState<string | null>(null);
   const clonePreviewUrlsRef = useRef(new Map<string, string>());
@@ -3587,6 +3605,24 @@ export function AudioGenerationPage() {
     } catch {
       // Ignore storage restrictions; the tab still changes for this session.
     }
+  };
+
+  // Entering the cloned-voice list starts on MiniMax Speech 2.8 HD, and the model can still be changed afterwards.
+  const changeVoiceMode = (mode: "tone" | "cloned") => {
+    setVoiceMode(mode);
+    if (mode !== "cloned") return;
+    const clonedVoiceModelKey = availableModels.find((model) =>
+      MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key),
+    )?.key;
+    if (clonedVoiceModelKey) setSelectedModel(clonedVoiceModelKey);
+    else preferClonedVoiceModelRef.current = true;
+  };
+
+  const openClonedVoiceInTextToSpeech = (voiceId?: string | null) => {
+    pendingClonedVoiceRef.current = voiceId ?? null;
+    changeVoiceMode("cloned");
+    if (voiceId) setSelectedVoice(voiceId);
+    changeActiveTab("Text to Speech");
   };
 
   useTemplatePrompt("audio", (value) => {
@@ -3655,7 +3691,16 @@ export function AudioGenerationPage() {
       const items = await listAudioModels("textToSpeech");
       const eligible = pickTextToSpeechModels(items);
       setAvailableModels(eligible);
-      setSelectedModel((current) => (eligible.some((model) => model.key === current) ? current : (eligible[0]?.key ?? "")));
+      const clonedVoiceModelKey = eligible.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key))?.key;
+      const preferClonedVoiceModel = preferClonedVoiceModelRef.current && Boolean(clonedVoiceModelKey);
+      preferClonedVoiceModelRef.current = false;
+      setSelectedModel((current) =>
+        preferClonedVoiceModel && clonedVoiceModelKey
+          ? clonedVoiceModelKey
+          : eligible.some((model) => model.key === current)
+            ? current
+            : (eligible[0]?.key ?? ""),
+      );
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -3674,7 +3719,7 @@ export function AudioGenerationPage() {
       setSelectedVoice((current) => {
         const isPreset = items.some((voice) => voice.key === current);
         const isClonedVoice = savedVoicesRef.current.some((item) => item.voiceId === current);
-        return isPreset || isClonedVoice ? current : (items[0]?.key ?? "");
+        return isPreset || isClonedVoice || current === pendingClonedVoiceRef.current ? current : (items[0]?.key ?? "");
       });
       setVoiceLoadState("ready");
     } catch (error) {
@@ -3713,6 +3758,9 @@ export function AudioGenerationPage() {
       setSavedVoices(result.voices);
     } catch {
       // Saved-voices list is a convenience; ignore load failures silently.
+      // Do not keep waiting for a voice that never arrives.
+      pendingClonedVoiceRef.current = null;
+      setSavedVoices((current) => [...current]);
     }
   }, []);
 
@@ -3784,6 +3832,10 @@ export function AudioGenerationPage() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (voiceMode === "cloned") {
+        const pendingVoice = pendingClonedVoiceRef.current;
+        // Keep the voice that was just opened until the saved list has loaded and shows it.
+        if (pendingVoice && !savedVoices.some((item) => item.voiceId === pendingVoice)) return;
+        pendingClonedVoiceRef.current = null;
         if (!savedVoices.some((item) => item.voiceId === selectedVoice)) {
           setSelectedVoice(savedVoices[0]?.voiceId ?? "");
         }
@@ -4474,7 +4526,7 @@ export function AudioGenerationPage() {
                     </div>
                     <Dropdown
                       value={voiceMode}
-                      onChange={(value) => setVoiceMode(value as "tone" | "cloned")}
+                      onChange={(value) => changeVoiceMode(value as "tone" | "cloned")}
                       options={[
                         { value: "tone", label: t("create.audio.voiceMode.tone") },
                         { value: "cloned", label: t("create.audio.voiceMode.cloned") },
@@ -5165,7 +5217,10 @@ export function AudioGenerationPage() {
             ) : activeTab === "Podcast & Dialogue" ? (
               <PodcastDialogueLayout onHistorySaved={persistGeneratedAudio} />
             ) : activeTab === "Voice Clone" ? (
-              <VoiceCloneLayout onHistorySaved={persistGeneratedAudio} />
+              <VoiceCloneLayout
+                onHistorySaved={persistGeneratedAudio}
+                onOpenInTextToSpeech={openClonedVoiceInTextToSpeech}
+              />
             ) : activeTab === "Sound Effects" ? (
               <SoundEffectsLayout onHistorySaved={persistGeneratedAudio} />
             ) : (
