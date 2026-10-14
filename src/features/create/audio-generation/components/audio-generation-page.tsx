@@ -3517,8 +3517,14 @@ export function AudioGenerationPage() {
   const [savedVoices, setSavedVoices] = useState<VoiceCloneListItem[]>([]);
   const [language, setLanguage] = useState("Thai");
   const [pronunciation, setPronunciation] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
+  const [chosenModel, setSelectedModel] = useState("");
   const [availableModels, setAvailableModels] = useState<AudioModel[]>([]);
+  // Cloned voices are registered with MiniMax Speech 2.8 HD, so that model is fixed while cloned voices are in use.
+  const clonedVoiceModelKey = availableModels.find((model) =>
+    MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key),
+  )?.key;
+  const isModelLockedToClonedVoice = voiceMode === "cloned" && Boolean(clonedVoiceModelKey);
+  const selectedModel = isModelLockedToClonedVoice && clonedVoiceModelKey ? clonedVoiceModelKey : chosenModel;
   const [modelLoadState, setModelLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [selectedVoice, setSelectedVoice] = useState("");
   const [availableVoices, setAvailableVoices] = useState<AudioVoice[]>([]);
@@ -3580,8 +3586,6 @@ export function AudioGenerationPage() {
   const savedVoicesRef = useRef<VoiceCloneListItem[]>([]);
   // A voice that was just opened from the Voice Clone tab; it can be missing from savedVoices until the list refreshes.
   const pendingClonedVoiceRef = useRef<string | null>(null);
-  // Cloned voices are registered with MiniMax Speech 2.8 HD; when the model list is not loaded yet, pick it on load.
-  const preferClonedVoiceModelRef = useRef(false);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
   const [previewLoadingKey, setPreviewLoadingKey] = useState<string | null>(null);
   const clonePreviewUrlsRef = useRef(new Map<string, string>());
@@ -3607,20 +3611,9 @@ export function AudioGenerationPage() {
     }
   };
 
-  // Entering the cloned-voice list starts on MiniMax Speech 2.8 HD, and the model can still be changed afterwards.
-  const changeVoiceMode = (mode: "tone" | "cloned") => {
-    setVoiceMode(mode);
-    if (mode !== "cloned") return;
-    const clonedVoiceModelKey = availableModels.find((model) =>
-      MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key),
-    )?.key;
-    if (clonedVoiceModelKey) setSelectedModel(clonedVoiceModelKey);
-    else preferClonedVoiceModelRef.current = true;
-  };
-
   const openClonedVoiceInTextToSpeech = (voiceId?: string | null) => {
     pendingClonedVoiceRef.current = voiceId ?? null;
-    changeVoiceMode("cloned");
+    setVoiceMode("cloned");
     if (voiceId) setSelectedVoice(voiceId);
     changeActiveTab("Text to Speech");
   };
@@ -3691,16 +3684,7 @@ export function AudioGenerationPage() {
       const items = await listAudioModels("textToSpeech");
       const eligible = pickTextToSpeechModels(items);
       setAvailableModels(eligible);
-      const clonedVoiceModelKey = eligible.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key))?.key;
-      const preferClonedVoiceModel = preferClonedVoiceModelRef.current && Boolean(clonedVoiceModelKey);
-      preferClonedVoiceModelRef.current = false;
-      setSelectedModel((current) =>
-        preferClonedVoiceModel && clonedVoiceModelKey
-          ? clonedVoiceModelKey
-          : eligible.some((model) => model.key === current)
-            ? current
-            : (eligible[0]?.key ?? ""),
-      );
+      setSelectedModel((current) => (eligible.some((model) => model.key === current) ? current : (eligible[0]?.key ?? "")));
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -4526,7 +4510,7 @@ export function AudioGenerationPage() {
                     </div>
                     <Dropdown
                       value={voiceMode}
-                      onChange={(value) => changeVoiceMode(value as "tone" | "cloned")}
+                      onChange={(value) => setVoiceMode(value as "tone" | "cloned")}
                       options={[
                         { value: "tone", label: t("create.audio.voiceMode.tone") },
                         { value: "cloned", label: t("create.audio.voiceMode.cloned") },
@@ -4965,7 +4949,7 @@ export function AudioGenerationPage() {
                   </div>
                   <div className={styles.settingBlock}>
                     <FieldLabel>{t("create.audio.voiceModel")}</FieldLabel>
-                    {availableModels.length > 1 ? (
+                    {availableModels.length > 1 && !isModelLockedToClonedVoice ? (
                       <Dropdown
                         value={selectedModel}
                         options={availableModels.map((model) => ({ value: model.key, label: model.name }))}
@@ -4974,7 +4958,11 @@ export function AudioGenerationPage() {
                         triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
                       />
                     ) : (
-                      <div className={styles.fixedVoiceModel}>{availableModels[0]?.name ?? "ElevenLabs · Eleven v3"}</div>
+                      <div className={styles.fixedVoiceModel}>
+                        {availableModels.find((model) => model.key === selectedModel)?.name ??
+                          availableModels[0]?.name ??
+                          "ElevenLabs · Eleven v3"}
+                      </div>
                     )}
                   </div>
                   <div className={styles.settingBlock}>
