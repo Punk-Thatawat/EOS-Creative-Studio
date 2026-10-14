@@ -173,6 +173,8 @@ const waveformBars = Array.from({ length: 88 }, (_, index) =>
 
 type AudioHistoryItem = Omit<AudioHistoryEntry, "url"> & { url: string; localUrl?: boolean; persisted?: boolean };
 const AUDIO_HISTORY_LIMIT = 10;
+// Most recent Text to Speech entries (the API maximum) scanned for ones made with a cloned voice.
+const CLONE_HISTORY_SPEECH_SCAN_LIMIT = 50;
 const VOICE_PAGE_SIZE = 8;
 type SaveHistoryCallback = (input: SaveAudioHistoryInput) => Promise<AudioHistoryEntry | null>;
 type AudioScene = { id: string; title: string; durationSeconds: number; text: string; voice: string };
@@ -1788,9 +1790,26 @@ function VoiceCloneLayout({
 
   useEffect(() => {
     let active = true;
-    void listAudioHistory({ feature: "voice-clone", limit: AUDIO_HISTORY_LIMIT })
-      .then((items) => {
-        if (active) setCloneHistory(items);
+    // Speech made with a cloned voice is saved as Text to Speech, so keep the entries whose voice is one of the user's clones.
+    const loadSpeechWithClonedVoices = async () => {
+      const [items, clones] = await Promise.all([
+        listAudioHistory({ feature: "tts", limit: CLONE_HISTORY_SPEECH_SCAN_LIMIT }),
+        listVoiceClones(),
+      ]);
+      const cloneIds = new Set(clones.voices.map((voice) => voice.voiceId));
+      return items.filter((item) => Boolean(item.voice) && cloneIds.has(item.voice as string));
+    };
+    void Promise.all([
+      listAudioHistory({ feature: "voice-clone", limit: AUDIO_HISTORY_LIMIT }),
+      loadSpeechWithClonedVoices().catch(() => [] as AudioHistoryEntry[]),
+    ])
+      .then(([previews, speech]) => {
+        if (!active) return;
+        const merged = [...previews, ...speech].filter(
+          (entry, index, all) => all.findIndex((other) => other.id === entry.id) === index,
+        );
+        merged.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+        setCloneHistory(merged.slice(0, AUDIO_HISTORY_LIMIT));
       })
       .catch(() => undefined);
     return () => {
