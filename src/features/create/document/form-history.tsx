@@ -17,7 +17,7 @@ import { downloadFormResult, type FormExportFormat } from "./form-export";
 import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const DOWNLOAD_FORMATS: ReadonlyArray<{ id: FormExportFormat; label: string }> = [
   { id: "docx", label: "DOCX" },
   { id: "pdf", label: "PDF" },

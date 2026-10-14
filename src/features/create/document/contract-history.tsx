@@ -19,7 +19,7 @@ import { CONTRACT_TYPE_OPTIONS } from "./contract-types";
 import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const DOWNLOAD_FORMATS: ReadonlyArray<{ id: OcrOutputFormat; label: string }> = [
   { id: "docx", label: "DOCX" },
   { id: "pdf", label: "PDF" },
