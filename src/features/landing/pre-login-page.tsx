@@ -28,6 +28,23 @@ type ShowcaseExample = { id?: string; label: string; video: string; mimeType?: s
 const introVideoShownDateKey = "eos-intro-video-shown-date-v1";
 const rememberedEmailStorageKey = "eos.auth.remembered-email";
 const resendConfirmationCooldownSeconds = 30;
+const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+
+type RecaptchaApi = {
+  render: (container: HTMLElement, options: {
+    sitekey: string;
+    callback: (token: string) => void;
+    "expired-callback": () => void;
+    "error-callback": () => void;
+  }) => string | number;
+  reset: (widgetId?: string | number) => void;
+};
+
+declare global {
+  interface Window {
+    grecaptcha?: RecaptchaApi;
+  }
+}
 
 const getLocalDateKey = () => {
   const now = new Date();
@@ -163,11 +180,53 @@ export function PreLoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [googleLoginLoading, setGoogleLoginLoading] = useState(false);
   const [googleLoginError, setGoogleLoginError] = useState<string | null>(null);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
   const showcaseVideoRefs = useRef<Array<HTMLVideoElement | null>>([]);
+  const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const recaptchaWidgetRef = useRef<string | number | null>(null);
   const maxExampleOffset = Math.max(0, examples.length - 5);
   const visibleExampleOffset = Math.min(exampleOffset, maxExampleOffset);
   const authEmailError = authEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(authEmail) ? t("auth.validation.emailInvalid") : null;
   const authPasswordError = authMode === "register" && authPassword.length > 0 && authPassword.length < 8 ? t("auth.validation.passwordMin") : null;
+
+  useEffect(() => {
+    if (!loginOpen || authMode !== "register" || !recaptchaSiteKey || !recaptchaContainerRef.current) return undefined;
+    let cancelled = false;
+    const renderWidget = () => {
+      if (cancelled || !recaptchaContainerRef.current || !window.grecaptcha || recaptchaWidgetRef.current !== null) return;
+      recaptchaWidgetRef.current = window.grecaptcha.render(recaptchaContainerRef.current, {
+        sitekey: recaptchaSiteKey,
+        callback: (token) => setRecaptchaToken(token),
+        "expired-callback": () => setRecaptchaToken(null),
+        "error-callback": () => {
+          setRecaptchaToken(null);
+          setAuthError(t("auth.validation.captchaFailed"));
+        },
+      });
+    };
+
+    const existingScript = document.querySelector<HTMLScriptElement>('script[data-eos-recaptcha="true"]');
+    if (window.grecaptcha) {
+      renderWidget();
+    } else if (existingScript) {
+      existingScript.addEventListener("load", renderWidget, { once: true });
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://www.google.com/recaptcha/api.js?render=explicit";
+      script.async = true;
+      script.defer = true;
+      script.dataset.eosRecaptcha = "true";
+      script.addEventListener("load", renderWidget, { once: true });
+      document.head.appendChild(script);
+    }
+
+    return () => {
+      cancelled = true;
+      setRecaptchaToken(null);
+      if (recaptchaWidgetRef.current !== null && window.grecaptcha) window.grecaptcha.reset(recaptchaWidgetRef.current);
+      recaptchaWidgetRef.current = null;
+    };
+  }, [authMode, loginOpen, t]);
 
   useEffect(() => {
     let active = true;
@@ -234,6 +293,7 @@ export function PreLoginPage() {
     setPendingLoginToken(null);
     setGoogleLoginLoading(false);
     setGoogleLoginError(null);
+    setRecaptchaToken(null);
     setLoginOpen(true);
     void getBrowserLoginCredential().then((credential) => {
       if (!credential) return;
@@ -258,6 +318,7 @@ export function PreLoginPage() {
     setPendingLoginToken(null);
     setGoogleLoginLoading(false);
     setGoogleLoginError(null);
+    setRecaptchaToken(null);
   };
 
   const switchAuthMode = (mode: AuthMode) => {
@@ -268,6 +329,7 @@ export function PreLoginPage() {
     setAuthMessage(null);
     setPendingLoginToken(null);
     setGoogleLoginError(null);
+    setRecaptchaToken(null);
   };
 
   const handleEmailAuth = async (event: FormEvent<HTMLFormElement>) => {
@@ -283,7 +345,8 @@ export function PreLoginPage() {
       if (authMode === "register") {
         if (authPassword.length < 8) throw new Error(t("auth.validation.passwordMinFull"));
         if (authPassword !== authPasswordConfirmation) throw new Error(t("auth.validation.passwordMismatch"));
-        const result = await registerWithBackend({ email: authEmail, password: authPassword, display_name: authName.trim() || undefined });
+        if (recaptchaSiteKey && !recaptchaToken) throw new Error(t("auth.validation.captchaRequired"));
+        const result = await registerWithBackend({ email: authEmail, password: authPassword, display_name: authName.trim() || undefined, captchaToken: recaptchaToken ?? undefined });
         if (result.data.session) {
           clearGenerationProgressStorage();
           storeBrowserLoginCredential(authEmail.trim(), authPassword);
@@ -558,6 +621,7 @@ export function PreLoginPage() {
                   <span>{t(getPasswordStrength(authPassword).labelKey)}</span>
                 </div>}
                 <AuthField id="modal-password-confirm" label={t("auth.form.confirmPassword")} value={authPasswordConfirmation} onChange={setAuthPasswordConfirmation} type="password" placeholder={t("auth.form.confirmPasswordPlaceholder")} autoComplete="new-password" icon={LockKeyhole} required minLength={8} disabled={authSubmitting} error={authPasswordConfirmation && authPassword !== authPasswordConfirmation ? t("auth.validation.passwordMismatch") : null} showPassword={confirmationPasswordVisible} passwordToggleLabel={confirmationPasswordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onTogglePassword={() => setConfirmationPasswordVisible((visible) => !visible)} />
+                {recaptchaSiteKey ? <div className="auth-captcha" aria-label={t("auth.captcha.label")}><div ref={recaptchaContainerRef} /></div> : null}
               </>}
               {authMode === "login" && <><label className="auth-remember"><input type="checkbox" checked={rememberEmail} onChange={(event) => { const checked = event.currentTarget.checked; setRememberEmail(checked); if (!checked) persistRememberedEmail("", false); }} /> {t("auth.form.rememberMe")}</label><button type="button" className="auth-forgot-link" onClick={() => switchAuthMode("forgot")}>{t("auth.action.forgotPassword")}</button></>}
               {authError && <p className="auth-error" role="alert">{authError}</p>}
