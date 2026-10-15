@@ -12,7 +12,9 @@ export function RedirectAuthenticated({ children }: { children: React.ReactNode 
     void getApiAccessToken().then((token) => {
       if (active && token) router.replace("/home");
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   return children;

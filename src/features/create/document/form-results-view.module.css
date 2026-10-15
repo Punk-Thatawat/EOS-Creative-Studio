@@ -1,0 +1,52 @@
+.view { display: grid; min-width: 0; gap: 8px; }
+.summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 0 2px; color: #59626b; font-size: 12px; font-weight: 700; }
+.toCheck { color: #a56a0c; }
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; border: 1px solid #ece9e6; border-radius: 10px; background: #fff; padding: 10px 12px; }
+.rowSelected { border-color: #e6a23c; background: #fff7e8; }
+.number { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border: 0; border-radius: 50%; background: #df602d; color: #fff; font: inherit; font-size: 11px; font-weight: 800; line-height: 1; padding: 0; }
+button.number { cursor: pointer; }
+button.number:hover { background: #c4501f; }
+.body { display: grid; min-width: 0; gap: 3px; }
+.label { color: #6f7780; font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
+.input { width: 100%; min-height: 32px; border: 1px solid #e2e3e5; border-radius: 7px; background: #fff; padding: 0 9px; color: #252a2f; font: inherit; font-size: 13px; }
+.input:focus { border-color: #f6a17d; outline: 0; box-shadow: 0 0 0 3px rgb(246 161 125 / 22%); }
+.pill { border-radius: 999px; padding: 3px 9px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.ok { background: #eaf5ec; color: #2f7d46; }
+.warn { background: #fff3dc; color: #a56a0c; }
+.locateIcon { color: #a0a7ad; }
+.empty { margin: 0; color: #9aa1a8; font-size: 12px; line-height: 1.6; }
+.hint { margin: 2px 0 0; color: #8d949b; font-size: 11px; line-height: 1.5; }
+.layoutSwitch { display: inline-flex; margin-left: auto; border: 1px solid #ece9e6; border-radius: 8px; background: #f5f3f1; padding: 2px; }
+.layoutSwitch button { border: 0; border-radius: 6px; background: transparent; padding: 4px 12px; color: #6f7780; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
+.layoutSwitch button.layoutOn { background: #fff; color: #252a2f; box-shadow: 0 1px 3px rgb(37 42 47 / 12%); }
+.sheet { min-width: 0; border: 1px solid #ece9e6; border-radius: 6px; background: #fff; padding: 22px 24px 26px; box-shadow: 0 2px 10px rgb(37 42 47 / 8%); }
+.sheetTitle { margin: 0 0 16px; border-bottom: 2px solid #252a2f; padding-bottom: 8px; color: #252a2f; font-size: 15px; font-weight: 800; overflow-wrap: anywhere; }
+.sheetGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px 24px; }
+.cell { display: grid; min-width: 0; align-content: start; gap: 4px; border-left: 3px solid transparent; padding-left: 8px; }
+.cellWide { grid-column: 1 / -1; }
+.cellLow { border-left-color: #e0a63a; }
+.cellSelected { border-left-color: #df602d; background: #fff7e8; }
+.cellHead { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.cellLabel { min-width: 0; flex: 1; color: #59626b; font-size: 11px; font-weight: 700; overflow-wrap: anywhere; }
+.cellHead .number { width: 18px; height: 18px; font-size: 10px; }
+.cellHead .pill { padding: 1px 7px; font-size: 10px; }
+.lineBox { display: grid; min-width: 0; }
+/* The box grows with the text: a hidden copy of it sizes the row and the input fills the row, so a long value wraps instead of being cut. The font size is pinned: the page-wide minimum size for inputs would make the two differ. */
+.lineBox::after, .lineBox .line { grid-area: 1 / 1; min-width: 0; font-size: 14px !important; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.lineBox::after { content: attr(data-value) " "; visibility: hidden; min-height: 30px; border-bottom: 1px solid transparent; padding: 3px 2px; pointer-events: none; }
+.lineBox .line { padding: 3px 2px; resize: none; overflow: hidden; }
+.line { width: 100%; min-height: 30px; border: 0; border-bottom: 1px solid #b9bec3; border-radius: 0; background: transparent; padding: 0 2px; color: #1a3a8a; font: inherit; font-size: 14px; }
+.line:focus { border-bottom-color: #df602d; outline: 0; box-shadow: 0 1px 0 #df602d; }
+.checkRow { display: flex; align-items: center; gap: 10px; }
+.checkBox { display: grid; width: 22px; height: 22px; flex: none; place-items: center; border: 1.5px solid #59626b; border-radius: 4px; background: #fff; color: #fff; font: inherit; font-size: 14px; font-weight: 800; line-height: 1; cursor: pointer; }
+.checkBoxOn { border-color: #1a7f37; background: #1a7f37; }
+.signBox { display: flex; align-items: center; gap: 8px; min-height: 56px; border: 1.5px dashed #b9bec3; border-radius: 8px; padding: 0 12px; color: #8d949b; }
+.signInput { width: 100%; min-height: 40px; border: 0; background: transparent; color: #1a3a8a; font: inherit; font-size: 18px; font-style: italic; }
+.signInput:focus { outline: 0; }
+@media (max-width: 767px) {
+  .sheet { padding: 16px 14px 20px; }
+  .row { grid-template-columns: 24px minmax(0, 1fr); }
+  .pill { grid-column: 2; justify-self: start; }
+  .locateIcon { display: none; }
+}

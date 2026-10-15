@@ -5,14 +5,48 @@ import { getApiAccessToken } from "@/lib/auth/access-token";
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
 
-export type HistoryType = "all" | "image" | "video" | "audio";
+export type HistoryType = "all" | "image" | "video" | "audio" | "document";
 export type HistoryStatus = "all" | "queued" | "processing" | "completed" | "failed" | "cancelled";
+
+export type HistoryDocumentSummary = {
+  filename: string;
+  summary: {
+    title: string;
+    executiveSummary: string;
+    sections?: Array<{ heading: string; items: string[] }>;
+    keyTakeaways: string[];
+    actionItems: Array<{ task: string; owner?: string; dueDate?: string }>;
+    decisions: string[];
+    importantDates: Array<{ date: string; event: string }>;
+  };
+  options: {
+    summaryStyle: "executive" | "bullets";
+    summaryLength: "auto" | "brief" | "standard" | "detailed";
+    language: "auto" | "English" | "Thai";
+    includeKeyTakeaways: boolean;
+    includeActionItems: boolean;
+    includeImportantDates: boolean;
+    prompt?: string;
+  };
+};
+
+export type HistoryDocumentTranslation = {
+  filename: string;
+  translatedText: string;
+  sourceLanguage: "auto" | "Thai" | "English" | "Japanese" | "Chinese";
+  targetLanguage: "Thai" | "English" | "Japanese" | "Chinese";
+  creditCost: number;
+  outputFilename?: string;
+  outputMimeType?: string;
+  hasOutputFile?: boolean;
+  hasSourceFile?: boolean;
+};
 
 export type HistoryItem = {
   settings?: Record<string, unknown>;
   id: string;
-  source: "generation" | "video-storyboard" | "audio";
-  mediaKind: "image" | "video" | "audio";
+  source: "generation" | "video-storyboard" | "audio" | "document-summary" | "document-translation";
+  mediaKind: "image" | "video" | "audio" | "document";
   feature: string;
   title: string;
   prompt?: string;
@@ -28,6 +62,8 @@ export type HistoryItem = {
   durationSeconds?: number;
   creditCost?: number;
   errorMessage?: string;
+  documentSummary?: HistoryDocumentSummary;
+  documentTranslation?: HistoryDocumentTranslation;
   createdAt: string;
   updatedAt: string;
 };
@@ -35,7 +71,7 @@ export type HistoryItem = {
 export type HistoryResponse = {
   items: HistoryItem[];
   pagination: { limit: number; offset: number; total: number; hasMore: boolean };
-  summary: { total: number; inProgress: number; completed: number; failed: number; images: number; videos: number; audio: number };
+  summary: { total: number; inProgress: number; completed: number; failed: number; images: number; videos: number; audio: number; documents: number };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,8 +85,8 @@ function isCount(value: unknown): value is number {
 function isHistoryItem(value: unknown): value is HistoryItem {
   return isRecord(value)
     && ["id", "feature", "title", "createdAt", "updatedAt"].every((key) => typeof value[key] === "string")
-    && ["generation", "video-storyboard", "audio"].some((source) => source === value.source)
-    && ["image", "video", "audio"].some((kind) => kind === value.mediaKind)
+    && ["generation", "video-storyboard", "audio", "document-summary", "document-translation"].some((source) => source === value.source)
+    && ["image", "video", "audio", "document"].some((kind) => kind === value.mediaKind)
     && ["queued", "processing", "completed", "failed", "cancelled"].some((status) => status === value.status)
     && ["outputCount", "totalCount", "completedCount"].every((key) => isCount(value[key]));
 }
@@ -63,7 +99,7 @@ function isHistoryResponse(value: unknown): value is HistoryResponse {
     && ["limit", "offset", "total"].every((key) => isCount(pagination[key]))
     && typeof pagination.hasMore === "boolean"
     && isRecord(summary)
-    && ["total", "inProgress", "completed", "failed", "images", "videos", "audio"].every((key) => isCount(summary[key]));
+    && ["total", "inProgress", "completed", "failed", "images", "videos", "audio", "documents"].every((key) => isCount(summary[key]));
 }
 
 export async function fetchHistory(input: { search?: string; type?: HistoryType; status?: HistoryStatus; offset?: number; limit?: number; signal?: AbortSignal } = {}): Promise<HistoryResponse> {
@@ -115,4 +151,39 @@ export async function deleteHistoryItem(item: Pick<HistoryItem, "id" | "source">
       ? payload.message : "Unable to delete history item";
     throw new Error(message);
   }
+}
+
+export async function fetchTranslatedDocumentFile(id: string, format?: "PDF" | "DOCX" | "TXT" | "JSON"): Promise<{ blob: Blob; filename: string }> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in to download your translated document");
+  const query = format ? `?format=${encodeURIComponent(format)}` : "";
+  const response = await fetch(`${backendApiUrl}/documents/translate/${encodeURIComponent(id)}/file${query}`, {
+    method: "GET",
+    headers: { Accept: "application/pdf, application/octet-stream", Authorization: `Bearer ${accessToken}` },
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Translated file is no longer available");
+  const contentDisposition = response.headers.get("content-disposition") ?? "";
+  const filename = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    ? decodeURIComponent(contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)![1]!)
+    : `translated-document.${format?.toLowerCase() ?? "pdf"}`;
+  return { blob: await response.blob(), filename };
+}
+
+export async function fetchOriginalDocumentFile(id: string): Promise<{ blob: Blob; filename: string }> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in to view your original document");
+  const response = await fetch(`${backendApiUrl}/documents/translate/${encodeURIComponent(id)}/source-file`, {
+    method: "GET",
+    headers: { Accept: "application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, image/*, text/plain", Authorization: `Bearer ${accessToken}` },
+    credentials: "include",
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Original file is no longer available");
+  const contentDisposition = response.headers.get("content-disposition") ?? "";
+  const filename = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+    ? decodeURIComponent(contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)![1]!)
+    : "original-document";
+  return { blob: await response.blob(), filename };
 }

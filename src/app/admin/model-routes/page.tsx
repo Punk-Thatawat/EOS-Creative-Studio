@@ -66,9 +66,17 @@ const videoFunctions = [
   { id: "video-to-music", label: "Video to Music", description: "Generate music from a video" },
 ] as const;
 
+const documentFunctions = [
+  { id: "document-ocr", label: "OCR", description: "Extract text from documents" },
+  { id: "document-summary", label: "Summarize", description: "Create a structured document summary" },
+  { id: "document-translate", label: "Translate", description: "Translate document content" },
+  { id: "document-contract", label: "Contract", description: "Analyze contracts" },
+  { id: "document-report", label: "Report", description: "Create reports from documents" },
+  { id: "document-form", label: "Form", description: "Extract structured form data" },
+] as const;
+
 const features = [
   { id: "audio", label: "Audio", description: "Create audio and music", icon: AudioWaveform },
-  { id: "document", label: "Document", description: "Create documents and presentations", icon: FileText },
 ] as const;
 
 const aiBackgroundModes: Array<{ id: AiBackgroundMode; label: string; description: string }> = [
@@ -108,10 +116,10 @@ function sameVideoStoryboardModeRouteDraft(left?: VideoStoryboardModeRouteDraft,
   return left.enabledModels.every((model) => right.enabledModels.includes(model));
 }
 
-type FeatureId = (typeof imageFunctions)[number]["id"] | (typeof videoFunctions)[number]["id"] | (typeof features)[number]["id"];
+type FeatureId = (typeof imageFunctions)[number]["id"] | (typeof videoFunctions)[number]["id"] | (typeof documentFunctions)[number]["id"] | (typeof features)[number]["id"] | "document";
 
 function formatFeature(id: FeatureId) {
-  return imageFunctions.find((feature) => feature.id === id)?.label ?? videoFunctions.find((feature) => feature.id === id)?.label ?? features.find((feature) => feature.id === id)?.label ?? id;
+  return imageFunctions.find((feature) => feature.id === id)?.label ?? videoFunctions.find((feature) => feature.id === id)?.label ?? documentFunctions.find((feature) => feature.id === id)?.label ?? features.find((feature) => feature.id === id)?.label ?? id;
 }
 
 function ModelInitials({ name }: { name: string }) {
@@ -397,17 +405,39 @@ function ModelGrid({ models, selectedModel, onSelect, onToggleEnabled, onDetails
   return <div className="grid gap-3 md:grid-cols-2">{models.map((item) => <ModelCard key={`${item.provider}:${item.model}`} item={item} selected={selectedModel === item.model} onSelect={() => onSelect(item.model)} onToggleEnabled={() => onToggleEnabled(item.model)} onDetails={() => onDetails(item)} />)}</div>;
 }
 
+function OcrEnginePanel() {
+  return <section aria-labelledby="ocr-engine-heading" className="rounded-3xl border border-[#eaded6] bg-white p-5 shadow-[0_8px_24px_rgba(68,49,36,0.04)] sm:p-6">
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">OCR engine</p>
+        <h2 id="ocr-engine-heading" className="mt-1 text-xl font-bold tracking-tight">iApp Thai OCR</h2>
+        <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted-foreground">OCR ใช้บริการเฉพาะสำหรับอ่านข้อความและโครงสร้างเอกสาร จึงไม่ต้อง Assign model จาก model catalog</p>
+      </div>
+      <Badge tone="success"><CheckCircle2 size={13} /> Ready</Badge>
+    </div>
+    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="rounded-2xl border border-border bg-[#fcfaf8] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Input</p><p className="mt-2 text-sm font-bold">PDF · PNG · JPG</p><p className="mt-1 text-[11px] text-muted-foreground">เอกสารและภาพสแกน</p></div>
+      <div className="rounded-2xl border border-border bg-[#fcfaf8] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Modes</p><p className="mt-2 text-sm font-bold">General · Advanced</p><p className="mt-1 text-[11px] text-muted-foreground">อ่านข้อความและรักษา layout</p></div>
+      <div className="rounded-2xl border border-border bg-[#fcfaf8] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Billing</p><p className="mt-2 text-sm font-bold">Per page</p><p className="mt-1 text-[11px] text-muted-foreground">เครดิตขึ้นกับประเภทเอกสาร</p></div>
+    </div>
+    <div className="mt-4 flex items-start gap-3 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4"><FileText size={17} className="mt-0.5 shrink-0 text-primary" /><div><p className="text-xs font-bold">การตั้งค่า OCR</p><p className="mt-1 text-[11px] leading-5 text-muted-foreground">ประเภทเอกสาร ภาษา รูปแบบผลลัพธ์ และระดับการอ่าน ถูกควบคุมจากหน้า OCR โดยตรง</p></div></div>
+  </section>;
+}
+
 function modelKindForFeature(feature: FeatureId): string {
   if (feature === "video-to-sfx" || feature === "video-to-music") return "audio";
   if (videoFunctions.some((item) => item.id === feature)) return "video";
   if (feature === "audio") return "audio";
-  if (feature === "document") return "document";
+  if (feature === "document" || documentFunctions.some((item) => item.id === feature)) return "document";
   return "image";
 }
 
 function isFeatureCompatible(item: GenerationModelOption, feature: FeatureId): boolean {
-  if (item.kind !== modelKindForFeature(feature)) return false;
   const capabilities = item.capabilities;
+  const isDocumentFeature = feature === "document" || documentFunctions.some((documentFeature) => documentFeature.id === feature);
+  const isLlm = capabilities.providerType?.trim().toLowerCase() === "llm";
+  if (isDocumentFeature) return item.kind === "document" && isLlm;
+  if (item.kind !== modelKindForFeature(feature)) return false;
   if (feature === "text-to-image") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter);
   if (feature === "image-to-image") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && (capabilities.imageParameter || capabilities.referenceImagesParameter));
   if (feature === "image-to-video") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && (capabilities.imageParameter || capabilities.referenceImagesParameter));
@@ -485,14 +515,14 @@ function MultiTargetModelAssignmentDialog({
     <div className="flex max-h-[min(820px,calc(100vh-32px))] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]">
       <header className="border-b border-border bg-white px-5 py-4 sm:px-7 sm:py-5">
         <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Model assignment</p><h2 id="assign-models-title" className="mt-1 text-xl font-bold tracking-tight">Assign models to features</h2><p className="mt-1 text-xs text-muted-foreground">เลือกฟีเจอร์ปลายทาง แล้วลาก model เข้าไป หรือกด Add</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground" aria-label="Close dialog"><X size={19} /></button></div>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Assign to</span><select value={feature} onChange={(event) => handleFeatureChange(event.target.value as FeatureId)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><optgroup label="Image">{imageFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Video">{videoFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>{features.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{feature === "background-removal" ? <label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">AI Background mode</span><select value={backgroundMode} onChange={(event) => onBackgroundModeChange(event.target.value as AiBackgroundMode)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10">{aiBackgroundModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label> : null}</div>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Assign to</span><select value={feature} onChange={(event) => handleFeatureChange(event.target.value as FeatureId)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><optgroup label="Image">{imageFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Video">{videoFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Document">{documentFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>{features.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{feature === "background-removal" ? <label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">AI Background mode</span><select value={backgroundMode} onChange={(event) => onBackgroundModeChange(event.target.value as AiBackgroundMode)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10">{aiBackgroundModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label> : null}</div>
       </header>
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-white p-4" aria-label="Model catalog">
           <div className="mb-3 flex items-center justify-between gap-3"><div><h3 className="text-sm font-bold">Model catalog</h3><p className="mt-1 text-[11px] text-muted-foreground">{compatibleModels.length} compatible model{compatibleModels.length === 1 ? "" : "s"} · {formatFeature(feature)}</p></div><GripVertical size={17} className="text-muted-foreground" /></div>
           <SearchInput size="compact" value={query} onValueChange={setQuery} placeholder="Search model" aria-label="Search model catalog" />
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{unassigned.length ? unassigned.map((item) => <div key={`${item.provider}:${item.model}`} draggable onDragStart={() => setDraggedModel(item.model)} onDragEnd={() => { setDraggedModel(null); setDragOver(false); }} className="flex cursor-grab items-center gap-3 rounded-xl border border-border bg-[#fcfaf8] p-3 transition hover:border-primary/50 active:cursor-grabbing"><GripVertical size={15} className="shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.displayName}</p><p className="truncate font-mono text-[10px] text-muted-foreground">{item.provider} · {item.model}</p></div><button type="button" onClick={() => onAdd(feature, item.model)} className="shrink-0 rounded-lg bg-[#fff0e9] px-2.5 py-1.5 text-[10px] font-bold text-primary hover:bg-primary hover:text-white">Add</button></div>) : <p className="rounded-xl border border-dashed border-[#d8d0ca] px-4 py-8 text-center text-xs text-muted-foreground">All compatible models are assigned.</p>}</div>
+          <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">{unassigned.length ? unassigned.map((item) => <div key={`${item.provider}:${item.model}`} draggable onDragStart={() => setDraggedModel(item.model)} onDragEnd={() => { setDraggedModel(null); setDragOver(false); }} className="flex cursor-grab items-center gap-3 rounded-xl border border-border bg-[#fcfaf8] p-3 transition hover:border-primary/50 active:cursor-grabbing"><GripVertical size={15} className="shrink-0 text-muted-foreground" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold">{item.displayName}</p><p className="truncate font-mono text-[10px] text-muted-foreground">{item.provider} · {item.model}</p></div><button type="button" onClick={() => onAdd(feature, item.model)} className="shrink-0 rounded-lg bg-[#fff0e9] px-2.5 py-1.5 text-[10px] font-bold text-primary hover:bg-primary hover:text-white">Add</button></div>) : <p className="rounded-xl border border-dashed border-[#d8d0ca] px-4 py-8 text-center text-xs text-muted-foreground">All compatible models are assigned.</p>}</div>
         </section>
 
         <section className={`flex min-h-0 flex-col overflow-hidden rounded-2xl border-2 border-dashed p-4 transition-colors ${dragOver ? "border-primary bg-[#fff0e9]" : "border-[#d8d0ca] bg-white"}`} onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={(event) => { event.preventDefault(); if (draggedModel) onAdd(feature, draggedModel); setDraggedModel(null); setDragOver(false); }} aria-label="Assigned models drop zone">
@@ -1055,7 +1085,7 @@ function AdminModelRoutesContent() {
   const requestedFeature = searchParams.get("feature");
   const audioFeatureParam = audioFeatureProfileRows.some((item) => item.key === requestedFeature) ? requestedFeature as AdminAudioFeature : null;
   const featureParam = (requestedFeature === "video" ? "image-to-video" : audioFeatureParam ? "audio" : requestedFeature) as FeatureId | null;
-  const feature = featureParam && [...imageFunctions, ...videoFunctions, ...features].some((item) => item.id === featureParam) ? featureParam : imageFunctions[0].id;
+  const feature = featureParam && [...imageFunctions, ...videoFunctions, ...documentFunctions, ...features].some((item) => item.id === featureParam) ? featureParam : imageFunctions[0].id;
   const [backgroundMode, setBackgroundMode] = useState<AiBackgroundMode>("remove");
   const routeKey = feature === "background-removal" ? `background-removal:${backgroundMode}` : feature;
   const [models, setModels] = useState<GenerationModelOption[]>([]);
@@ -1121,7 +1151,7 @@ function AdminModelRoutesContent() {
   const enabledCount = enabledModels.length;
   const enabledChanged = enabledModels.length !== savedEnabledModels.length || enabledModels.some((model) => !savedEnabledModels.includes(model));
   const hasChanges = selectedModel !== savedModel || enabledChanged;
-  const activeFeature = imageFunctions.find((item) => item.id === feature) ?? videoFunctions.find((item) => item.id === feature) ?? features.find((item) => item.id === feature) ?? imageFunctions[0];
+  const activeFeature = imageFunctions.find((item) => item.id === feature) ?? videoFunctions.find((item) => item.id === feature) ?? documentFunctions.find((item) => item.id === feature) ?? features.find((item) => item.id === feature) ?? imageFunctions[0];
   const tutorialFeature = audioFeatureParam ?? feature;
   const tutorialFeatureName = audioFeatureParam ? audioFeatureProfileRows.find((item) => item.key === audioFeatureParam)?.label ?? activeFeature.label : activeFeature.label;
 
@@ -1176,7 +1206,7 @@ function AdminModelRoutesContent() {
     setAssignmentBackgroundMode(backgroundMode);
     const assignmentModels = [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()];
     setAssignmentCatalog(assignmentModels);
-    const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
+    const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...documentFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
     const drafts = Object.fromEntries(targetFeatures.map((target) => {
       const targetRouteKey = target === "background-removal" ? `background-removal:${backgroundMode}` : target;
       // Use the already loaded mode-specific list for the active feature. This
@@ -1203,7 +1233,7 @@ function AdminModelRoutesContent() {
     setAssignmentSaving(true);
     setError("");
     try {
-      const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
+      const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...documentFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
       for (const target of targetFeatures) {
         const draft = assignmentDrafts[target] ?? { assignedModelIds: [], defaultModel: "" };
         if (draft.assignedModelIds.length > 0 && !draft.defaultModel) throw new Error(`${formatFeature(target)} needs a default model`);
@@ -1362,20 +1392,20 @@ function AdminModelRoutesContent() {
             <div className="min-h-[calc(100vh-120px)] overflow-x-clip rounded-3xl bg-[#faf8f6] px-4 pb-20 sm:px-6 lg:px-8 lg:pb-24">
       <div className="mx-auto max-w-[1180px] pt-6 lg:pt-8">
         <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-           <div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><ServerCog size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">{feature === "audio" ? "Audio provider settings" : "Generation model routes"}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{feature === "audio" ? "Configure ElevenLabs, WaveSpeed and internal audio processing for Create > Audio." : "Choose the model that powers each creative feature. Changes apply to new generations immediately."}</p></div>
-            {feature === "audio" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">ElevenLabs / WaveSpeed configuration</span> : feature === "image-to-video" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">5 Image to Video modes</span> : <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void openAssignment()} disabled={busy || loading}><Settings2 size={17} /> Assign models</Button><Button variant="outline" size="lg" onClick={() => void sync()} disabled={busy || loading}><CloudDownload size={17} /> {busy ? "Syncing catalog..." : "Sync provider catalog"}</Button></div>}
+           <div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><ServerCog size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">{feature === "audio" ? "Audio provider settings" : feature === "document-ocr" ? "OCR engine settings" : "Generation model routes"}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{feature === "audio" ? "Configure ElevenLabs, WaveSpeed and internal audio processing for Create > Audio." : feature === "document-ocr" ? "ตรวจสอบบริการ OCR เฉพาะทางสำหรับ Create > Document > OCR." : "Choose the model that powers each creative feature. Changes apply to new generations immediately."}</p></div>
+            {feature === "audio" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">ElevenLabs / WaveSpeed configuration</span> : feature === "image-to-video" ? <span className="rounded-full bg-[#fff0e9] px-3 py-2 text-xs font-bold text-primary">5 Image to Video modes</span> : feature === "document-ocr" ? <span className="rounded-full bg-[#e3f3e9] px-3 py-2 text-xs font-bold text-[#347454]">Dedicated OCR service</span> : <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void openAssignment()} disabled={busy || loading}><Settings2 size={17} /> Assign models</Button><Button variant="outline" size="lg" onClick={() => void sync()} disabled={busy || loading}><CloudDownload size={17} /> {busy ? "Syncing catalog..." : "Sync provider catalog"}</Button></div>}
         </div>
 
         {error ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc2c2] bg-[#fff6f6] p-4 text-sm text-[#9f3b3b]" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={18} /><div><p className="font-bold">Couldn&apos;t load model routes</p><p className="mt-1 text-xs leading-5">{error}</p><button type="button" className="mt-2 text-xs font-bold underline underline-offset-2" onClick={() => void load()}>Try again</button></div></div> : null}
         {message ? <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#bfe1cc] bg-[#f3fbf5] p-4 text-sm text-[#347454]" role="status"><CheckCircle2 size={18} /><p className="font-semibold">{message}</p></div> : null}
 
-            {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
+            {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : feature === "document-ocr" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="OCR engine" value="iApp Thai OCR" detail="Dedicated OCR service" accent="orange" /><StatCard label="Status" value="Ready" detail="Available for document OCR" accent="green" /><StatCard label="Billing" value="Per page" detail="Based on document type" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
 
             <FeatureTutorialPanel feature={tutorialFeature} featureName={tutorialFeatureName} includeFeatureOverview={feature !== "image-to-video"} />
             {feature === "audio" ? <AudioProviderSettingsPanel key={audioFeatureParam ?? "textToSpeech"} initialFeature={audioFeatureParam ?? undefined} /> : null}
         {feature === "image-to-video" ? <VideoStoryboardSettingsPanel catalog={catalog} routeOverview={routeOverview} onRoutesChanged={load} onDetails={(item, routeFeature) => setDetailsModel({ item, routeFeature })} /> : null}
 
-        {feature === "audio" || feature === "image-to-video" ? null : <div className="grid gap-6 lg:grid-cols-1 lg:items-start">
+        {feature === "document-ocr" ? <OcrEnginePanel /> : feature === "audio" || feature === "image-to-video" ? null : <div className="grid gap-6 lg:grid-cols-1 lg:items-start">
           <section aria-labelledby="route-heading" className="min-w-0">
             <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Route configuration</p><h2 id="route-heading" className="mt-1 text-xl font-bold tracking-tight">{activeFeature.label}</h2></div><SearchInput size="compact" className="w-full sm:w-60" value={query} onValueChange={setQuery} placeholder="Search models" aria-label="Search models" /></div>
             {feature === "background-removal" ? <div className="mb-4 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-3"><div className="mb-2 flex items-center justify-between gap-3"><div><p className="text-xs font-bold">AI Background mode</p><p className="mt-1 text-[11px] text-muted-foreground">ตั้ง model และ default แยกตามงานที่เลือก</p></div><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-primary">Mode-specific</span></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="tablist" aria-label="AI Background modes">{aiBackgroundModes.map((mode) => <button key={mode.id} type="button" role="tab" aria-selected={backgroundMode === mode.id} onClick={() => { setBackgroundMode(mode.id); setQuery(""); }} className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${backgroundMode === mode.id ? "border-primary bg-primary text-white" : "border-border bg-white hover:border-primary/50"}`}><span className="block text-xs font-bold">{mode.label}</span><span className={`mt-0.5 block text-[10px] ${backgroundMode === mode.id ? "text-white/80" : "text-muted-foreground"}`}>{mode.description}</span></button>)}</div></div> : null}
@@ -1385,7 +1415,7 @@ function AdminModelRoutesContent() {
         </div>}
       </div>
 
-      {feature !== "audio" && feature !== "image-to-video" ? <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div> : null}
+      {feature !== "audio" && feature !== "image-to-video" && feature !== "document-ocr" ? <div className={`fixed inset-x-0 bottom-0 z-30 border-t border-border bg-white/95 px-[var(--page-gutter)] py-3 shadow-[0_-8px_30px_rgba(68,49,36,0.08)] backdrop-blur transition-transform ${hasChanges ? "translate-y-0" : "translate-y-full"}`} aria-live="polite"><div className="mx-auto flex max-w-[1180px] flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><p className="text-xs font-bold">Unsaved route changes</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedModel ? `${enabledCount} model${enabledCount === 1 ? "" : "s"} allowed; ${formatFeature(feature)} default: ${selectedModel}.` : "Select a model to continue."}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => { setSelectedModel(savedModel); setEnabledModels(savedEnabledModels); setModels((current) => current.map((item) => ({ ...item, enabled: savedEnabledModels.includes(item.model) }))); }} disabled={busy}>Cancel</Button><Button size="sm" onClick={() => void save()} disabled={busy || !selectedModel || !hasChanges}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} {busy ? "Saving..." : "Save route settings"}</Button></div></div></div> : null}
       {assignmentOpen ? <MultiTargetModelAssignmentDialog feature={assignmentFeature} catalog={assignmentFeature === "background-removal" ? assignmentCatalog : [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()]} assignments={assignmentDrafts} backgroundMode={assignmentBackgroundMode} onFeatureChange={setAssignmentFeature} onBackgroundModeChange={changeAssignmentBackgroundMode} onAdd={addAssignment} onRemove={removeAssignment} onSetDefault={setAssignmentDefault} onClose={() => setAssignmentOpen(false)} onSave={saveAssignment} saving={assignmentSaving} /> : null}
       {detailsModel ? <ModelDetailsDialog key={`${detailsModel.routeFeature}:${detailsModel.item.model}:${detailsModel.item.provider}`} item={detailsModel.item} feature={feature} routeFeature={detailsModel.routeFeature} backgroundMode={feature === "background-removal" ? backgroundMode : undefined} onClose={() => setDetailsModel(null)} onSaveDisplayName={saveModelDisplayName} onSaveInputLimits={saveModelInputLimits} onSavePreview={saveModelPreview} onSavePostAudio={saveModelPostAudio} /> : null}
             </div>

@@ -808,3 +808,17 @@
    there instead of letting the last tab slide under the strip's hidden
    scrollbar. */
 @media (max-width: 1279.98px) { .gen-tabs button { gap: 6px; padding-inline: 11px; } }
+
+/* Short mobile viewports can otherwise let the fixed action dock overlap the
+   last setting control. Keep the dock floating, but make it compact enough to
+   leave a visible breathing gap above it. */
+@media (max-width: 767.98px) and (max-height: 520px) {
+  .gen-mobile-action-dock {
+    gap: 3px;
+    padding: 4px 8px;
+  }
+  .gen-mobile-action-dock .gen-estimate h3 { font-size: 11px; }
+  .gen-mobile-action-dock .gen-estimate p { margin-top: 0; font-size: 11px !important; }
+  .gen-mobile-action-dock .gen-generate-button { min-height: 38px; padding: 4px 6px; font-size: 13px !important; }
+  .gen-mobile-action-dock .gen-private { font-size: 10px !important; }
+}

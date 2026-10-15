@@ -1,9 +1,10 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { AudioLines, BarChart3, ChevronDown, Clock3, Home, ImageIcon, Settings, Video, WandSparkles } from "lucide-react";
+import { AudioLines, BarChart3, ChevronDown, Clock3, FileText, Home, ImageIcon, Settings, Video, WandSparkles, type LucideIcon } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { preloadCreatePage } from "@/features/create/components/preload-create-page";
+import type { GenerationKind } from "@/features/create/types/generation";
 import { shellCopy, useLocale } from "@/lib/i18n/locale-provider";
 
 const workspaceItems = [
@@ -13,11 +14,12 @@ const workspaceItems = [
   { label: "Usage & Credits", href: "/usage", icon: BarChart3 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
-const createItems = [
+const createItems: { kind?: GenerationKind; label: string; href: string; icon: LucideIcon }[] = [
   { kind: "image", label: "Image", href: "/create/image", icon: ImageIcon },
   { kind: "video", label: "Video", href: "/create/video", icon: Video },
   { kind: "audio", label: "Audio", href: "/create/audio", icon: AudioLines },
-] as const;
+  { label: "Document", href: "/create/document", icon: FileText },
+];
 const mainClass = "flex min-h-11 select-none items-center gap-2 rounded-[11px] px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary";
 const activeClass = "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary";
 const idleClass = "text-muted-foreground hover:bg-surface-muted hover:text-foreground";
@@ -103,7 +105,7 @@ export function WorkspaceNavigation({ pathname, onNavigate }: { pathname: string
       <div className="grid transition-[grid-template-rows] duration-200 ease-out" style={{ gridTemplateRows: createOpen ? "1fr" : "0fr" }}>
         <div className="overflow-hidden">
           <div className="ml-5 mt-1 space-y-1 border-l border-[#f1d7cc] pl-2">
-            {createItems.map((item) => { const active = isActive(item.href); const preparePage = () => { if (!active) preloadCreatePage(item.kind); }; return <Link key={item.href} href={item.href} onMouseEnter={preparePage} onFocus={preparePage} onClick={(event) => { preloadCreatePage(item.kind); handleNavigationClick(event, item.href); }} aria-current={active ? "page" : undefined} className={`flex min-h-10 select-none items-center gap-2 rounded-[9px] px-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary ${active ? "bg-[#fff0e9] text-primary" : idleClass}`}><item.icon size={16} strokeWidth={active ? 2.4 : 2} /><span>{text.nav[item.href] ?? item.label}</span><NavigationLinkStatus /></Link>; })}
+            {createItems.map((item) => { const active = isActive(item.href); const preload = () => { if (item.kind) preloadCreatePage(item.kind); }; const preparePage = () => { if (!active) preload(); }; return <Link key={item.href} href={item.href} onMouseEnter={preparePage} onFocus={preparePage} onClick={(event) => { preload(); handleNavigationClick(event, item.href); }} aria-current={active ? "page" : undefined} className={`flex min-h-10 select-none items-center gap-2 rounded-[9px] px-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:outline-primary ${active ? "bg-[#fff0e9] text-primary" : idleClass}`}><item.icon size={16} strokeWidth={active ? 2.4 : 2} /><span>{text.nav[item.href] ?? item.label}</span><NavigationLinkStatus /></Link>; })}
           </div>
         </div>
       </div>

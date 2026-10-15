@@ -22,7 +22,7 @@ export function GeneratedWorkPicker({ onSelect }: { onSelect: (patch: Partial<Te
       setLoading(true); setError("");
       void fetchHistory({search, type, status:"completed", limit:12, offset}).then(result => {
         if (!active) return;
-        setItems(result.items); setMore(result.pagination.hasMore);
+        setItems(result.items.filter(item => item.mediaKind !== "document")); setMore(result.pagination.hasMore);
       }).catch(() => { if (active) setError("โหลดผลงานไม่สำเร็จ กรุณาปิดแล้วเปิดใหม่"); })
         .finally(() => { if (active) setLoading(false); });
     }, 200);

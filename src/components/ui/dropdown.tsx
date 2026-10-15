@@ -19,6 +19,7 @@ export type DropdownProps = {
   options: readonly DropdownOption[];
   onChange: (value: string) => void;
   placeholder?: ReactNode;
+  triggerLabel?: ReactNode;
   ariaLabel: string;
   disabled?: boolean;
   loading?: boolean;
@@ -29,7 +30,7 @@ export type DropdownProps = {
   menuPosition?: "absolute" | "fixed";
 };
 
-export function Dropdown({ value, options, onChange, placeholder = "Select an option", ariaLabel, disabled = false, loading = false, className, triggerClassName, menuClassName, optionClassName, menuPosition = "absolute" }: DropdownProps) {
+export function Dropdown({ value, options, onChange, placeholder = "Select an option", triggerLabel, ariaLabel, disabled = false, loading = false, className, triggerClassName, menuClassName, optionClassName, menuPosition = "absolute" }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const [fixedMenuStyle, setFixedMenuStyle] = useState<CSSProperties | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -70,8 +71,16 @@ export function Dropdown({ value, options, onChange, placeholder = "Select an op
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const viewportHeight = window.innerHeight;
+      // A sticky page header is on top of the page, so the room above the trigger starts under it, not at the screen edge.
+      const topLimit = Math.max(0, document.querySelector("header.eos-studio-header")?.getBoundingClientRect().bottom ?? 0);
+      if (rect.bottom <= topLimit) {
+        // The trigger has scrolled out from under the header; a menu hanging from a button nobody can see helps no one.
+        setOpen(false);
+        setFixedMenuStyle(null);
+        return;
+      }
       const spaceBelow = viewportHeight - rect.bottom;
-      const spaceAbove = rect.top;
+      const spaceAbove = rect.top - topLimit;
       const openUpward = spaceBelow < 200 && spaceAbove > spaceBelow;
       const maxHeight = Math.max(120, (openUpward ? spaceAbove : spaceBelow) - 12);
       setFixedMenuStyle(
@@ -107,7 +116,7 @@ export function Dropdown({ value, options, onChange, placeholder = "Select an op
 
   return <div ref={rootRef} className={cn("relative min-w-0", className)}>
     <button ref={triggerRef} type="button" className={cn("flex min-h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-white px-3 text-left text-xs font-semibold text-foreground outline-none transition focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-60", triggerClassName)} disabled={isDisabled} aria-haspopup="listbox" aria-expanded={open} aria-controls={listboxId} aria-label={ariaLabel} onClick={() => setOpen((current) => !current)}>
-      <span className="min-w-0 flex-1 truncate" data-no-translate={selectedOption?.preserveLabel ? "true" : undefined}>{loading ? <span className="inline-block h-3 w-24 animate-pulse rounded bg-surface-muted" aria-label="Loading" /> : selectedOption?.label ?? placeholder}</span>
+      <span className="min-w-0 flex-1 truncate" data-no-translate={selectedOption?.preserveLabel ? "true" : undefined}>{loading ? <span className="inline-block h-3 w-24 animate-pulse rounded bg-surface-muted" aria-label="Loading" /> : triggerLabel ?? selectedOption?.label ?? placeholder}</span>
       <ChevronDown size={15} className={cn("shrink-0 transition-transform", open && "rotate-180")} aria-hidden="true" />
     </button>
     {menuPosition === "fixed" ? (typeof document === "undefined" || !menu ? null : createPortal(menu, document.body)) : menu}

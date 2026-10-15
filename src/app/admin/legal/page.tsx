@@ -7,17 +7,25 @@ import { SidebarNavigation } from "@/components/app-shell/navigation";
 import { StudioHeader } from "@/components/app-shell/studio-header";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { getAdminLegalDocument, updateAdminLegalDocument, type AdminLegalDocument, type LegalSlug } from "@/lib/api/legal";
+import { getAdminLegalDocument, updateAdminLegalDocument, type AdminLegalDocument, type LegalDocumentTranslation, type LegalLocale, type LegalSlug } from "@/lib/api/legal";
 import { legalDocuments, type LegalDocument } from "@/features/legal/legal-documents";
 
 type DraftSection = { heading: string; paragraphsText: string; bulletsText: string };
 type Draft = Omit<AdminLegalDocument, "sections"> & { sections: DraftSection[] };
 
-function toDraft(policy: AdminLegalDocument): Draft {
+function toDraft(policy: AdminLegalDocument, locale: LegalLocale): Draft {
+  const content = locale === "th" ? policy : policy.translations?.[locale];
+  const localized = content ?? { title: "", shortTitle: "", description: "", effectiveDate: "", draftNote: "", sections: [] };
   return {
-    ...policy,
-    draftNote: policy.draftNote ?? "",
-    sections: policy.sections.map((section) => ({
+    slug: policy.slug,
+    title: localized.title,
+    shortTitle: localized.shortTitle,
+    description: localized.description,
+    effectiveDate: localized.effectiveDate,
+    draftNote: localized.draftNote ?? "",
+    published: policy.published,
+    updatedAt: policy.updatedAt,
+    sections: localized.sections.map((section) => ({
       heading: section.heading,
       paragraphsText: section.paragraphs?.join("\n\n") ?? "",
       bulletsText: section.bullets?.join("\n") ?? "",
@@ -26,17 +34,17 @@ function toDraft(policy: AdminLegalDocument): Draft {
 }
 
 function fromFallback(document: LegalDocument): AdminLegalDocument {
-  return { ...document, published: true };
+  const content: LegalDocumentTranslation = { title: document.title, shortTitle: document.shortTitle, description: document.description, effectiveDate: document.effectiveDate, ...(document.draftNote ? { draftNote: document.draftNote } : {}), sections: document.sections };
+  return { ...document, translations: { th: content }, published: true };
 }
 
-function toPayload(draft: Draft): Omit<AdminLegalDocument, "slug" | "updatedAt"> {
+function toTranslationPayload(draft: Draft): LegalDocumentTranslation {
   return {
     title: draft.title.trim(),
     shortTitle: draft.shortTitle.trim(),
     description: draft.description.trim(),
     effectiveDate: draft.effectiveDate.trim(),
     draftNote: draft.draftNote?.trim() ?? "",
-    published: draft.published,
     sections: draft.sections.map((section) => ({
       heading: section.heading.trim(),
       paragraphs: section.paragraphsText.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean),
@@ -45,29 +53,43 @@ function toPayload(draft: Draft): Omit<AdminLegalDocument, "slug" | "updatedAt">
   };
 }
 
+function toPayload(drafts: Record<LegalLocale, Draft | null>): Omit<AdminLegalDocument, "slug" | "updatedAt"> {
+  const thaiDraft = drafts.th;
+  if (!thaiDraft) throw new Error("Thai document is required");
+  const thai = toTranslationPayload(thaiDraft);
+  const translations: Partial<Record<LegalLocale, LegalDocumentTranslation>> = { th: thai };
+  const englishDraft = drafts.en;
+  if (englishDraft && (englishDraft.title.trim() || englishDraft.sections.length > 0)) translations.en = toTranslationPayload(englishDraft);
+  return { ...thai, published: thaiDraft.published, translations };
+}
+
 const emptySection = (): DraftSection => ({ heading: "", paragraphsText: "", bulletsText: "" });
 
 function AdminLegalContent() {
   const [selectedSlug, setSelectedSlug] = useState<LegalSlug>("cookies");
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [selectedLocale, setSelectedLocale] = useState<LegalLocale>("th");
+  const [drafts, setDrafts] = useState<Record<LegalLocale, Draft | null>>({ th: null, en: null });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const selectedDocument = legalDocuments.find((document) => document.slug === selectedSlug);
+  const draft = drafts[selectedLocale];
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     setMessage("");
     try {
-      setDraft(toDraft(await getAdminLegalDocument(selectedSlug)));
+      const policy = await getAdminLegalDocument(selectedSlug);
+      setDrafts({ th: toDraft(policy, "th"), en: toDraft(policy, "en") });
     } catch (reason) {
       if (selectedDocument) {
-        setDraft(toDraft(fromFallback(selectedDocument)));
+        const fallback = fromFallback(selectedDocument);
+        setDrafts({ th: toDraft(fallback, "th"), en: toDraft(fallback, "en") });
         setMessage("ยังไม่มีฉบับที่บันทึกไว้ จึงแสดงเนื้อหาตั้งต้นให้แก้ไขได้");
       } else {
-        setDraft(null);
+        setDrafts({ th: null, en: null });
         setError(reason instanceof Error ? reason.message : "โหลดเอกสารไม่สำเร็จ");
       }
     } finally {
@@ -83,26 +105,35 @@ function AdminLegalContent() {
   const selectDocument = (slug: LegalSlug) => {
     if (slug === selectedSlug) return;
     setSelectedSlug(slug);
-    setDraft(null);
+    setSelectedLocale("th");
+    setDrafts({ th: null, en: null });
     setMessage("");
     setError("");
   };
 
   const updateSection = (index: number, patch: Partial<DraftSection>) => {
-    setDraft((current) => current ? {
-      ...current,
-      sections: current.sections.map((section, sectionIndex) => sectionIndex === index ? { ...section, ...patch } : section),
-    } : current);
+    setDrafts((current) => {
+      const currentDraft = current[selectedLocale];
+      if (!currentDraft) return current;
+      return { ...current, [selectedLocale]: { ...currentDraft, sections: currentDraft.sections.map((section, sectionIndex) => sectionIndex === index ? { ...section, ...patch } : section) } };
+    });
+  };
+
+  const updateDraft = (patch: Partial<Draft>) => {
+    setDrafts((current) => {
+      const currentDraft = current[selectedLocale];
+      return currentDraft ? { ...current, [selectedLocale]: { ...currentDraft, ...patch } } : current;
+    });
   };
 
   const save = async () => {
-    if (!draft || draft.sections.length === 0) return;
+    if (!drafts.th || drafts.th.sections.length === 0) return;
     setBusy(true);
     setError("");
     setMessage("");
     try {
-      const saved = await updateAdminLegalDocument(selectedSlug, toPayload(draft));
-      setDraft(toDraft(saved));
+      const saved = await updateAdminLegalDocument(selectedSlug, toPayload(drafts));
+      setDrafts({ th: toDraft(saved, "th"), en: toDraft(saved, "en") });
       setMessage(`บันทึก${saved.title}แล้ว`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "บันทึกเอกสารไม่สำเร็จ");
@@ -138,6 +169,13 @@ function AdminLegalContent() {
                   ))}
                 </div>
 
+                {draft ? <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-border bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div><p className="text-xs font-bold">ภาษาของเอกสาร</p><p className="mt-1 text-xs text-muted-foreground">บันทึกเนื้อหาไทยและ English แยกกันในเอกสารเดียว</p></div>
+                  <div className="inline-flex rounded-xl border border-border bg-[#faf8f6] p-1" role="tablist" aria-label="ภาษาของเอกสาร">
+                    {(["th", "en"] as const).map((locale) => <button key={locale} type="button" role="tab" aria-selected={selectedLocale === locale} onClick={() => setSelectedLocale(locale)} className={`rounded-lg px-4 py-2 text-xs font-bold transition-colors ${selectedLocale === locale ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{locale === "th" ? "ไทย" : "English"}</button>)}
+                  </div>
+                </div> : null}
+
                 {error ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc2c2] bg-[#fff6f6] p-4 text-sm text-[#9f3b3b]" role="alert"><AlertCircle size={18} className="mt-0.5 shrink-0" /><p>{error}</p></div> : null}
                 {message ? <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#bfe1cc] bg-[#f3fbf5] p-4 text-sm text-[#347454]" role="status"><CheckCircle2 size={18} /><p className="font-semibold">{message}</p></div> : null}
 
@@ -147,21 +185,21 @@ function AdminLegalContent() {
                       <section className="rounded-2xl border border-border bg-white p-5 sm:p-6">
                         <div className="mb-5"><h2 className="text-base font-bold">ข้อมูลเอกสาร</h2><p className="mt-1 text-xs text-muted-foreground">ข้อมูลส่วนหัวที่จะแสดงบนหน้าเอกสารสาธารณะ</p></div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                          <label className="text-xs font-semibold">ชื่อเอกสาร<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} maxLength={120} required className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary" /></label>
-                          <label className="text-xs font-semibold">ชื่อสั้น<input value={draft.shortTitle} onChange={(event) => setDraft({ ...draft, shortTitle: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary" /></label>
+                          <label className="text-xs font-semibold">ชื่อเอกสาร<input value={draft.title} onChange={(event) => updateDraft({ title: event.target.value })} maxLength={120} required className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary" /></label>
+                          <label className="text-xs font-semibold">ชื่อสั้น<input value={draft.shortTitle} onChange={(event) => updateDraft({ shortTitle: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary" /></label>
                         </div>
-                        <label className="mt-4 block text-xs font-semibold">คำอธิบาย<textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} maxLength={500} required className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-white p-3 text-sm leading-6 outline-none focus:border-primary" /></label>
+                        <label className="mt-4 block text-xs font-semibold">คำอธิบาย<textarea value={draft.description} onChange={(event) => updateDraft({ description: event.target.value })} maxLength={500} required className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-white p-3 text-sm leading-6 outline-none focus:border-primary" /></label>
                         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                          <label className="text-xs font-semibold">วันที่มีผล<input value={draft.effectiveDate} onChange={(event) => setDraft({ ...draft, effectiveDate: event.target.value })} maxLength={120} required className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary" /></label>
-                          <label className="text-xs font-semibold">หมายเหตุฉบับร่าง <span className="font-normal text-muted-foreground">(ถ้ามี)</span><textarea value={draft.draftNote ?? ""} onChange={(event) => setDraft({ ...draft, draftNote: event.target.value })} maxLength={1000} className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-white p-3 text-sm leading-6 outline-none focus:border-primary" /></label>
+                          <label className="text-xs font-semibold">วันที่มีผล<input value={draft.effectiveDate} onChange={(event) => updateDraft({ effectiveDate: event.target.value })} maxLength={120} required className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary" /></label>
+                          <label className="text-xs font-semibold">หมายเหตุฉบับร่าง <span className="font-normal text-muted-foreground">(ถ้ามี)</span><textarea value={draft.draftNote ?? ""} onChange={(event) => updateDraft({ draftNote: event.target.value })} maxLength={1000} className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-white p-3 text-sm leading-6 outline-none focus:border-primary" /></label>
                         </div>
                       </section>
 
                       <section className="rounded-2xl border border-border bg-white p-5 sm:p-6">
-                        <div className="mb-5 flex items-start justify-between gap-3"><div><h2 className="text-base font-bold">เนื้อหาเอกสาร</h2><p className="mt-1 text-xs text-muted-foreground">แยกย่อหน้าด้วยบรรทัดว่าง และแยกรายการด้วยการขึ้นบรรทัดใหม่</p></div><Button type="button" variant="outline" size="sm" onClick={() => setDraft({ ...draft, sections: [...draft.sections, emptySection()] })}><Plus size={15} /> เพิ่มหัวข้อ</Button></div>
+                        <div className="mb-5 flex items-start justify-between gap-3"><div><h2 className="text-base font-bold">เนื้อหาเอกสาร</h2><p className="mt-1 text-xs text-muted-foreground">แยกย่อหน้าด้วยบรรทัดว่าง และแยกรายการด้วยการขึ้นบรรทัดใหม่</p></div><Button type="button" variant="outline" size="sm" onClick={() => updateDraft({ sections: [...draft.sections, emptySection()] })}><Plus size={15} /> เพิ่มหัวข้อ</Button></div>
                         <div className="space-y-4">
                           {draft.sections.map((section, index) => <article key={`section-${index}`} className="rounded-2xl border border-[#eaded6] bg-[#fcfaf8] p-4">
-                            <div className="mb-3 flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">หัวข้อที่ {index + 1}</span><button type="button" onClick={() => setDraft({ ...draft, sections: draft.sections.filter((_, sectionIndex) => sectionIndex !== index) })} disabled={draft.sections.length === 1} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-white hover:text-[#bd3e3e] disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={13} /> ลบหัวข้อ</button></div>
+                            <div className="mb-3 flex items-center justify-between gap-3"><span className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">หัวข้อที่ {index + 1}</span><button type="button" onClick={() => updateDraft({ sections: draft.sections.filter((_, sectionIndex) => sectionIndex !== index) })} disabled={draft.sections.length === 1} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-white hover:text-[#bd3e3e] disabled:cursor-not-allowed disabled:opacity-40"><Trash2 size={13} /> ลบหัวข้อ</button></div>
                             <input value={section.heading} onChange={(event) => updateSection(index, { heading: event.target.value })} maxLength={180} required placeholder="เช่น 1. คุกกี้คืออะไร" className="h-10 w-full rounded-xl border border-border bg-white px-3 text-sm font-semibold outline-none focus:border-primary" />
                             <label className="mt-3 block text-xs font-semibold">ย่อหน้า<textarea value={section.paragraphsText} onChange={(event) => updateSection(index, { paragraphsText: event.target.value })} placeholder="พิมพ์เนื้อหาแต่ละย่อหน้า..." className="mt-2 min-h-24 w-full resize-y rounded-xl border border-border bg-white p-3 text-sm leading-6 outline-none focus:border-primary" /></label>
                             <label className="mt-3 block text-xs font-semibold">รายการหัวข้อย่อย <span className="font-normal text-muted-foreground">(หนึ่งรายการต่อหนึ่งบรรทัด)</span><textarea value={section.bulletsText} onChange={(event) => updateSection(index, { bulletsText: event.target.value })} placeholder={'คุกกี้ที่จำเป็น\nคุกกี้การตั้งค่า'} className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-white p-3 text-sm leading-6 outline-none focus:border-primary" /></label>
@@ -171,7 +209,7 @@ function AdminLegalContent() {
                     </div>
 
                     <aside className="space-y-5">
-                      <section className="rounded-2xl border border-border bg-white p-5 sm:p-6"><h2 className="text-base font-bold">การเผยแพร่</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">เมื่อเปิดเผยแพร่ ผู้ใช้จะเห็นเอกสารฉบับนี้ที่หน้าสาธารณะ</p><button type="button" onClick={() => setDraft({ ...draft, published: !draft.published })} className={`mt-4 flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left text-xs font-semibold ${draft.published ? "border-[#bfe1cc] bg-[#f3fbf5] text-[#347454]" : "border-border bg-white text-muted-foreground"}`} aria-pressed={draft.published}><span><b>{draft.published ? "เผยแพร่แล้ว" : "ซ่อนเอกสาร"}</b><small className="mt-1 block font-normal">{draft.published ? "หน้าเว็บสาธารณะใช้เนื้อหานี้" : "ผู้ใช้จะเห็นฉบับสำรองเดิม"}</small></span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${draft.published ? "border-[#4c9b72] bg-[#4c9b72] text-white" : "border-border"}`}>{draft.published ? "✓" : null}</span></button><Button type="submit" className="mt-4 w-full" disabled={busy || !draft.title.trim() || !draft.shortTitle.trim() || !draft.effectiveDate.trim() || draft.sections.some((section) => !section.heading.trim())}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}{busy ? "กำลังบันทึก..." : "บันทึกเอกสาร"}</Button></section>
+                      <section className="rounded-2xl border border-border bg-white p-5 sm:p-6"><h2 className="text-base font-bold">การเผยแพร่</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">เมื่อเปิดเผยแพร่ ผู้ใช้จะเห็นเอกสารฉบับนี้ที่หน้าสาธารณะ</p><button type="button" onClick={() => updateDraft({ published: !draft.published })} className={`mt-4 flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left text-xs font-semibold ${draft.published ? "border-[#bfe1cc] bg-[#f3fbf5] text-[#347454]" : "border-border bg-white text-muted-foreground"}`} aria-pressed={draft.published}><span><b>{draft.published ? "เผยแพร่แล้ว" : "ซ่อนเอกสาร"}</b><small className="mt-1 block font-normal">{draft.published ? "หน้าเว็บสาธารณะใช้เนื้อหานี้" : "ผู้ใช้จะเห็นฉบับสำรองเดิม"}</small></span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${draft.published ? "border-[#4c9b72] bg-[#4c9b72] text-white" : "border-border"}`}>{draft.published ? "✓" : null}</span></button><Button type="submit" className="mt-4 w-full" disabled={busy || !drafts.th?.title.trim() || !drafts.th?.shortTitle.trim() || !drafts.th?.effectiveDate.trim() || drafts.th?.sections.some((section) => !section.heading.trim())}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}{busy ? "กำลังบันทึก..." : "บันทึกเอกสาร"}</Button></section>
                       <section className="rounded-2xl border border-[#eaded6] bg-[#fff8f4] p-5"><h2 className="text-sm font-bold">ตรวจสอบหน้าเว็บ</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">เปิดหน้าเผยแพร่เพื่อดูผลลัพธ์หลังบันทึก</p><Link href={`/legal/${selectedSlug}`} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-xs font-bold text-primary hover:underline">เปิดหน้า {draft.title} ↗</Link></section>
                       {draft.updatedAt ? <p className="px-1 text-[10px] text-muted-foreground">แก้ไขล่าสุด: {new Date(draft.updatedAt).toLocaleString("th-TH")}</p> : null}
                     </aside>

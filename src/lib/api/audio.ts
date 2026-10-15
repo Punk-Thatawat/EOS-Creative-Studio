@@ -14,6 +14,15 @@ export type TextToSpeechInput = {
   speed: number;
   pitch?: number;
   volume?: number;
+  /** MiniMax speech only; overrides the emotion derived from `tone`. */
+  emotion?: "happy" | "sad" | "angry" | "fearful" | "disgusted" | "surprised" | "neutral";
+  /** MiniMax speech only. */
+  englishNormalization?: boolean;
+  /** MiniMax speech only; overrides the language_boost derived from `languageCode`. */
+  languageBoost?: "Thai" | "English";
+  sampleRate?: 8000 | 16000 | 22050 | 24000 | 32000 | 44100;
+  bitrate?: 32000 | 64000 | 128000 | 256000;
+  channel?: "1" | "2";
   pronunciationHint?: string;
   backgroundMusicEnabled?: boolean;
   backgroundMusicKey?: string;
@@ -30,6 +39,15 @@ export type TextToSpeechScenesInput = {
   speed: number;
   pitch?: number;
   volume?: number;
+  /** MiniMax speech only; overrides the emotion derived from `tone`. */
+  emotion?: "happy" | "sad" | "angry" | "fearful" | "disgusted" | "surprised" | "neutral";
+  /** MiniMax speech only. */
+  englishNormalization?: boolean;
+  /** MiniMax speech only; overrides the language_boost derived from `languageCode`. */
+  languageBoost?: "Thai" | "English";
+  sampleRate?: 8000 | 16000 | 22050 | 24000 | 32000 | 44100;
+  bitrate?: 32000 | 64000 | 128000 | 256000;
+  channel?: "1" | "2";
   pronunciationHint?: string;
   pauseSeconds?: number;
   backgroundMusicEnabled?: boolean;
@@ -47,6 +65,21 @@ export type AudioCreditQuote = {
   backgroundMusicCredits: number;
   backgroundMusicSource: "disabled" | "admin-audio-url" | "wavespeed" | "elevenlabs";
   pricingSource: "provider" | "fallback";
+};
+
+export type AudioCleanupCreditQuote = {
+  provider: "elevenlabs" | "internal";
+  model: string;
+  sceneCount: number;
+  textCharacters: number;
+  creditCost: number;
+  speechCredits: number;
+  backgroundMusicCredits: number;
+  backgroundMusicSource: "disabled";
+  pricingSource: "provider" | "fallback";
+  durationSeconds: number;
+  billableMinutes: number;
+  providerCredits: number;
 };
 
 export type AudioCreditBalance = { balance: number };
@@ -80,12 +113,14 @@ export type AudioBackgroundMusic = {
 export type AudioFeatureKey = "textToSpeech" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
 
 export type DialogueSpeakerInput = { name: string; voice: string };
+export type DialogueEmotionTag = "happy" | "excited" | "calm" | "sad" | "serious" | "whispering" | "angry";
 export type DialogueInput = {
   script: string;
   speakers: DialogueSpeakerInput[];
   conversationStyle: "Interview" | "Roundtable" | "Storytelling";
   languageCode: string;
-  emotion: number;
+  emotion?: number;
+  emotionTags?: Array<DialogueEmotionTag | "natural">;
   pauseSeconds: number;
   autoDirect: boolean;
   modelId?: string;
@@ -98,6 +133,7 @@ export type DialogueInput = {
 
 export type AudioCleanupInput = {
   audio: File;
+  durationSeconds: number;
   noiseReduction: boolean;
   voiceClarity: boolean;
   removeReverb: boolean;
@@ -452,6 +488,7 @@ export async function createDialogue(input: DialogueInput, signal?: AbortSignal)
 export async function cleanupAudio(input: AudioCleanupInput, signal?: AbortSignal): Promise<TextToSpeechResponse> {
   const form = new FormData();
   form.append("audio", input.audio, input.audio.name);
+  form.append("durationSeconds", String(input.durationSeconds));
   form.append("noiseReduction", String(input.noiseReduction));
   form.append("voiceClarity", String(input.voiceClarity));
   form.append("removeReverb", String(input.removeReverb));
@@ -464,6 +501,19 @@ export async function cleanupAudio(input: AudioCleanupInput, signal?: AbortSigna
     body: form,
     signal,
   });
+}
+
+export async function quoteAudioCleanup(input: Omit<AudioCleanupInput, "audio">, signal?: AbortSignal): Promise<AudioCleanupCreditQuote> {
+  const response = await userAudioRequest("/audio/cleanup/quote", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: JSON.stringify(input),
+    signal,
+  });
+  const payload = await response.json().catch(() => null) as { data?: AudioCleanupCreditQuote } | AudioCleanupCreditQuote | null;
+  if (payload && typeof payload === "object" && "data" in payload && payload.data) return payload.data;
+  if (payload && typeof payload === "object" && "creditCost" in payload) return payload as AudioCleanupCreditQuote;
+  throw new Error("Audio cleanup pricing unavailable");
 }
 
 export async function quoteDialogue(input: Omit<DialogueInput, "idempotencyKey">, signal?: AbortSignal): Promise<AudioCreditQuote> {

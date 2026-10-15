@@ -40,7 +40,6 @@ export default function AuthCallbackPage() {
     completionStarted.current = true;
     let active = true;
     const redirectParam = new URLSearchParams(window.location.search).get("redirect");
-    const loginRetryUrl = "/?auth_error=1";
 
     async function completeAuth() {
       const code = new URLSearchParams(window.location.search).get("code");
@@ -66,7 +65,6 @@ export default function AuthCallbackPage() {
       const message = error instanceof Error ? error.message : "Unable to complete login";
       setErrorMessage(message);
       window.sessionStorage.setItem("eos.auth.login-error", message);
-      window.location.replace(loginRetryUrl);
     });
 
     return () => {

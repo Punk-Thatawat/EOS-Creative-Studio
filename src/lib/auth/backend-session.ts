@@ -1,6 +1,7 @@
 "use client";
 
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
+const AUTH_REQUEST_TIMEOUT_MS = 15000;
 
 export type BackendUserProfile = Record<string, unknown>;
 export type BackendAuthProvider = "email" | "google";
@@ -13,14 +14,23 @@ export type BackendSessionSummary = {
 };
 
 export async function fetchBackendSession(accessToken: string): Promise<BackendUserProfile> {
-  const response = await fetch(`${backendUrl}/api/v1/auth/session`, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    credentials: "include",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${backendUrl}/api/v1/auth/session`, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      credentials: "include",
+      signal: AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new Error("The workspace server is taking too long to respond. Please try again.");
+    }
+    throw new Error("Unable to connect to the workspace server. Please try again.");
+  }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
@@ -50,6 +60,7 @@ export async function fetchBackendAuthSessions(accessToken: string): Promise<Bac
     },
     credentials: "include",
     cache: "no-store",
+    signal: AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS),
   });
 
   const payload = await response.json().catch(() => null) as { data?: { sessions?: BackendSessionSummary[] }; message?: string } | null;
