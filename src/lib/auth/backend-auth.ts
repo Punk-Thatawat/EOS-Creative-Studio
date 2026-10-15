@@ -93,9 +93,10 @@ export function completePendingEmailLoginWithBackend(pendingLoginToken: string) 
   return postAuth("complete-pending-login", { pending_login_token: pendingLoginToken });
 }
 
-export function registerWithBackend(input: { email: string; password: string; display_name?: string }) {
+export function registerWithBackend(input: { email: string; password: string; display_name?: string; captchaToken?: string }) {
   const body: Record<string, string> = { email: input.email, password: input.password };
   if (input.display_name) body.display_name = input.display_name;
+  if (input.captchaToken) body.captcha_token = input.captchaToken;
   return postAuth("register", body);
 }
 
