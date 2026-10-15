@@ -31,13 +31,14 @@ const resendConfirmationCooldownSeconds = 30;
 const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
 type RecaptchaApi = {
-  render: (container: HTMLElement, options: {
+  ready?: (callback: () => void) => void;
+  render?: (container: HTMLElement, options: {
     sitekey: string;
     callback: (token: string) => void;
     "expired-callback": () => void;
     "error-callback": () => void;
   }) => string | number;
-  reset: (widgetId?: string | number) => void;
+  reset?: (widgetId?: string | number) => void;
 };
 
 declare global {
@@ -193,8 +194,9 @@ export function PreLoginPage() {
     if (!loginOpen || authMode !== "register" || !recaptchaSiteKey || !recaptchaContainerRef.current) return undefined;
     let cancelled = false;
     const renderWidget = () => {
-      if (cancelled || !recaptchaContainerRef.current || !window.grecaptcha || recaptchaWidgetRef.current !== null) return;
-      recaptchaWidgetRef.current = window.grecaptcha.render(recaptchaContainerRef.current, {
+      const api = window.grecaptcha;
+      if (cancelled || !recaptchaContainerRef.current || !api || typeof api.render !== "function" || recaptchaWidgetRef.current !== null) return;
+      recaptchaWidgetRef.current = api.render(recaptchaContainerRef.current, {
         sitekey: recaptchaSiteKey,
         callback: (token) => setRecaptchaToken(token),
         "expired-callback": () => setRecaptchaToken(null),
@@ -204,26 +206,32 @@ export function PreLoginPage() {
         },
       });
     };
+    const renderWhenReady = () => {
+      const api = window.grecaptcha;
+      if (!api) return;
+      if (typeof api.ready === "function") api.ready(renderWidget);
+      else renderWidget();
+    };
 
     const existingScript = document.querySelector<HTMLScriptElement>('script[data-eos-recaptcha="true"]');
     if (window.grecaptcha) {
-      renderWidget();
+      renderWhenReady();
     } else if (existingScript) {
-      existingScript.addEventListener("load", renderWidget, { once: true });
+      existingScript.addEventListener("load", renderWhenReady, { once: true });
     } else {
       const script = document.createElement("script");
       script.src = "https://www.google.com/recaptcha/api.js?render=explicit";
       script.async = true;
       script.defer = true;
       script.dataset.eosRecaptcha = "true";
-      script.addEventListener("load", renderWidget, { once: true });
+      script.addEventListener("load", renderWhenReady, { once: true });
       document.head.appendChild(script);
     }
 
     return () => {
       cancelled = true;
       setRecaptchaToken(null);
-      if (recaptchaWidgetRef.current !== null && window.grecaptcha) window.grecaptcha.reset(recaptchaWidgetRef.current);
+      if (recaptchaWidgetRef.current !== null && typeof window.grecaptcha?.reset === "function") window.grecaptcha.reset(recaptchaWidgetRef.current);
       recaptchaWidgetRef.current = null;
     };
   }, [authMode, loginOpen, t]);
