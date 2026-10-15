@@ -4,6 +4,7 @@ const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://loc
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
 
 export type LegalSlug = "cookies" | "privacy" | "terms-of-use" | "creators-community-terms" | "business-subscription-terms";
+export type LegalLocale = "th" | "en";
 
 export type LegalDocumentSection = {
   heading: string;
@@ -11,14 +12,18 @@ export type LegalDocumentSection = {
   bullets?: string[];
 };
 
-export type AdminLegalDocument = {
-  slug: LegalSlug;
+export type LegalDocumentTranslation = {
   title: string;
   shortTitle: string;
   description: string;
   effectiveDate: string;
   draftNote?: string;
   sections: LegalDocumentSection[];
+};
+
+export type AdminLegalDocument = LegalDocumentTranslation & {
+  slug: LegalSlug;
+  translations?: Partial<Record<LegalLocale, LegalDocumentTranslation>>;
   published: boolean;
   updatedAt?: string;
 };
