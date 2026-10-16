@@ -138,7 +138,7 @@ function AuthField({ id, name, label, value, placeholder, type, autoComplete, ic
       <div className="auth-input-wrap">
         <Icon className="auth-input-icon" size={17} aria-hidden="true" />
         <input id={id} name={name ?? id} value={value} onChange={(event) => onChange(event.target.value)} type={inputType} placeholder={placeholder} autoComplete={autoComplete} autoCapitalize={type === "email" ? "none" : undefined} spellCheck={type === "email" ? false : undefined} required={required} minLength={minLength} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={descriptionId} />
-        {type === "password" && onTogglePassword ? <button type="button" className="auth-password-toggle" aria-label={passwordToggleLabel} onClick={onTogglePassword} disabled={disabled}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button> : null}
+        {type === "password" && onTogglePassword ? <button type="button" className="auth-password-toggle" aria-label={passwordToggleLabel} onClick={onTogglePassword} disabled={disabled}>{showPassword ? <Eye size={17} /> : <EyeOff size={17} />}</button> : null}
       </div>
       {error ? <p id={`${id}-error`} className="auth-field-error"><CircleAlert size={13} aria-hidden="true" />{error}</p> : null}
     </div>
