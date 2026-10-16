@@ -173,6 +173,8 @@ const waveformBars = Array.from({ length: 88 }, (_, index) =>
 
 type AudioHistoryItem = Omit<AudioHistoryEntry, "url"> & { url: string; localUrl?: boolean; persisted?: boolean };
 const AUDIO_HISTORY_LIMIT = 10;
+// Most recent Text to Speech entries (the API maximum) scanned for ones made with a cloned voice.
+const CLONE_HISTORY_SPEECH_SCAN_LIMIT = 50;
 const VOICE_PAGE_SIZE = 8;
 type SaveHistoryCallback = (input: SaveAudioHistoryInput) => Promise<AudioHistoryEntry | null>;
 type AudioScene = { id: string; title: string; durationSeconds: number; text: string; voice: string };
@@ -1754,6 +1756,7 @@ function VoiceCloneLayout({
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [previewModel, setPreviewModel] = useState(VOICE_CLONE_MODEL_ID);
   const [cloneHistory, setCloneHistory] = useState<AudioHistoryEntry[]>([]);
+  const [cloneVoices, setCloneVoices] = useState<VoiceCloneListItem[]>([]);
   const [activeCloneHistoryId, setActiveCloneHistoryId] = useState<string | null>(null);
   const [cloneHistoryLoadingId, setCloneHistoryLoadingId] = useState<string | null>(null);
   const [pendingCloneHistoryDelete, setPendingCloneHistoryDelete] = useState<AudioHistoryEntry | null>(null);
@@ -1788,9 +1791,26 @@ function VoiceCloneLayout({
 
   useEffect(() => {
     let active = true;
-    void listAudioHistory({ feature: "voice-clone", limit: AUDIO_HISTORY_LIMIT })
-      .then((items) => {
-        if (active) setCloneHistory(items);
+    void Promise.all([
+      listAudioHistory({ feature: "voice-clone", limit: AUDIO_HISTORY_LIMIT }),
+      listVoiceClones()
+        .then((result) => result.voices)
+        .catch(() => [] as VoiceCloneListItem[]),
+      // Speech made with a cloned voice is saved as Text to Speech, so scan it for entries that used one of the clones.
+      listAudioHistory({ feature: "tts", limit: CLONE_HISTORY_SPEECH_SCAN_LIMIT }).catch(
+        () => [] as AudioHistoryEntry[],
+      ),
+    ])
+      .then(([previews, voices, speech]) => {
+        if (!active) return;
+        const cloneIds = new Set(voices.map((voice) => voice.voiceId));
+        const speechWithClones = speech.filter((item) => Boolean(item.voice) && cloneIds.has(item.voice as string));
+        const merged = [...previews, ...speechWithClones].filter(
+          (entry, index, all) => all.findIndex((other) => other.id === entry.id) === index,
+        );
+        merged.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+        setCloneHistory(merged.slice(0, AUDIO_HISTORY_LIMIT));
+        setCloneVoices(voices);
       })
       .catch(() => undefined);
     return () => {
@@ -2053,6 +2073,17 @@ function VoiceCloneLayout({
       });
   };
 
+  // The list shows what was made with cloning (previews and speech) together with the newest voices, newest first.
+  const historyRows = [
+    ...cloneHistory.map((entry) => ({ kind: "entry" as const, key: entry.id, createdAt: entry.createdAt, entry })),
+    ...cloneVoices.slice(0, AUDIO_HISTORY_LIMIT).map((voice) => ({
+      kind: "voice" as const,
+      key: `voice:${voice.voiceId}`,
+      createdAt: voice.createdAt,
+      voice,
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+
   return (
     <div className={styles.alternateLayout}>
       <section className={`${styles.alternatePanel} ${styles.alternateFormPanel}`}>
@@ -2309,16 +2340,39 @@ function VoiceCloneLayout({
               <History size={13} /> {t("create.audio.generationHistory")}
             </h2>
             <span className={styles.timelineHint}>
-              {cloneHistory.length
-                ? cloneHistory.length === 1
+              {historyRows.length
+                ? historyRows.length === 1
                   ? t("create.audio.resultCountOne")
-                  : t("create.audio.resultCountMany", { count: cloneHistory.length })
+                  : t("create.audio.resultCountMany", { count: historyRows.length })
                 : t("create.audio.noResults")}
             </span>
           </div>
-          {cloneHistory.length ? (
+          {historyRows.length ? (
             <div className={styles.historyList}>
-              {cloneHistory.map((item) => {
+              {historyRows.map((row) => {
+                if (row.kind === "voice") {
+                  const voiceLabel = row.voice.name.trim() || t("create.audio.clone.unnamedVoice");
+                  return (
+                    <div key={row.key} className={styles.historyItemRow}>
+                      <button
+                        type="button"
+                        className={styles.historyItem}
+                        onClick={() => onOpenInTextToSpeech?.(row.voice.voiceId)}
+                        disabled={!onOpenInTextToSpeech}
+                      >
+                        <span className={styles.historyPlay}>
+                          <Mic2 size={13} />
+                        </span>
+                        <span className={styles.historyCopy}>
+                          <strong>{voiceLabel}</strong>
+                          <small>{formatAudioHistoryDate(row.voice.createdAt, locale)}</small>
+                        </span>
+                        <span className={styles.historyCurrent}>{t("create.audio.clone.historyVoice")}</span>
+                      </button>
+                    </div>
+                  );
+                }
+                const item = row.entry;
                 const isActive = item.id === activeCloneHistoryId;
                 return (
                   <div key={item.id} className={isActive ? styles.historyItemRowActive : styles.historyItemRow}>
@@ -3517,8 +3571,22 @@ export function AudioGenerationPage() {
   const [savedVoices, setSavedVoices] = useState<VoiceCloneListItem[]>([]);
   const [language, setLanguage] = useState("Thai");
   const [pronunciation, setPronunciation] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
+  const [chosenModel, setSelectedModel] = useState("");
   const [availableModels, setAvailableModels] = useState<AudioModel[]>([]);
+  // Cloned voices are registered with MiniMax Speech 2.8 HD, so that model is fixed while cloned voices are in use.
+  const clonedVoiceModelKey = availableModels.find((model) =>
+    MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key),
+  )?.key;
+  const isModelLockedToClonedVoice = voiceMode === "cloned" && Boolean(clonedVoiceModelKey);
+  // MiniMax is only used through cloned voices, so the tone-voice list offers the other models.
+  const toneVoiceModels = availableModels.filter((model) => !MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key));
+  const selectableModels = toneVoiceModels.length ? toneVoiceModels : availableModels;
+  const selectedModel =
+    isModelLockedToClonedVoice && clonedVoiceModelKey
+      ? clonedVoiceModelKey
+      : selectableModels.some((model) => model.key === chosenModel)
+        ? chosenModel
+        : (selectableModels[0]?.key ?? chosenModel);
   const [modelLoadState, setModelLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [selectedVoice, setSelectedVoice] = useState("");
   const [availableVoices, setAvailableVoices] = useState<AudioVoice[]>([]);
@@ -3580,8 +3648,6 @@ export function AudioGenerationPage() {
   const savedVoicesRef = useRef<VoiceCloneListItem[]>([]);
   // A voice that was just opened from the Voice Clone tab; it can be missing from savedVoices until the list refreshes.
   const pendingClonedVoiceRef = useRef<string | null>(null);
-  // Cloned voices are registered with MiniMax Speech 2.8 HD; when the model list is not loaded yet, pick it on load.
-  const preferClonedVoiceModelRef = useRef(false);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
   // The click handlers read this instead of the state above: state lags a render behind, so a quick second
   // click on a playing voice would otherwise start it again rather than stop it.
@@ -3614,20 +3680,9 @@ export function AudioGenerationPage() {
     }
   };
 
-  // Entering the cloned-voice list starts on MiniMax Speech 2.8 HD, and the model can still be changed afterwards.
-  const changeVoiceMode = (mode: "tone" | "cloned") => {
-    setVoiceMode(mode);
-    if (mode !== "cloned") return;
-    const clonedVoiceModelKey = availableModels.find((model) =>
-      MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key),
-    )?.key;
-    if (clonedVoiceModelKey) setSelectedModel(clonedVoiceModelKey);
-    else preferClonedVoiceModelRef.current = true;
-  };
-
   const openClonedVoiceInTextToSpeech = (voiceId?: string | null) => {
     pendingClonedVoiceRef.current = voiceId ?? null;
-    changeVoiceMode("cloned");
+    setVoiceMode("cloned");
     if (voiceId) setSelectedVoice(voiceId);
     changeActiveTab("Text to Speech");
   };
@@ -3698,16 +3753,7 @@ export function AudioGenerationPage() {
       const items = await listAudioModels("textToSpeech");
       const eligible = pickTextToSpeechModels(items);
       setAvailableModels(eligible);
-      const clonedVoiceModelKey = eligible.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key))?.key;
-      const preferClonedVoiceModel = preferClonedVoiceModelRef.current && Boolean(clonedVoiceModelKey);
-      preferClonedVoiceModelRef.current = false;
-      setSelectedModel((current) =>
-        preferClonedVoiceModel && clonedVoiceModelKey
-          ? clonedVoiceModelKey
-          : eligible.some((model) => model.key === current)
-            ? current
-            : (eligible[0]?.key ?? ""),
-      );
+      setSelectedModel((current) => (eligible.some((model) => model.key === current) ? current : (eligible[0]?.key ?? "")));
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -4020,6 +4066,16 @@ export function AudioGenerationPage() {
     carouselVoices.slice(pageIndex * VOICE_PAGE_SIZE, pageIndex * VOICE_PAGE_SIZE + VOICE_PAGE_SIZE),
   );
   const carouselLoadState = voiceMode === "cloned" ? "ready" : voiceLoadState;
+  // The history also lists the newest cloned voices, the same way the Voice Clone tab does, newest first.
+  const historyRows = [
+    ...audioHistory.map((item) => ({ kind: "entry" as const, key: item.id, createdAt: item.createdAt, item })),
+    ...savedVoices.slice(0, AUDIO_HISTORY_LIMIT).map((voice) => ({
+      kind: "voice" as const,
+      key: `voice:${voice.voiceId}`,
+      createdAt: voice.createdAt,
+      voice,
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
   const isSceneMode = activeTab === "Podcast & Dialogue" && audioScenes.length > 0;
   const hasIncompleteScene = audioScenes.some((scene) => !scene.text.trim() || !scene.voice.trim());
   const isGenerating = status === "generating" || sceneGenerationStatus === "generating";
@@ -4552,7 +4608,7 @@ export function AudioGenerationPage() {
                     </div>
                     <Dropdown
                       value={voiceMode}
-                      onChange={(value) => changeVoiceMode(value as "tone" | "cloned")}
+                      onChange={(value) => setVoiceMode(value as "tone" | "cloned")}
                       options={[
                         { value: "tone", label: t("create.audio.voiceMode.tone") },
                         { value: "cloned", label: t("create.audio.voiceMode.cloned") },
@@ -4921,59 +4977,86 @@ export function AudioGenerationPage() {
                         <History size={13} /> {t("create.audio.generationHistory")}
                       </h2>
                       <span className={styles.timelineHint}>
-                        {audioHistory.length
-                          ? audioHistory.length === 1
+                        {historyRows.length
+                          ? historyRows.length === 1
                             ? t("create.audio.resultCountOne")
-                            : t("create.audio.resultCountMany", { count: audioHistory.length })
+                            : t("create.audio.resultCountMany", { count: historyRows.length })
                           : t("create.audio.noResults")}
                       </span>
                     </div>
-                    {audioHistory.length ? (
+                    {historyRows.length ? (
                       <div className={styles.historyList}>
-                        {audioHistory.map((item) => (
-                          <div
-                            key={item.id}
-                            className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}
-                          >
-                            <button
-                              type="button"
-                              className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem}
-                              onClick={() => selectHistoryItem(item)}
-                              disabled={historyLoadingId === item.id}
-                              aria-busy={historyLoadingId === item.id}
+                        {historyRows.map((row) => {
+                          if (row.kind === "voice") {
+                            const voiceLabel = row.voice.name.trim() || t("create.audio.clone.unnamedVoice");
+                            return (
+                              <div key={row.key} className={styles.historyItemRow}>
+                                <button
+                                  type="button"
+                                  className={styles.historyItem}
+                                  onClick={() => {
+                                    setVoiceMode("cloned");
+                                    setSelectedVoice(row.voice.voiceId);
+                                  }}
+                                >
+                                  <span className={styles.historyPlay}>
+                                    <Mic2 size={13} />
+                                  </span>
+                                  <span className={styles.historyCopy}>
+                                    <strong>{voiceLabel}</strong>
+                                    <small>{formatAudioHistoryDate(row.voice.createdAt, locale)}</small>
+                                  </span>
+                                  <span className={styles.historyCurrent}>{t("create.audio.clone.historyVoice")}</span>
+                                </button>
+                              </div>
+                            );
+                          }
+                          const item = row.item;
+                          return (
+                            <div
+                              key={item.id}
+                              className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}
                             >
-                              <span
-                                className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}
+                              <button
+                                type="button"
+                                className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem}
+                                onClick={() => selectHistoryItem(item)}
+                                disabled={historyLoadingId === item.id}
+                                aria-busy={historyLoadingId === item.id}
                               >
-                                {historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? (
-                                  <Pause size={13} fill="currentColor" />
-                                ) : (
-                                  <Play size={13} fill="currentColor" />
-                                )}
-                              </span>
-                              <span className={styles.historyCopy}>
-                                <strong>{item.label}</strong>
-                                <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
-                              </span>
-                              <span className={styles.historyCurrent}>
-                                {item.url === audioUrl
-                                  ? t("create.audio.historyCurrent")
-                                  : t("create.audio.historyPlay")}
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.historyDelete}
-                              aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
-                              onClick={() => {
-                                setPendingHistoryDelete(item);
-                                setHistoryDeleteOpen(true);
-                              }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        ))}
+                                <span
+                                  className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}
+                                >
+                                  {historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? (
+                                    <Pause size={13} fill="currentColor" />
+                                  ) : (
+                                    <Play size={13} fill="currentColor" />
+                                  )}
+                                </span>
+                                <span className={styles.historyCopy}>
+                                  <strong>{item.label}</strong>
+                                  <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
+                                </span>
+                                <span className={styles.historyCurrent}>
+                                  {item.url === audioUrl
+                                    ? t("create.audio.historyCurrent")
+                                    : t("create.audio.historyPlay")}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.historyDelete}
+                                aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
+                                onClick={() => {
+                                  setPendingHistoryDelete(item);
+                                  setHistoryDeleteOpen(true);
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className={styles.historyEmpty}>
@@ -4991,16 +5074,20 @@ export function AudioGenerationPage() {
                   </div>
                   <div className={styles.settingBlock}>
                     <FieldLabel>{t("create.audio.voiceModel")}</FieldLabel>
-                    {availableModels.length > 1 ? (
+                    {selectableModels.length > 1 && !isModelLockedToClonedVoice ? (
                       <Dropdown
                         value={selectedModel}
-                        options={availableModels.map((model) => ({ value: model.key, label: model.name }))}
+                        options={selectableModels.map((model) => ({ value: model.key, label: model.name }))}
                         onChange={setSelectedModel}
                         ariaLabel={t("create.audio.voiceModel")}
                         triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
                       />
                     ) : (
-                      <div className={styles.fixedVoiceModel}>{availableModels[0]?.name ?? "ElevenLabs · Eleven v3"}</div>
+                      <div className={styles.fixedVoiceModel}>
+                        {availableModels.find((model) => model.key === selectedModel)?.name ??
+                          selectableModels[0]?.name ??
+                          "ElevenLabs · Eleven v3"}
+                      </div>
                     )}
                   </div>
                   <div className={styles.settingBlock}>
