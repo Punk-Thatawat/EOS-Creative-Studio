@@ -216,7 +216,7 @@ export async function quoteVideoStoryboard(input: Omit<VideoGenerationInput, "id
   }) as VideoCreditQuoteResponse;
 }
 
-export async function quoteDirectVideoGeneration(input: DirectVideoQuoteInput): Promise<DirectVideoQuoteResponse> {
+export async function quoteDirectVideoGeneration(input: DirectVideoQuoteInput, signal?: AbortSignal): Promise<DirectVideoQuoteResponse> {
   return await authenticatedRequest("/generations/video/quote", {
     method: "POST",
     body: JSON.stringify({
@@ -233,6 +233,7 @@ export async function quoteDirectVideoGeneration(input: DirectVideoQuoteInput): 
       ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
       ...(input.modelParams ? { modelParams: input.modelParams } : {}),
     }),
+    signal,
   }) as DirectVideoQuoteResponse;
 }
 
