@@ -428,10 +428,12 @@ export function AiPresenterPage() {
       }
       setGenerationStatus("processing");
       setNotice(isThai ? "ส่งงานสร้างวิดีโอแล้ว กำลังประมวลผล…" : "Video job submitted. Processing…");
+      const lipsyncAcceptsScript = Boolean(selectedVideoModel.capabilities.scriptParameter || selectedVideoModel.capabilities.promptParameter);
       const created = await createLipsyncGeneration({
         model: selectedVideoModel.model,
         ...(sourceMedia.kind === "image" ? { sourceImage: sourceUrl } : { sourceVideo: sourceUrl }),
-        script: script.trim(), audioUrl, duration: current.durationSeconds ?? duration, aspectRatio: aspect,
+        ...(lipsyncAcceptsScript ? { script: script.trim() } : {}),
+        audioUrl, duration: current.durationSeconds ?? duration, aspectRatio: aspect,
         voiceLanguage: language, voiceSpeed: 1, idempotencyKey: requestId,
       }, controller.signal);
       const generationId = created.generationId ?? created.id;
