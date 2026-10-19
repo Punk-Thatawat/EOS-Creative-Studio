@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { AudioLines, BarChart3, ChevronDown, Clock3, Home, ImageIcon, Settings, Video, WandSparkles, type LucideIcon } from "lucide-react";
+import { AudioLines, BarChart3, ChevronDown, Clock3, Home, ImageIcon, Settings, UserRound, Video, WandSparkles, type LucideIcon } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { preloadCreatePage } from "@/features/create/components/preload-create-page";
 import type { GenerationKind } from "@/features/create/types/generation";
@@ -17,6 +17,7 @@ const workspaceItems = [
 const createItems: { kind?: GenerationKind; label: string; href: string; icon: LucideIcon }[] = [
   { kind: "image", label: "Image", href: "/create/image", icon: ImageIcon },
   { kind: "video", label: "Video", href: "/create/video", icon: Video },
+  { label: "AI Presenter", href: "/create/ai-presenter", icon: UserRound },
   { kind: "audio", label: "Audio", href: "/create/audio", icon: AudioLines },
 ];
 const mainClass = "flex min-h-11 select-none items-center gap-2 rounded-[11px] px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary";
