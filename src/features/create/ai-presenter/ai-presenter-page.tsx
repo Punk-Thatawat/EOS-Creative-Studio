@@ -15,6 +15,7 @@ import { useVideoGenerationResume, type ResumableVideoStatus } from "@/features/
 import styles from "./ai-presenter-page.module.css";
 
 const sampleScript = "Welcome to EOS Creative Studio. Turn your ideas into stories, and your stories into impact.";
+const defaultPresenterImage = "/ai-presenter/presenter-mouth-open.png";
 const toneOptions = [
   { label: "Corporate", value: "Premium" },
   { label: "Friendly", value: "Friendly" },
@@ -33,7 +34,7 @@ const elevenLabsModelAliases = new Set([
   "elevenlabs_v3",
 ]);
 
-type SourceMedia = { file: File; previewUrl: string; kind: "image" | "video"; remoteUrl?: string; uploading: boolean; error?: string };
+type SourceMedia = { file?: File; fileName: string; previewUrl: string; kind: "image" | "video"; remoteUrl?: string; defaultAsset?: string; uploading: boolean; error?: string };
 type SpeechPreview = { key: string; blob: Blob; url: string; durationSeconds?: number; remoteUrl?: string };
 
 function estimatedDuration(script: string, language: string): number {
@@ -120,7 +121,13 @@ export function AiPresenterPage() {
   const [tone, setTone] = useState<(typeof toneOptions)[number]["value"]>("Premium");
   const [language, setLanguage] = useState("en");
   const [pronunciation, setPronunciation] = useState("");
-  const [sourceMedia, setSourceMedia] = useState<SourceMedia | null>(null);
+  const [sourceMedia, setSourceMedia] = useState<SourceMedia | null>({
+    fileName: "AI Presenter reference.png",
+    previewUrl: defaultPresenterImage,
+    kind: "image",
+    defaultAsset: defaultPresenterImage,
+    uploading: false,
+  });
   const [lipsyncModels, setLipsyncModels] = useState<GenerationModelOption[]>([]);
   const [audioModels, setAudioModels] = useState<AudioModel[]>([]);
   const [voices, setVoices] = useState<AudioVoice[]>([]);
@@ -243,7 +250,7 @@ export function AiPresenterPage() {
 
   useEffect(() => {
     const previewUrl = sourceMedia?.previewUrl;
-    return () => { if (previewUrl) URL.revokeObjectURL(previewUrl); };
+    return () => { if (previewUrl?.startsWith("blob:")) URL.revokeObjectURL(previewUrl); };
   }, [sourceMedia?.previewUrl]);
 
   useEffect(() => {
@@ -294,14 +301,14 @@ export function AiPresenterPage() {
   }, [speechKey, selectedLipsyncModel, aspect, sourceMedia?.remoteUrl]);
 
   const videoQuoteInput = useMemo(() => {
-    if (!sourceMedia?.remoteUrl || !selectedVideoModel || !script.trim()) return null;
+    if (!sourceMedia || !selectedVideoModel || !script.trim()) return null;
     return {
       feature: "lipsync" as const,
       model: selectedVideoModel.model,
       prompt: script.trim(),
       duration,
       aspectRatio: aspect,
-      ...(sourceMedia.kind === "image" ? { sourceImage: sourceMedia.remoteUrl } : { sourceVideo: sourceMedia.remoteUrl }),
+      ...(sourceMedia.remoteUrl ? (sourceMedia.kind === "image" ? { sourceImage: sourceMedia.remoteUrl } : { sourceVideo: sourceMedia.remoteUrl }) : {}),
     };
   }, [sourceMedia, selectedVideoModel, script, duration, aspect]);
   const [videoCreditCost, setVideoCreditCost] = useState<number | null>(null);
@@ -331,7 +338,7 @@ export function AiPresenterPage() {
     const controller = new AbortController();
     uploadControllerRef.current = controller;
     const previewUrl = URL.createObjectURL(file);
-    const next: SourceMedia = { file, previewUrl, kind: file.type.startsWith("video/") ? "video" : "image", uploading: true };
+    const next: SourceMedia = { file, fileName: file.name, previewUrl, kind: file.type.startsWith("video/") ? "video" : "image", uploading: true };
     setSourceMedia(next);
     setFinalVideoUrl("");
     setGenerationError("");
@@ -347,7 +354,7 @@ export function AiPresenterPage() {
 
   const handleRemoveSource = () => {
     uploadControllerRef.current?.abort();
-    if (sourceMedia?.previewUrl) URL.revokeObjectURL(sourceMedia.previewUrl);
+    if (sourceMedia?.previewUrl.startsWith("blob:")) URL.revokeObjectURL(sourceMedia.previewUrl);
     setSourceMedia(null);
     setFinalVideoUrl("");
   };
@@ -381,7 +388,7 @@ export function AiPresenterPage() {
   };
 
   const handleGenerateVideo = async () => {
-    if (!sourceMedia?.remoteUrl || !script.trim() || !selectedVideoModel || !selectedVoice || sourceMedia.uploading || isGenerating) return;
+    if (!sourceMedia || (!sourceMedia.remoteUrl && !sourceMedia.defaultAsset) || !script.trim() || !selectedVideoModel || !selectedVoice || sourceMedia.uploading || sourceMedia.error || isGenerating) return;
     const controller = new AbortController();
     generationControllerRef.current = controller;
     const requestId = crypto.randomUUID();
@@ -392,8 +399,22 @@ export function AiPresenterPage() {
     setGenerationStatus("uploading");
     setNotice(isThai ? "เตรียมไฟล์และเสียงพูด…" : "Preparing your media and voice track…");
     try {
+      let sourceUrl = sourceMedia.remoteUrl;
+      if (!sourceUrl && sourceMedia.defaultAsset) {
+        setNotice(isThai ? "กำลังเตรียมภาพพรีเซนเตอร์…" : "Preparing the presenter image…");
+        const imageResponse = await fetch(sourceMedia.defaultAsset, { signal: controller.signal });
+        if (!imageResponse.ok) throw new Error("Could not load the presenter image");
+        const imageBlob = await imageResponse.blob();
+        const imageFile = new File([imageBlob], sourceMedia.fileName, { type: imageBlob.type || "image/png" });
+        sourceUrl = await uploadPeopleMedia(imageFile, controller.signal, selectedVideoModel.capabilities.uploadConstraints);
+        if (controller.signal.aborted) return;
+        setSourceMedia((current) => current?.defaultAsset === sourceMedia.defaultAsset ? { ...current, remoteUrl: sourceUrl, error: undefined } : current);
+      }
+      if (!sourceUrl) throw new Error("Presenter image is not ready");
+
       let current = currentSpeech;
       if (!current) {
+        setNotice(isThai ? "กำลังสร้างเสียงพูดด้วย ElevenLabs…" : "Generating ElevenLabs speech…");
         current = await generateSpeech();
         if (controller.signal.aborted) return;
       }
@@ -409,7 +430,7 @@ export function AiPresenterPage() {
       setNotice(isThai ? "ส่งงานสร้างวิดีโอแล้ว กำลังประมวลผล…" : "Video job submitted. Processing…");
       const created = await createLipsyncGeneration({
         model: selectedVideoModel.model,
-        ...(sourceMedia.kind === "image" ? { sourceImage: sourceMedia.remoteUrl } : { sourceVideo: sourceMedia.remoteUrl }),
+        ...(sourceMedia.kind === "image" ? { sourceImage: sourceUrl } : { sourceVideo: sourceUrl }),
         script: script.trim(), audioUrl, duration: current.durationSeconds ?? duration, aspectRatio: aspect,
         voiceLanguage: language, voiceSpeed: 1, idempotencyKey: requestId,
       }, controller.signal);
@@ -460,7 +481,7 @@ export function AiPresenterPage() {
   const estimatedCredits = (speechQuote?.creditCost ?? null) !== null && videoCreditCost !== null
     ? (speechQuote?.creditCost ?? 0) + videoCreditCost
     : null;
-  const canGenerate = Boolean(sourceMedia?.remoteUrl && script.trim() && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !speechBusy && !catalogLoading && !voiceLoading && !speechQuoteLoading && !videoQuoteLoading);
+  const canGenerate = Boolean(sourceMedia && (sourceMedia.remoteUrl || sourceMedia.defaultAsset) && !sourceMedia.error && script.trim() && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !speechBusy && !catalogLoading && !voiceLoading && !speechQuoteLoading && !videoQuoteLoading);
 
   return (
     <div className={styles.page}>
@@ -518,8 +539,8 @@ export function AiPresenterPage() {
               <input ref={sourceInputRef} className={styles.hiddenInput} type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" onChange={(event) => void handleSourceChange(event)} disabled={isLocked} />
               {sourceMedia ? (
                 <div className={styles.sourceFileCard}>
-                  {sourceMedia.kind === "image" ? <span className={styles.sourceThumb}><Image src={sourceMedia.previewUrl} alt={sourceMedia.file.name} fill unoptimized sizes="80px" /></span> : <video src={sourceMedia.previewUrl} muted playsInline />}
-                  <div><strong>{sourceMedia.file.name}</strong><small>{sourceMedia.uploading ? (isThai ? "กำลังอัปโหลด…" : "Uploading…") : sourceMedia.error ? sourceMedia.error : sourceMedia.remoteUrl ? (isThai ? "อัปโหลดพร้อมแล้ว" : "Upload ready") : ""}</small></div>
+                  {sourceMedia.kind === "image" ? <span className={styles.sourceThumb}><Image src={sourceMedia.previewUrl} alt={sourceMedia.fileName} fill unoptimized sizes="80px" loading="eager" /></span> : <video src={sourceMedia.previewUrl} muted playsInline />}
+                  <div><strong>{sourceMedia.fileName}</strong><small>{sourceMedia.uploading ? (isThai ? "กำลังอัปโหลด…" : "Uploading…") : sourceMedia.error ? sourceMedia.error : sourceMedia.remoteUrl ? (isThai ? "อัปโหลดพร้อมแล้ว" : "Upload ready") : sourceMedia.defaultAsset ? (isThai ? "พร้อมอัปโหลดเมื่อกดสร้าง" : "Ready to upload when you generate") : ""}</small></div>
                   <button type="button" onClick={handleRemoveSource} disabled={isLocked} aria-label={isThai ? "นำไฟล์ออก" : "Remove source media"}><X size={15} /></button>
                 </div>
               ) : (
