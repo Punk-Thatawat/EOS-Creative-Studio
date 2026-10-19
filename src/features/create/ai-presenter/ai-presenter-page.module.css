@@ -1573,22 +1573,6 @@ button.settingRow {
 .previewReady { background: #e8f7ef; color: #16774d; }
 .previewReady > span { background: #18a86b; }
 
-.previewPlaceholder {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  color: #f9eee7;
-  text-align: center;
-}
-
-.previewPlaceholder > svg { color: #ff8a54; }
-.previewPlaceholder strong { font-size: 12px; }
-.previewPlaceholder span { color: #c8bdb5; font-size: 9px; }
-
 .speechPreview {
   display: grid;
   gap: 7px;
@@ -1604,21 +1588,6 @@ button.settingRow {
 .speechPreview strong { font-size: 8px; }
 .speechPreview span { margin-left: auto; color: #817970; font-size: 7px; }
 .speechPreview audio { width: 100%; height: 30px; }
-
-.progressCard {
-  display: grid;
-  gap: 8px;
-  margin-top: 9px;
-  border: 1px solid #f0ddce;
-  border-radius: 9px;
-  background: #fff8f2;
-  padding: 9px 10px;
-}
-
-.progressCard > div { display: flex; align-items: center; gap: 6px; color: #594133; font-size: 8px; }
-.progressCard > div > span { margin-left: auto; font-variant-numeric: tabular-nums; }
-.progressTrack { display: block; height: 5px; overflow: hidden; border-radius: 999px; background: #f0e4dc; }
-.progressTrack i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff7a3d, #e94f15); transition: width .25s ease; }
 
 .errorCard,
 .formError {

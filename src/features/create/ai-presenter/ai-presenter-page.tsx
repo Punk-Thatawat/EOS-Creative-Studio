@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { AudioLines, Check, ChevronDown, CloudUpload, Copy, LoaderCircle, LockKeyhole, Sparkles, UserRound, Video, X } from "lucide-react";
+import { AudioLines, Check, ChevronDown, CloudUpload, Copy, LoaderCircle, LockKeyhole, Sparkles, Video, WandSparkles, X } from "lucide-react";
+import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { createTextToSpeech, listAudioModels, listAudioVoices, quoteTextToSpeech, type AudioCreditQuote, type AudioModel, type AudioVoice } from "@/lib/api/audio";
 import { createLipsyncGeneration, getLipsyncGenerationStatus, type LipsyncGenerationResponse, type LipsyncGenerationStatus } from "@/lib/api/lipsync-generations";
@@ -12,6 +13,8 @@ import { quoteDirectVideoGeneration } from "@/lib/api/video-generations";
 import { emitGenerationCompleted, emitGenerationRequestFailed, emitGenerationRequestFinished, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { useVideoGenerationResume, type ResumableVideoStatus } from "@/features/create/use-video-generation-resume";
+import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "../video-preview-placeholder";
+import videoPreviewStyles from "../video-generation-page.module.css";
 import styles from "./ai-presenter-page.module.css";
 
 const sampleScript = "Welcome to EOS Creative Studio. Turn your ideas into stories, and your stories into impact.";
@@ -555,11 +558,41 @@ export function AiPresenterPage() {
           <section className={styles.previewPanel} aria-labelledby="presenter-preview-heading">
             <div className={styles.panelTitle}><div><span className={styles.stepNumber}>2.</span><h2 id="presenter-preview-heading">PREVIEW</h2></div><span className={`${styles.previewBadge} ${finalVideoUrl ? styles.previewReady : ""}`}><span />{finalVideoUrl ? (isThai ? "วิดีโอที่สร้างแล้ว" : "GENERATED") : (isThai ? "ตัวอย่างต้นแบบ" : "SOURCE PREVIEW")}</span></div>
             <div className={styles.videoFrame}>
-              {finalVideoUrl ? <video key={finalVideoUrl} controls playsInline src={finalVideoUrl} aria-label={isThai ? "วิดีโอพรีเซนเตอร์ที่สร้างแล้ว" : "Generated presenter video"} /> : sourceMedia?.kind === "video" ? <video key={sourceMedia.previewUrl} controls muted playsInline src={sourceMedia.previewUrl} aria-label={isThai ? "วิดีโอต้นแบบ" : "Presenter source video"} /> : sourceMedia?.kind === "image" ? <Image src={sourceMedia.previewUrl} alt={isThai ? "ภาพต้นแบบพรีเซนเตอร์" : "Presenter source image"} fill unoptimized sizes="(max-width: 760px) 100vw, 60vw" className={styles.sourcePreviewImage} /> : <div className={styles.previewPlaceholder}><UserRound size={42} /><strong>{isThai ? "ตัวอย่างพรีเซนเตอร์" : "Presenter preview"}</strong><span>{isThai ? "อัปโหลดรูปหรือวิดีโอเพื่อเริ่มต้น" : "Upload an image or video to get started."}</span></div>}
+              <VideoPreviewLiveBadge />
+              {isGenerating ? (
+                <div className={videoPreviewStyles.videoGeneratingPreview} aria-busy="true">
+                  <WandSparkles size={26} />
+                  <strong>{generationStatus === "uploading" ? (isThai ? "กำลังเตรียมไฟล์" : "Preparing files") : (isThai ? "กำลังสร้างวิดีโอ" : "Generating video")}</strong>
+                  <span>{notice ?? (isThai ? "กำลังซิงก์เสียงพูดกับภาพพรีเซนเตอร์" : "Syncing the speech with your presenter.")}</span>
+                  <div className={videoPreviewStyles.videoGenerationProgress}><i style={{ width: `${Math.max(8, generationProgress)}%` }} /></div>
+                  <small>{isThai ? `เสร็จแล้ว ${generationProgress}%` : `${generationProgress}% complete`}</small>
+                </div>
+              ) : finalVideoUrl ? (
+                <EosVideoPlayer
+                  key={finalVideoUrl}
+                  src={finalVideoUrl}
+                  className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
+                  mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
+                  ariaLabel={isThai ? "วิดีโอพรีเซนเตอร์ที่สร้างแล้ว" : "Generated presenter video"}
+                />
+              ) : sourceMedia?.kind === "video" ? (
+                <EosVideoPlayer
+                  key={sourceMedia.previewUrl}
+                  src={sourceMedia.previewUrl}
+                  muted
+                  className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
+                  mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
+                  ariaLabel={isThai ? "วิดีโอต้นแบบ" : "Presenter source video"}
+                />
+              ) : sourceMedia?.kind === "image" ? (
+                <Image src={sourceMedia.previewUrl} alt={isThai ? "ภาพต้นแบบพรีเซนเตอร์" : "Presenter source image"} fill unoptimized sizes="(max-width: 760px) 100vw, 60vw" className={styles.sourcePreviewImage} />
+              ) : (
+                <VideoPreviewPlaceholder showActions={false} />
+              )}
+              {finalVideoUrl && !isGenerating ? <VideoPreviewOverlayActions videoUrl={finalVideoUrl} /> : null}
               {finalVideoUrl ? <span className={styles.videoWatermark}>EOS CREATIVE STUDIO</span> : null}
             </div>
             {currentSpeech ? <div className={styles.speechPreview}><div><AudioLines size={15} /><strong>{isThai ? "เสียงพูดที่สร้างแล้ว" : "Generated speech"}</strong><span>{currentSpeech.durationSeconds ? currentSpeech.durationSeconds + "s" : "MP3"}</span></div><audio controls src={currentSpeech.url} /></div> : null}
-            {isGenerating ? <div className={styles.progressCard} role="status"><div><LoaderCircle size={16} className={styles.spin} /><strong>{generationStatus === "uploading" ? (isThai ? "กำลังเตรียมไฟล์" : "Preparing files") : (isThai ? "กำลังสร้างวิดีโอ" : "Generating video")}</strong><span>{generationProgress}%</span></div><span className={styles.progressTrack}><i style={{ width: `${Math.max(8, generationProgress)}%` }} /></span></div> : null}
             {generationError ? <div className={styles.errorCard} role="alert">{generationError}</div> : null}
             {notice ? <p className={styles.statusNote} role="status">{notice}</p> : null}
           </section>
