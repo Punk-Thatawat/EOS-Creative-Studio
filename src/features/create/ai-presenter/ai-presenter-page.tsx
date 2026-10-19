@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { AudioLines, Check, ChevronDown, CloudUpload, Copy, LoaderCircle, LockKeyhole, Sparkles, Video, WandSparkles, X } from "lucide-react";
+import { ArrowRight, AudioLines, Check, ChevronDown, CloudUpload, Copy, GripVertical, LoaderCircle, LockKeyhole, MoreHorizontal, Plus, Sparkles, Video, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { createTextToSpeech, listAudioModels, listAudioVoices, quoteTextToSpeech, type AudioCreditQuote, type AudioModel, type AudioVoice } from "@/lib/api/audio";
@@ -39,12 +39,25 @@ const elevenLabsModelAliases = new Set([
 
 type SourceMedia = { file?: File; fileName: string; previewUrl: string; kind: "image" | "video"; remoteUrl?: string; defaultAsset?: string; uploading: boolean; error?: string };
 type SpeechPreview = { key: string; blob: Blob; url: string; durationSeconds?: number; remoteUrl?: string };
+type PresenterScene = { id: string; title: string; script: string };
+
+const presenterOptions = [
+  { id: "eos-host", name: "EOS Host", style: "Corporate", image: defaultPresenterImage, objectPosition: "center 28%" },
+  { id: "news-host", name: "News Host", style: "Studio", image: "/generated-icons-v2/jobs/ai-presenter-video.png", objectPosition: "center 24%" },
+  { id: "office-host", name: "Office Host", style: "Business", image: "/generated-icons-v2/projects/ai-presenter.png", objectPosition: "64% 40%" },
+  { id: "training-host", name: "Training Host", style: "Training", image: "/generated-icons-v2/templates/training-video.png", objectPosition: "43% 25%" },
+] as const;
 
 function estimatedDuration(script: string, language: string): number {
   const text = script.trim();
   if (!text) return 3;
   const spokenUnits = language === "th" ? text.replace(/\s/g, "").length / 12 : text.split(/\s+/).length;
   return Math.max(3, Math.min(60, Math.ceil(spokenUnits / (language === "th" ? 1 : 2.45))));
+}
+
+function formatTimelineTime(seconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safeSeconds / 60).toString().padStart(2, "0")}:${(safeSeconds % 60).toString().padStart(2, "0")}`;
 }
 
 function outputVideoUrl(status: ResumableVideoStatus | LipsyncGenerationResponse | LipsyncGenerationStatus): string | undefined {
@@ -120,7 +133,10 @@ export function AiPresenterPage() {
   const sourceInputRef = useRef<HTMLInputElement>(null);
   const uploadControllerRef = useRef<AbortController | null>(null);
   const generationControllerRef = useRef<AbortController | null>(null);
-  const [script, setScript] = useState(sampleScript);
+  const [scenes, setScenes] = useState<PresenterScene[]>([{ id: "scene-1", title: "Intro", script: sampleScript }]);
+  const [activeSceneId, setActiveSceneId] = useState("scene-1");
+  const [showAllPresenters, setShowAllPresenters] = useState(false);
+  const [isReorderingScenes, setIsReorderingScenes] = useState(false);
   const [tone, setTone] = useState<(typeof toneOptions)[number]["value"]>("Premium");
   const [language, setLanguage] = useState("en");
   const [pronunciation, setPronunciation] = useState("");
@@ -151,6 +167,22 @@ export function AiPresenterPage() {
   const [generationError, setGenerationError] = useState("");
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
+
+  const script = useMemo(() => scenes.map((scene) => scene.script).join("\n\n").trim(), [scenes]);
+  const activeScene = scenes.find((scene) => scene.id === activeSceneId) ?? scenes[0];
+  const allScenesHaveScript = scenes.every((scene) => Boolean(scene.script.trim()));
+  const sceneTimeline = useMemo(() => {
+    let elapsedSeconds = 0;
+    return scenes.map((scene) => {
+      const start = elapsedSeconds;
+      const durationSeconds = scene.script.trim() ? estimatedDuration(scene.script, language) : 0;
+      elapsedSeconds += durationSeconds;
+      return { scene, start, end: elapsedSeconds };
+    });
+  }, [language, scenes]);
+  const otherSceneTextLength = scenes.reduce((length, scene) => scene.id === activeScene?.id ? length : length + scene.script.length, 0) + Math.max(0, scenes.length - 1) * 2;
+  const activeSceneMaxLength = Math.max(activeScene?.script.length ?? 0, 5000 - otherSceneTextLength);
+  const canAddScene = scenes.length < 6 && script.length + 2 <= 5000;
 
   const availableAudioModels = useMemo(() => audioModels.filter(isElevenLabsSpeechModel), [audioModels]);
   const availableLipsyncModels = useMemo(
@@ -229,7 +261,7 @@ export function AiPresenterPage() {
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    const ready = Boolean(script.trim() && selectedVoice && selectedAudioModel);
+    const ready = Boolean(script.trim() && allScenesHaveScript && selectedVoice && selectedAudioModel);
     if (!ready) {
       setSpeechQuote(null);
       setSpeechQuoteLoading(false);
@@ -249,7 +281,7 @@ export function AiPresenterPage() {
       });
     }, 350);
     return () => { active = false; controller.abort(); window.clearTimeout(timer); };
-  }, [script, selectedVoice, selectedAudioModel, language, tone, pronunciation]);
+  }, [script, allScenesHaveScript, selectedVoice, selectedAudioModel, language, tone, pronunciation]);
 
   useEffect(() => {
     const previewUrl = sourceMedia?.previewUrl;
@@ -362,6 +394,61 @@ export function AiPresenterPage() {
     setFinalVideoUrl("");
   };
 
+  const choosePresenter = (presenter: (typeof presenterOptions)[number]) => {
+    uploadControllerRef.current?.abort();
+    setSourceMedia({
+      fileName: `${presenter.name}.png`,
+      previewUrl: presenter.image,
+      kind: "image",
+      defaultAsset: presenter.image,
+      uploading: false,
+    });
+    setFinalVideoUrl("");
+    setGenerationError("");
+    setNotice("");
+  };
+
+  const updateActiveScene = (update: Partial<PresenterScene>) => {
+    if (!activeScene) return;
+    setScenes((current) => current.map((scene) => scene.id === activeScene.id ? { ...scene, ...update } : scene));
+    setFinalVideoUrl("");
+    setGenerationError("");
+  };
+
+  const addScene = () => {
+    if (!canAddScene) return;
+    const id = crypto.randomUUID();
+    setScenes((current) => [...current, { id, title: `Scene ${current.length + 1}`, script: "" }]);
+    setActiveSceneId(id);
+    setFinalVideoUrl("");
+    setGenerationError("");
+  };
+
+  const removeScene = (sceneId: string) => {
+    if (scenes.length <= 1) return;
+    const removedIndex = scenes.findIndex((scene) => scene.id === sceneId);
+    const nextScenes = scenes.filter((scene) => scene.id !== sceneId);
+    setScenes(nextScenes);
+    if (activeSceneId === sceneId) setActiveSceneId(nextScenes[Math.max(0, removedIndex - 1)]?.id ?? nextScenes[0]!.id);
+    setFinalVideoUrl("");
+    setGenerationError("");
+  };
+
+  const reorderScenes = (draggedId: string, targetId: string) => {
+    if (!draggedId || draggedId === targetId) return;
+    setScenes((current) => {
+      const fromIndex = current.findIndex((scene) => scene.id === draggedId);
+      const toIndex = current.findIndex((scene) => scene.id === targetId);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      const next = [...current];
+      const [draggedScene] = next.splice(fromIndex, 1);
+      if (!draggedScene) return current;
+      next.splice(toIndex, 0, draggedScene);
+      return next;
+    });
+    setFinalVideoUrl("");
+  };
+
   const generateSpeech = async (): Promise<SpeechPreview> => {
     const result = await createTextToSpeech({
       text: script.trim(), voice: selectedVoice, modelId: selectedAudioModel, outputFormat: "mp3", languageCode: language,
@@ -375,7 +462,7 @@ export function AiPresenterPage() {
   };
 
   const handleGenerateSpeech = async () => {
-    if (!script.trim() || !selectedVoice || currentSpeech || speechBusy || isGenerating) return;
+    if (!script.trim() || !allScenesHaveScript || !selectedVoice || currentSpeech || speechBusy || isGenerating) return;
     setSpeechBusy(true);
     setGenerationError("");
     setNotice(isThai ? "กำลังสร้างเสียงพูดและคิดเครดิตเสียง" : "Generating speech audio. Speech credits will be charged.");
@@ -391,7 +478,7 @@ export function AiPresenterPage() {
   };
 
   const handleGenerateVideo = async () => {
-    if (!sourceMedia || (!sourceMedia.remoteUrl && !sourceMedia.defaultAsset) || !script.trim() || !selectedVideoModel || !selectedVoice || sourceMedia.uploading || sourceMedia.error || isGenerating) return;
+    if (!sourceMedia || (!sourceMedia.remoteUrl && !sourceMedia.defaultAsset) || !script.trim() || !allScenesHaveScript || !selectedVideoModel || !selectedVoice || sourceMedia.uploading || sourceMedia.error || isGenerating) return;
     const controller = new AbortController();
     generationControllerRef.current = controller;
     const requestId = crypto.randomUUID();
@@ -486,7 +573,7 @@ export function AiPresenterPage() {
   const estimatedCredits = (speechQuote?.creditCost ?? null) !== null && videoCreditCost !== null
     ? (speechQuote?.creditCost ?? 0) + videoCreditCost
     : null;
-  const canGenerate = Boolean(sourceMedia && (sourceMedia.remoteUrl || sourceMedia.defaultAsset) && !sourceMedia.error && script.trim() && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !speechBusy && !catalogLoading && !voiceLoading && !speechQuoteLoading && !videoQuoteLoading);
+  const canGenerate = Boolean(sourceMedia && (sourceMedia.remoteUrl || sourceMedia.defaultAsset) && !sourceMedia.error && script.trim() && allScenesHaveScript && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !speechBusy && !catalogLoading && !voiceLoading && !speechQuoteLoading && !videoQuoteLoading);
 
   return (
     <div className={styles.page}>
@@ -504,13 +591,13 @@ export function AiPresenterPage() {
 
       <div className={styles.prototypeNotice} role="status">
         <span className={styles.prototypeDot} />
-        {isThai ? "รุ่นเริ่มต้น: 1 ฉาก · สร้างเสียงและวิดีโอผ่านระบบจริง โดยคิดเครดิตแยกตามงาน" : "MVP: one scene · speech and video use live generation and are charged separately."}
+        {isThai ? "แบ่งสคริปต์เป็นฉากได้ · สร้างเป็นวิดีโอพรีเซนเตอร์ต่อเนื่อง 1 คลิป โดยคิดเครดิตเสียงและวิดีโอแยกกัน" : "Organize the script into scenes · generation creates one continuous presenter video, with separate speech and video credits."}
       </div>
 
       <section className={styles.workspace} aria-label={isThai ? "พื้นที่สร้าง AI Presenter" : "AI Presenter workspace"}>
         <nav className={styles.modeTabs} aria-label={isThai ? "โหมด AI Presenter" : "AI Presenter modes"}>
           <span className={`${styles.modeTab} ${styles.modeTabActive}`}><Video size={16} /><span>Presenter Video</span></span>
-          <span className={styles.mvpTag}>{isThai ? "MVP · ฉากเดียว" : "MVP · one scene"}</span>
+          <span className={styles.mvpTag}>{isThai ? "สคริปต์หลายฉาก" : "Multi-scene script"}</span>
         </nav>
 
         <div className={styles.workspaceGrid}>
@@ -520,8 +607,13 @@ export function AiPresenterPage() {
               <button type="button" className={styles.iconButton} aria-label={isThai ? "คัดลอกสคริปต์" : "Copy script"} onClick={() => void handleCopyScript()} title={copied ? "Copied" : "Copy script"}>{copied ? <Check size={15} /> : <Copy size={15} />}</button>
             </div>
             <p className={styles.panelHint}>{isThai ? "สคริปต์นี้จะถูกแปลงเป็นเสียงพูดก่อนนำไปซิงก์กับภาพ" : "Your script is converted to speech, then synced to the source media."}</p>
-            <textarea className={styles.scriptInput} value={script} onChange={(event) => { setScript(event.target.value.slice(0, 5000)); setFinalVideoUrl(""); }} maxLength={5000} disabled={isLocked} aria-label={isThai ? "สคริปต์สำหรับพรีเซนเตอร์" : "Presenter script"} />
-            <div className={styles.characterCount}>{script.length.toLocaleString()} / 5,000</div>
+            <label className={styles.formGroup}>
+              <span className={styles.formLabel}>{isThai ? "ชื่อฉาก" : "Scene title"}</span>
+              <input className={styles.textInput} value={activeScene?.title ?? ""} onChange={(event) => updateActiveScene({ title: event.target.value.slice(0, 40) })} maxLength={40} disabled={isLocked} />
+            </label>
+            <textarea className={styles.scriptInput} value={activeScene?.script ?? ""} onChange={(event) => updateActiveScene({ script: event.target.value.slice(0, activeSceneMaxLength) })} maxLength={activeSceneMaxLength} disabled={isLocked} placeholder={isThai ? "เขียนบทพูดสำหรับฉากนี้" : "Write the presenter script for this scene"} aria-label={isThai ? "สคริปต์สำหรับพรีเซนเตอร์" : "Presenter script"} />
+            <div className={styles.characterCount}>{script.length.toLocaleString()} / 5,000 {isThai ? "ตัวอักษรรวม" : "total characters"}</div>
+            {!allScenesHaveScript ? <p className={styles.formError}>{isThai ? "เพิ่มบทพูดให้ครบทุกฉากก่อนสร้างเสียงและวิดีโอ" : "Add script to every scene before generating speech and video."}</p> : null}
 
             <div className={styles.formGroup}>
               <div className={styles.formLabel}><span>{isThai ? "โทนเสียง" : "Speech tone"}</span></div>
@@ -592,6 +684,93 @@ export function AiPresenterPage() {
               {finalVideoUrl && !isGenerating ? <VideoPreviewOverlayActions videoUrl={finalVideoUrl} /> : null}
               {finalVideoUrl ? <span className={styles.videoWatermark}>EOS CREATIVE STUDIO</span> : null}
             </div>
+            <div className={styles.presenterPicker}>
+              <div className={styles.sectionHeading}>
+                <h3>{isThai ? "เลือกพรีเซนเตอร์ / อวาตาร์" : "Choose Presenter / Avatar"}</h3>
+                <button type="button" className={styles.textButton} onClick={() => setShowAllPresenters(true)} disabled={isLocked}>{isThai ? "เปลี่ยนพรีเซนเตอร์" : "Change Presenter"}</button>
+              </div>
+              <div className={styles.presenterList}>
+                {presenterOptions.slice(0, showAllPresenters ? presenterOptions.length : 3).map((presenter) => {
+                  const isSelected = sourceMedia?.defaultAsset === presenter.image;
+                  return (
+                    <button
+                      type="button"
+                      key={presenter.id}
+                      className={`${styles.presenterCard} ${isSelected ? styles.presenterCardActive : ""}`}
+                      onClick={() => choosePresenter(presenter)}
+                      disabled={isLocked}
+                      aria-pressed={isSelected}
+                      title={`${presenter.name} · ${presenter.style}`}
+                    >
+                      <span className={styles.presenterImage}><Image src={presenter.image} alt={presenter.name} fill unoptimized sizes="49px" style={{ objectPosition: presenter.objectPosition }} /></span>
+                      <strong>{presenter.name}</strong>
+                      <small>{presenter.style}</small>
+                      {isSelected ? <span className={styles.presenterCheck}><Check size={9} /></span> : null}
+                    </button>
+                  );
+                })}
+                <button type="button" className={`${styles.presenterCard} ${styles.morePresenter}`} onClick={() => setShowAllPresenters((expanded) => !expanded)} disabled={isLocked} aria-expanded={showAllPresenters}>
+                  <MoreHorizontal size={18} />
+                  <strong>{showAllPresenters ? (isThai ? "น้อยลง" : "Less") : (isThai ? "เพิ่มเติม" : "More")}</strong>
+                </button>
+                {showAllPresenters ? (
+                  <button type="button" className={`${styles.presenterCard} ${styles.morePresenter}`} onClick={() => sourceInputRef.current?.click()} disabled={isLocked}>
+                    <CloudUpload size={17} />
+                    <strong>{isThai ? "อัปโหลด" : "Upload"}</strong>
+                    <small>{isThai ? "รูปหรือวิดีโอ" : "Photo or video"}</small>
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className={styles.timelineHeader}>
+              <div className={styles.sectionHeading}>
+                <h3>{isThai ? "ไทม์ไลน์ฉาก" : "Scene Timeline"}</h3>
+                <span className={styles.sceneCount}>{scenes.length} / 6 · ~{duration}s</span>
+              </div>
+              <button type="button" className={styles.textButton} onClick={() => setIsReorderingScenes((current) => !current)} disabled={isLocked || scenes.length < 2} aria-pressed={isReorderingScenes}>
+                {isReorderingScenes ? (isThai ? "เสร็จสิ้น" : "Done") : (isThai ? "เรียงฉากใหม่" : "Reorder Scenes")}
+              </button>
+            </div>
+            <p className={styles.timelineNote}>{isReorderingScenes ? (isThai ? "ลากฉากเพื่อเปลี่ยนลำดับ" : "Drag scenes to change their order.") : (isThai ? "ฉากจะพูดต่อกันตามลำดับในวิดีโอเดียว โดยใช้พรีเซนเตอร์ที่เลือก" : "Scenes are spoken in order in one continuous video using the selected presenter.")}</p>
+            <div className={styles.sceneTimeline} aria-label={isThai ? "ไทม์ไลน์ฉาก" : "Scene timeline"}>
+              {sceneTimeline.map(({ scene, start, end }, index) => (
+                <div
+                  key={scene.id}
+                  className={styles.sceneItem}
+                  draggable={isReorderingScenes}
+                  onDragStart={(event) => {
+                    if (!isReorderingScenes) return;
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", scene.id);
+                  }}
+                  onDragOver={(event) => { if (isReorderingScenes) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+                  onDrop={(event) => {
+                    if (!isReorderingScenes) return;
+                    event.preventDefault();
+                    reorderScenes(event.dataTransfer.getData("text/plain"), scene.id);
+                  }}
+                >
+                  <div className={`${styles.sceneCard} ${activeSceneId === scene.id ? styles.sceneCardActive : ""}`}>
+                    <button type="button" className={styles.sceneSelect} onClick={() => setActiveSceneId(scene.id)} aria-pressed={activeSceneId === scene.id} disabled={isLocked}>
+                      <span className={styles.sceneImage}>
+                        {sourceMedia?.kind === "image" ? <Image src={sourceMedia.previewUrl} alt="" fill unoptimized sizes="43px" /> : sourceMedia?.kind === "video" ? <video src={sourceMedia.previewUrl} muted playsInline /> : <Video size={16} />}
+                      </span>
+                      <span className={styles.sceneCopy}>
+                        <strong>{scene.title || `${isThai ? "ฉาก" : "Scene"} ${index + 1}`}</strong>
+                        <small>{formatTimelineTime(start)} – {formatTimelineTime(end)}</small>
+                        <em>{scene.script.trim() || (isThai ? "เพิ่มบทพูดในฉากนี้" : "Add script for this scene")}</em>
+                      </span>
+                    </button>
+                    {isReorderingScenes ? <span className={styles.sceneMore}><GripVertical size={13} /></span> : scenes.length > 1 ? <button type="button" className={styles.sceneMore} onClick={() => removeScene(scene.id)} aria-label={isThai ? `ลบฉาก ${index + 1}` : `Remove scene ${index + 1}`} title={isThai ? "ลบฉาก" : "Remove scene"} disabled={isLocked}><X size={12} /></button> : <span className={styles.sceneMore}><MoreHorizontal size={14} /></span>}
+                  </div>
+                  {index < scenes.length - 1 ? <ArrowRight className={styles.sceneArrow} size={13} /> : null}
+                </div>
+              ))}
+              <button type="button" className={styles.addScene} onClick={addScene} disabled={!canAddScene || isLocked}>
+                <Plus size={15} />
+                <span>{isThai ? "เพิ่มฉาก" : "Add Scene"}</span>
+              </button>
+            </div>
             {currentSpeech ? <div className={styles.speechPreview}><div><AudioLines size={15} /><strong>{isThai ? "เสียงพูดที่สร้างแล้ว" : "Generated speech"}</strong><span>{currentSpeech.durationSeconds ? currentSpeech.durationSeconds + "s" : "MP3"}</span></div><audio controls src={currentSpeech.url} /></div> : null}
             {generationError ? <div className={styles.errorCard} role="alert">{generationError}</div> : null}
             {notice ? <p className={styles.statusNote} role="status">{notice}</p> : null}
@@ -625,7 +804,7 @@ export function AiPresenterPage() {
               <span>{isThai ? `ความยาวประมาณ ${duration} วินาที · คิดเครดิตแยกตามงาน` : `About ${duration} seconds · each step is charged separately`}</span>
             </div>
 
-            <button type="button" className={styles.secondaryAction} onClick={() => void handleGenerateSpeech()} disabled={!script.trim() || !selectedVoice || Boolean(currentSpeech) || speechBusy || isGenerating}>
+            <button type="button" className={styles.secondaryAction} onClick={() => void handleGenerateSpeech()} disabled={!script.trim() || !allScenesHaveScript || !selectedVoice || Boolean(currentSpeech) || speechBusy || isGenerating}>
               {speechBusy ? <LoaderCircle size={16} className={styles.spin} /> : currentSpeech ? <Check size={16} /> : <AudioLines size={16} />}{speechBusy ? (isThai ? "กำลังสร้างเสียง…" : "Generating speech…") : currentSpeech ? (isThai ? "เสียงพร้อมแล้ว" : "Speech is ready") : (isThai ? "สร้างเสียงตัวอย่าง" : "Generate speech preview")}
             </button>
             <button type="button" className={styles.generateButton} onClick={() => void handleGenerateVideo()} disabled={!canGenerate}>

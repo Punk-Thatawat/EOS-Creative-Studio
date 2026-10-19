@@ -683,6 +683,13 @@
   font-size: 7px;
 }
 
+.timelineNote {
+  margin: 2px 0 0;
+  color: #817a74;
+  font-size: 7px;
+  line-height: 1.4;
+}
+
 .sceneTimeline {
   display: flex;
   min-width: 0;
@@ -717,6 +724,24 @@
   text-align: left;
 }
 
+.sceneSelect {
+  display: grid;
+  min-width: 0;
+  grid-column: 1 / 3;
+  grid-template-columns: 43px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sceneSelect:disabled { cursor: not-allowed; }
+.sceneSelect:focus-visible { outline: 2px solid var(--presenter-orange); outline-offset: 2px; }
+
 .sceneCard:hover,
 .sceneCardActive {
   border-color: var(--presenter-orange);
@@ -736,6 +761,12 @@
 .sceneImage img {
   object-fit: cover;
   object-position: center 29%;
+}
+
+.sceneImage video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .sceneCopy {
@@ -768,9 +799,21 @@
 }
 
 .sceneMore {
+  display: grid;
+  width: 14px;
+  height: 20px;
   align-self: start;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
   color: #79716a;
+  cursor: pointer;
 }
+
+.sceneMore:disabled { cursor: not-allowed; opacity: .45; }
+.sceneItem[draggable="true"] .sceneCard { cursor: grab; }
+.sceneItem[draggable="true"] .sceneCard:active { cursor: grabbing; }
 
 .sceneArrow {
   flex: none;
@@ -799,6 +842,8 @@
   border-color: var(--presenter-orange);
   background: #fff7f2;
 }
+
+.addScene:disabled { cursor: not-allowed; opacity: .52; }
 
 .settingsPanel {
   display: flex;
