@@ -13,8 +13,25 @@ export type VideoGenerationSceneInput = {
   prompt: string;
   negativePrompt?: string;
   duration?: number;
+  audioUrl?: string;
+  /** Replace any generated model audio with this reference after composition. */
+  preserveReferenceAudio?: boolean;
+  /** Send this scene's audio as a model reference without using it as the final soundtrack. */
+  useReferenceAudio?: boolean;
   modelParams?: Record<string, unknown>;
   [key: string]: unknown;
+};
+
+export type PresenterSceneMediaInput = {
+  sceneIndex: number;
+  startSeconds: number;
+  endSeconds: number;
+  file: File;
+};
+
+export type PresenterVideoCompositionResponse = {
+  url: string;
+  mimeType?: string;
 };
 
 export type VideoGenerationInput = {
@@ -23,7 +40,7 @@ export type VideoGenerationInput = {
   model: string;
   mode: "storyboard" | "continuous" | "flexible";
   /** Selects the Admin-configured Image to Video mode route. */
-  generationMode?: "image-to-video" | "reference-to-video" | "single-image" | "multi-scene" | "continuous";
+  generationMode?: "image-to-video" | "reference-to-video" | "single-image" | "multi-scene" | "continuous" | "ai-presenter";
   duration?: number;
   resolution?: string;
   aspectRatio?: string;
@@ -49,6 +66,7 @@ export type VideoStoryboardResponse = {
   completedScenes?: number;
   failedScenes?: number;
   totalCreditCost?: number;
+  scenes?: Array<{ sceneIndex?: number; generationId?: string; status?: string; [key: string]: unknown }>;
   errorSource?: "system" | "provider";
   errorCode?: string;
   errorMessage?: string;
@@ -119,9 +137,14 @@ export type DirectVideoQuoteResponse = {
 };
 
 export type VideoStoryboardStatus = {
+  id?: string;
+  generationId?: string;
   workspaceId?: string;
   storyboardId?: string;
   status: "processing" | "completed" | "failed" | "cancelled" | string;
+  progress?: number;
+  totalCount?: number;
+  completedCount?: number;
   totalScenes?: number;
   completedScenes?: number;
   failedScenes?: number;
@@ -133,6 +156,8 @@ export type VideoStoryboardStatus = {
     mode?: "none" | "sfx" | "music" | "both" | string;
   };
   finalVideoUrl?: string;
+  videoUrl?: string;
+  output?: Array<{ url?: string; mimeType?: string; type?: string }>;
   errorSource?: "system" | "provider";
   errorCode?: string;
   errorMessage?: string;
@@ -198,10 +223,11 @@ async function authenticatedRequest(path: string, init: RequestInit = {}) {
   return payload?.data ?? payload;
 }
 
-export async function createVideoStoryboard(input: VideoGenerationInput): Promise<VideoStoryboardResponse> {
+export async function createVideoStoryboard(input: VideoGenerationInput, signal?: AbortSignal): Promise<VideoStoryboardResponse> {
   return await authenticatedRequest("/generations/video/image-to-video", {
     method: "POST",
     body: JSON.stringify(input),
+    signal,
   }) as VideoStoryboardResponse;
 }
 
@@ -209,11 +235,37 @@ export async function getVideoStoryboardSettings(): Promise<VideoStoryboardSetti
   return await authenticatedRequest("/generations/video/image-to-video/settings") as VideoStoryboardSettings;
 }
 
-export async function quoteVideoStoryboard(input: Omit<VideoGenerationInput, "idempotencyKey">): Promise<VideoCreditQuoteResponse> {
+export async function quoteVideoStoryboard(input: Omit<VideoGenerationInput, "idempotencyKey">, signal?: AbortSignal): Promise<VideoCreditQuoteResponse> {
   return await authenticatedRequest("/generations/video/image-to-video/quote", {
     method: "POST",
     body: JSON.stringify(input),
+    signal,
   }) as VideoCreditQuoteResponse;
+}
+
+export async function composePresenterVideo(storyboardId: string, scenes: PresenterSceneMediaInput[], voiceover: Blob, signal?: AbortSignal): Promise<PresenterVideoCompositionResponse> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in before finalizing a presenter video");
+  const formData = new FormData();
+  if (scenes.length > 0) formData.append("manifest", JSON.stringify({
+    scenes: scenes.map(({ sceneIndex, startSeconds, endSeconds }) => ({ sceneIndex, startSeconds, endSeconds })),
+  }));
+  for (const scene of scenes) formData.append("media", scene.file, scene.file.name);
+  formData.append("voiceover", voiceover, "elevenlabs-presenter.mp3");
+  const response = await fetch(`${backendApiUrl}/generations/presenter/storyboard/${encodeURIComponent(storyboardId)}/compose`, {
+    method: "POST",
+    headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+    body: formData,
+    signal,
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw generationErrorFromPayload(payload, "Could not finalize the presenter video");
+  const result = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
+  if (!result || typeof result !== "object" || !("url" in result) || typeof result.url !== "string" || !result.url) {
+    throw new Error("Presenter video composition did not return a video URL");
+  }
+  return result as PresenterVideoCompositionResponse;
 }
 
 export async function quoteDirectVideoGeneration(input: DirectVideoQuoteInput, signal?: AbortSignal): Promise<DirectVideoQuoteResponse> {
@@ -237,8 +289,13 @@ export async function quoteDirectVideoGeneration(input: DirectVideoQuoteInput, s
   }) as DirectVideoQuoteResponse;
 }
 
-export async function getVideoStoryboardStatus(storyboardId: string): Promise<VideoStoryboardStatus> {
-  return await authenticatedRequest(`/generations/video/image-to-video/${encodeURIComponent(storyboardId)}/status`) as VideoStoryboardStatus;
+export async function getVideoStoryboardStatus(storyboardIdOrPollUrl: string, signal?: AbortSignal): Promise<VideoStoryboardStatus> {
+  const path = storyboardIdOrPollUrl.startsWith("/api/v1/")
+    ? storyboardIdOrPollUrl.slice("/api/v1".length)
+    : storyboardIdOrPollUrl.startsWith("/generations/")
+      ? storyboardIdOrPollUrl
+      : `/generations/video/image-to-video/${encodeURIComponent(storyboardIdOrPollUrl)}/status`;
+  return await authenticatedRequest(path, { method: "GET", signal }) as VideoStoryboardStatus;
 }
 
 export async function cancelVideoStoryboard(storyboardId: string): Promise<VideoStoryboardStatus> {

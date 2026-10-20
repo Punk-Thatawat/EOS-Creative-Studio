@@ -53,6 +53,7 @@ export type GenerationModelOption = {
     promptParameter?: string;
     scriptParameter?: string;
     audioParameter?: string;
+    referenceAudiosParameter?: string;
     voiceParameter?: string;
     imageParameter?: string;
     videoParameter?: string;
