@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { AudioLines, Check, ChevronDown, CloudUpload, Copy, LoaderCircle, LockKeyhole, Sparkles, UserRound, Video, X } from "lucide-react";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { createTextToSpeech, listAudioModels, listAudioVoices, quoteTextToSpeech, type AudioCreditQuote, type AudioModel, type AudioVoice } from "@/lib/api/audio";
+import { createTextToSpeech, getAudioCreditBalance, listAudioModels, listAudioVoices, quoteTextToSpeech, type AudioCreditQuote, type AudioModel, type AudioVoice } from "@/lib/api/audio";
 import { createLipsyncGeneration, getLipsyncGenerationStatus, type LipsyncGenerationResponse, type LipsyncGenerationStatus } from "@/lib/api/lipsync-generations";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
@@ -15,6 +15,7 @@ import { useVideoGenerationResume, type ResumableVideoStatus } from "@/features/
 import styles from "./ai-presenter-page.module.css";
 
 const sampleScript = "Welcome to EOS Creative Studio. Turn your ideas into stories, and your stories into impact.";
+const voicePreviewScript = "นี่คือตัวอย่างเสียงภาษาไทยสำหรับตรวจสอบโทนเสียงและคุณภาพการพูด";
 const toneOptions = [
   { label: "Corporate", value: "Premium" },
   { label: "Friendly", value: "Friendly" },
@@ -36,11 +37,15 @@ const elevenLabsModelAliases = new Set([
 type SourceMedia = { file: File; previewUrl: string; kind: "image" | "video"; remoteUrl?: string; uploading: boolean; error?: string };
 type SpeechPreview = { key: string; blob: Blob; url: string; durationSeconds?: number; remoteUrl?: string };
 
-function estimatedDuration(script: string, language: string): number {
+function baselineDuration(script: string, language: string): number {
   const text = script.trim();
   if (!text) return 3;
   const spokenUnits = language === "th" ? text.replace(/\s/g, "").length / 12 : text.split(/\s+/).length;
   return Math.max(3, Math.min(60, Math.ceil(spokenUnits / (language === "th" ? 1 : 2.45))));
+}
+
+function estimatedDuration(script: string, language: string, voicePace = 1): number {
+  return Math.max(3, Math.min(60, Math.ceil(baselineDuration(script, language) * voicePace)));
 }
 
 function outputVideoUrl(status: ResumableVideoStatus | LipsyncGenerationResponse | LipsyncGenerationStatus): string | undefined {
@@ -134,7 +139,9 @@ export function AiPresenterPage() {
   const [speechQuote, setSpeechQuote] = useState<AudioCreditQuote | null>(null);
   const [speechQuoteLoading, setSpeechQuoteLoading] = useState(false);
   const [speech, setSpeech] = useState<SpeechPreview | null>(null);
-  const [speechBusy, setSpeechBusy] = useState(false);
+  const [creditCheckBusy, setCreditCheckBusy] = useState(false);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [voiceSample, setVoiceSample] = useState<{ key: string; durationSeconds: number } | null>(null);
   const [generationStatus, setGenerationStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "failed">("idle");
   const [generationProgress, setGenerationProgress] = useState(0);
   const [finalVideoUrl, setFinalVideoUrl] = useState("");
@@ -148,13 +155,26 @@ export function AiPresenterPage() {
     [lipsyncModels, sourceMedia?.kind],
   );
   const selectedVideoModel = availableLipsyncModels.find((model) => model.model === selectedLipsyncModel);
+  const selectedVoiceInfo = voices.find((voice) => voice.key === selectedVoice);
+  const voiceSampleKey = JSON.stringify([selectedAudioModel, selectedVoice]);
+  const sampleDuration = voiceSample?.key === voiceSampleKey ? voiceSample.durationSeconds : null;
+  const voicePace = sampleDuration
+    ? Math.max(0.65, Math.min(1.8, sampleDuration / baselineDuration(voicePreviewScript, "th")))
+    : 1;
+  const speechQuoteInput = useMemo(() => {
+    if (!script.trim() || !selectedVoice || !selectedAudioModel) return null;
+    return {
+      text: script.trim(), voice: selectedVoice, modelId: selectedAudioModel, outputFormat: "mp3" as const, languageCode: language,
+      tone, speed: 1, pronunciationHint: pronunciation.trim() || undefined,
+    };
+  }, [script, selectedVoice, selectedAudioModel, language, tone, pronunciation]);
   const duration = speech?.key === JSON.stringify([script, selectedVoice, selectedAudioModel, language, tone, pronunciation.trim()]) && speech.durationSeconds
     ? speech.durationSeconds
-    : estimatedDuration(script, language);
+    : estimatedDuration(script, language, voicePace);
   const speechKey = JSON.stringify([script, selectedVoice, selectedAudioModel, language, tone, pronunciation.trim()]);
   const currentSpeech = speech?.key === speechKey ? speech : null;
   const isGenerating = generationStatus === "uploading" || generationStatus === "processing";
-  const isLocked = isGenerating || speechBusy;
+  const isLocked = isGenerating || creditCheckBusy;
 
   useEffect(() => {
     let active = true;
@@ -180,6 +200,16 @@ export function AiPresenterPage() {
     });
     return () => { active = false; };
   }, [isThai]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void getAudioCreditBalance(controller.signal).then(({ balance }) => {
+      setCreditBalance(balance);
+    }).catch(() => {
+      if (!controller.signal.aborted) setCreditBalance(null);
+    });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (!selectedAudioModel) {
@@ -219,18 +249,14 @@ export function AiPresenterPage() {
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    const ready = Boolean(script.trim() && selectedVoice && selectedAudioModel);
-    if (!ready) {
+    if (!speechQuoteInput) {
       setSpeechQuote(null);
       setSpeechQuoteLoading(false);
       return () => { active = false; controller.abort(); };
     }
     setSpeechQuoteLoading(true);
     const timer = window.setTimeout(() => {
-      void quoteTextToSpeech({
-        text: script.trim(), voice: selectedVoice, modelId: selectedAudioModel, outputFormat: "mp3", languageCode: language,
-        tone, speed: 1, pronunciationHint: pronunciation.trim() || undefined,
-      }, controller.signal).then((quote) => {
+      void quoteTextToSpeech(speechQuoteInput, controller.signal).then((quote) => {
         if (active) setSpeechQuote(quote);
       }).catch(() => {
         if (active) setSpeechQuote(null);
@@ -239,7 +265,7 @@ export function AiPresenterPage() {
       });
     }, 350);
     return () => { active = false; controller.abort(); window.clearTimeout(timer); };
-  }, [script, selectedVoice, selectedAudioModel, language, tone, pronunciation]);
+  }, [speechQuoteInput]);
 
   useEffect(() => {
     const previewUrl = sourceMedia?.previewUrl;
@@ -352,11 +378,11 @@ export function AiPresenterPage() {
     setFinalVideoUrl("");
   };
 
-  const generateSpeech = async (): Promise<SpeechPreview> => {
+  const generateSpeech = async (signal?: AbortSignal): Promise<SpeechPreview> => {
     const result = await createTextToSpeech({
       text: script.trim(), voice: selectedVoice, modelId: selectedAudioModel, outputFormat: "mp3", languageCode: language,
       tone, speed: 1, pronunciationHint: pronunciation.trim() || undefined, idempotencyKey: crypto.randomUUID(),
-    });
+    }, signal);
     const url = URL.createObjectURL(result.blob);
     const durationSeconds = await readAudioDuration(result.blob);
     const next = { key: speechKey, blob: result.blob, url, durationSeconds };
@@ -364,37 +390,45 @@ export function AiPresenterPage() {
     return next;
   };
 
-  const handleGenerateSpeech = async () => {
-    if (!script.trim() || !selectedVoice || currentSpeech || speechBusy || isGenerating) return;
-    setSpeechBusy(true);
-    setGenerationError("");
-    setNotice(isThai ? "กำลังสร้างเสียงพูดและคิดเครดิตเสียง" : "Generating speech audio. Speech credits will be charged.");
-    try {
-      await generateSpeech();
-      setNotice(isThai ? "สร้างเสียงแล้ว ฟังตัวอย่างได้ด้านล่าง" : "Speech is ready. Preview it below.");
-    } catch (error) {
-      setGenerationError(formatGenerationError(error, isThai ? "สร้างเสียงไม่สำเร็จ" : "Could not generate speech"));
-      setNotice("");
-    } finally {
-      setSpeechBusy(false);
-    }
-  };
-
   const handleGenerateVideo = async () => {
-    if (!sourceMedia?.remoteUrl || !script.trim() || !selectedVideoModel || !selectedVoice || sourceMedia.uploading || isGenerating) return;
+    if (!sourceMedia?.remoteUrl || !script.trim() || !selectedVideoModel || !selectedVoice || sourceMedia.uploading || isGenerating || creditCheckBusy || !speechQuoteInput || !videoQuoteInput) return;
     const controller = new AbortController();
     generationControllerRef.current = controller;
-    const requestId = crypto.randomUUID();
-    emitGenerationSubmitting({ feature: "lipsync", requestId });
+    let requestId: string | null = null;
+    setCreditCheckBusy(true);
     setGenerationError("");
     setFinalVideoUrl("");
-    setGenerationProgress(4);
-    setGenerationStatus("uploading");
-    setNotice(isThai ? "เตรียมไฟล์และเสียงพูด…" : "Preparing your media and voice track…");
+    setNotice(isThai ? "กำลังตรวจสอบเครดิตและราคาล่าสุด…" : "Checking your balance and the latest total price…");
     try {
+      const [latestSpeechQuote, latestVideoQuote, { balance }] = await Promise.all([
+        quoteTextToSpeech(speechQuoteInput, controller.signal),
+        quoteDirectVideoGeneration(videoQuoteInput, controller.signal),
+        getAudioCreditBalance(controller.signal),
+      ]);
+      if (controller.signal.aborted) return;
+
+      const speechCost = currentSpeech ? 0 : Number(latestSpeechQuote.creditCost);
+      const videoCost = Number(latestVideoQuote.creditCost);
+      if (!Number.isFinite(speechCost) || !Number.isFinite(videoCost)) throw new Error(isThai ? "ตรวจสอบราคารวมไม่ได้ จึงยังไม่เริ่มสร้าง" : "Could not verify the total price, so generation was not started.");
+      const totalCost = speechCost + videoCost;
+      setSpeechQuote(latestSpeechQuote);
+      setVideoCreditCost(videoCost);
+      setCreditBalance(balance);
+      if (balance < totalCost) {
+        throw new Error(isThai
+          ? `เครดิตไม่พอสำหรับงานนี้ ต้องใช้ประมาณ ${totalCost.toLocaleString()} เครดิต แต่มี ${balance.toLocaleString()} เครดิต ยังไม่ได้สร้างเสียงหรือวิดีโอ`
+          : `Not enough credits. This job needs about ${totalCost.toLocaleString()} credits and your balance is ${balance.toLocaleString()}. No audio or video was generated.`);
+      }
+
+      setCreditCheckBusy(false);
+      requestId = crypto.randomUUID();
+      emitGenerationSubmitting({ feature: "lipsync", requestId });
+      setGenerationProgress(4);
+      setGenerationStatus("uploading");
+      setNotice(isThai ? "เครดิตพอแล้ว กำลังสร้างเสียงและเตรียมไฟล์…" : "Credits confirmed. Generating the speech and preparing your media…");
       let current = currentSpeech;
       if (!current) {
-        current = await generateSpeech();
+        current = await generateSpeech(controller.signal);
         if (controller.signal.aborted) return;
       }
       let audioUrl = current.remoteUrl;
@@ -435,13 +469,15 @@ export function AiPresenterPage() {
       setNotice(isThai ? "วิดีโอพร้อมแล้ว" : "Your presenter video is ready.");
       if (generationId) emitGenerationCompleted({ feature: "lipsync", generationId });
     } catch (error) {
-      emitGenerationRequestFailed({ feature: "lipsync", requestId });
+      if (requestId) emitGenerationRequestFailed({ feature: "lipsync", requestId });
       if (controller.signal.aborted) return;
-      setGenerationStatus("failed");
+      if (requestId) setGenerationStatus("failed");
       setNotice("");
       setGenerationError(formatGenerationError(error, isThai ? "สร้างวิดีโอไม่สำเร็จ" : "Unable to generate the presenter video"));
     } finally {
-      emitGenerationRequestFinished({ feature: "lipsync", requestId });
+      if (requestId) emitGenerationRequestFinished({ feature: "lipsync", requestId });
+      if (requestId) void getAudioCreditBalance().then(({ balance }) => setCreditBalance(balance)).catch(() => undefined);
+      setCreditCheckBusy(false);
       if (generationControllerRef.current === controller) generationControllerRef.current = null;
     }
   };
@@ -457,10 +493,11 @@ export function AiPresenterPage() {
   };
 
   const supportedRatios = selectedVideoModel?.capabilities.supportedRatios?.filter((value) => aspectOptions.some((ratio) => ratio === value)) ?? [];
-  const estimatedCredits = (speechQuote?.creditCost ?? null) !== null && videoCreditCost !== null
-    ? (speechQuote?.creditCost ?? 0) + videoCreditCost
+  const speechCostEstimate = currentSpeech ? 0 : speechQuote?.creditCost ?? null;
+  const estimatedCredits = speechCostEstimate !== null && videoCreditCost !== null
+    ? speechCostEstimate + videoCreditCost
     : null;
-  const canGenerate = Boolean(sourceMedia?.remoteUrl && script.trim() && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !speechBusy && !catalogLoading && !voiceLoading && !speechQuoteLoading && !videoQuoteLoading);
+  const canGenerate = Boolean(sourceMedia?.remoteUrl && script.trim() && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !creditCheckBusy && !catalogLoading && !voiceLoading && !speechQuoteLoading && !videoQuoteLoading);
 
   return (
     <div className={styles.page}>
@@ -478,7 +515,7 @@ export function AiPresenterPage() {
 
       <div className={styles.prototypeNotice} role="status">
         <span className={styles.prototypeDot} />
-        {isThai ? "รุ่นเริ่มต้น: 1 ฉาก · สร้างเสียงและวิดีโอผ่านระบบจริง โดยคิดเครดิตแยกตามงาน" : "MVP: one scene · speech and video use live generation and are charged separately."}
+        {isThai ? "รุ่นเริ่มต้น: 1 ฉาก · ตรวจเครดิตรวมก่อนสร้างเสียงและวิดีโอจริง" : "MVP: one scene · total credits are checked before speech and video generation."}
       </div>
 
       <section className={styles.workspace} aria-label={isThai ? "พื้นที่สร้าง AI Presenter" : "AI Presenter workspace"}>
@@ -556,6 +593,25 @@ export function AiPresenterPage() {
               <span className={styles.settingLabel}>{isThai ? "เสียงพรีเซนเตอร์" : "Presenter voice"}</span>
               <span className={styles.selectWrap}><select value={selectedVoice} onChange={(event) => setSelectedVoice(event.target.value)} disabled={voiceLoading || !voices.length || isLocked}><option value="">{voiceLoading ? (isThai ? "กำลังโหลดเสียง…" : "Loading voices…") : (isThai ? "เลือกเสียง" : "Select a voice")}</option>{voices.map((voice) => <option key={voice.key} value={voice.key}>{voice.name}</option>)}</select><ChevronDown size={14} /></span>
             </label>
+            {selectedVoiceInfo?.previewUrl ? (
+              <div className={styles.voiceSampleCard}>
+                <div><AudioLines size={14} /><strong>{isThai ? "ตัวอย่างเสียงฟรี" : "Free voice sample"}</strong><span>{sampleDuration ? `${Math.ceil(sampleDuration)}s` : (isThai ? "กำลังอ่านความยาว…" : "Reading duration…")}</span></div>
+                <audio
+                  key={`${selectedAudioModel}:${selectedVoiceInfo.key}`}
+                  controls
+                  preload="metadata"
+                  src={selectedVoiceInfo.previewUrl}
+                  aria-label={isThai ? `ตัวอย่างเสียง ${selectedVoiceInfo.name}` : `${selectedVoiceInfo.name} voice sample`}
+                  onLoadedMetadata={(event) => {
+                    const measuredDuration = event.currentTarget.duration;
+                    if (Number.isFinite(measuredDuration) && measuredDuration > 0) setVoiceSample({ key: JSON.stringify([selectedAudioModel, selectedVoiceInfo.key]), durationSeconds: measuredDuration });
+                  }}
+                />
+                <small>{isThai ? "เทียบจังหวะกับข้อความตัวอย่างมาตรฐาน ความยาวจริงอาจต่างตามภาษาและการอ่าน" : "Pacing is compared with the standard sample text; actual duration can vary by language and delivery."}</small>
+              </div>
+            ) : (
+              <p className={styles.voiceSampleMissing}>{isThai ? "เสียงนี้ไม่มีไฟล์ตัวอย่าง ใช้ความเร็วพูดมาตรฐานในการประเมิน" : "No sample is configured for this voice; duration uses a standard speaking pace."}</p>
+            )}
             <div className={styles.settingCard}>
               <div className={styles.settingLabel}>{isThai ? "สัดส่วนวิดีโอ" : "Video format"}</div>
               <div className={styles.formatChoices}>{(supportedRatios.length ? supportedRatios : aspectOptions).map((value) => <button key={value} type="button" className={`${styles.formatOption} ${aspect === value ? styles.formatOptionActive : ""}`} onClick={() => setAspect(value as (typeof aspectOptions)[number])} disabled={isLocked}><span className={`${styles.formatShape} ${value === "9:16" ? styles.formatPortrait : value === "1:1" ? styles.formatSquare : ""}`} /><strong>{value}</strong><small>{value === "16:9" ? "Landscape" : value === "9:16" ? "Portrait" : "Square"}</small></button>)}</div>
@@ -563,17 +619,16 @@ export function AiPresenterPage() {
 
             <div className={styles.estimateCard}>
               <div><strong>{isThai ? "เครดิตโดยประมาณ" : "Estimated credits"}</strong><span className={styles.estimateIcon}><Sparkles size={18} /></span></div>
-              <div className={styles.estimateLine}><span>{isThai ? "เสียงพูด" : "Speech"}</span><b>{speechQuoteLoading ? "…" : speechQuote ? speechQuote.creditCost.toLocaleString() : "—"}</b></div>
+              <div className={styles.estimateLine}><span>{isThai ? (currentSpeech ? "เสียงพูด (พร้อมแล้ว)" : "เสียงพูด") : (currentSpeech ? "Speech (ready)" : "Speech")}</span><b>{speechQuoteLoading ? "…" : currentSpeech ? "0" : speechQuote ? speechQuote.creditCost.toLocaleString() : "—"}</b></div>
               <div className={styles.estimateLine}><span>{isThai ? "วิดีโอ" : "Video"}</span><b>{videoQuoteLoading ? "…" : videoCreditCost === null ? "—" : videoCreditCost.toLocaleString()}</b></div>
+              <div className={styles.estimateLine}><span>{isThai ? "เครดิตคงเหลือ" : "Available balance"}</span><b>{creditBalance === null ? (isThai ? "ตรวจตอนกดสร้าง" : "Checked on create") : creditBalance.toLocaleString()}</b></div>
               <b className={styles.estimateTotal}>{estimatedCredits === null ? "—" : estimatedCredits.toLocaleString()} <small>{isThai ? "เครดิตรวม" : "credits total"}</small></b>
-              <span>{isThai ? `ความยาวประมาณ ${duration} วินาที · คิดเครดิตแยกตามงาน` : `About ${duration} seconds · each step is charged separately`}</span>
+              <span>{isThai ? `ประมาณ ${duration} วินาที · จะตรวจราคาและเครดิตรวมซ้ำก่อนเริ่มสร้าง` : `About ${duration} seconds · price and total balance are checked again before generation`}</span>
             </div>
 
-            <button type="button" className={styles.secondaryAction} onClick={() => void handleGenerateSpeech()} disabled={!script.trim() || !selectedVoice || Boolean(currentSpeech) || speechBusy || isGenerating}>
-              {speechBusy ? <LoaderCircle size={16} className={styles.spin} /> : currentSpeech ? <Check size={16} /> : <AudioLines size={16} />}{speechBusy ? (isThai ? "กำลังสร้างเสียง…" : "Generating speech…") : currentSpeech ? (isThai ? "เสียงพร้อมแล้ว" : "Speech is ready") : (isThai ? "สร้างเสียงตัวอย่าง" : "Generate speech preview")}
-            </button>
+            <p className={styles.creditNote}>{isThai ? "การฟังตัวอย่างไม่เสียเครดิต · สร้างเสียงจากบทเมื่อกดสร้างพรีเซนเตอร์เท่านั้น" : "Listening to the sample is free. Script audio is generated only after you create the presenter."}</p>
             <button type="button" className={styles.generateButton} onClick={() => void handleGenerateVideo()} disabled={!canGenerate}>
-              {isGenerating ? <LoaderCircle size={17} className={styles.spin} /> : <Sparkles size={17} />}{isGenerating ? (isThai ? "กำลังสร้างวิดีโอ…" : "Generating video…") : (isThai ? "สร้างพรีเซนเตอร์" : "Generate presenter")}
+              {creditCheckBusy ? <LoaderCircle size={17} className={styles.spin} /> : isGenerating ? <LoaderCircle size={17} className={styles.spin} /> : <Sparkles size={17} />}{creditCheckBusy ? (isThai ? "กำลังตรวจเครดิต…" : "Checking credits…") : isGenerating ? (isThai ? "กำลังสร้างวิดีโอ…" : "Generating video…") : (isThai ? "สร้างพรีเซนเตอร์" : "Generate presenter")}
             </button>
             {catalogError ? <p className={styles.formError}>{catalogError}</p> : null}
             {!catalogLoading && !availableLipsyncModels.length ? <p className={styles.formError}>{isThai ? "ไม่มีโมเดลที่รองรับรูปแบบไฟล์นี้และเสียงพูด กรุณาเลือกไฟล์อื่นหรือตรวจสอบการตั้งค่าโมเดล" : "No enabled model supports this media type and speech input. Choose another file or check model routing."}</p> : null}
@@ -585,8 +640,8 @@ export function AiPresenterPage() {
 
       <section className={styles.bottomShelf} aria-label={isThai ? "ขั้นตอนการสร้าง" : "Generation workflow"}>
         <div className={styles.workflowStep}><span>01</span><div><strong>{isThai ? "อัปโหลดต้นแบบ" : "Upload source media"}</strong><small>{isThai ? "รูปภาพหรือวิดีโอที่คุณมีสิทธิ์ใช้งาน" : "Use an image or video you have rights to use."}</small></div></div>
-        <div className={styles.workflowStep}><span>02</span><div><strong>{isThai ? "สร้างเสียงพูด" : "Generate speech"}</strong><small>{isThai ? "เลือกภาษา น้ำเสียง และเสียงพูด" : "Choose a language, tone, and voice."}</small></div></div>
-        <div className={styles.workflowStep}><span>03</span><div><strong>{isThai ? "สร้างวิดีโอ" : "Generate presenter video"}</strong><small>{isThai ? "ซิงก์เสียงกับภาพและรับผลลัพธ์ในหน้านี้" : "Sync the voice to your media and preview the result here."}</small></div></div>
+        <div className={styles.workflowStep}><span>02</span><div><strong>{isThai ? "ฟังตัวอย่างเสียง" : "Preview the voice"}</strong><small>{isThai ? "ฟังไฟล์ตัวอย่างที่ตั้งไว้ได้ฟรี และใช้ช่วยประเมินเวลา" : "Listen to the configured sample for free; its pace informs the estimate."}</small></div></div>
+        <div className={styles.workflowStep}><span>03</span><div><strong>{isThai ? "ตรวจเครดิตแล้วสร้าง" : "Check credits and create"}</strong><small>{isThai ? "ตรวจราคารวมก่อนสร้างเสียงและวิดีโอจริง" : "Verify the combined price before generating speech and video."}</small></div></div>
       </section>
     </div>
   );
