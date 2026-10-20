@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
 import { SearchInput } from "@/components/ui/search-input";
+import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 import {
   AlertCircle,
   Archive,
@@ -94,15 +95,22 @@ const filterByApiType: Record<AssetsApiType, Exclude<FilterType, "All Types">> =
    strip rather than deleted -- flip this to true on the day they ship. */
 const showDocumentsTab = false;
 
-type MediaTab = { value: FilterType; label: string; Icon: LucideIcon | null };
+type MediaTab = { value: FilterType; Icon: LucideIcon | null };
 
 const mediaTabs: MediaTab[] = [
-  { value: "All Types", label: "ทั้งหมด", Icon: null },
-  { value: "Images", label: "ภาพ", Icon: ImageIcon },
-  { value: "Videos", label: "วิดีโอ", Icon: Video },
-  { value: "Audio", label: "เสียง", Icon: AudioLines },
-  { value: "Documents", label: "เอกสาร", Icon: FileText },
+  { value: "All Types", Icon: null },
+  { value: "Images", Icon: ImageIcon },
+  { value: "Videos", Icon: Video },
+  { value: "Audio", Icon: AudioLines },
+  { value: "Documents", Icon: FileText },
 ];
+const mediaTabKeys: Partial<Record<FilterType, StudioCopyKey>> = {
+  "All Types": "assets.tab.all",
+  Images: "assets.tab.images",
+  Videos: "assets.tab.videos",
+  Audio: "assets.tab.audio",
+  Documents: "assets.tab.documents",
+};
 
 const visibleMediaTabs = mediaTabs.filter((tab) => showDocumentsTab || tab.value !== "Documents");
 
@@ -164,10 +172,10 @@ function formatBytes(value: number | null | undefined): string {
   return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function formatDate(value: string): string {
+function formatDate(value: string, locale: "th" | "en"): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short", year: "numeric" }).format(date);
+  return new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "th-TH", { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string): string | undefined {
@@ -175,7 +183,7 @@ function metadataString(metadata: Record<string, unknown> | null | undefined, ke
   return typeof value === "string" ? value : typeof value === "number" ? String(value) : undefined;
 }
 
-function mapApiAsset(asset: AssetsApiAsset): Asset {
+function mapApiAsset(asset: AssetsApiAsset, locale: "th" | "en", untitled: string): Asset {
   const extension = asset.fileExtension?.replace(/^\./, "").toUpperCase();
   const type = extension || formatLabel(asset.type).toUpperCase();
   return {
@@ -184,9 +192,9 @@ function mapApiAsset(asset: AssetsApiAsset): Asset {
       /^(create a high-quality image|preserve the entire original image|upscale the provided image|continue the source image)/i.test(
         asset.title.trim(),
       )
-        ? metadataString(asset.metadata, "userPrompt") || "ผลงานสร้างสรรค์"
+        ? metadataString(asset.metadata, "userPrompt") || untitled
         : asset.title,
-    date: formatDate(asset.createdAt),
+    date: formatDate(asset.createdAt, locale),
     size: asset.sizeLabel || formatBytes(asset.sizeBytes),
     type,
     image:
@@ -314,13 +322,14 @@ function FilterSelect({
 }
 
 function AssetPreview({ asset }: { asset: Asset }) {
+  const { c } = useStudioCopy();
   if (asset.mediaKind === "audio") return <AudioAssetPreview />;
   if (asset.mediaKind === "video" && asset.url && asset.image === asset.url) {
     return (
       <VideoFrameThumbnail
         key={asset.url}
         src={asset.url}
-        alt={`ภาพตัวอย่าง ${asset.title}`}
+        alt={c("assets.preview.alt", { title: asset.title })}
         className="asset-preview-video"
         fallback={
           <span className="flex h-full w-full items-center justify-center text-white/70">
@@ -334,6 +343,7 @@ function AssetPreview({ asset }: { asset: Asset }) {
 }
 
 function AssetPreviewPopup({ asset, onClose }: { asset: Asset; onClose: () => void }) {
+  const { c } = useStudioCopy();
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -349,14 +359,14 @@ function AssetPreviewPopup({ asset, onClose }: { asset: Asset; onClose: () => vo
         className="video-modal assets-video-modal"
         role="dialog"
         aria-modal="true"
-        aria-label={`ตัวอย่าง ${asset.title}`}
+        aria-label={c("assets.preview.aria", { title: asset.title })}
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) onClose();
         }}
       >
         <div className="video-modal-shell assets-video-modal-shell" onMouseDown={(event) => event.stopPropagation()}>
           <div className="video-modal-actions">
-            <button type="button" className="video-modal-close" onClick={onClose} aria-label="ปิดตัวอย่าง">
+            <button type="button" className="video-modal-close" onClick={onClose} aria-label={c("assets.preview.close")}>
               <X size={22} />
             </button>
           </div>
@@ -370,13 +380,13 @@ function AssetPreviewPopup({ asset, onClose }: { asset: Asset; onClose: () => vo
       className="assets-preview-popup"
       role="dialog"
       aria-modal="true"
-      aria-label={`ตัวอย่าง ${asset.title}`}
+      aria-label={c("assets.preview.aria", { title: asset.title })}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <div className="assets-preview-popup-content">
-        <button type="button" className="assets-preview-popup-close" onClick={onClose} aria-label="ปิดตัวอย่าง">
+        <button type="button" className="assets-preview-popup-close" onClick={onClose} aria-label={c("assets.preview.close")}>
           <X size={20} />
         </button>
         {asset.mediaKind === "audio" && asset.url ? (
@@ -417,6 +427,7 @@ type TagListProps = {
 };
 
 function TagList({ items, activeId, onSelect, onRemove, removeBusy }: TagListProps) {
+  const { c } = useStudioCopy();
   return (
     <>
       {items.map((item) => {
@@ -438,8 +449,8 @@ function TagList({ items, activeId, onSelect, onRemove, removeBusy }: TagListPro
               <button
                 type="button"
                 className="assets-tag-remove"
-                aria-label={`ลบแท็ก ${label}`}
-                title={`ลบแท็ก ${label}`}
+                aria-label={c("assets.tag.removeAria", { label })}
+                title={c("assets.tag.removeAria", { label })}
                 disabled={removeBusy}
                 onClick={() => onRemove(item)}
               >
@@ -461,25 +472,26 @@ type TagDeleteConfirmProps = {
 };
 
 function TagDeleteConfirm({ tag, busy, onCancel, onConfirm }: TagDeleteConfirmProps) {
+  const { c } = useStudioCopy();
   const label = formatLabel(tag.name);
 
   return (
-    <div className="assets-tag-delete-popover" role="dialog" aria-label={`ยืนยันการลบ ${label}`}>
+    <div className="assets-tag-delete-popover" role="dialog" aria-label={c("assets.tag.confirmAria", { label })}>
       <div className="assets-tag-delete-copy">
         <span className="assets-tag-delete-icon">
           <Trash2 size={16} />
         </span>
         <div>
-          <strong>ลบแท็ก?</strong>
-          <p>“{label}” จะถูกลบออกจากแอสเซ็ตของคุณ</p>
+          <strong>{c("assets.tag.deleteTitle")}</strong>
+          <p>{c("assets.tag.deleteBody", { label })}</p>
         </div>
       </div>
       <div className="assets-tag-delete-actions">
         <button type="button" onClick={onCancel} disabled={busy}>
-          ยกเลิก
+          {c("assets.cancel")}
         </button>
         <button type="button" onClick={onConfirm} disabled={busy}>
-          ลบ
+          {c("assets.delete")}
         </button>
       </div>
     </div>
@@ -487,6 +499,7 @@ function TagDeleteConfirm({ tag, busy, onCancel, onConfirm }: TagDeleteConfirmPr
 }
 
 export default function AssetsPage() {
+  const { c, locale } = useStudioCopy();
   const queryParams = useSearchParams();
   const searchRef = useRef(queryParams.get("q") ?? "");
   const [activeTab] = useState<AssetTab>("My Assets");
@@ -609,9 +622,10 @@ export default function AssetsPage() {
     return () => window.removeEventListener("eos:generation-completed", refreshGeneratedAssets);
   }, [activeTab]);
 
+  const untitledAsset = c("assets.untitled");
   const assets = useMemo(
-    () => assetsData.assets.filter((asset) => asset.source === "generated").map(mapApiAsset),
-    [assetsData.assets],
+    () => assetsData.assets.filter((asset) => asset.source === "generated").map((asset) => mapApiAsset(asset, locale, untitledAsset)),
+    [assetsData.assets, locale, untitledAsset],
   );
   const visibleTagItems = showAllTags ? assetsData.filters.tags : assetsData.filters.tags.slice(0, SIDEBAR_GROUP_LIMIT);
   const totalPages = Math.max(1, assetsData.pagination.totalPages || 1);
@@ -626,8 +640,8 @@ export default function AssetsPage() {
   const endItem = Math.min(assetsData.pagination.total, startItem + assetsData.pagination.limit - 1);
   const rangeLabel =
     assetsData.pagination.total === 0
-      ? "ไม่มีรายการ"
-      : `แสดง ${startItem}–${endItem} จาก ${formatCount(assetsData.pagination.total)} รายการ`;
+      ? c("assets.range.none")
+      : c("assets.range.showing", { from: startItem, to: endItem, total: formatCount(assetsData.pagination.total) });
 
   const openTagDialog = (assetId: string | null = null) => {
     setOpenFilter(null);
@@ -762,12 +776,12 @@ export default function AssetsPage() {
 
   return (
     <div className="assets-page" data-active-tab={activeTab} data-no-translate>
-      <section className="studio-hero-frame assets-universe-hero" aria-label="แอสเซ็ตของ EOS Creative Studio">
+      <section className="studio-hero-frame assets-universe-hero" aria-label={c("assets.heroAria")}>
         <picture>
           <source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/assets-mobile.webp" />
           <Image
             src="/generated-assets/studio-heroes-v4/assets-desktop.webp"
-            alt="ภาพรวมเครื่องมือสร้างภาพ วิดีโอ เสียง และเอกสารของ EOS Creative Studio"
+            alt={c("assets.heroAlt")}
             width={2400}
             height={435}
             priority
@@ -778,13 +792,13 @@ export default function AssetsPage() {
       </section>
       <div className="assets-retention-notice" role="note">
         <Clock3 size={16} aria-hidden="true" />
-        <span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span>
+        <span>{c("assets.retention")}</span>
       </div>
 
-      <section className="assets-library" aria-label="คลังแอสเซ็ต">
+      <section className="assets-library" aria-label={c("assets.libraryAria")}>
         <div className="assets-toolbar">
-          <div className="assets-media-tabs" role="group" aria-label="ประเภทไฟล์">
-            {visibleMediaTabs.map(({ value, label, Icon }) => (
+          <div className="assets-media-tabs" role="group" aria-label={c("assets.typeGroupAria")}>
+            {visibleMediaTabs.map(({ value, Icon }) => (
               <button
                 key={value}
                 type="button"
@@ -796,12 +810,12 @@ export default function AssetsPage() {
                 }}
               >
                 {Icon ? <Icon size={16} /> : null}
-                {label}
+                {c(mediaTabKeys[value] ?? "assets.tab.all")}
               </button>
             ))}
           </div>
 
-          <div className="assets-tag-strip" aria-label="แท็ก">
+          <div className="assets-tag-strip" aria-label={c("assets.tagsAria")}>
             <span className="assets-tag-strip-divider" aria-hidden="true" />
 
             <TagList
@@ -822,12 +836,12 @@ export default function AssetsPage() {
                 aria-expanded={showAllTags}
                 onClick={() => setShowAllTags((current) => !current)}
               >
-                {showAllTags ? "ย่อลง" : "ดูทั้งหมด"} <ChevronDown size={14} />
+                {showAllTags ? c("assets.showLess") : c("assets.showAll")} <ChevronDown size={14} />
               </button>
             ) : null}
 
             <button type="button" className="assets-add-tag" onClick={() => openTagDialog()}>
-              <Plus size={16} /> แท็ก
+              <Plus size={16} /> {c("assets.addTag")}
             </button>
 
             {pendingDeleteTag ? (
@@ -842,11 +856,11 @@ export default function AssetsPage() {
           <div className="assets-filters">
             <FilterSelect
               key="sort"
-              label={activeSort === "Newest" ? "ล่าสุด" : "เก่าสุด"}
+              label={activeSort === "Newest" ? c("assets.sort.newest") : c("assets.sort.oldest")}
               value={activeSort}
               options={[
-                { value: "Newest", label: "ล่าสุด" },
-                { value: "Oldest", label: "เก่าสุด" },
+                { value: "Newest", label: c("assets.sort.newest") },
+                { value: "Oldest", label: c("assets.sort.oldest") },
               ]}
               onSelect={(value) => {
                 setActiveSort(value as AssetSort);
@@ -855,10 +869,10 @@ export default function AssetsPage() {
               open={openFilter === "sort"}
               onToggle={(nextOpen) => setOpenFilter(nextOpen ? "sort" : null)}
             />
-            <div className="assets-view-toggle" aria-label="เปลี่ยนมุมมองแอสเซ็ต">
+            <div className="assets-view-toggle" aria-label={c("assets.viewToggleAria")}>
               <button
                 type="button"
-                aria-label="มุมมองตาราง"
+                aria-label={c("assets.viewGrid")}
                 className={view === "grid" ? "is-active" : ""}
                 onClick={() => setView("grid")}
               >
@@ -866,7 +880,7 @@ export default function AssetsPage() {
               </button>
               <button
                 type="button"
-                aria-label="มุมมองรายการ"
+                aria-label={c("assets.viewList")}
                 className={view === "list" ? "is-active" : ""}
                 onClick={() => setView("list")}
               >
@@ -879,10 +893,10 @@ export default function AssetsPage() {
         <div className="assets-search-row">
           <SearchInput
             className="w-full sm:w-57.5"
-            aria-label="ค้นหาแอสเซ็ต"
+            aria-label={c("assets.searchAria")}
             value={search}
             onValueChange={setSearch}
-            placeholder="ค้นหาแอสเซ็ต..."
+            placeholder={c("assets.searchPlaceholder")}
           />
           <span>{rangeLabel}</span>
         </div>
@@ -900,10 +914,10 @@ export default function AssetsPage() {
             {!loading && error ? (
               <div className="assets-error" role="alert">
                 <AlertCircle size={24} />
-                <strong>โหลดผลงานไม่สำเร็จ</strong>
+                <strong>{c("assets.loadFailed")}</strong>
                 <span>{error}</span>
                 <button type="button" onClick={() => setRefreshKey((current) => current + 1)}>
-                  ลองอีกครั้ง
+                  {c("assets.retry")}
                 </button>
               </div>
             ) : null}
@@ -913,7 +927,7 @@ export default function AssetsPage() {
                     key={asset.id}
                     className={`asset-card ${selectedAsset === asset.id ? "is-selected" : ""} ${openMenuAsset === asset.id ? "is-menu-open" : ""}`}
                     tabIndex={0}
-                    aria-label={`ดูผลงาน ${asset.title}`}
+                    aria-label={c("assets.card.viewAria", { title: asset.title })}
                     onKeyDown={(event) => {
                       if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
                         event.preventDefault();
@@ -935,7 +949,7 @@ export default function AssetsPage() {
                         <button
                           type="button"
                           className="asset-play"
-                          aria-label={`เล่น ${asset.title}`}
+                          aria-label={c("assets.card.playAria", { title: asset.title })}
                           onClick={(event) => {
                             event.stopPropagation();
                             openAssetPreview(asset);
@@ -956,7 +970,7 @@ export default function AssetsPage() {
                       <div className="asset-card-actions">
                         <button
                           type="button"
-                          aria-label={`ดาวน์โหลด ${asset.title}`}
+                          aria-label={c("assets.card.downloadAria", { title: asset.title })}
                           onClick={(event) => {
                             event.stopPropagation();
                             void handleDownload(asset);
@@ -967,7 +981,7 @@ export default function AssetsPage() {
                         </button>
                         <button
                           type="button"
-                          aria-label={`ตัวเลือกเพิ่มเติมของ ${asset.title}`}
+                          aria-label={c("assets.card.moreAria", { title: asset.title })}
                           onClick={(event) => {
                             event.stopPropagation();
                             setOpenMenuAsset(openMenuAsset === asset.id ? null : asset.id);
@@ -985,12 +999,12 @@ export default function AssetsPage() {
                               disabled={busyAssetId === asset.id}
                             >
                               <Download size={14} />
-                              {busyAssetId === asset.id ? "กำลังดาวน์โหลด..." : "ดาวน์โหลด"}
+                              {busyAssetId === asset.id ? c("assets.card.downloading") : c("assets.card.download")}
                             </button>
                             {activeTab !== "Trash" ? (
                               <button type="button" role="menuitem" onClick={() => openTagDialog(asset.id)}>
                                 <Plus size={14} />
-                                เพิ่มแท็ก
+                                {c("assets.card.addTag")}
                               </button>
                             ) : null}
                             {activeTab === "Trash" ? (
@@ -1000,7 +1014,7 @@ export default function AssetsPage() {
                                 onClick={() => void handleAssetAction(asset.id, "restore")}
                               >
                                 <RotateCcw size={14} />
-                                กู้คืน
+                                {c("assets.card.restore")}
                               </button>
                             ) : (
                               <button
@@ -1009,7 +1023,7 @@ export default function AssetsPage() {
                                 onClick={() => void handleAssetAction(asset.id, "trash")}
                               >
                                 <Trash2 size={14} />
-                                ย้ายไปถังขยะ
+                                {c("assets.card.trash")}
                               </button>
                             )}
                           </div>
@@ -1022,8 +1036,8 @@ export default function AssetsPage() {
             {!loading && !error && assets.length === 0 ? (
               <div className="assets-empty">
                 <Archive size={24} />
-                <strong>ไม่พบผลงานที่ตรงกัน</strong>
-                <span>ลองเปลี่ยนคำค้นหาหรือตัวกรอง</span>
+                <strong>{c("assets.empty.title")}</strong>
+                <span>{c("assets.empty.body")}</span>
               </div>
             ) : null}
           </div>
@@ -1034,7 +1048,7 @@ export default function AssetsPage() {
           <div>
             <button
               type="button"
-              aria-label="หน้าก่อนหน้า"
+              aria-label={c("assets.page.prev")}
               disabled={!assetsData.pagination.hasPrevious}
               onClick={() => setPage((current) => Math.max(1, current - 1))}
             >
@@ -1054,7 +1068,7 @@ export default function AssetsPage() {
             ))}
             <button
               type="button"
-              aria-label="หน้าถัดไป"
+              aria-label={c("assets.page.next")}
               disabled={!assetsData.pagination.hasNext}
               onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
             >
@@ -1079,8 +1093,8 @@ export default function AssetsPage() {
             aria-labelledby="assets-group-dialog-title"
           >
             <div className="assets-group-dialog-heading">
-              <strong id="assets-group-dialog-title">{groupDialog.assetId ? "เพิ่มแท็ก" : "สร้างแท็ก"}</strong>
-              <button type="button" onClick={closeGroupDialog} disabled={groupSaving} aria-label="ปิด">
+              <strong id="assets-group-dialog-title">{groupDialog.assetId ? c("assets.dialog.addTag") : c("assets.dialog.createTag")}</strong>
+              <button type="button" onClick={closeGroupDialog} disabled={groupSaving} aria-label={c("assets.dialog.close")}>
                 ×
               </button>
             </div>
@@ -1099,7 +1113,7 @@ export default function AssetsPage() {
                     </button>
                   ))
                 ) : (
-                  <span className="assets-group-options-empty">ไม่มีแท็กที่ใช้ได้กับแอสเซ็ตนี้</span>
+                  <span className="assets-group-options-empty">{c("assets.dialog.noTags")}</span>
                 )}
               </div>
             ) : null}
@@ -1107,7 +1121,7 @@ export default function AssetsPage() {
               autoFocus
               value={groupName}
               onChange={(event) => setGroupName(event.target.value)}
-              placeholder="ชื่อแท็ก"
+              placeholder={c("assets.dialog.tagName")}
               maxLength={120}
               onKeyDown={(event) => {
                 if (event.key === "Enter") void handleSaveGroup();
@@ -1115,19 +1129,19 @@ export default function AssetsPage() {
             />
             {duplicateTag ? (
               <span className="assets-group-dialog-error" role="alert">
-                แอสเซ็ตนี้มีแท็กนี้อยู่แล้ว
+                {c("assets.dialog.duplicate")}
               </span>
             ) : null}
             <div className="assets-group-dialog-actions">
               <button type="button" onClick={closeGroupDialog} disabled={groupSaving}>
-                ยกเลิก
+                {c("assets.cancel")}
               </button>
               <button
                 type="button"
                 onClick={() => void handleSaveGroup()}
                 disabled={groupSaving || !groupName.trim() || duplicateTag}
               >
-                {groupSaving ? "กำลังบันทึก..." : groupDialog.assetId ? "บันทึก" : "สร้าง"}
+                {groupSaving ? c("assets.dialog.saving") : groupDialog.assetId ? c("assets.dialog.save") : c("assets.dialog.create")}
               </button>
             </div>
           </div>

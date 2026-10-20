@@ -44,64 +44,83 @@ import {
   type HistoryType,
 } from "@/lib/api/history";
 import { templateCopy } from "@/features/templates/template-copy";
+import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 import s from "./history-page.module.css";
 
 const PAGE_SIZE = 24;
 const HISTORY_CACHE_TTL_MS = 30_000;
 const types = [
-  { value: "all", label: "ทั้งหมด", icon: Sparkles },
-  { value: "image", label: "ภาพ", icon: ImageIcon },
-  { value: "video", label: "วิดีโอ", icon: Video },
-  { value: "audio", label: "เสียง", icon: AudioLines },
-  { value: "document", label: "เอกสาร", icon: FileText },
+  { value: "all", icon: Sparkles },
+  { value: "image", icon: ImageIcon },
+  { value: "video", icon: Video },
+  { value: "audio", icon: AudioLines },
+  { value: "document", icon: FileText },
 ] as const;
-const statuses = {
-  all: "ทุกสถานะ",
-  queued: "รอคิว",
-  processing: "กำลังสร้าง",
-  completed: "สำเร็จ",
-  failed: "ไม่สำเร็จ",
-  cancelled: "ยกเลิกแล้ว",
+const typeKeys: Record<HistoryType, StudioCopyKey> = {
+  all: "history.type.all",
+  image: "history.type.image",
+  video: "history.type.video",
+  audio: "history.type.audio",
+  document: "history.type.document",
 };
-const features: Record<string, string> = {
-  "text-to-image": "สร้างภาพจากข้อความ",
-  "image-to-image": "ปรับแต่งภาพ",
-  "style-transfer": "เปลี่ยนสไตล์",
-  "background-removal": "พื้นหลัง AI",
-  "extend-image": "ขยายภาพ",
-  upscale: "เพิ่มความละเอียด",
-  "image-to-video": "ภาพเป็นวิดีโอ",
-  "text-to-video": "ข้อความเป็นวิดีโอ",
-  "reference-to-video": "วิดีโอจากภาพอ้างอิง",
-  "people-video": "พรีเซนเตอร์ AI",
-  lipsync: "ลิปซิงก์",
-  "motion-transfer": "ถ่ายทอดการเคลื่อนไหว",
-  tts: "เสียงบรรยาย",
-  dialogue: "พอดแคสต์",
-  "voice-clone": "โคลนเสียง",
-  "sound-effects": "เอฟเฟกต์เสียง",
-  "audio-cleanup": "ปรับคุณภาพเสียง",
+const statusKeys = {
+  all: "history.status.all",
+  queued: "history.status.queued",
+  processing: "history.status.processing",
+  completed: "history.status.completed",
+  failed: "history.status.failed",
+  cancelled: "history.status.cancelled",
+} as const satisfies Record<string, StudioCopyKey>;
+const featureKeys: Record<string, StudioCopyKey> = {
+  "text-to-image": "history.feature.text-to-image",
+  "image-to-image": "history.feature.image-to-image",
+  "style-transfer": "history.feature.style-transfer",
+  "background-removal": "history.feature.background-removal",
+  "extend-image": "history.feature.extend-image",
+  upscale: "history.feature.upscale",
+  "image-to-video": "history.feature.image-to-video",
+  "text-to-video": "history.feature.text-to-video",
+  "reference-to-video": "history.feature.reference-to-video",
+  "people-video": "history.feature.people-video",
+  lipsync: "history.feature.lipsync",
+  "motion-transfer": "history.feature.motion-transfer",
+  tts: "history.feature.tts",
+  dialogue: "history.feature.dialogue",
+  "voice-clone": "history.feature.voice-clone",
+  "sound-effects": "history.feature.sound-effects",
+  "audio-cleanup": "history.feature.audio-cleanup",
 };
 const historyTypeValues = new Set<HistoryType>(["all", "image", "video", "audio", "document"]);
-const featureLabel = (item: HistoryItem) => features[item.feature] ?? item.feature;
 const modelLabel = (item: HistoryItem) => item.modelLabel || item.model;
-const title = (item: HistoryItem) =>
-  templateCopy(item.title, "", item.feature, item.mediaKind).title || featureLabel(item);
-const dateLabel = (value: string) =>
-  Number.isNaN(Date.parse(value))
-    ? "ไม่ระบุวันที่"
-    : new Intl.DateTimeFormat("th-TH", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date(value));
+// Marks a failure whose message is not worth showing, so the screen can use its own translated text.
+const LOAD_FAILED = "__history_load_failed__";
+function useHistoryText() {
+  const { c, locale } = useStudioCopy();
+  const status = (value: keyof typeof statusKeys) => c(statusKeys[value]);
+  const featureLabel = (item: HistoryItem) => {
+    const key = featureKeys[item.feature];
+    return key ? c(key) : item.feature;
+  };
+  const title = (item: HistoryItem) =>
+    templateCopy(item.title, "", item.feature, item.mediaKind, locale).title || featureLabel(item);
+  const dateLabel = (value: string) =>
+    Number.isNaN(Date.parse(value))
+      ? c("history.date.unknown")
+      : new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "th-TH", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(value));
+  return { c, locale, status, featureLabel, title, dateLabel };
+}
 function creatorHref(item: HistoryItem) {
   if (item.mediaKind !== "image") return `/create/${item.mediaKind}`;
   return `/create/image?tab=${encodeURIComponent(item.feature === "style-transfer" ? "image-to-image" : item.feature)}`;
 }
 function Status({ item }: { item: HistoryItem }) {
+  const { status } = useHistoryText();
   const Icon =
     item.status === "completed"
       ? Check
@@ -115,11 +134,12 @@ function Status({ item }: { item: HistoryItem }) {
   return (
     <span className={`${s.status} ${s[item.status]}`}>
       <Icon size={13} className={item.status === "processing" ? s.spin : undefined} />
-      {statuses[item.status]}
+      {status(item.status)}
     </span>
   );
 }
 function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) {
+  const { c, status, title } = useHistoryText();
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const Icon = item.mediaKind === "image" ? ImageIcon : item.mediaKind === "video" ? Video : item.mediaKind === "document" ? FileText : AudioLines;
@@ -135,11 +155,11 @@ function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) 
     return (
       <div className={s.mediaFallback}>
         <Icon size={32} />
-        <strong>{failed || item.status === "completed" ? "ยังแสดงตัวอย่างไม่ได้" : statuses[item.status]}</strong>
+        <strong>{failed || item.status === "completed" ? c("history.media.unavailable") : status(item.status)}</strong>
         <span>
           {item.status === "queued" || item.status === "processing"
-            ? "ผลงานจะแสดงเมื่อสร้างเสร็จ"
-            : "สถานะงานยังคงเดิม"}
+            ? c("history.media.willAppear")
+            : c("history.media.unchanged")}
         </span>
         {failed && (
           <button
@@ -148,7 +168,7 @@ function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) 
               setAttempt((v) => v + 1);
             }}
           >
-            ลองโหลดใหม่
+            {c("history.media.reload")}
           </button>
         )}
       </div>
@@ -169,12 +189,12 @@ function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) 
       <VideoFrameThumbnail
         key={item.outputUrl}
         src={item.outputUrl}
-        alt={`ภาพตัวอย่าง ${title(item)}`}
+        alt={c("history.media.previewAlt", { title: title(item) })}
         className={s.videoThumbnail}
         fallback={
           <div className={s.mediaFallback}>
             <Video size={32} />
-            <strong>ยังแสดงตัวอย่างไม่ได้</strong>
+            <strong>{c("history.media.unavailable")}</strong>
           </div>
         }
       />
@@ -188,26 +208,27 @@ function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) 
         playsInline
         preload="metadata"
         onError={() => setFailed(true)}
-        aria-label={`วิดีโอ ${title(item)}`}
+        aria-label={c("history.media.videoAria", { title: title(item) })}
         className={s.video}
       />
     );
   return (
     <div className={s.audio}>
       <AudioLines size={42} />
-      <span>เสียงของไอเดียคุณ</span>
+      <span>{c("history.media.audioLabel")}</span>
       <audio
         key={attempt}
         src={item.outputUrl}
         controls
         preload="none"
         onError={() => setFailed(true)}
-        aria-label={`เสียง ${title(item)}`}
+        aria-label={c("history.media.audioAria", { title: title(item) })}
       />
     </div>
   );
 }
 function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
+  const { c, featureLabel, title, dateLabel } = useHistoryText();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -235,21 +256,21 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
         <div className={s.dialogMedia}>
           {item.documentSummary ? (
             <article className={s.documentPage}>
-              <span><FileText size={16} /> สรุปเอกสาร</span>
+              <span><FileText size={16} /> {c("history.dialog.docSummary")}</span>
               <h3>{item.documentSummary.summary.title}</h3>
               <p>{item.documentSummary.summary.executiveSummary}</p>
               {item.documentSummary.summary.sections?.length ? item.documentSummary.summary.sections.map((section, sectionIndex) => <section key={`${sectionIndex}-${section.heading}`}>
                 <h4>{section.heading}</h4>
                 <ul>{section.items.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
               </section>) : item.documentSummary.summary.keyTakeaways.length > 0 && <>
-                <h4>ประเด็นสำคัญ</h4>
+                <h4>{c("history.dialog.keyPoints")}</h4>
                 <ul>{item.documentSummary.summary.keyTakeaways.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
               </>}
             </article>
           ) : <Media key={item.outputUrl ?? item.id} item={item} large />}
         </div>
         <div className={s.dialogInfo}>
-          <button className={s.close} onClick={close} aria-label="ปิดตัวอย่าง" autoFocus>
+          <button className={s.close} onClick={close} aria-label={c("history.dialog.close")} autoFocus>
             <X size={21} />
           </button>
           <span className={s.eyebrow}>YOUR CREATIVE ARCHIVE</span>
@@ -258,70 +279,70 @@ function WorkDialog({ item, close }: { item: HistoryItem; close: () => void }) {
           <p>{featureLabel(item)}</p>
           <dl>
             <div>
-              <dt>สร้างเมื่อ</dt>
+              <dt>{c("history.dialog.created")}</dt>
               <dd>{dateLabel(item.createdAt)}</dd>
             </div>
             <div>
-              <dt>โมเดล</dt>
-              <dd>{modelLabel(item) || "ไม่ระบุ"}</dd>
+              <dt>{c("history.dialog.model")}</dt>
+              <dd>{modelLabel(item) || c("history.dialog.modelUnknown")}</dd>
             </div>
             <div>
-              <dt>จำนวนผลงาน</dt>
+              <dt>{c("history.dialog.outputs")}</dt>
               <dd>
-                {item.outputCount} ไฟล์{item.outputCount > 1 ? " · แสดงตัวอย่างไฟล์แรก" : ""}
+                {c("history.dialog.files", { count: item.outputCount })}{item.outputCount > 1 ? c("history.dialog.firstOnly") : ""}
               </dd>
             </div>
             {item.creditCost != null && (
               <div>
-                <dt>เครดิตที่ใช้</dt>
-                <dd>{item.creditCost.toLocaleString()} เครดิต</dd>
+                <dt>{c("history.dialog.creditsUsed")}</dt>
+                <dd>{c("history.dialog.creditsValue", { value: item.creditCost.toLocaleString() })}</dd>
               </div>
             )}
-            {item.documentSummary && <div><dt>ไฟล์ต้นฉบับ</dt><dd>{item.documentSummary.filename}</dd></div>}
+            {item.documentSummary && <div><dt>{c("history.dialog.sourceFile")}</dt><dd>{item.documentSummary.filename}</dd></div>}
           </dl>
-          {item.documentSummary && <section className={s.documentDetails} aria-label="รายละเอียดสรุปเอกสาร">
-            <h3>บทสรุปผู้บริหาร</h3>
+          {item.documentSummary && <section className={s.documentDetails} aria-label={c("history.dialog.docDetailsAria")}>
+            <h3>{c("history.dialog.execSummary")}</h3>
             <p>{item.documentSummary.summary.executiveSummary}</p>
             {item.documentSummary.summary.sections?.length ? item.documentSummary.summary.sections.map((section, sectionIndex) => <div key={`${sectionIndex}-${section.heading}`}>
               <h3>{section.heading}</h3>
               <ul>{section.items.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
             </div>) : <>
               {item.documentSummary.summary.keyTakeaways.length > 0 && <>
-                <h3>ประเด็นสำคัญ</h3>
+                <h3>{c("history.dialog.keyPoints")}</h3>
                 <ul>{item.documentSummary.summary.keyTakeaways.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
               </>}
               {item.documentSummary.summary.actionItems.length > 0 && <>
-                <h3>สิ่งที่ต้องดำเนินการ</h3>
+                <h3>{c("history.dialog.actionItems")}</h3>
                 <ul>{item.documentSummary.summary.actionItems.map((entry, index) => <li key={`${index}-${entry.task}`}>
                   {entry.task}{entry.owner ? ` · ${entry.owner}` : ""}{entry.dueDate ? ` · ${entry.dueDate}` : ""}
                 </li>)}</ul>
               </>}
               {item.documentSummary.summary.decisions.length > 0 && <>
-                <h3>มติและข้อสรุป</h3>
+                <h3>{c("history.dialog.decisions")}</h3>
                 <ul>{item.documentSummary.summary.decisions.map((entry, index) => <li key={`${index}-${entry}`}>{entry}</li>)}</ul>
               </>}
               {item.documentSummary.summary.importantDates.length > 0 && <>
-                <h3>วันที่สำคัญ</h3>
+                <h3>{c("history.dialog.importantDates")}</h3>
                 <ul>{item.documentSummary.summary.importantDates.map((entry, index) => <li key={`${index}-${entry.date}-${entry.event}`}><b>{entry.date}</b> · {entry.event}</li>)}</ul>
               </>}
             </>}
           </section>}
           {item.errorMessage && (
             <details className={s.errorDetails}>
-              <summary>รายละเอียดข้อผิดพลาด</summary>
+              <summary>{c("history.dialog.errorDetails")}</summary>
               <p>{item.errorMessage}</p>
             </details>
           )}
           <div className={s.dialogActions}>
             {item.outputUrl && (
               <a href={item.outputUrl} target="_blank" rel="noreferrer" className={s.primary}>
-                เปิดไฟล์ต้นฉบับ <ExternalLink size={16} />
+                {c("history.dialog.openOriginal")} <ExternalLink size={16} />
               </a>
             )}
             <Link href={creatorHref(item)} className={s.secondary}>
-              ไปหน้าสร้างงาน <ArrowRight size={16} />
+              {c("history.dialog.goCreate")} <ArrowRight size={16} />
             </Link>
-            <small>เปิดดูผลงานได้โดยไม่ใช้เครดิต</small>
+            <small>{c("history.dialog.viewFree")}</small>
           </div>
         </div>
       </div>
@@ -339,13 +360,14 @@ function WorkCard({
   remove: (item: HistoryItem) => void;
   deleting: boolean;
 }) {
+  const { c, featureLabel, title, dateLabel } = useHistoryText();
   const providerAudio = item.source === "audio" && item.id.startsWith("wavespeed:");
   const canDelete = !providerAudio && item.status !== "queued" && item.status !== "processing";
   const deleteHint = providerAudio
-    ? "ประวัติเสียงจากผู้ให้บริการลบไม่ได้"
+    ? c("history.card.deleteProviderAudio")
     : item.status === "queued" || item.status === "processing"
-      ? "ลบไม่ได้ขณะกำลังสร้าง"
-      : "ลบรายการนี้";
+      ? c("history.card.deleteBusy")
+      : c("history.card.deleteItem");
   return (
     <article className={s.card}>
       <div className={s.cardMedia}>
@@ -353,12 +375,12 @@ function WorkCard({
         <div className={s.cardBadge}>
           <Status item={item} />
         </div>
-        {item.outputCount > 1 && <span className={s.outputCount}>{item.outputCount} ไฟล์</span>}
+        {item.outputCount > 1 && <span className={s.outputCount}>{c("history.card.files", { count: item.outputCount })}</span>}
       </div>
       <div className={s.cardBody}>
         <div className={s.feature}>
           <span>{featureLabel(item)}</span>
-          {item.creditCost != null && <span>{item.creditCost.toLocaleString()} เครดิต</span>}
+          {item.creditCost != null && <span>{c("history.card.credits", { value: item.creditCost.toLocaleString() })}</span>}
         </div>
         <button className={s.cardTitle} onClick={open}>
           {title(item)}
@@ -369,15 +391,15 @@ function WorkCard({
         <div className={s.cardFooter}>
           <time dateTime={item.createdAt}>{dateLabel(item.createdAt)}</time>
           <div className={s.cardActions}>
-            <button onClick={open} aria-label={`ดูรายละเอียด ${title(item)}`}>
-              ดูงาน <ArrowRight size={15} />
+            <button onClick={open} aria-label={c("history.card.detailsAria", { title: title(item) })}>
+              {c("history.card.view")} <ArrowRight size={15} />
             </button>
             <button
               type="button"
               className={s.deleteButton}
               onClick={() => remove(item)}
               disabled={!canDelete || deleting}
-              aria-label={canDelete ? `ลบ ${title(item)}` : `ลบไม่ได้ ${title(item)}`}
+              aria-label={canDelete ? c("history.card.deleteAria", { title: title(item) }) : c("history.card.deleteBlockedAria", { title: title(item) })}
               title={deleteHint}
             >
               {deleting ? <LoaderCircle size={15} className={s.spin} /> : <Trash2 size={15} />}
@@ -390,6 +412,7 @@ function WorkCard({
 }
 type Query = { type: HistoryType; status: HistoryStatus; search: string; offset: number };
 export function HistoryPageClient() {
+  const { c, status, title } = useHistoryText();
   const [query, setQuery] = useState<Query>({ type: "all", status: "all", search: "", offset: 0 });
   const [data, setData] = useState<HistoryResponse | null>(null);
   const [loadedQuery, setLoadedQuery] = useState<Query | null>(null);
@@ -450,7 +473,7 @@ export function HistoryPageClient() {
             setLoadedQuery(query);
           })
           .catch((reason: unknown) => {
-            if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "โหลดประวัติไม่สำเร็จ");
+            if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : LOAD_FAILED);
           })
           .finally(() => {
             if (!controller.signal.aborted) {
@@ -509,14 +532,14 @@ export function HistoryPageClient() {
       setSelected((current) => (current?.id === item.id && current.source === item.source ? null : current));
       setRefresh((value) => value + 1);
     } catch (reason: unknown) {
-      setActionError(reason instanceof Error ? reason.message : "ลบรายการไม่สำเร็จ");
+      setActionError(reason instanceof Error ? reason.message : c("history.page.deleteFailed"));
     } finally {
       setDeletingKey((current) => (current === key ? null : current));
     }
   };
   return (
     <div className={s.page} data-no-translate data-page="history">
-      <header className={`studio-hero-frame ${s.hero}`} aria-label="ประวัติการสร้าง">
+      <header className={`studio-hero-frame ${s.hero}`} aria-label={c("history.page.heroAria")}>
         <picture className={s.heroPicture}>
           <source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/history-mobile-v2.webp" />
           <Image
@@ -530,39 +553,39 @@ export function HistoryPageClient() {
           />
         </picture>
       </header>
-      <section className={s.stats} aria-label="สรุปงานทั้งหมดในเวิร์กสเปซ">
+      <section className={s.stats} aria-label={c("history.page.statsAria")}>
         <div>
           <FileClock size={18} />
-          <span>งานทั้งหมด</span>
+          <span>{c("history.page.statTotal")}</span>
           <strong>{count(summary?.total)}</strong>
         </div>
         <div>
           <Check size={18} />
-          <span>สำเร็จ</span>
+          <span>{c("history.page.statDone")}</span>
           <strong>{count(summary?.completed)}</strong>
         </div>
         <div>
           <Clock3 size={18} />
-          <span>กำลังดำเนินการ</span>
+          <span>{c("history.page.statProgress")}</span>
           <strong>{count(summary?.inProgress)}</strong>
         </div>
         <div>
           <AlertCircle size={18} />
-          <span>ไม่สำเร็จ / ยกเลิก</span>
+          <span>{c("history.page.statFailed")}</span>
           <strong>{count(summary?.failed)}</strong>
         </div>
       </section>
       <div className={s.retentionNotice} role="note">
         <Clock3 size={16} aria-hidden="true" />
-        <span>ผลงานที่สร้างจะถูกเก็บไว้ 7 วัน กรุณาดาวน์โหลดไฟล์ที่ต้องการเก็บไว้ก่อนหมดอายุ</span>
+        <span>{c("history.page.retention")}</span>
       </div>
-      <section className={s.library} aria-label="คลังประวัติผลงาน" ref={results} tabIndex={-1}>
+      <section className={s.library} aria-label={c("history.page.libraryAria")} ref={results} tabIndex={-1}>
         <div className={s.toolbar}>
-          <div className={s.typeFilters} role="group" aria-label="ประเภทผลงาน">
-            {types.map(({ value, label, icon: Icon }) => (
+          <div className={s.typeFilters} role="group" aria-label={c("history.page.typeGroup")}>
+            {types.map(({ value, icon: Icon }) => (
               <button key={value} aria-pressed={query.type === value} onClick={() => change({ type: value })}>
                 <Icon size={16} />
-                {label}
+                {c(typeKeys[value])}
               </button>
             ))}
           </div>
@@ -570,19 +593,19 @@ export function HistoryPageClient() {
             className="w-full max-w-[380px] flex-1"
             value={query.search}
             onValueChange={(value) => change({ search: value })}
-            placeholder="ค้นหาชื่อผลงานหรือโมเดล…"
-            aria-label="ค้นหาประวัติผลงาน"
+            placeholder={c("history.page.searchPlaceholder")}
+            aria-label={c("history.page.searchAria")}
           />
         </div>
         <div className={s.resultBar}>
           <div>
-            <h2>รายการของคุณ</h2>
+            <h2>{c("history.page.yourItems")}</h2>
             <span role="status">
               {loading
-                ? "กำลังอัปเดต…"
+                ? c("history.page.updating")
                 : error
-                  ? "โหลดไม่สำเร็จ"
-                  : `${data?.pagination.total.toLocaleString() ?? 0} รายการ`}
+                  ? c("history.page.loadFailedShort")
+                  : c("history.page.itemsCount", { count: data?.pagination.total.toLocaleString() ?? 0 })}
             </span>
           </div>
           <div className={s.controls}>
@@ -591,12 +614,12 @@ export function HistoryPageClient() {
               <Dropdown
                 className={s.statusDropdown}
                 value={query.status}
-                options={Object.entries(statuses).map(([value, label]) => ({ value, label }))}
+                options={Object.entries(statusKeys).map(([value, key]) => ({ value, label: c(key) }))}
                 onChange={(value) => change({ status: value as HistoryStatus })}
-                ariaLabel="กรองตามสถานะ"
+                ariaLabel={c("history.page.statusFilterAria")}
               />
             </span>
-            <button onClick={() => setRefresh((v) => v + 1)} disabled={busy} aria-label="รีเฟรชประวัติ">
+            <button onClick={() => setRefresh((v) => v + 1)} disabled={busy} aria-label={c("history.page.refreshAria")}>
               <RefreshCw size={16} className={busy ? s.spin : undefined} />
             </button>
           </div>
@@ -604,12 +627,12 @@ export function HistoryPageClient() {
         {hasFilters && (
           <div className={s.filterNotice}>
             <span>
-              กำลังกรอง{query.type !== "all" ? ` · ${types.find((t) => t.value === query.type)?.label}` : ""}
-              {query.status !== "all" ? ` · ${statuses[query.status]}` : ""}
+              {c("history.page.filtering")}{query.type !== "all" ? ` · ${c(typeKeys[query.type])}` : ""}
+              {query.status !== "all" ? ` · ${status(query.status)}` : ""}
               {query.search.trim() ? ` · “${query.search.trim()}”` : ""}
             </span>
             <button onClick={reset}>
-              ล้างตัวกรอง <X size={13} />
+              {c("history.page.clearFilters")} <X size={13} />
             </button>
           </div>
         )}
@@ -617,14 +640,14 @@ export function HistoryPageClient() {
           <div className={s.actionError} role="alert">
             <AlertCircle size={15} />
             <span>{actionError}</span>
-            <button type="button" onClick={() => setActionError(null)} aria-label="ปิดข้อความผิดพลาด">
+            <button type="button" onClick={() => setActionError(null)} aria-label={c("history.page.dismissError")}>
               <X size={14} />
             </button>
           </div>
         )}
         <div aria-busy={busy}>
           {loading ? (
-            <div className={s.list} aria-label="กำลังโหลดประวัติ">
+            <div className={s.list} aria-label={c("history.page.loadingAria")}>
               {[0, 1, 2].map((i) => (
                 <div className={s.skeleton} key={i}>
                   <div />
@@ -636,11 +659,11 @@ export function HistoryPageClient() {
           ) : error ? (
             <div className={s.empty} role="alert">
               <AlertCircle size={34} />
-              <h3>โหลดประวัติไม่สำเร็จ</h3>
-              <p>{error}</p>
+              <h3>{c("history.page.loadFailed")}</h3>
+              <p>{error === LOAD_FAILED ? c("history.page.loadFailed") : error}</p>
               <button className={s.secondary} onClick={() => setRefresh((v) => v + 1)}>
                 <RefreshCw size={16} />
-                ลองอีกครั้ง
+                {c("history.page.retry")}
               </button>
             </div>
           ) : data?.items.length ? (
@@ -656,26 +679,25 @@ export function HistoryPageClient() {
                   />
                 ))}
               </div>
-              <nav className={s.pagination} aria-label="แบ่งหน้าประวัติ">
+              <nav className={s.pagination} aria-label={c("history.page.paginationAria")}>
                 <span>
-                  แสดง {query.offset + 1}–{query.offset + data.items.length} จาก{" "}
-                  {data.pagination.total.toLocaleString()} รายการ
+                  {c("history.page.showingRange", { from: query.offset + 1, to: query.offset + data.items.length, total: data.pagination.total.toLocaleString() })}
                 </span>
                 <div>
                   <button
                     disabled={query.offset === 0}
                     onClick={() => goPage(Math.max(0, query.offset - PAGE_SIZE))}
-                    aria-label="หน้าก่อนหน้า"
+                    aria-label={c("history.page.prevPage")}
                   >
                     <ChevronLeft size={17} />
                   </button>
                   <span>
-                    หน้า {page} / {pageCount}
+                    {c("history.page.pageOf", { page, pages: pageCount })}
                   </span>
                   <button
                     disabled={!data.pagination.hasMore}
                     onClick={() => goPage(query.offset + PAGE_SIZE)}
-                    aria-label="หน้าถัดไป"
+                    aria-label={c("history.page.nextPage")}
                   >
                     <ChevronRight size={17} />
                   </button>
@@ -685,19 +707,19 @@ export function HistoryPageClient() {
           ) : (
             <div className={s.empty}>
               <FileClock size={36} />
-              <h3>{hasFilters ? "ยังไม่พบงานที่ตรงกับตัวกรอง" : "ไอเดียแรกของคุณ เริ่มได้ที่นี่"}</h3>
+              <h3>{hasFilters ? c("history.page.emptyFilteredTitle") : c("history.page.emptyTitle")}</h3>
               <p>
                 {hasFilters
-                  ? "ลองเปลี่ยนคำค้นหา หรือแสดงผลงานทั้งหมด"
-                  : "เมื่อสร้างงานแล้ว ผลงานและสถานะจะปรากฏในหน้านี้"}
+                  ? c("history.page.emptyFilteredBody")
+                  : c("history.page.emptyBody")}
               </p>
               {hasFilters ? (
                 <button className={s.secondary} onClick={reset}>
-                  แสดงผลงานทั้งหมด
+                  {c("history.page.showAll")}
                 </button>
               ) : (
                 <Link href="/create/image" className={s.primary}>
-                  สร้างภาพแรก <ArrowRight size={16} />
+                  {c("history.page.createFirst")} <ArrowRight size={16} />
                 </Link>
               )}
             </div>
@@ -721,15 +743,14 @@ export function HistoryPageClient() {
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>ลบรายการนี้?</DialogTitle>
+            <DialogTitle>{c("history.page.deleteTitle")}</DialogTitle>
             <DialogDescription>
-              ต้องการลบ “{pendingDelete ? title(pendingDelete) : ""}” ออกจากประวัติหรือไม่
-              ไฟล์ผลงานจะถูกลบถาวรและกู้คืนไม่ได้
+              {c("history.page.deleteBody", { title: pendingDelete ? title(pendingDelete) : "" })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmOpen(false)}>
-              ยกเลิก
+              {c("history.page.cancel")}
             </Button>
             <Button
               type="button"
@@ -739,7 +760,7 @@ export function HistoryPageClient() {
                 if (pendingDelete) void confirmDelete(pendingDelete);
               }}
             >
-              <Trash2 size={15} /> ลบรายการ
+              <Trash2 size={15} /> {c("history.page.deleteConfirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
