@@ -2661,6 +2661,9 @@ function VoiceCloneLayout({
             {status === "creating" ? t("create.audio.clone.creatingButton") : t("create.audio.clone.createVoice")}{" "}
             <Sparkles size={16} />
           </button>
+          <p className={styles.securityNote}>
+            <LockKeyhole size={11} /> {t("create.audio.privateSecure")}
+          </p>
         </div>
       </aside>
       <PodcastConfirmationDialog
@@ -3186,6 +3189,9 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
             {status === "generating" ? t("create.audio.sfx.generatingButton") : t("create.audio.sfx.generate")}{" "}
             <Sparkles size={16} />
           </button>
+          <p className={styles.securityNote}>
+            <LockKeyhole size={11} /> {t("create.audio.privateSecure")}
+          </p>
         </div>
       </aside>
     </div>
