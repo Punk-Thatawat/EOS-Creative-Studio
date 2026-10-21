@@ -1902,7 +1902,7 @@
 }
 .altToggleOn {
   justify-content: flex-end;
-  background: #18c980;
+  background: var(--audio-orange);
 }
 .altToggleOff {
   justify-content: flex-start;
