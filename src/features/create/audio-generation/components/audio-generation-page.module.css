@@ -5464,3 +5464,13 @@
     padding: 14px;
   }
 }
+
+/* Wraps the active audio tab; the page can pin its min-height while switching tabs (see changeActiveTab). */
+.tabBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.tabBody > * {
+  flex: 1 1 auto;
+}
