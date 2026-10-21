@@ -7,7 +7,9 @@ import { useLocale } from "@/lib/i18n/locale-provider";
 function formatVideoDuration(duration: number): string {
   if (!Number.isFinite(duration)) return "--:--";
   const totalSeconds = Math.max(0, Math.round(duration));
-  return `${Math.floor(totalSeconds / 60).toString().padStart(2, "0")}:${(totalSeconds % 60).toString().padStart(2, "0")}`;
+  return `${Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, "0")}:${(totalSeconds % 60).toString().padStart(2, "0")}`;
 }
 
 export function EosVideoPlayer({
@@ -49,9 +51,12 @@ export function EosVideoPlayer({
   const feedbackTimeoutRef = useRef<number | null>(null);
   const pointerOverVideoRef = useRef(true);
 
-  useEffect(() => () => {
-    if (feedbackTimeoutRef.current !== null) window.clearTimeout(feedbackTimeoutRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (feedbackTimeoutRef.current !== null) window.clearTimeout(feedbackTimeoutRef.current);
+    },
+    [],
+  );
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -84,11 +89,16 @@ export function EosVideoPlayer({
 
     const videoRect = video.getBoundingClientRect();
     const controlsRect = controls?.getBoundingClientRect();
-    const isInsideVideo = event.clientX >= videoRect.left && event.clientX <= videoRect.right
-      && event.clientY >= videoRect.top && event.clientY <= videoRect.bottom;
+    const isInsideVideo =
+      event.clientX >= videoRect.left &&
+      event.clientX <= videoRect.right &&
+      event.clientY >= videoRect.top &&
+      event.clientY <= videoRect.bottom;
     const isInsideControls = controlsRect
-      ? event.clientX >= controlsRect.left && event.clientX <= controlsRect.right
-        && event.clientY >= controlsRect.top && event.clientY <= controlsRect.bottom
+      ? event.clientX >= controlsRect.left &&
+        event.clientX <= controlsRect.right &&
+        event.clientY >= controlsRect.top &&
+        event.clientY <= controlsRect.bottom
       : false;
     const isInsidePlayer = isInsideVideo || isInsideControls;
     updatePointerOverVideo(isInsidePlayer);
@@ -128,7 +138,8 @@ export function EosVideoPlayer({
     setMuted(video.muted);
   };
   const toggleFullscreen = () => {
-    const target = videoRef.current?.closest<HTMLElement>(".intro-video-player-wrap") ?? videoRef.current?.parentElement;
+    const target =
+      videoRef.current?.closest<HTMLElement>(".intro-video-player-wrap") ?? videoRef.current?.parentElement;
     if (!target) return;
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
@@ -145,62 +156,90 @@ export function EosVideoPlayer({
 
   const videoElement = (
     <video
-        ref={videoRef}
-        className="video-modal-player"
-        style={mediaFrameClassName ? { objectFit: "cover" } : undefined}
-        src={src}
-        autoPlay={autoPlay}
-        muted={muted}
-        playsInline
-        preload="metadata"
-        disablePictureInPicture
-        disableRemotePlayback
-        aria-label={videoAriaLabel}
-        onClick={handleVideoClick}
-        onLoadedMetadata={(event) => {
-          setDuration(event.currentTarget.duration);
-          event.currentTarget.playbackRate = playbackRate;
-          setVideoResolution(event.currentTarget.videoWidth && event.currentTarget.videoHeight
+      ref={videoRef}
+      className="video-modal-player"
+      style={mediaFrameClassName ? { objectFit: "cover" } : undefined}
+      src={src}
+      autoPlay={autoPlay}
+      muted={muted}
+      playsInline
+      preload="metadata"
+      disablePictureInPicture
+      disableRemotePlayback
+      aria-label={videoAriaLabel}
+      onClick={handleVideoClick}
+      onLoadedMetadata={(event) => {
+        setDuration(event.currentTarget.duration);
+        event.currentTarget.playbackRate = playbackRate;
+        setVideoResolution(
+          event.currentTarget.videoWidth && event.currentTarget.videoHeight
             ? `${event.currentTarget.videoWidth} × ${event.currentTarget.videoHeight}`
-            : null);
-          if (event.currentTarget.videoWidth && event.currentTarget.videoHeight) {
-            setMediaAspectRatio(`${event.currentTarget.videoWidth} / ${event.currentTarget.videoHeight}`);
-            onAspectRatioChange?.(`${event.currentTarget.videoWidth} / ${event.currentTarget.videoHeight}`);
-          }
-        }}
-        onLoadedData={(event) => {
-          event.currentTarget.muted = muted;
-          event.currentTarget.volume = volume;
-          if (autoPlay) void event.currentTarget.play().catch(() => undefined);
-        }}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-        onPlay={() => {
-          setPaused(false);
-          setAreControlsVisible(true);
-        }}
-        onPause={() => {
-          setPaused(true);
-          setAreControlsVisible(true);
-        }}
-        onEnded={() => {
-          setPaused(true);
-          setAreControlsVisible(true);
-          onEnded?.();
-        }}
+            : null,
+        );
+        if (event.currentTarget.videoWidth && event.currentTarget.videoHeight) {
+          setMediaAspectRatio(`${event.currentTarget.videoWidth} / ${event.currentTarget.videoHeight}`);
+          onAspectRatioChange?.(`${event.currentTarget.videoWidth} / ${event.currentTarget.videoHeight}`);
+        }
+      }}
+      onLoadedData={(event) => {
+        event.currentTarget.muted = muted;
+        event.currentTarget.volume = volume;
+        if (autoPlay) void event.currentTarget.play().catch(() => undefined);
+      }}
+      onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+      onPlay={() => {
+        setPaused(false);
+        setAreControlsVisible(true);
+      }}
+      onPause={() => {
+        setPaused(true);
+        setAreControlsVisible(true);
+      }}
+      onEnded={() => {
+        setPaused(true);
+        setAreControlsVisible(true);
+        onEnded?.();
+      }}
     />
   );
 
   return (
-    <div className={`intro-video-player-wrap ${!paused ? "intro-video-is-playing" : ""} ${isPointerOverVideo ? "intro-video-pointer-over" : ""} ${areControlsVisible ? "intro-video-controls-visible" : ""} ${className}`} onMouseMove={handlePlayerPointerMove} onMouseLeave={() => { updatePointerOverVideo(false); if (!videoRef.current?.paused) setAreControlsVisible(false); }}>
-      {mediaFrameClassName ? <div className={`intro-video-media-frame ${mediaFrameClassName}`} style={{ aspectRatio: mediaAspectRatio, ...mediaFrameStyle }}>{videoElement}</div> : videoElement}
+    <div
+      className={`intro-video-player-wrap ${!paused ? "intro-video-is-playing" : ""} ${isPointerOverVideo ? "intro-video-pointer-over" : ""} ${areControlsVisible ? "intro-video-controls-visible" : ""} ${className}`}
+      onMouseMove={handlePlayerPointerMove}
+      onMouseLeave={() => {
+        updatePointerOverVideo(false);
+        if (!videoRef.current?.paused) setAreControlsVisible(false);
+      }}
+    >
+      {mediaFrameClassName ? (
+        <div
+          className={`intro-video-media-frame ${mediaFrameClassName}`}
+          style={{ aspectRatio: mediaAspectRatio, ...mediaFrameStyle }}
+        >
+          {videoElement}
+        </div>
+      ) : (
+        videoElement
+      )}
       {playbackFeedback ? (
         <span key={playbackFeedback.id} className="intro-video-play-feedback" aria-hidden="true">
-          {playbackFeedback.type === "play" ? <Play size={42} fill="currentColor" /> : <Pause size={42} fill="currentColor" />}
+          {playbackFeedback.type === "play" ? (
+            <Play size={42} fill="currentColor" />
+          ) : (
+            <Pause size={42} fill="currentColor" />
+          )}
         </span>
       ) : null}
       <div className="intro-video-controls" onClick={(event) => event.stopPropagation()}>
-        <div className="intro-video-progress" style={{ "--intro-video-progress": `${duration ? (currentTime / duration) * 100 : 0}%` } as CSSProperties}>
-          <div className="intro-video-progress-fill" style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }} />
+        <div
+          className="intro-video-progress"
+          style={{ "--intro-video-progress": `${duration ? (currentTime / duration) * 100 : 0}%` } as CSSProperties}
+        >
+          <div
+            className="intro-video-progress-fill"
+            style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+          />
           <input
             type="range"
             min="0"
@@ -217,7 +256,14 @@ export function EosVideoPlayer({
         </div>
         <div className="intro-video-control-row">
           <div className="intro-video-volume-control">
-            <button type="button" className="intro-video-icon-button" aria-label={muted ? t("create.video.common.unmuteVideo") : t("create.video.common.muteVideo")} onClick={toggleMute}>{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>
+            <button
+              type="button"
+              className="intro-video-icon-button"
+              aria-label={muted ? t("create.video.common.unmuteVideo") : t("create.video.common.muteVideo")}
+              onClick={toggleMute}
+            >
+              {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
             <input
               type="range"
               min="0"
@@ -230,16 +276,45 @@ export function EosVideoPlayer({
           </div>
           <div className="intro-video-center-controls">
             <div className="intro-video-transport">
-              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label={t("create.video.common.rewind10")} onClick={() => seek(-10)}><RotateCcw size={17} /><span aria-hidden="true">10</span></button>
-              <button type="button" className="intro-video-play-button" aria-label={paused ? t("create.video.common.playVideo") : t("create.video.common.pauseVideo")} onClick={togglePlay}>{paused ? <Play size={21} fill="white" /> : <Pause size={21} />}</button>
-              <button type="button" className="intro-video-icon-button intro-video-skip" aria-label={t("create.video.common.forward10")} onClick={() => seek(10)}><RotateCw size={17} /><span aria-hidden="true">10</span></button>
+              <button
+                type="button"
+                className="intro-video-icon-button intro-video-skip"
+                aria-label={t("create.video.common.rewind10")}
+                onClick={() => seek(-10)}
+              >
+                <RotateCcw size={17} />
+                <span aria-hidden="true">10</span>
+              </button>
+              <button
+                type="button"
+                className="intro-video-play-button"
+                aria-label={paused ? t("create.video.common.playVideo") : t("create.video.common.pauseVideo")}
+                onClick={togglePlay}
+              >
+                {paused ? <Play size={21} fill="white" /> : <Pause size={21} />}
+              </button>
+              <button
+                type="button"
+                className="intro-video-icon-button intro-video-skip"
+                aria-label={t("create.video.common.forward10")}
+                onClick={() => seek(10)}
+              >
+                <RotateCw size={17} />
+                <span aria-hidden="true">10</span>
+              </button>
             </div>
-            <span className="intro-video-time">{formatVideoDuration(currentTime)} / {formatVideoDuration(duration)}</span>
+            <span className="intro-video-time">
+              {formatVideoDuration(currentTime)} / {formatVideoDuration(duration)}
+            </span>
           </div>
           <div className="intro-video-extra-controls">
             <div className="intro-video-settings">
               {isSettingsOpen ? (
-                <div className="intro-video-settings-popover" role="dialog" aria-label={t("create.video.common.videoSettings")}>
+                <div
+                  className="intro-video-settings-popover"
+                  role="dialog"
+                  aria-label={t("create.video.common.videoSettings")}
+                >
                   <strong>{t("create.video.common.quality")}</strong>
                   <div className="intro-video-quality-value">
                     <span>{t("create.video.common.sourceQuality")}</span>
@@ -254,9 +329,24 @@ export function EosVideoPlayer({
                   ))}
                 </div>
               ) : null}
-              <button type="button" className="intro-video-icon-button" aria-label={t("create.video.common.videoSettings")} aria-expanded={isSettingsOpen} onClick={() => setIsSettingsOpen((open) => !open)}><Settings size={17} /></button>
+              <button
+                type="button"
+                className="intro-video-icon-button"
+                aria-label={t("create.video.common.videoSettings")}
+                aria-expanded={isSettingsOpen}
+                onClick={() => setIsSettingsOpen((open) => !open)}
+              >
+                <Settings size={17} />
+              </button>
             </div>
-            <button type="button" className="intro-video-icon-button" aria-label={t("create.video.common.fullscreen")} onClick={toggleFullscreen}><Maximize size={17} /></button>
+            <button
+              type="button"
+              className="intro-video-icon-button"
+              aria-label={t("create.video.common.fullscreen")}
+              onClick={toggleFullscreen}
+            >
+              <Maximize size={17} />
+            </button>
           </div>
         </div>
       </div>
