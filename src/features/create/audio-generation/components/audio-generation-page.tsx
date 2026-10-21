@@ -101,6 +101,10 @@ const MIN_PODCAST_SPEAKERS = 2;
 
 const visibleTabs: readonly AudioTab[] = [
   "Text to Speech",
+  "Podcast & Dialogue",
+  "Voice Clone",
+  "Sound Effects",
+  "Audio Cleanup",
 ];
 // The backend may list Eleven v3 under either its WaveSpeed-style key or the raw ElevenLabs id.
 const TEXT_TO_SPEECH_MODEL_KEYS = ["elevenlabs/eleven-v3", "eleven_v3"];

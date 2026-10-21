@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { ArrowRight, AudioLines, Check, ChevronDown, CloudUpload, Copy, GripVertical, LoaderCircle, LockKeyhole, MoreHorizontal, Plus, Sparkles, Video, WandSparkles, X } from "lucide-react";
+import { ArrowRight, AudioLines, Check, ChevronDown, CloudUpload, Copy, FileClock, GripVertical, LoaderCircle, LockKeyhole, MoreHorizontal, Play, Plus, Sparkles, Video, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { getAccountScopedStorageKey } from "@/lib/generation-progress-storage";
@@ -13,6 +14,9 @@ import { composePresenterVideo, createVideoStoryboard, getVideoStoryboardStatus,
 import { emitGenerationCompleted, emitGenerationRequestFailed, emitGenerationRequestFinished, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
+import { fetchHistory } from "@/lib/api/history";
+import type { HistoryItem } from "@/lib/api/history";
+import { ModelPreviewMedia } from "../model-preview-media";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "../video-preview-placeholder";
 import videoPreviewStyles from "../video-generation-page.module.css";
 import styles from "./ai-presenter-page.module.css";
@@ -53,7 +57,8 @@ type SourceMedia = { file?: File; fileName: string; previewUrl: string; kind: "i
 type SceneMedia = { file?: File; fileName: string; previewUrl: string; kind: "image" | "video"; remoteUrl?: string };
 type AudioSceneSegment = { file: File; startSeconds: number; endSeconds: number; durationSeconds: number };
 type SpeechPreview = { key: string; blob: Blob; url: string; durationSeconds: number; sceneAudio: AudioSceneSegment[]; remoteUrl?: string };
-type PresenterScene = { id: string; title: string; script: string; direction: string; durationSeconds?: number; media?: SceneMedia; mediaError?: string };
+type PresenterVisualMode = "presenter" | "scene-only" | "presenter-scene";
+type PresenterScene = { id: string; title: string; script: string; direction: string; visualMode?: PresenterVisualMode; durationSeconds?: number; media?: SceneMedia; mediaError?: string };
 type SavedAiPresenterScene = Omit<PresenterScene, "media" | "mediaError"> & { media?: { fileName: string; kind: SceneMedia["kind"]; remoteUrl?: string; hasFile: boolean } | null };
 type SavedAiPresenterDraft = {
   version: 1;
@@ -173,7 +178,8 @@ function outputVideoUrl(status: VideoStoryboardResponse | VideoStoryboardStatus)
   if ("finalVideoUrl" in status && typeof status.finalVideoUrl === "string") return status.finalVideoUrl;
   if ("videoUrl" in status && typeof status.videoUrl === "string") return status.videoUrl;
   const output = "output" in status && Array.isArray(status.output) ? status.output : [];
-  const item = output.find((entry) => typeof entry?.url === "string" && entry.url);
+  const item = output.find((entry) => typeof entry?.url === "string" && entry.url && (entry.type?.toLowerCase().startsWith("video") || entry.mimeType?.toLowerCase().startsWith("video/")))
+    ?? output.find((entry) => typeof entry?.url === "string" && entry.url && /\.(?:mp4|webm|mov|m3u8)(?:[?#]|$)/i.test(entry.url));
   return item?.url;
 }
 
@@ -289,14 +295,86 @@ function modelSupports(model: GenerationModelOption, kind: SourceMedia["kind"] |
   return Boolean(capabilities.promptParameter && hasAudioInput && hasPresenterReference && hasSceneImageInput);
 }
 
-function presenterPrompt(script: string, direction: string, hasSceneBackground = false): string {
-  const sceneDirection = hasSceneBackground
-    ? "Use the scene image as the background and preserve its setting, composition, and visible product. Add the person from the separate presenter reference image naturally into this scene; do not replace the scene image with the presenter reference."
-    : "Keep the same person and outfit as the presenter reference image.";
+function presenterPrompt(script: string, direction: string, hasSceneBackground = false, visualMode: PresenterVisualMode = "presenter"): string {
+  const sceneDirection = visualMode === "scene-only"
+    ? "Show only the scene, product, or B-roll from the scene image. Do not show any person, presenter, face, lips, or talking character. Treat the supplied speech audio as off-camera voiceover and keep the product or setting as the visual subject."
+    : visualMode === "presenter-scene"
+      ? "Use the scene image as the background and preserve its setting, composition, and visible product. Add the person from the separate presenter reference image naturally into this scene; do not replace the scene image with the presenter reference."
+      : hasSceneBackground
+        ? "Use the scene image as the background and preserve its setting, composition, and visible product. Add the person from the separate presenter reference image naturally into this scene; do not replace the scene image with the presenter reference."
+        : "Keep the same person and outfit as the presenter reference image.";
   const visualDirection = direction.trim()
     ? `Follow these visual directions only; do not say them aloud: ${direction.trim()}`
-    : "Use subtle natural head movement and keep the camera steady.";
-  return `A professional on-camera presenter speaks naturally to the viewer. ${sceneDirection} Match facial expression, mouth movement, and timing to the provided reference audio. Speak only these words: "${script.trim()}" ${visualDirection}`;
+    : visualMode === "scene-only"
+      ? "Use slow, polished product-focused camera movement; keep the product or setting in focus."
+      : "Use subtle natural head movement and keep the camera steady.";
+  const performanceDirection = visualMode === "scene-only"
+    ? "Keep the supplied narration as voiceover; there is no visible speaker or lip movement."
+    : "A professional on-camera presenter speaks naturally to the viewer. Match facial expression, mouth movement, and timing to the provided reference audio.";
+  return `${performanceDirection} ${sceneDirection} Use only the provided narration and speak only these words: "${script.trim()}" ${visualDirection}`;
+}
+
+function presenterSceneVisualInput(
+  scene: PresenterScene,
+  presenterImageUrl: string,
+  sceneImageUrl?: string,
+  quoteFallback = false,
+) {
+  const visualMode = scene.visualMode ?? "presenter";
+  const sceneImage = sceneImageUrl || (quoteFallback ? presenterImageUrl : undefined);
+  if (visualMode === "scene-only") {
+    const image = sceneImage ?? presenterImageUrl;
+    return {
+      storyboardImage: image,
+      referenceImages: [image],
+      prompt: presenterPrompt(scene.script, scene.direction, true, visualMode),
+    };
+  }
+  if (visualMode === "presenter-scene") {
+    const image = sceneImage ?? presenterImageUrl;
+    return {
+      storyboardImage: image,
+      referenceImages: Array.from(new Set([presenterImageUrl, ...(sceneImage ? [sceneImage] : [])])),
+      prompt: presenterPrompt(scene.script, scene.direction, Boolean(sceneImage), visualMode),
+    };
+  }
+  return {
+    storyboardImage: sceneImage ?? presenterImageUrl,
+    referenceImages: [presenterImageUrl],
+    prompt: presenterPrompt(scene.script, scene.direction, Boolean(sceneImage), visualMode),
+  };
+}
+
+async function extractSceneVideoPoster(file: File): Promise<File> {
+  const objectUrl = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  video.src = objectUrl;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(() => reject(new Error("Could not read the first frame of the scene video.")), 10000);
+      video.onloadeddata = () => { window.clearTimeout(timeout); resolve(); };
+      video.onerror = () => { window.clearTimeout(timeout); reject(new Error("Could not read the first frame of the scene video.")); };
+      video.load();
+    });
+    if (!video.videoWidth || !video.videoHeight) throw new Error("The scene video has no readable first frame.");
+    const scale = Math.min(1, 1280 / video.videoWidth, 1280 / video.videoHeight);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not prepare the scene video frame.");
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Could not encode the first frame of the scene video.")), "image/jpeg", 0.9));
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}-poster.jpg`, { type: "image/jpeg" });
+  } finally {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    URL.revokeObjectURL(objectUrl);
+  }
 }
 
 function isElevenLabsSpeechModel(model: AudioModel): boolean {
@@ -316,8 +394,11 @@ export function AiPresenterPage() {
   const knownDraftMediaIdsRef = useRef(new Set<string>());
   const uploadControllerRef = useRef<AbortController | null>(null);
   const generationControllerRef = useRef<AbortController | null>(null);
+  const historyPreviewLookupStartedRef = useRef(false);
+  const historyPreviewCancelledRef = useRef(false);
+  const presenterRecentRowRef = useRef<HTMLDivElement>(null);
   const [draftRestoreComplete, setDraftRestoreComplete] = useState(false);
-  const [scenes, setScenes] = useState<PresenterScene[]>([{ id: "scene-1", title: "Intro", script: sampleScript, direction: "" }]);
+  const [scenes, setScenes] = useState<PresenterScene[]>([{ id: "scene-1", title: "Intro", script: sampleScript, direction: "", visualMode: "presenter" }]);
   const [activeSceneId, setActiveSceneId] = useState("scene-1");
   const [showAllPresenters, setShowAllPresenters] = useState(false);
   const [isReorderingScenes, setIsReorderingScenes] = useState(false);
@@ -351,6 +432,11 @@ export function AiPresenterPage() {
   const [generationStatus, setGenerationStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "failed">("idle");
   const [generationProgress, setGenerationProgress] = useState(0);
   const [finalVideoUrl, setFinalVideoUrl] = useState("");
+  const [previewView, setPreviewView] = useState<"latest" | "model" | "library">("latest");
+  const [presenterHistory, setPresenterHistory] = useState<HistoryItem[]>([]);
+  const [presenterHistoryLoading, setPresenterHistoryLoading] = useState(true);
+  const [presenterHistoryError, setPresenterHistoryError] = useState("");
+  const [presenterLibraryIndex, setPresenterLibraryIndex] = useState(0);
   const [generationError, setGenerationError] = useState("");
   const [notice, setNotice] = useState("");
   const [copied, setCopied] = useState(false);
@@ -414,6 +500,7 @@ export function AiPresenterPage() {
             title: scene.title,
             script: scene.script,
             direction: typeof scene.direction === "string" ? scene.direction : "",
+            visualMode: scene.visualMode === "scene-only" || scene.visualMode === "presenter-scene" ? scene.visualMode : "presenter",
             durationSeconds: Number.isFinite(scene.durationSeconds) ? scene.durationSeconds : undefined,
             media: scene.media ? { file: file ?? undefined, fileName: scene.media.fileName, kind: scene.media.kind, previewUrl, remoteUrl: scene.media.remoteUrl } : undefined,
             mediaError: scene.media?.hasFile && !file && !scene.media.remoteUrl
@@ -487,6 +574,7 @@ export function AiPresenterPage() {
         title: scene.title,
         script: scene.script,
         direction: scene.direction,
+        visualMode: scene.visualMode ?? "presenter",
         durationSeconds: scene.durationSeconds,
         media: scene.media ? {
           fileName: scene.media.fileName,
@@ -548,9 +636,49 @@ export function AiPresenterPage() {
     [referenceVideoModels, sourceMedia?.kind],
   );
   const selectedVideoModel = availableReferenceVideoModels.find((model) => model.model === selectedReferenceVideoModel);
+  const aiPresenterVideos = presenterHistory.filter((item) => item.feature === "ai-presenter-video" && item.outputUrl);
+  const latestVideoUrl = finalVideoUrl || aiPresenterVideos[0]?.outputUrl || "";
+  const selectedLibraryVideo = aiPresenterVideos[presenterLibraryIndex];
+  const displayedVideoUrl = previewView === "library" ? selectedLibraryVideo?.outputUrl ?? "" : previewView === "latest" ? latestVideoUrl : "";
+  const showModelPreview = previewView === "model" && Boolean(selectedVideoModel?.previewUrl);
   const duration = currentSpeech?.durationSeconds ?? estimatedDuration(script, language, voicePace);
   const isGenerating = generationStatus === "uploading" || generationStatus === "processing";
   const isLocked = isGenerating || creditPreflightBusy;
+
+  const clearFinalVideoPreview = () => {
+    historyPreviewCancelledRef.current = true;
+    setFinalVideoUrl("");
+  };
+
+  useEffect(() => {
+    if (!draftRestoreComplete || catalogLoading || voiceLoading || historyPreviewLookupStartedRef.current) return;
+    historyPreviewLookupStartedRef.current = true;
+    const controller = new AbortController();
+    setPresenterHistoryLoading(true);
+    setPresenterHistoryError("");
+    void fetchHistory({ type: "video", status: "completed", limit: 50, signal: controller.signal }).then((history) => {
+      if (controller.signal.aborted) return;
+      const videos = history.items.filter((item) => item.feature === "ai-presenter-video" && item.outputUrl);
+      setPresenterHistory(videos);
+      if (!historyPreviewCancelledRef.current && videos[0]?.outputUrl) setFinalVideoUrl(videos[0].outputUrl);
+    }).catch(() => {
+      // History is optional for the current editing session; generation remains available.
+      if (!controller.signal.aborted) setPresenterHistoryError(isThai ? "โหลดประวัติวิดีโอไม่สำเร็จ" : "Could not load video history");
+    }).finally(() => {
+      if (!controller.signal.aborted) setPresenterHistoryLoading(false);
+    });
+    return () => controller.abort();
+  }, [catalogLoading, draftRestoreComplete, isThai, voiceLoading]);
+
+  useEffect(() => {
+    if (generationStatus !== "completed") return;
+    const controller = new AbortController();
+    void fetchHistory({ type: "video", status: "completed", limit: 50, signal: controller.signal }).then((history) => {
+      if (controller.signal.aborted) return;
+      setPresenterHistory(history.items.filter((item) => item.feature === "ai-presenter-video" && item.outputUrl));
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [generationStatus]);
 
   useEffect(() => {
     let active = true;
@@ -679,10 +807,8 @@ export function AiPresenterPage() {
       duration: sceneTimeline.reduce((total, { start, end }) => total + generatedClipDuration(end - start), 0),
       aspectRatio: aspect,
       scenes: sceneTimeline.map(({ scene, start, end }) => ({
-        storyboardImage: presenterImageUrl,
-        referenceImages: [presenterImageUrl],
+        ...presenterSceneVisualInput(scene, presenterImageUrl, scene.media?.kind === "image" ? scene.media.remoteUrl : undefined, true),
         startFrameSource: "manual" as const,
-        prompt: presenterPrompt(scene.script, scene.direction, scene.media?.kind === "image"),
         duration: Math.min(maxSceneDurationSeconds, generatedClipDuration(end - start)),
       })),
     };
@@ -740,7 +866,7 @@ export function AiPresenterPage() {
     const previewUrl = URL.createObjectURL(file);
     const next: SourceMedia = { file, fileName: file.name, previewUrl, kind: file.type.startsWith("video/") ? "video" : "image", uploading: true };
     setSourceMedia(next);
-    setFinalVideoUrl("");
+    clearFinalVideoPreview();
     setGenerationError("");
     try {
       const remoteUrl = await uploadPeopleMedia(file, controller.signal, selectedVideoModel?.capabilities.uploadConstraints);
@@ -756,7 +882,7 @@ export function AiPresenterPage() {
     uploadControllerRef.current?.abort();
     if (sourceMedia?.previewUrl.startsWith("blob:")) URL.revokeObjectURL(sourceMedia.previewUrl);
     setSourceMedia(null);
-    setFinalVideoUrl("");
+    clearFinalVideoPreview();
   };
 
   const handleSceneMediaChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -810,7 +936,7 @@ export function AiPresenterPage() {
       defaultAsset: presenter.image,
       uploading: false,
     });
-    setFinalVideoUrl("");
+    clearFinalVideoPreview();
     setGenerationError("");
     setNotice("");
   };
@@ -818,7 +944,7 @@ export function AiPresenterPage() {
   const updateActiveScene = (update: Partial<PresenterScene>) => {
     if (!activeScene) return;
     setScenes((current) => current.map((scene) => scene.id === activeScene.id ? { ...scene, ...update } : scene));
-    setFinalVideoUrl("");
+    clearFinalVideoPreview();
     setGenerationError("");
   };
 
@@ -837,9 +963,9 @@ export function AiPresenterPage() {
   const addScene = () => {
     if (!canAddScene) return;
     const id = crypto.randomUUID();
-    setScenes((current) => [...current, { id, title: `Scene ${current.length + 1}`, script: "", direction: "" }]);
+    setScenes((current) => [...current, { id, title: `Scene ${current.length + 1}`, script: "", direction: "", visualMode: "presenter" }]);
     setActiveSceneId(id);
-    setFinalVideoUrl("");
+    clearFinalVideoPreview();
     setGenerationError("");
   };
 
@@ -852,7 +978,7 @@ export function AiPresenterPage() {
     const nextScenes = scenes.filter((scene) => scene.id !== sceneId);
     setScenes(nextScenes);
     if (activeSceneId === sceneId) setActiveSceneId(nextScenes[Math.max(0, removedIndex - 1)]?.id ?? nextScenes[0]!.id);
-    setFinalVideoUrl("");
+    clearFinalVideoPreview();
     setGenerationError("");
   };
 
@@ -868,7 +994,7 @@ export function AiPresenterPage() {
       next.splice(toIndex, 0, draggedScene);
       return next;
     });
-    setFinalVideoUrl("");
+    clearFinalVideoPreview();
   };
 
   const syncCurrentCreditBalance = (confirmedDelta?: number) => {
@@ -903,6 +1029,13 @@ export function AiPresenterPage() {
   const handleGenerateVideo = async () => {
     const presenterMedia = sourceMedia;
     if (!presenterMedia || (!presenterMedia.remoteUrl && !presenterMedia.defaultAsset && !presenterMedia.file) || !script.trim() || !allScenesHaveScript || !selectedVideoModel || !selectedVoice || presenterMedia.uploading || presenterMedia.error || isGenerating || creditPreflightBusy) return;
+    const missingSceneVisual = scenes.find((scene) => (scene.visualMode ?? "presenter") !== "presenter" && !scene.media);
+    if (missingSceneVisual) {
+      setGenerationError(isThai
+        ? `${missingSceneVisual.title} ตั้งเป็นซีนไม่มีพรีเซนเตอร์ กรุณาเพิ่มภาพสินค้า/ฉาก หรือวิดีโอให้ซีนนี้ก่อน`
+        : `${missingSceneVisual.title} is set to hide the presenter. Add a product or scene image, or a video, first.`);
+      return;
+    }
     const missingSceneVideo = scenes.find((scene) => scene.media?.kind === "video" && !scene.media.file);
     if (missingSceneVideo) {
       setGenerationError(isThai ? `ไม่พบไฟล์วิดีโอของ ${missingSceneVideo.title} กรุณาอัปโหลดซีนนี้อีกครั้ง` : `The video file for ${missingSceneVideo.title} is missing. Upload it again.`);
@@ -966,7 +1099,7 @@ export function AiPresenterPage() {
     const requestId = crypto.randomUUID();
     emitGenerationSubmitting({ feature: "image-to-video", requestId });
     setGenerationError("");
-    setFinalVideoUrl("");
+    clearFinalVideoPreview();
     setGenerationProgress(4);
     setGenerationStatus("uploading");
     setNotice(isThai ? "เตรียมไฟล์และเสียงพูด…" : "Preparing your media and voice track…");
@@ -995,22 +1128,27 @@ export function AiPresenterPage() {
       if (!sourceUrl) throw new Error("Presenter image is not ready");
       const presenterImageUrl = sourceUrl;
 
-      const sceneBackgroundUrls = new Map<string, string>();
+      const sceneReferenceImageUrls = new Map<string, string>();
       for (const [index, { scene }] of sceneTimeline.entries()) {
-        if (scene.media?.kind !== "image") continue;
-        if (scene.media.remoteUrl) {
-          sceneBackgroundUrls.set(scene.id, scene.media.remoteUrl);
+        if (!scene.media) continue;
+        if (scene.media.kind === "image" && scene.media.remoteUrl) {
+          sceneReferenceImageUrls.set(scene.id, scene.media.remoteUrl);
           continue;
         }
-        if (!scene.media.file) throw new Error(`The scene image for ${scene.title} is missing. Upload it again.`);
-        setNotice(isThai ? `กำลังอัปโหลดฉากซีน ${index + 1}/${sceneTimeline.length}…` : `Uploading scene ${index + 1}/${sceneTimeline.length} background…`);
+        if (!scene.media.file) throw new Error(`The scene media for ${scene.title} is missing. Upload it again.`);
+        setNotice(scene.media.kind === "video"
+          ? (isThai ? `กำลังเตรียมภาพอ้างอิงจากวิดีโอซีน ${index + 1}/${sceneTimeline.length}…` : `Preparing a reference frame from scene video ${index + 1}/${sceneTimeline.length}…`)
+          : (isThai ? `กำลังอัปโหลดภาพซีน ${index + 1}/${sceneTimeline.length}…` : `Uploading scene ${index + 1}/${sceneTimeline.length} image…`));
         const sceneFile = scene.media.file;
-        const sceneBackgroundUrl = await uploadPeopleMedia(sceneFile, controller.signal, selectedVideoModel.capabilities.uploadConstraints);
+        const referenceFile = scene.media.kind === "video" ? await extractSceneVideoPoster(sceneFile) : sceneFile;
+        const sceneReferenceImageUrl = await uploadPeopleMedia(referenceFile, controller.signal, selectedVideoModel.capabilities.uploadConstraints);
         if (controller.signal.aborted) return;
-        sceneBackgroundUrls.set(scene.id, sceneBackgroundUrl);
-        setScenes((current) => current.map((item) => item.id === scene.id && item.media?.file === sceneFile && item.media
-          ? { ...item, media: { ...item.media, remoteUrl: sceneBackgroundUrl } }
-          : item));
+        sceneReferenceImageUrls.set(scene.id, sceneReferenceImageUrl);
+        if (scene.media.kind === "image") {
+          setScenes((current) => current.map((item) => item.id === scene.id && item.media?.file === sceneFile && item.media
+            ? { ...item, media: { ...item.media, remoteUrl: sceneReferenceImageUrl } }
+            : item));
+        }
       }
 
       let current = currentSpeech;
@@ -1034,9 +1172,7 @@ export function AiPresenterPage() {
         duration: requestedSceneDurations.reduce((total, item) => total + item, 0),
         scenes: sceneTimeline.map(({ scene }, index) => ({
           ...videoQuoteInput.scenes[index],
-          storyboardImage: sceneBackgroundUrls.get(scene.id) ?? presenterImageUrl,
-          referenceImages: [presenterImageUrl],
-          prompt: presenterPrompt(scene.script, scene.direction, sceneBackgroundUrls.has(scene.id)),
+          ...presenterSceneVisualInput(scene, presenterImageUrl, sceneReferenceImageUrls.get(scene.id)),
           duration: requestedSceneDurations[index],
         })),
       };
@@ -1070,10 +1206,8 @@ export function AiPresenterPage() {
         aspectRatio: aspect,
         audioMode: "none",
         scenes: sceneTimeline.map(({ scene }, index) => ({
-          storyboardImage: sceneBackgroundUrls.get(scene.id) ?? presenterImageUrl,
-          referenceImages: [presenterImageUrl],
+          ...presenterSceneVisualInput(scene, presenterImageUrl, sceneReferenceImageUrls.get(scene.id)),
           startFrameSource: "manual" as const,
-          prompt: presenterPrompt(scene.script, scene.direction, sceneBackgroundUrls.has(scene.id)),
           duration: requestedSceneDurations[index],
           audioUrl: audioUrls[index],
           useReferenceAudio: true,
@@ -1105,22 +1239,25 @@ export function AiPresenterPage() {
         file: sceneTimeline[sceneIndex]!.scene.media!.file!,
       }] : []);
       let resultVideoUrl = videoUrl;
-      try {
-        setGenerationProgress(98);
-        setNotice(isThai ? "กำลังรวมซีนและใส่เสียง ElevenLabs ต้นฉบับด้วย FFmpeg…" : "Joining the scenes and muxing the original ElevenLabs track with FFmpeg…");
-        const composed = await composePresenterVideo(storyboardId, scenesWithMedia, current.blob, controller.signal);
-        resultVideoUrl = composed.url;
-      } catch (error) {
-        if (controller.signal.aborted) throw error;
-        throw new Error(formatGenerationError(error, isThai
-          ? "สร้างวิดีโอแล้ว แต่รวมซีนหรือใส่เสียง ElevenLabs ไม่สำเร็จ"
-          : "The video scenes were generated, but FFmpeg could not join them or attach the exact ElevenLabs track."));
+      if (scenesWithMedia.length > 0) {
+        try {
+          setGenerationProgress(98);
+          setNotice(isThai ? "กำลังเพิ่มภาพประกอบลงในแต่ละซีน โดยคงเสียงจากวิดีโอไว้…" : "Adding scene visuals while preserving the audio from the generated video…");
+          const composed = await composePresenterVideo(storyboardId, scenesWithMedia, controller.signal);
+          resultVideoUrl = composed.url;
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+          throw new Error(formatGenerationError(error, isThai
+            ? "สร้างวิดีโอแล้ว แต่เพิ่มภาพประกอบลงในซีนไม่สำเร็จ"
+            : "The video scenes were generated, but their scene visuals could not be composed."));
+        }
       }
 
       setFinalVideoUrl(resultVideoUrl);
+      setPreviewView("latest");
       setGenerationProgress(100);
       setGenerationStatus("completed");
-      setNotice(isThai ? "วิดีโอพร้อมแล้ว ใช้เสียง ElevenLabs ต้นฉบับ" : "Your presenter video is ready with the exact ElevenLabs voice track.");
+      setNotice(isThai ? "วิดีโอพร้อมแล้ว โดยคงเสียงจากแต่ละซีนไว้" : "Your presenter video is ready with each generated scene's audio preserved.");
       emitGenerationCompleted({ feature: "image-to-video", generationId: storyboardId });
     } catch (error) {
       emitGenerationRequestFailed({ feature: "image-to-video", requestId });
@@ -1145,7 +1282,8 @@ export function AiPresenterPage() {
   };
 
   const supportedRatios = selectedVideoModel?.capabilities.supportedRatios?.filter((value) => aspectOptions.some((ratio) => ratio === value)) ?? [];
-  const canGenerate = Boolean(sourceMedia && (sourceMedia.remoteUrl || sourceMedia.defaultAsset) && !sourceMedia.error && script.trim() && allScenesHaveScript && !sceneReferenceAudioTooLong && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !creditPreflightBusy && !catalogLoading && !voiceLoading);
+  const missingSceneVisual = scenes.find((scene) => (scene.visualMode ?? "presenter") !== "presenter" && !scene.media);
+  const canGenerate = Boolean(sourceMedia && (sourceMedia.remoteUrl || sourceMedia.defaultAsset) && !sourceMedia.error && script.trim() && allScenesHaveScript && !missingSceneVisual && !sceneReferenceAudioTooLong && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !creditPreflightBusy && !catalogLoading && !voiceLoading);
 
   return (
     <div className={styles.page}>
@@ -1163,7 +1301,7 @@ export function AiPresenterPage() {
 
       <div className={styles.prototypeNotice} role="status">
         <span className={styles.prototypeDot} />
-        {isThai ? "แนบภาพหรือวิดีโอสินค้าแยกตามซีนได้ · เสียง ElevenLabs จะเป็นเสียงสุดท้าย ส่วนเสียงอ้างอิงช่วยกำกับการแสดงของพรีเซนเตอร์" : "Attach product images or videos to scenes. The final audio stays on ElevenLabs; the reference guides the presenter's performance."}
+        {isThai ? "เลือกได้ในแต่ละซีนว่าจะให้พรีเซนเตอร์ออกกล้องหรือใช้ภาพสินค้าแทน · เสียงที่โมเดลสร้างจะคงอยู่ในวิดีโอ" : "Choose per scene whether the presenter appears or the product takes over. Generated scene audio stays in the video."}
       </div>
 
       <section className={styles.workspace} aria-label={isThai ? "พื้นที่สร้าง AI Presenter" : "AI Presenter workspace"}>
@@ -1240,17 +1378,17 @@ export function AiPresenterPage() {
 
             <div className={styles.formGroup}>
               <div className={styles.formLabel}><span>{isThai ? "โทนเสียง" : "Speech tone"}</span></div>
-              <div className={styles.chipRow}>{toneOptions.map((option) => <button type="button" key={option.value} className={`${styles.toneChip} ${tone === option.value ? styles.toneChipActive : ""}`} onClick={() => setTone(option.value)} disabled={isLocked} aria-pressed={tone === option.value}>{option.label}</button>)}</div>
+              <div className={styles.chipRow}>{toneOptions.map((option) => <button type="button" key={option.value} className={`${styles.toneChip} ${tone === option.value ? styles.toneChipActive : ""}`} onClick={() => { clearFinalVideoPreview(); setTone(option.value); }} disabled={isLocked} aria-pressed={tone === option.value}>{option.label}</button>)}</div>
             </div>
 
             <div className={styles.twoFields}>
               <label className={styles.formGroup}>
                 <span className={styles.formLabel}>{isThai ? "ภาษา" : "Language"}</span>
-                <span className={styles.selectWrap}><select value={language} onChange={(event) => setLanguage(event.target.value)} disabled={isLocked}><option value="en">English</option><option value="th">ไทย</option><option value="ja">日本語</option></select><ChevronDown size={14} /></span>
+                <span className={styles.selectWrap}><select value={language} onChange={(event) => { clearFinalVideoPreview(); setLanguage(event.target.value); }} disabled={isLocked}><option value="en">English</option><option value="th">ไทย</option><option value="ja">日本語</option></select><ChevronDown size={14} /></span>
               </label>
               <label className={styles.formGroup}>
                 <span className={styles.formLabel}>{isThai ? "คำอ่านเพิ่มเติม" : "Pronunciation hints"}</span>
-                <input className={styles.textInput} value={pronunciation} onChange={(event) => setPronunciation(event.target.value)} placeholder={isThai ? "ชื่อแบรนด์หรือคำย่อ" : "Brand names, acronyms"} disabled={isLocked} />
+                <input className={styles.textInput} value={pronunciation} onChange={(event) => { clearFinalVideoPreview(); setPronunciation(event.target.value); }} placeholder={isThai ? "ชื่อแบรนด์หรือคำย่อ" : "Brand names, acronyms"} disabled={isLocked} />
               </label>
             </div>
 
@@ -1271,9 +1409,30 @@ export function AiPresenterPage() {
             </div>
 
             <div className={styles.formGroup}>
+              <div className={styles.formLabel}>{isThai ? "พรีเซนเตอร์ในซีนนี้" : "Presenter in this scene"}</div>
+              <div className={styles.sceneVisualModes} role="group" aria-label={isThai ? "เลือกการแสดงพรีเซนเตอร์ในซีน" : "Choose presenter visibility for this scene"}>
+                {([
+                  { value: "presenter", label: isThai ? "พรีเซนเตอร์" : "Presenter", detail: isThai ? "พูดกับกล้อง" : "On camera" },
+                  { value: "scene-only", label: isThai ? "สินค้า / B-roll" : "Product / B-roll", detail: isThai ? "ไม่มีคนในภาพ" : "No person shown" },
+                  { value: "presenter-scene", label: isThai ? "พรีเซนเตอร์ + ฉาก" : "Presenter + scene", detail: isThai ? "ให้ทั้งคู่ปรากฏ" : "Show both" },
+                ] as const).map((option) => {
+                  const activeMode = activeScene?.visualMode ?? "presenter";
+                  return <button key={option.value} type="button" className={`${styles.sceneVisualMode} ${activeMode === option.value ? styles.sceneVisualModeActive : ""}`} onClick={() => updateActiveScene({ visualMode: option.value })} disabled={isLocked} aria-pressed={activeMode === option.value}>
+                    <strong>{option.label}</strong><small>{option.detail}</small>
+                  </button>;
+                })}
+              </div>
+              <p className={styles.sceneMediaHint}>{(activeScene?.visualMode ?? "presenter") === "scene-only"
+                ? (isThai ? "เสียงบรรยายจะเล่นต่อ แต่ไม่ส่งภาพพรีเซนเตอร์ให้ซีนนี้ ต้องเพิ่มภาพสินค้า/ฉากหรือวิดีโอ" : "Narration continues off-camera. The presenter reference is omitted; add a product/scene image or video.")
+                : (activeScene?.visualMode ?? "presenter") === "presenter-scene"
+                  ? (isThai ? "ส่งทั้งภาพพรีเซนเตอร์และภาพฉากเข้าโมเดล ต้องเพิ่มภาพหรือวิดีโอของซีนนี้" : "The model receives both the presenter and scene references. Add an image or video for this scene.")
+                  : (isThai ? "ส่งภาพพรีเซนเตอร์ที่เลือกเข้าโมเดลในซีนนี้" : "The selected presenter image is sent to the model for this scene.")}</p>
+            </div>
+
+            <div className={styles.formGroup}>
               <div className={styles.formLabel}>
                 <span>{isThai ? "ภาพฉาก / สินค้า / วิดีโอประกอบ" : "Scene background, product, or video"}</span>
-                <span className={styles.optionalTag}>{isThai ? "ไม่บังคับ" : "OPTIONAL"}</span>
+                <span className={styles.optionalTag}>{(activeScene?.visualMode ?? "presenter") === "presenter" ? (isThai ? "ไม่บังคับ" : "OPTIONAL") : (isThai ? "จำเป็น" : "REQUIRED")}</span>
               </div>
               <input ref={sceneMediaInputRef} className={styles.hiddenInput} type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" onChange={handleSceneMediaChange} disabled={isLocked} />
               {activeScene?.media ? (
@@ -1281,7 +1440,7 @@ export function AiPresenterPage() {
                   <span className={styles.sceneMediaThumb}>
                     {activeScene.media.previewUrl ? activeScene.media.kind === "image" ? <Image src={activeScene.media.previewUrl} alt="" fill unoptimized sizes="48px" /> : <video src={activeScene.media.previewUrl} muted playsInline autoPlay loop /> : <CloudUpload size={16} />}
                   </span>
-                  <span className={styles.sceneMediaDetails}><strong>{activeScene.media.fileName}</strong><small>{activeScene.mediaError === "draft-media-missing" ? (isThai ? "ไม่พบไฟล์เดิม กรุณาอัปโหลดใหม่" : "Original file is missing. Upload it again.") : isThai ? (activeScene.media.kind === "video" ? "วิดีโอคั่นซีน" : "ฉากตั้งต้น · ใช้พรีเซนเตอร์ที่เลือก") : (activeScene.media.kind === "video" ? "Video cutaway" : "Scene start frame · selected presenter")}</small></span>
+                  <span className={styles.sceneMediaDetails}><strong>{activeScene.media.fileName}</strong><small>{activeScene.mediaError === "draft-media-missing" ? (isThai ? "ไม่พบไฟล์เดิม กรุณาอัปโหลดใหม่" : "Original file is missing. Upload it again.") : isThai ? (activeScene.media.kind === "video" ? "วิดีโอจะแสดงแทนภาพที่สร้างในซีนนี้" : (activeScene.visualMode === "scene-only" ? "ภาพซีน · ไม่มีพรีเซนเตอร์" : "ภาพซีน")) : (activeScene.media.kind === "video" ? "Video replaces the generated visual in this scene" : (activeScene.visualMode === "scene-only" ? "Scene image · no presenter" : "Scene image"))}</small></span>
                   <button type="button" onClick={() => sceneMediaInputRef.current?.click()} disabled={isLocked} aria-label={isThai ? "เปลี่ยนสื่อซีน" : "Replace scene media"} title={isThai ? "เปลี่ยนสื่อ" : "Replace media"}><CloudUpload size={14} /></button>
                   <button type="button" onClick={handleRemoveSceneMedia} disabled={isLocked} aria-label={isThai ? "นำสื่อซีนออก" : "Remove scene media"} title={isThai ? "นำสื่อออก" : "Remove media"}><X size={14} /></button>
                 </div>
@@ -1293,16 +1452,16 @@ export function AiPresenterPage() {
                 </button>
               )}
               {activeScene?.mediaError ? <p className={styles.formError}>{activeScene.mediaError === "draft-media-missing" ? (isThai ? "ไม่พบไฟล์เดิม กรุณาอัปโหลดใหม่" : "Original file is missing. Upload it again.") : activeScene.mediaError}</p> : null}
-              <p className={styles.sceneMediaHint}>{activeScene?.media?.kind === "image"
-                ? (isThai ? "ภาพนิ่งจะเป็นฉากของซีน และระบบจะสร้างพรีเซนเตอร์ที่เลือกไว้ให้ปรากฏในฉากนั้น" : "The image becomes this scene’s background, with your selected presenter generated into it.")
-                : activeScene?.media?.kind === "video"
-                  ? (isThai ? "วิดีโอจะแสดงเป็นภาพคั่นแทนพรีเซนเตอร์ในซีนนี้ โดยเสียงพูดเล่นต่อเนื่อง" : "The video plays as a cutaway in place of the presenter while speech continues.")
-                  : (isThai ? "เพิ่มภาพฉากหรือสินค้าเพื่อให้พรีเซนเตอร์ที่เลือกปรากฏอยู่ในฉากนั้น หรือเพิ่มวิดีโอเพื่อใช้เป็นภาพคั่น" : "Add a background or product image to place your selected presenter in that scene, or add a video cutaway.")}</p>
+              <p className={styles.sceneMediaHint}>{activeScene?.media?.kind === "video"
+                ? (isThai ? "วิดีโอนี้จะแสดงแทนภาพที่โมเดลสร้างตลอดซีน และเสียงพูดจากคลิปที่สร้างจะเล่นต่อ" : "This video replaces the generated visual for the whole scene; generated speech audio continues.")
+                : activeScene?.media?.kind === "image"
+                  ? (isThai ? "ใช้ภาพนี้เป็นภาพตั้งต้นของซีน ตัวเลือกด้านบนกำหนดว่าจะมีพรีเซนเตอร์ปรากฏด้วยหรือไม่" : "This image is the scene's start frame. The choice above controls whether the presenter also appears.")
+                  : (isThai ? "เพิ่มภาพฉากหรือสินค้า หรือวิดีโอคั่นสำหรับซีนนี้" : "Add a scene or product image, or a video cutaway for this scene.")}</p>
             </div>
           </section>
 
           <section className={styles.previewPanel} aria-labelledby="presenter-preview-heading">
-            <div className={styles.panelTitle}><div><span className={styles.stepNumber}>2.</span><h2 id="presenter-preview-heading">PREVIEW</h2></div><span className={`${styles.previewBadge} ${finalVideoUrl ? styles.previewReady : ""}`}><span />{finalVideoUrl ? (isThai ? "วิดีโอที่สร้างแล้ว" : "GENERATED") : activeScene?.media ? (isThai ? "ตัวอย่างสื่อซีน" : "SCENE VISUAL") : (isThai ? "ตัวอย่างพรีเซนเตอร์" : "PRESENTER SOURCE")}</span></div>
+            <div className={styles.panelTitle}><div><span className={styles.stepNumber}>2.</span><h2 id="presenter-preview-heading">PREVIEW</h2></div><span className={`${styles.previewBadge} ${displayedVideoUrl ? styles.previewReady : ""}`}><span />{showModelPreview ? (isThai ? "ตัวอย่างโมเดล" : "MODEL PREVIEW") : displayedVideoUrl ? (isThai ? "วิดีโอพรีเซนเตอร์" : "PRESENTER VIDEO") : activeScene?.media ? (isThai ? "ตัวอย่างสื่อซีน" : "SCENE VISUAL") : (isThai ? "ตัวอย่างพรีเซนเตอร์" : "PRESENTER SOURCE")}</span></div>
             <div className={styles.videoFrame}>
               <VideoPreviewLiveBadge />
               {isGenerating ? (
@@ -1313,15 +1472,25 @@ export function AiPresenterPage() {
                   <div className={videoPreviewStyles.videoGenerationProgress}><i style={{ width: `${Math.max(8, generationProgress)}%` }} /></div>
                   <small>{isThai ? `เสร็จแล้ว ${generationProgress}%` : `${generationProgress}% complete`}</small>
                 </div>
-              ) : finalVideoUrl ? (
+              ) : showModelPreview && selectedVideoModel?.previewUrl ? (
+                <ModelPreviewMedia
+                  url={selectedVideoModel.previewUrl}
+                  type={selectedVideoModel.previewType}
+                  autoPlay={selectedVideoModel.previewType === "video"}
+                  alt={`${selectedVideoModel.displayName} model preview`}
+                  className={videoPreviewStyles.generatedVideoPlayer}
+                  frameClassName={videoPreviewStyles.videoPreviewMediaFrame}
+                  frameStyle={{ aspectRatio: "16 / 9" }}
+                />
+              ) : displayedVideoUrl ? (
                 <EosVideoPlayer
-                  key={finalVideoUrl}
-                  src={finalVideoUrl}
+                  key={displayedVideoUrl}
+                  src={displayedVideoUrl}
                   className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
                   mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
                   ariaLabel={isThai ? "วิดีโอพรีเซนเตอร์ที่สร้างแล้ว" : "Generated presenter video"}
                 />
-              ) : activeScene?.media?.kind === "video" ? (
+              ) : previewView === "latest" && activeScene?.media?.kind === "video" ? (
                 <EosVideoPlayer
                   key={activeScene.media.previewUrl}
                   src={activeScene.media.previewUrl}
@@ -1330,9 +1499,9 @@ export function AiPresenterPage() {
                   mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
                   ariaLabel={isThai ? `ตัวอย่างวิดีโอของซีน ${activeScene.title}` : `Scene visual preview for ${activeScene.title}`}
                 />
-              ) : activeScene?.media?.kind === "image" ? (
+              ) : previewView === "latest" && activeScene?.media?.kind === "image" ? (
                 <Image src={activeScene.media.previewUrl} alt={isThai ? `ภาพประกอบซีน ${activeScene.title}` : `Visual for ${activeScene.title}`} fill unoptimized sizes="(max-width: 760px) 100vw, 60vw" className={styles.sourcePreviewImage} />
-              ) : sourceMedia?.kind === "video" ? (
+              ) : previewView === "latest" && sourceMedia?.kind === "video" ? (
                 <EosVideoPlayer
                   key={sourceMedia.previewUrl}
                   src={sourceMedia.previewUrl}
@@ -1341,13 +1510,59 @@ export function AiPresenterPage() {
                   mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
                   ariaLabel={isThai ? "วิดีโอต้นแบบ" : "Presenter source video"}
                 />
-              ) : sourceMedia?.kind === "image" ? (
+              ) : previewView === "latest" && sourceMedia?.kind === "image" ? (
                 <Image src={sourceMedia.previewUrl} alt={isThai ? "ภาพต้นแบบพรีเซนเตอร์" : "Presenter source image"} fill unoptimized sizes="(max-width: 760px) 100vw, 60vw" className={styles.sourcePreviewImage} />
               ) : (
                 <VideoPreviewPlaceholder showActions={false} />
               )}
-              {finalVideoUrl && !isGenerating ? <VideoPreviewOverlayActions videoUrl={finalVideoUrl} /> : null}
-              {finalVideoUrl ? <span className={styles.videoWatermark}>EOS CREATIVE STUDIO</span> : null}
+              {displayedVideoUrl && !isGenerating ? <VideoPreviewOverlayActions videoUrl={displayedVideoUrl} /> : null}
+              {displayedVideoUrl ? <span className={styles.videoWatermark}>EOS CREATIVE STUDIO</span> : null}
+            </div>
+            <div className={videoPreviewStyles.previewViewTabs} role="tablist" aria-label={isThai ? "มุมมองวิดีโอพรีเซนเตอร์" : "Presenter video views"}>
+              <button type="button" role="tab" aria-selected={previewView === "latest"} className={previewView === "latest" ? videoPreviewStyles.previewViewTabActive : undefined} onClick={() => setPreviewView("latest")}>
+                {isThai ? "ผลลัพธ์ล่าสุด" : "Latest Results"}
+              </button>
+              <button type="button" role="tab" aria-selected={previewView === "model"} className={previewView === "model" ? videoPreviewStyles.previewViewTabActive : undefined} onClick={() => setPreviewView("model")}>
+                {isThai ? "ตัวอย่างโมเดล" : "Model Samples"}
+              </button>
+              <button type="button" role="tab" aria-selected={previewView === "library"} className={previewView === "library" ? videoPreviewStyles.previewViewTabActive : undefined} onClick={() => setPreviewView("library")}>
+                {isThai ? "คลังวิดีโอ" : "Video Library"}
+              </button>
+            </div>
+            <div className={videoPreviewStyles.videoGalleryGrid}>
+              <div className={videoPreviewStyles.videoGalleryColumn}>
+                <div className={videoPreviewStyles.videoGalleryHeading}><h3>{isThai ? "วิดีโอปัจจุบัน" : "Current Video"}</h3></div>
+                <div className={videoPreviewStyles.videoCurrentGallery}>
+                  {latestVideoUrl ? (
+                    <button type="button" className={videoPreviewStyles.videoCurrentCard} onClick={() => setPreviewView("latest")} aria-label={isThai ? "เปิดวิดีโอพรีเซนเตอร์ล่าสุด" : "Open latest presenter video"} aria-pressed={previewView === "latest"}>
+                      <span className={videoPreviewStyles.videoGalleryThumb}><video src={latestVideoUrl} muted playsInline preload="metadata" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} aria-hidden="true" /><span className={videoPreviewStyles.videoGalleryPlay}><Play size={14} fill="currentColor" /></span></span>
+                      <span className={videoPreviewStyles.videoGalleryStatus}>{isThai ? "วิดีโอที่สร้างล่าสุด" : "Latest generated video"}</span>
+                    </button>
+                  ) : <div className={videoPreviewStyles.videoGalleryEmpty}>{isThai ? "ยังไม่มีวิดีโอที่สร้าง" : "No generated video yet"}</div>}
+                </div>
+              </div>
+              <div className={`${videoPreviewStyles.videoGalleryColumn} ${videoPreviewStyles.videoRecentColumn}`}>
+                <div className={videoPreviewStyles.videoGalleryHeading}>
+                  <h3>{isThai ? "วิดีโอล่าสุด" : "Recent Videos"}</h3>
+                  <Link href="/history?type=video&search=AI%20Presenter%20Video" className={styles.presenterHistoryLink}><FileClock size={12} />{isThai ? "ประวัติ" : "History"}</Link>
+                </div>
+                <div className={videoPreviewStyles.videoRecentGallery}>
+                  <div className={videoPreviewStyles.videoRecentRow} ref={presenterRecentRowRef}>
+                    {presenterHistoryLoading && aiPresenterVideos.length === 0 ? (
+                      <div className={videoPreviewStyles.videoGalleryEmpty}>{isThai ? "กำลังโหลดประวัติ…" : "Loading history…"}</div>
+                    ) : presenterHistoryError && aiPresenterVideos.length === 0 ? (
+                      <div className={`${videoPreviewStyles.videoGalleryEmpty} ${videoPreviewStyles.videoGalleryError}`} role="alert">{presenterHistoryError}</div>
+                    ) : aiPresenterVideos.length > 0 ? aiPresenterVideos.map((item, itemIndex) => {
+                      const selected = previewView === "library" ? selectedLibraryVideo?.id === item.id : previewView === "latest" && latestVideoUrl === item.outputUrl;
+                      return (
+                        <button key={item.id} type="button" className={`${videoPreviewStyles.videoRecentCard} ${selected ? videoPreviewStyles.videoRecentCardSelected : ""}`} onClick={() => { setPresenterLibraryIndex(itemIndex); setPreviewView("library"); }} aria-label={`${isThai ? "เปิดวิดีโอที่สร้างเมื่อ" : "Open video created"} ${new Date(item.createdAt).toLocaleString(isThai ? "th-TH" : "en-US")}`} aria-pressed={selected}>
+                          <span className={videoPreviewStyles.videoGalleryThumb}><video src={item.outputUrl} muted playsInline preload="metadata" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} aria-hidden="true" /><span className={videoPreviewStyles.videoGalleryPlay}><Play size={13} fill="currentColor" /></span></span>
+                        </button>
+                      );
+                    }) : <div className={videoPreviewStyles.videoGalleryEmpty}>{isThai ? "ยังไม่มีวิดีโอในประวัติ" : "No videos in history"}</div>}
+                  </div>
+                </div>
+              </div>
             </div>
             <div className={styles.presenterPicker}>
               <div className={styles.sectionHeading}>
@@ -1428,6 +1643,7 @@ export function AiPresenterPage() {
                       </span>
                       <span className={styles.sceneCopy}>
                         <strong>{scene.title || `${isThai ? "ฉาก" : "Scene"} ${index + 1}`}</strong>
+                        <small className={styles.sceneVisualTag}>{(scene.visualMode ?? "presenter") === "scene-only" ? (isThai ? "สินค้า / B-roll" : "Product / B-roll") : (scene.visualMode ?? "presenter") === "presenter-scene" ? (isThai ? "พรีเซนเตอร์ + ฉาก" : "Presenter + scene") : (isThai ? "พรีเซนเตอร์" : "Presenter")}</small>
                         <small>{formatTimelineTime(start)} – {formatTimelineTime(end)}</small>
                         {speechDuration !== null && speechDuration !== undefined ? <small className={styles.sceneSpeechDuration} data-warning={speechNearLimit ? "true" : undefined} data-over={speechOverLimit ? "true" : undefined}>{audioDuration !== undefined ? `${isThai ? "เสียงจริง" : "Actual"} ${audioDuration.toFixed(1)}s` : `${isThai ? "ประมาณ" : "Est."} ${speechDuration}s`}</small> : null}
                         <em>{scene.script.trim() || (isThai ? "เพิ่มบทพูดในฉากนี้" : "Add script for this scene")}</em>
@@ -1445,6 +1661,7 @@ export function AiPresenterPage() {
               </button>
             </div>
             {currentSpeech ? <div className={styles.speechPreview}><div><AudioLines size={15} /><strong>{isThai ? "เสียงพูดที่สร้างแยกตามซีนแล้ว" : "Speech generated per scene"}</strong><span>{Math.ceil(currentSpeech.durationSeconds)}s</span></div><audio controls src={currentSpeech.url} /></div> : null}
+            {missingSceneVisual ? <p className={styles.formError} role="status">{isThai ? `${missingSceneVisual.title}: เลือกโหมดไม่มีพรีเซนเตอร์ไว้ กรุณาเพิ่มภาพสินค้า/ฉากหรือวิดีโอ` : `${missingSceneVisual.title}: this scene hides the presenter. Add a product or scene image, or a video.`}</p> : null}
             {generationError ? <div className={styles.errorCard} role="alert">{generationError}</div> : null}
             {notice ? <p className={styles.statusNote} role="status">{notice}</p> : null}
           </section>
@@ -1454,15 +1671,15 @@ export function AiPresenterPage() {
 
             <label className={styles.settingCard}>
               <span className={styles.settingLabel}>{isThai ? "โมเดลสร้างวิดีโอ" : "Presenter video model"}</span>
-              <span className={styles.settingSelect}><Video size={14} /><select value={selectedReferenceVideoModel} onChange={(event) => setSelectedReferenceVideoModel(event.target.value)} disabled={catalogLoading || isLocked}><option value="">{catalogLoading ? (isThai ? "กำลังโหลดโมเดล…" : "Loading models…") : (isThai ? "เลือกโมเดล" : "Select a model")}</option>{availableReferenceVideoModels.map((model) => <option key={model.model} value={model.model}>{model.displayName}</option>)}</select><ChevronDown size={14} /></span>
+              <span className={styles.settingSelect}><Video size={14} /><select value={selectedReferenceVideoModel} onChange={(event) => { clearFinalVideoPreview(); setSelectedReferenceVideoModel(event.target.value); }} disabled={catalogLoading || isLocked}><option value="">{catalogLoading ? (isThai ? "กำลังโหลดโมเดล…" : "Loading models…") : (isThai ? "เลือกโมเดล" : "Select a model")}</option>{availableReferenceVideoModels.map((model) => <option key={model.model} value={model.model}>{model.displayName}</option>)}</select><ChevronDown size={14} /></span>
             </label>
             <label className={styles.settingCard}>
               <span className={styles.settingLabel}>{isThai ? "โมเดลเสียงพูด (ElevenLabs)" : "Speech model (ElevenLabs)"}</span>
-              <span className={styles.selectWrap}><select value={selectedAudioModel} onChange={(event) => setSelectedAudioModel(event.target.value)} disabled={catalogLoading || isLocked}>{availableAudioModels.map((model) => <option key={model.key} value={model.key}>{model.name}</option>)}</select><ChevronDown size={14} /></span>
+              <span className={styles.selectWrap}><select value={selectedAudioModel} onChange={(event) => { clearFinalVideoPreview(); setSelectedAudioModel(event.target.value); }} disabled={catalogLoading || isLocked}>{availableAudioModels.map((model) => <option key={model.key} value={model.key}>{model.name}</option>)}</select><ChevronDown size={14} /></span>
             </label>
             <label className={styles.settingCard}>
               <span className={styles.settingLabel}>{isThai ? "เสียงพรีเซนเตอร์" : "Presenter voice"}</span>
-              <span className={styles.selectWrap}><select value={selectedVoice} onChange={(event) => setSelectedVoice(event.target.value)} disabled={voiceLoading || !voices.length || isLocked}><option value="">{voiceLoading ? (isThai ? "กำลังโหลดเสียง…" : "Loading voices…") : (isThai ? "เลือกเสียง" : "Select a voice")}</option>{voices.map((voice) => <option key={voice.key} value={voice.key}>{voice.name}</option>)}</select><ChevronDown size={14} /></span>
+              <span className={styles.selectWrap}><select value={selectedVoice} onChange={(event) => { clearFinalVideoPreview(); setSelectedVoice(event.target.value); }} disabled={voiceLoading || !voices.length || isLocked}><option value="">{voiceLoading ? (isThai ? "กำลังโหลดเสียง…" : "Loading voices…") : (isThai ? "เลือกเสียง" : "Select a voice")}</option>{voices.map((voice) => <option key={voice.key} value={voice.key}>{voice.name}</option>)}</select><ChevronDown size={14} /></span>
             </label>
             {selectedVoiceInfo?.previewUrl ? (
               <div className={styles.voiceSampleCard}>
@@ -1485,7 +1702,7 @@ export function AiPresenterPage() {
             )}
             <div className={styles.settingCard}>
               <div className={styles.settingLabel}>{isThai ? "สัดส่วนวิดีโอ" : "Video format"}</div>
-              <div className={styles.formatChoices}>{(supportedRatios.length ? supportedRatios : aspectOptions).map((value) => <button key={value} type="button" className={`${styles.formatOption} ${aspect === value ? styles.formatOptionActive : ""}`} onClick={() => setAspect(value as (typeof aspectOptions)[number])} disabled={isLocked}><span className={`${styles.formatShape} ${value === "9:16" ? styles.formatPortrait : value === "1:1" ? styles.formatSquare : ""}`} /><strong>{value}</strong><small>{value === "16:9" ? "Landscape" : value === "9:16" ? "Portrait" : "Square"}</small></button>)}</div>
+              <div className={styles.formatChoices}>{(supportedRatios.length ? supportedRatios : aspectOptions).map((value) => <button key={value} type="button" className={`${styles.formatOption} ${aspect === value ? styles.formatOptionActive : ""}`} onClick={() => { clearFinalVideoPreview(); setAspect(value as (typeof aspectOptions)[number]); }} disabled={isLocked}><span className={`${styles.formatShape} ${value === "9:16" ? styles.formatPortrait : value === "1:1" ? styles.formatSquare : ""}`} /><strong>{value}</strong><small>{value === "16:9" ? "Landscape" : value === "9:16" ? "Portrait" : "Square"}</small></button>)}</div>
             </div>
 
             <div className={styles.estimateCard}>

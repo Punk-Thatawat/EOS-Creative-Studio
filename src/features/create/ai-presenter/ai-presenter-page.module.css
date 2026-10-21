@@ -1955,6 +1955,48 @@ button.settingRow {
   line-height: 1.45;
 }
 
+.sceneVisualModes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.sceneVisualMode {
+  display: grid;
+  min-width: 0;
+  min-height: 43px;
+  align-content: center;
+  gap: 3px;
+  border: 1px solid #e8e2de;
+  border-radius: 8px;
+  background: #fff;
+  padding: 5px 6px;
+  color: #625b55;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sceneVisualMode:hover,
+.sceneVisualModeActive {
+  border-color: var(--presenter-orange);
+  background: #fff4ee;
+  color: #c44b21;
+}
+
+.sceneVisualMode:disabled { cursor: not-allowed; opacity: .6; }
+.sceneVisualMode strong { overflow: hidden; font-size: 7.5px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.sceneVisualMode small { color: #8a817a; font-size: 6.5px; line-height: 1.2; }
+
+.sceneCopy .sceneVisualTag {
+  width: fit-content;
+  border-radius: 999px;
+  background: #f7f2ee;
+  padding: 2px 5px;
+  color: #776d65;
+  font-size: 6.5px;
+  line-height: 1.2;
+}
+
 .retryUpload {
   border: 0;
   background: transparent;
@@ -2034,6 +2076,9 @@ button.settingRow {
 .creditNote { margin: 0; color: #766c63; font-size: 7px; line-height: 1.45; text-align: center; }
 .generateButton:disabled { cursor: not-allowed; opacity: .56; box-shadow: none; }
 .spin { animation: presenterSpin .9s linear infinite; }
+.presenterHistoryLink { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: #f15b20; font-size: 9px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.presenterHistoryLink:hover { color: #cb4614; text-decoration: underline; }
+.presenterHistoryLink svg { flex: none; }
 @keyframes presenterSpin { to { transform: rotate(360deg); } }
 
 .bottomShelf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
