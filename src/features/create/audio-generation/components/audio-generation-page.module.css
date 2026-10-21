@@ -73,7 +73,7 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  grid-template-columns: minmax(300px, 344px) minmax(0, 1fr) minmax(286px, 320px);
+  grid-template-columns: minmax(280px, 0.9fr) minmax(390px, 1.55fr) minmax(280px, 0.98fr);
   column-gap: 14px;
   row-gap: 0;
   align-items: start;
@@ -681,6 +681,32 @@
   background: transparent;
   color: #9aa0a8;
   cursor: pointer;
+}
+.historyRetry {
+  display: grid;
+  width: 29px;
+  height: 29px;
+  flex: none;
+  margin-right: 4px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--audio-orange);
+  cursor: pointer;
+}
+.historyRetry:hover {
+  background: #fff0e7;
+}
+.historyRetry:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.historySaveWarning {
+  margin: 7px 0 0;
+  color: #b94a35;
+  font-size: 9px;
+  line-height: 1.5;
 }
 .historyDelete:hover {
   background: #ffe9e5;
@@ -2428,8 +2454,8 @@
   color: #e96021;
 }
 .cleanupSkipButton:disabled {
-  color: #b9bec4;
   cursor: not-allowed;
+  color: #b9bec4;
 }
 .cleanupSkipButton span {
   position: absolute;
@@ -3600,6 +3626,44 @@
   font-size: 10px;
   font-weight: 400;
 }
+.podcastDropdownVoiceOption {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.podcastDropdownVoiceImage {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #f0f2f5;
+}
+.podcastDropdownVoiceImage img {
+  object-fit: cover;
+}
+.podcastDropdownVoiceCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.podcastDropdownVoiceCopy strong,
+.podcastDropdownVoiceCopy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.podcastDropdownVoiceCopy strong {
+  font-size: 10px;
+  font-weight: 600;
+}
+.podcastDropdownVoiceCopy small {
+  color: #737781;
+  font-size: 9px;
+}
 .podcastSpeedHeader {
   display: flex;
   align-items: center;
@@ -3761,17 +3825,10 @@
     grid-template-columns: 1fr;
   }
   .podcastSettingsCard {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 14px;
-  }
-  .podcastSettingsHeader,
-  .podcastGenerateButton,
-  .podcastSecurityNote {
-    grid-column: 1 / -1;
+    display: block;
   }
   .podcastSettingsHeader {
-    margin-bottom: 0;
+    margin-bottom: 16px;
   }
   .podcastSettingsCard > .podcastSettingGroup:first-of-type {
     margin-top: 17px;
@@ -3954,7 +4011,7 @@
 
 @media (max-width: 1535.98px) {
   .audioGrid {
-    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(390px, 1.55fr) minmax(280px, 0.98fr);
     column-gap: 11px;
     row-gap: 0;
   }
@@ -4104,6 +4161,12 @@
   .scrubber {
     order: 10;
     width: 100%;
+  }
+}
+
+@media (max-width: 700px) {
+  .featureTabs {
+    display: none;
   }
 }
 
@@ -5450,7 +5513,7 @@
 
   .cleanupLayout .cleanupPlayerControls {
     grid-template-columns: 34px 22px 22px auto minmax(22px, 1fr) 14px 40px;
-    gap: 4px;
+    gap: 5px;
   }
 
   .cleanupLayout .cleanupPlayerPlay {
@@ -5462,5 +5525,19 @@
 
   .cleanupLayout .cleanupProcessBoard {
     padding: 14px;
+  }
+}
+
+@media (max-width: 479.98px) {
+  .cleanupLayout .cleanupPlayerControls {
+    grid-template-columns: 32px 20px 20px auto minmax(18px, 1fr) 14px 34px;
+    gap: 3px;
+  }
+
+  .cleanupLayout .cleanupPlayerPlay {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
   }
 }

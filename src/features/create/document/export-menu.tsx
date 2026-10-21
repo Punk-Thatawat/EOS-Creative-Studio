@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText } from "lucide-react";
+import { ChevronDown, Download, FileText } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { OcrOutputFormat } from "@/lib/api/document-ocr";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
@@ -70,6 +70,7 @@ export function ExportMenu<F extends string = OcrOutputFormat>({
       >
         <Download size={13} aria-hidden="true" />
         <span className={styles.toolbarLabel}>{busy ? t(K("ocr.exporting")) : t(K("preview.export"))}</span>
+        <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open && (
         <div className={styles.exportMenu} role="menu" aria-label={t(K("ocr.exportAs"))}>

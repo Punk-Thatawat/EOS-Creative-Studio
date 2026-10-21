@@ -45,6 +45,7 @@ import styles from "./audio-generation-page.module.css";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
 import { ClearValuesButton } from "@/features/create/components/clear-values-button";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
+import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { ImageTutorialButton } from "@/features/create/image-generation/components/image-tutorial-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { Dropdown, type DropdownOption } from "@/components/ui/dropdown";
@@ -98,12 +99,33 @@ import {
 
 type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Audio Cleanup";
 const MIN_PODCAST_SPEAKERS = 2;
+const podcastVoiceAvatarEntries = [
+  ["jessica", "/generated-assets/podcast-voices/jessica.jpg"],
+  ["laura", "/generated-assets/podcast-voices/laura.jpg"],
+  ["alice", "/generated-assets/podcast-voices/alice.jpg"],
+  ["bill", "/generated-assets/podcast-voices/bill.jpg"],
+  ["brian", "/generated-assets/podcast-voices/brian.jpg"],
+  ["haytham", "/generated-assets/podcast-voices/haytham.jpg"],
+  ["amelia", "/generated-assets/podcast-voices/amelia.jpg"],
+  ["otto", "/generated-assets/podcast-voices/otto.jpg"],
+] as const;
+
+function getPodcastVoiceAvatar(voice: AudioVoice | null | undefined): string | null {
+  if (!voice) return null;
+  const identity = `${voice.key} ${voice.name}`.toLowerCase();
+  return podcastVoiceAvatarEntries.find(([name]) => identity.includes(name))?.[1] ?? voice.imageUrl ?? null;
+}
 
 const visibleTabs: readonly AudioTab[] = [
   "Text to Speech",
 ];
-// The backend may list Eleven v3 under either its WaveSpeed-style key or the raw ElevenLabs id.
-const TEXT_TO_SPEECH_MODEL_KEYS = ["elevenlabs/eleven-v3", "eleven_v3"];
+// The backend may list Eleven models under either their WaveSpeed-style keys or raw ElevenLabs ids.
+const ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS = [
+  "elevenlabs/eleven-v3",
+  "eleven_v3",
+  "eleven_v4",
+  "elevenlabs/eleven-v4",
+];
 const MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS = ["minimax/speech-2.8-hd"];
 type MiniMaxSpeechEmotion = "happy" | "sad" | "angry" | "fearful" | "disgusted" | "surprised" | "neutral";
 
@@ -112,14 +134,16 @@ function supportsMiniMaxSpeechTuning(modelId: string): boolean {
 }
 
 /**
- * Offer Eleven v3 (default, listed first) and MiniMax Speech 2.8 HD when the backend lists them; otherwise fall
- * back to the active (or first) model so generation is never left without one.
+ * Offer Eleven v3, Eleven v4, and MiniMax Speech 2.8 HD when the backend lists
+ * them. Keep v3 first for backwards-compatible defaults, while allowing v4 to
+ * be selected alongside it.
  */
 function pickTextToSpeechModels(items: AudioModel[]): AudioModel[] {
-  const offered = [
-    items.find((model) => TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key)),
-    items.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key)),
-  ].filter((model): model is AudioModel => model !== undefined);
+  const preferredKeys = [...ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS, ...MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS];
+  const offered = preferredKeys
+    .map((key) => items.find((model) => model.key === key))
+    .filter((model): model is AudioModel => model !== undefined)
+    .filter((model, index, models) => models.findIndex((candidate) => candidate.key === model.key) === index);
   if (offered.length) return offered;
   const chosen = items.find((model) => model.isActive) ?? items[0];
   return chosen ? [chosen] : [];
@@ -140,6 +164,11 @@ const audioModeIcons = {
   "Sound Effects": Waves,
   "Audio Cleanup": WandSparkles,
 } as const;
+const mobileAudioModeOptions = visibleTabs.map((label) => ({
+  value: label,
+  label,
+  icon: audioModeIcons[label],
+}));
 
 const tones = [
   { label: "Energetic", icon: Zap },
@@ -587,6 +616,8 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const [error, setError] = useState<string | null>(null);
   const [podcastHistory, setPodcastHistory] = useState<AudioHistoryItem[]>([]);
   const [podcastHistoryLoadingId, setPodcastHistoryLoadingId] = useState<string | null>(null);
+  const [podcastHistorySavingId, setPodcastHistorySavingId] = useState<string | null>(null);
+  const [podcastHistorySaveFailed, setPodcastHistorySaveFailed] = useState(false);
   const [pendingPodcastHistoryDelete, setPendingPodcastHistoryDelete] = useState<AudioHistoryItem | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
@@ -614,6 +645,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
   const voicePreviewObjectUrlsRef = useRef<string[]>([]);
   const podcastHistoryRef = useRef<AudioHistoryItem[]>([]);
+  const pendingPodcastHistorySavesRef = useRef(new Map<string, SaveAudioHistoryInput>());
 
   const totalDuration = lines.reduce((total, line) => total + estimatePodcastLineSeconds(line.text), 0);
   // Keep the visible count identical to the trimmed text sent in episodeScript
@@ -627,10 +659,12 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const episodeEmotionTags = spokenLines.map((line) => line.emotionTag ?? "natural");
   useEffect(
     () => () => {
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
       voicePreviewAudioRef.current?.pause();
+      podcastHistoryRef.current
+        .filter((item) => item.localUrl && item.url)
+        .forEach((item) => URL.revokeObjectURL(item.url));
     },
-    [audioUrl],
+    [],
   );
 
   useEffect(
@@ -646,21 +680,20 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     void listAudioHistory({ feature: "dialogue", limit: AUDIO_HISTORY_LIMIT })
       .then((items) => {
         if (!active) return;
-        const history = items.map((item) => ({
+        const savedHistory = items.map((item) => ({
           ...item,
           url: item.url ?? item.audioUrl ?? item.downloadUrl ?? "",
           localUrl: false,
           persisted: true,
         }));
+        const localHistory = podcastHistoryRef.current.filter((item) => !item.persisted);
+        const history = [...localHistory, ...savedHistory].slice(0, AUDIO_HISTORY_LIMIT);
         podcastHistoryRef.current = history;
         setPodcastHistory(history);
       })
       .catch(() => undefined);
     return () => {
       active = false;
-      podcastHistoryRef.current
-        .filter((item) => item.localUrl && item.url)
-        .forEach((item) => URL.revokeObjectURL(item.url));
     };
   }, []);
 
@@ -738,7 +771,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
               );
               const nextVoice = configuredVoice ?? hydratedVoices[index % hydratedVoices.length];
               return nextVoice
-                ? { ...speaker, voice: nextVoice.key, image: nextVoice.imageUrl ?? "" }
+                ? { ...speaker, voice: nextVoice.key, image: getPodcastVoiceAvatar(nextVoice) ?? "" }
                 : { ...speaker, image: "" };
             }),
           );
@@ -786,6 +819,45 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     };
   }, []);
 
+  const savePodcastHistoryItem = async (itemId: string, input: SaveAudioHistoryInput) => {
+    if (!onHistorySaved) {
+      setPodcastHistorySaveFailed(true);
+      return;
+    }
+    setPodcastHistorySavingId(itemId);
+    try {
+      const saved = await onHistorySaved(input);
+      if (!saved) {
+        setPodcastHistorySaveFailed(true);
+        return;
+      }
+      pendingPodcastHistorySavesRef.current.delete(itemId);
+      const localItem = podcastHistoryRef.current.find((item) => item.id === itemId);
+      const historyItem: AudioHistoryItem = {
+        ...saved,
+        url: localItem?.url ?? saved.url ?? saved.audioUrl ?? saved.downloadUrl ?? "",
+        localUrl: localItem?.localUrl ?? false,
+        persisted: true,
+      };
+      const nextHistory = podcastHistoryRef.current
+        .map((item) => (item.id === itemId ? historyItem : item))
+        .slice(0, AUDIO_HISTORY_LIMIT);
+      podcastHistoryRef.current = nextHistory;
+      setPodcastHistory(nextHistory);
+      setPodcastHistorySaveFailed(nextHistory.some((item) => !item.persisted));
+    } catch (cause) {
+      console.warn("Unable to save podcast audio history", cause);
+      setPodcastHistorySaveFailed(true);
+    } finally {
+      setPodcastHistorySavingId(null);
+    }
+  };
+
+  const retrySavePodcastHistory = (item: AudioHistoryItem) => {
+    const input = pendingPodcastHistorySavesRef.current.get(item.id);
+    if (input) void savePodcastHistoryItem(item.id, input);
+  };
+
   const handleGenerate = async () => {
     if (!episodeScript.trim()) return;
     if (speakers.length < MIN_PODCAST_SPEAKERS) {
@@ -802,10 +874,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     // generated. The preview should appear only when this generation finishes.
     previewAudioRef.current?.pause();
     setIsPlaying(false);
-    setAudioUrl((previous) => {
-      if (previous) URL.revokeObjectURL(previous);
-      return null;
-    });
+    setAudioUrl(null);
     setPreviewProgress(0);
     setPreviewCurrentTime(0);
     setPreviewDuration(0);
@@ -829,11 +898,8 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
         idempotencyKey: createAudioIdempotencyKey(),
       });
       const nextUrl = URL.createObjectURL(result.blob);
-      setAudioUrl((previous) => {
-        if (previous) URL.revokeObjectURL(previous);
-        return nextUrl;
-      });
-      const savedHistory = await onHistorySaved?.({
+      setAudioUrl(nextUrl);
+      const historyInput: SaveAudioHistoryInput = {
         audio: result.blob,
         feature: "dialogue",
         label: "Podcast Episode 01",
@@ -847,18 +913,33 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           normalizeAudio,
           speed,
         },
+      };
+      const localHistoryId = `podcast-local-${Date.now()}`;
+      const localHistoryItem: AudioHistoryItem = {
+        id: localHistoryId,
+        feature: "dialogue",
+        label: historyInput.label,
+        provider: "wavespeed",
+        outputFormat,
+        mimeType: result.blob.type || "audio/mpeg",
+        sizeBytes: result.blob.size,
+        createdAt: new Date().toISOString(),
+        metadata: historyInput.metadata ?? {},
+        url: nextUrl,
+        localUrl: true,
+        persisted: false,
+      };
+      pendingPodcastHistorySavesRef.current.set(localHistoryId, historyInput);
+      const allHistory = [localHistoryItem, ...podcastHistoryRef.current];
+      allHistory.slice(AUDIO_HISTORY_LIMIT).forEach((item) => {
+        pendingPodcastHistorySavesRef.current.delete(item.id);
+        if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
       });
-      if (savedHistory) {
-        const historyItem: AudioHistoryItem = {
-          ...savedHistory,
-          url: savedHistory.url ?? savedHistory.audioUrl ?? savedHistory.downloadUrl ?? "",
-          localUrl: false,
-          persisted: true,
-        };
-        const nextHistory = [historyItem, ...podcastHistoryRef.current].slice(0, AUDIO_HISTORY_LIMIT);
-        podcastHistoryRef.current = nextHistory;
-        setPodcastHistory(nextHistory);
-      }
+      const nextHistory = allHistory.slice(0, AUDIO_HISTORY_LIMIT);
+      podcastHistoryRef.current = nextHistory;
+      setPodcastHistory(nextHistory);
+      setPodcastHistorySaveFailed(false);
+      await savePodcastHistoryItem(localHistoryId, historyInput);
       setStatus("ready");
       finishAudioProgress("audio-podcast", requestId);
     } catch (cause) {
@@ -896,7 +977,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
       return;
     }
     const selectedVoice = availableVoices.find((item) => item.key === voice || item.name === voice);
-    const image = selectedVoice?.imageUrl ?? "";
+    const image = getPodcastVoiceAvatar(selectedVoice) ?? "";
     const nextSpeaker: PodcastSpeaker = {
       id: editingSpeakerId ?? `speaker-${Date.now()}`,
       role,
@@ -1000,6 +1081,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const draftVoice = availableVoices.find(
     (voice) => voice.key === speakerDraft.voice || voice.name === speakerDraft.voice,
   );
+  const draftVoiceAvatar = getPodcastVoiceAvatar(draftVoice);
   const togglePreview = async () => {
     if (!audioUrl) {
       await handleGenerate();
@@ -1058,7 +1140,8 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     const item = pendingPodcastHistoryDelete;
     if (!item) return;
     setPendingPodcastHistoryDelete(null);
-    const removeFromView = () => {
+  const removeFromView = () => {
+      pendingPodcastHistorySavesRef.current.delete(item.id);
       if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
       const nextHistory = podcastHistoryRef.current.filter((historyItem) => historyItem.id !== item.id);
       podcastHistoryRef.current = nextHistory;
@@ -1415,6 +1498,22 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
                   >
                     <Trash2 size={13} />
                   </button>
+                  {!item.persisted ? (
+                    <button
+                      type="button"
+                      className={styles.historyRetry}
+                      aria-label={t("create.audio.saveToHistory")}
+                      title={t("create.audio.saveToHistory")}
+                      onClick={() => retrySavePodcastHistory(item)}
+                      disabled={podcastHistorySavingId === item.id}
+                    >
+                      {podcastHistorySavingId === item.id ? (
+                        <span className={styles.historyLoading} />
+                      ) : (
+                        <RotateCcw size={13} />
+                      )}
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -1424,6 +1523,11 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
               <span>{t("create.audio.historyEmpty")}</span>
             </div>
           )}
+          {podcastHistorySaveFailed ? (
+            <p className={styles.historySaveWarning} role="status">
+              {t("create.audio.historySaveFailed")}
+            </p>
+          ) : null}
         </section>
       </main>
 
@@ -1624,7 +1728,16 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
               <span>เสียง</span>
               <Dropdown
                 value={speakerDraft.voice}
-                options={availableVoices.map((voice) => ({ value: voice.key, label: voice.name }))}
+                options={availableVoices.map((voice) => {
+                  const imageUrl = getPodcastVoiceAvatar(voice);
+                  return {
+                    value: voice.key,
+                    label: <span className={styles.podcastDropdownVoiceOption}>
+                      <span className={styles.podcastDropdownVoiceImage}>{imageUrl ? <Image src={imageUrl} alt="" fill unoptimized sizes="28px" /> : null}</span>
+                      <span className={styles.podcastDropdownVoiceCopy}><strong>{voice.name}</strong><small>{voice.description || "เสียงพอดแคสต์"}</small></span>
+                    </span>,
+                  };
+                })}
                 onChange={(value) => setSpeakerDraft((current) => ({ ...current, voice: value }))}
                 ariaLabel="เสียงผู้พูด"
                 disabled={voicesLoading || availableVoices.length === 0}
@@ -1639,7 +1752,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
             </div>
             <div className={styles.podcastSpeakerDialogPreview}>
               <span className={styles.podcastSpeakerDialogVoiceImage}>
-                {draftVoice?.imageUrl ? <Image src={draftVoice.imageUrl} alt="" fill unoptimized sizes="34px" /> : null}
+                {draftVoiceAvatar ? <Image src={draftVoiceAvatar} alt="" fill unoptimized sizes="34px" /> : null}
               </span>
               <span className={styles.podcastSpeakerDialogVoiceCopy}>
                 <strong>{draftVoice?.name ?? "ยังไม่ได้เลือกเสียง"}</strong>
@@ -4244,7 +4357,8 @@ export function AudioGenerationPage() {
         persisted: true,
       });
       return saved;
-    } catch {
+    } catch (cause) {
+      console.warn("Unable to persist generated audio history", cause);
       // Generation preview remains available when persistent history storage is unavailable.
       return null;
     }
@@ -4587,6 +4701,23 @@ export function AudioGenerationPage() {
               );
             })}
           </nav>
+        }
+        mobileTabs={
+          <MobileModeDropdown
+            menuId="audio-mode-menu"
+            value={activeTab}
+            options={mobileAudioModeOptions.map((option) => ({
+              ...option,
+              label: t(audioTabKeys[option.value]),
+            }))}
+            ariaLabel={t("create.audio.tools")}
+            currentModeLabel={t("create.mode.current")}
+            switchModeLabel={t("create.mode.switch")}
+            otherModesLabel={t("create.mode.other")}
+            onChange={(nextTab) => {
+              if (nextTab !== activeTab) changeActiveTab(nextTab);
+            }}
+          />
         }
         content={
           <>

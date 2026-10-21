@@ -2,17 +2,14 @@
 
 import {
   ArrowUpRight,
-  BarChart3,
   ChevronDown,
   CloudUpload,
-  Columns2,
   Download,
   FileCheck2,
   FileText,
   Hand,
   Languages,
   ListChecks,
-  MessageSquarePlus,
   NotebookPen,
   Play,
   Plus,
@@ -22,9 +19,11 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import Image from "next/image";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
+import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { Dropdown } from "@/components/ui/dropdown";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { VideoModelDropdown } from "../video-model-dropdown";
@@ -53,6 +52,7 @@ import { downloadBlob, downloadOcrResult, ocrResultToText } from "./ocr-download
 import { OcrHistoryPanel } from "./ocr-history";
 import { OcrFullTextView, OcrResultView } from "./ocr-result-view";
 import { ImageTutorialButton } from "../image-generation/components/image-tutorial-button";
+import { failDocumentGeneration, finishDocumentGeneration, startDocumentGeneration } from "./document-generation-progress";
 import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -65,7 +65,7 @@ const FORM_EXPORT_FORMATS: ReadonlyArray<{ id: FormExportFormat; label: string }
   { id: "json", label: "JSON" },
 ];
 
-type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
+type ModeId = "ocr" | "summarize" | "translate" | "contract" | "form";
 type SummaryStyle = "executive" | "bullets";
 
 const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
@@ -73,7 +73,6 @@ const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "summarize", icon: NotebookPen, available: true },
   { id: "translate", icon: Languages, available: true },
   { id: "contract", icon: FileCheck2, available: true },
-  { id: "report", icon: BarChart3, available: true },
   { id: "form", icon: ListChecks, available: true },
 ];
 
@@ -82,7 +81,6 @@ const documentTutorialFeatureByMode: Record<ModeId, string> = {
   summarize: "document-summary",
   translate: "document-translate",
   contract: "document-contract",
-  report: "document-report",
   form: "document-form",
 };
 
@@ -98,14 +96,12 @@ const guides = [
   { title: K("guide.ocr"), detail: K("guide.ocrDetail"), time: "03:21", tone: "orange" },
   { title: K("guide.contract"), detail: K("guide.contractDetail"), time: "04:35", tone: "pink" },
   { title: K("guide.prompt"), detail: K("guide.promptDetail"), time: "05:12", tone: "yellow" },
-  { title: K("guide.reports"), detail: K("guide.reportsDetail"), time: "06:08", tone: "blue" },
 ];
 
 const documentTools = [
   { title: K("tool.ocr"), detail: K("tool.ocrDetail"), icon: ScanText },
   { title: K("tool.contract"), detail: K("tool.contractDetail"), icon: FileCheck2 },
   { title: K("tool.meeting"), detail: K("tool.meetingDetail"), icon: NotebookPen },
-  { title: K("tool.report"), detail: K("tool.reportDetail"), icon: BarChart3 },
 ];
 
 /** Renders a translated string, turning "\n" into line breaks (used by the hero artwork). */
@@ -185,9 +181,9 @@ export function DocumentFeatureGenerationPage() {
     else params.set(MODE_PARAM, id);
     const query = params.toString();
 
-    // Summary, translation and report are rendered by the shared page. Route
+    // Summary and translation are rendered by the shared page. Route
     // through the URL so the parent can switch away from the feature page.
-    if (id === "summarize" || id === "translate" || id === "report") {
+    if (id === "summarize" || id === "translate") {
       router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
       return;
     }
@@ -569,6 +565,7 @@ export function DocumentFeatureGenerationPage() {
       setOcrError(t(K("ocr.errorPageRangeBounds"), { count: pdfPageCount }));
       return;
     }
+    const requestId = startDocumentGeneration("document-ocr");
     setIsOcrRunning(true);
     setOcrError("");
     setOcrResult(null);
@@ -592,7 +589,9 @@ export function DocumentFeatureGenerationPage() {
       setOcrFromHistory(false);
       setOcrTab("result");
       setHistoryKey((key) => key + 1);
+      finishDocumentGeneration("document-ocr", requestId);
     } catch (error) {
+      failDocumentGeneration("document-ocr", requestId);
       setOcrError(error instanceof Error ? error.message : t(K("ocr.errorGeneral")));
     } finally {
       setIsOcrRunning(false);
@@ -702,6 +701,7 @@ export function DocumentFeatureGenerationPage() {
       setFormError(t(K("form.errorFields")));
       return;
     }
+    const requestId = startDocumentGeneration("document-form");
     setIsFormRunning(true);
     setFormError("");
     setFormResult(null);
@@ -719,7 +719,9 @@ export function DocumentFeatureGenerationPage() {
       setFormDocumentSaved(false);
       if (result.pages.length) setFormOptions((current) => ({ ...current, credits: result.creditsUsed / result.pages.length }));
       setFormHistoryKey((key) => key + 1);
+      finishDocumentGeneration("document-form", requestId);
     } catch (error) {
+      failDocumentGeneration("document-form", requestId);
       setFormError(error instanceof Error ? error.message : t(K("form.errorGeneral")));
     } finally {
       setIsFormRunning(false);
@@ -824,6 +826,7 @@ export function DocumentFeatureGenerationPage() {
 
   const runContract = async () => {
     if (!selectedFile || isContractRunning) return;
+    const requestId = startDocumentGeneration("document-contract");
     setIsContractRunning(true);
     setContractError("");
     setContractResult(null);
@@ -835,7 +838,9 @@ export function DocumentFeatureGenerationPage() {
       setContractFromHistory(false);
       setContractCredits(result.creditsUsed);
       setContractHistoryKey((key) => key + 1);
+      finishDocumentGeneration("document-contract", requestId);
     } catch (error) {
+      failDocumentGeneration("document-contract", requestId);
       setContractTab("preview");
       setContractError(error instanceof Error ? error.message : t(K("contract.errorGeneral")));
     } finally {
@@ -845,6 +850,7 @@ export function DocumentFeatureGenerationPage() {
 
   const generateSummary = async () => {
     if (!selectedFile || isSummarizing) return;
+    const requestId = startDocumentGeneration("document-summary");
     setIsSummarizing(true);
     setSummaryError("");
     try {
@@ -860,7 +866,9 @@ export function DocumentFeatureGenerationPage() {
       });
       setSummaryResult(response.summary);
       setSummaryOptions((current) => ({ ...current, model: response.model, credits: response.creditsUsed }));
+      finishDocumentGeneration("document-summary", requestId);
     } catch (error) {
+      failDocumentGeneration("document-summary", requestId);
       setSummaryError(error instanceof Error ? error.message : t(K("summary.errorGeneral")));
     } finally {
       setIsSummarizing(false);
@@ -870,26 +878,16 @@ export function DocumentFeatureGenerationPage() {
   return (
     <div className={`${styles.page} document-studio-page`}>
       <header className={styles.hero}>
-        <div className={styles.heroCopy}>
-          <span className={styles.heroEyebrow}>EOS CREATIVE STUDIO</span>
-          <h1>GEN DOCUMENT</h1>
-          <div className={styles.heroStamp}>{t(K("hero.stamp"))}</div>
-          <p>{t(K("hero.tagline"))}</p>
-        </div>
-        <div className={styles.heroArtwork} aria-hidden="true">
-          <div className={styles.heroBrush}><Lines text={t(K("hero.brush"))} /></div>
-          <div className={`${styles.paper} ${styles.paperBack}`}>
-            <span>{t(K("hero.paper"))}</span>
-            <i /><i /><i />
-            <div className={styles.miniChart}><b /><b /><b /><b /><b /></div>
-          </div>
-          <div className={styles.smartSticker}><Lines text={t(K("hero.sticker"))} /></div>
-          <div className={`${styles.paper} ${styles.paperFront}`}>
-            <span>OCR</span>
-            <i /><i /><i /><i />
-            <div className={styles.scanCorners} />
-          </div>
-          <div className={styles.orangeBurst} />
+        <div className={styles.heroBanner}>
+          <Image
+            className={styles.heroBannerImage}
+            src="/generated-assets/gen-document-hero-v2.png"
+            alt="GEN DOCUMENT — AI document generation studio"
+            width={2400}
+            height={435}
+            priority
+            sizes="100vw"
+          />
         </div>
       </header>
 
@@ -916,6 +914,24 @@ export function DocumentFeatureGenerationPage() {
               );
             })}
           </nav>
+        }
+        mobileTabs={
+          <MobileModeDropdown
+            menuId="document-mode-menu"
+            value={activeMode}
+            options={modes.filter((mode) => mode.available).map(({ id, icon }) => ({
+              value: id,
+              label: t(K(`mode.${id}`)),
+              icon,
+            }))}
+            ariaLabel={t(K("a11y.tools"))}
+            currentModeLabel={t("create.mode.current")}
+            switchModeLabel={t("create.mode.switch")}
+            otherModesLabel={t("create.mode.other")}
+            onChange={(nextMode) => {
+              if (nextMode !== activeMode) selectMode(nextMode);
+            }}
+          />
         }
         left={
           <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
@@ -1065,37 +1081,16 @@ export function DocumentFeatureGenerationPage() {
               <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
                 {showPreviewTools && (
                   <>
-                <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomIn"))} title={hasPreview ? t(K("ocr.tool.zoomIn")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom >= 300} onClick={() => setOcrZoom((zoom) => Math.min(300, zoom + 25))}>
-                  <ZoomIn size={14} aria-hidden="true" />
-                </button>
                 <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomOut"))} title={hasPreview ? t(K("ocr.tool.zoomOut")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom <= 25} onClick={() => setOcrZoom((zoom) => Math.max(25, zoom - 25))}>
                   <ZoomOut size={14} aria-hidden="true" />
                 </button>
-                <span className={styles.zoomDropdown} title={hasPreview ? undefined : t(K("ocr.tool.needFile"))}>
-                  <Dropdown
-                    value={String(ocrZoom)}
-                    options={Array.from({ length: 12 }, (_, index) => ({ value: String((index + 1) * 25), label: `${(index + 1) * 25}%` }))}
-                    onChange={(value) => setOcrZoom(Number(value))}
-                    ariaLabel={t(K("ocr.tool.zoom"))}
-                    disabled={!hasPreview}
-                    menuPosition="fixed"
-                    triggerClassName="h-[26px] min-h-0 w-[68px] gap-1 rounded-md border-transparent bg-transparent px-2 text-[10px] font-medium text-[#59626b] hover:bg-[#fff2ea]"
-                    menuClassName="min-w-[96px]"
-                    optionClassName="px-2.5 py-1.5 text-[11px]"
-                  />
-                </span>
-                <button type="button" className={`${styles.toolbarButton} ${ocrPan ? styles.toolbarButtonActive : ""}`} aria-label={t(K("ocr.tool.pan"))} aria-pressed={ocrPan} title={hasPreview ? t(K("ocr.tool.pan")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrPan((value) => !value); setOcrAnnotate(false); setFormDraw(false); }}>
-                  <Hand size={14} aria-hidden="true" />
+                <button type="button" className={`${styles.toolbarButton} ${styles.toolbarZoomValue}`} aria-label={t(K("ocr.tool.zoom"))} title={hasPreview ? t(K("ocr.tool.zoom")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => setOcrZoom(100)}>
+                  {ocrZoom}%
+                </button>
+                <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomIn"))} title={hasPreview ? t(K("ocr.tool.zoomIn")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom >= 300} onClick={() => setOcrZoom((zoom) => Math.min(300, zoom + 25))}>
+                  <ZoomIn size={14} aria-hidden="true" />
                 </button>
                 <span className={styles.toolbarDivider} />
-                {!isForm && (
-                  <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !compareReady ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !compareReady} onClick={() => setOcrCompare((value) => !value)}>
-                    <Columns2 size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.compare"))}</span>
-                  </button>
-                )}
-                <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); setFormDraw(false); }}>
-                  <MessageSquarePlus size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.annotate"))}</span>
-                </button>
                   </>
                 )}
                 {isForm ? (

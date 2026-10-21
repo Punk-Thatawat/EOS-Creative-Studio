@@ -40,6 +40,12 @@ const generationLabelKeys: Record<string, TranslationKey> = {
   "audio-voice-clone": "create.audio.tabs.voiceClone",
   "audio-sound-effects": "create.audio.tabs.soundEffects",
   "audio-cleanup": "create.audio.tabs.audioCleanup",
+  "document-ocr": "create.document.mode.ocr",
+  "document-summary": "create.document.mode.summarize",
+  "document-translate": "create.document.mode.translate",
+  "document-contract": "create.document.mode.contract",
+  "document-report": "create.document.mode.report",
+  "document-form": "create.document.mode.form",
 };
 
 const generationFeatureOptions = [
@@ -121,6 +127,12 @@ const generationFeatureOptions = [
   { feature: "audio-voice-clone", key: "eos.generation.pending.audio-voice-clone", label: "Voice Clone", tab: "Voice Clone", kind: "audio" },
   { feature: "audio-sound-effects", key: "eos.generation.pending.audio-sound-effects", label: "Sound Effects", tab: "Sound Effects", kind: "audio" },
   { feature: "audio-cleanup", key: "eos.generation.pending.audio-cleanup", label: "Audio Cleanup", tab: "Audio Cleanup", kind: "audio" },
+  { feature: "document-ocr", key: "eos.generation.pending.document-ocr", label: "OCR", tab: "ocr", kind: "document" },
+  { feature: "document-summary", key: "eos.generation.pending.document-summary", label: "Summarize", tab: "summarize", kind: "document" },
+  { feature: "document-translate", key: "eos.generation.pending.document-translate", label: "Translate", tab: "translate", kind: "document" },
+  { feature: "document-contract", key: "eos.generation.pending.document-contract", label: "Contract Review", tab: "contract", kind: "document" },
+  { feature: "document-report", key: "eos.generation.pending.document-report", label: "Report Builder", tab: "report", kind: "document" },
+  { feature: "document-form", key: "eos.generation.pending.document-form", label: "Form Reader", tab: "form", kind: "document" },
 ] as const;
 
 type ActivePendingGeneration = {
@@ -128,11 +140,15 @@ type ActivePendingGeneration = {
   feature: string;
   label: string;
   tab: string;
-  kind: "image" | "video" | "audio";
+  kind: "image" | "video" | "audio" | "document";
   requestId?: string;
   isSubmitting?: boolean;
   pending: PendingGeneration;
 };
+
+function pendingKind(kind: ActivePendingGeneration["kind"]): PendingGeneration["kind"] {
+  return kind === "video" ? "video" : "image";
+}
 
 function featureConfig(feature?: string) {
   return (
@@ -174,7 +190,7 @@ function toPendingGeneration(generation: GenerationHistoryItem): ActivePendingGe
       totalCount: generation.totalCount ?? Math.max(1, generation.output?.length ?? 1),
       completedCount: generation.completedCount ?? generation.output?.length ?? 0,
       output: generation.output ?? [],
-      kind: config.kind === "audio" ? "image" : config.kind,
+      kind: pendingKind(config.kind),
     },
   };
 }
@@ -211,7 +227,7 @@ function readActivePendingGenerations(): ActivePendingGeneration[] {
                   ? parsed.output.length
                   : 0,
             output: Array.isArray(parsed.output) ? (parsed.output as PendingGeneration["output"]) : [],
-            kind: kind === "audio" ? "image" : kind,
+            kind: pendingKind(kind),
           },
         },
       ];
@@ -252,7 +268,7 @@ function isPersistableProgress(value: unknown): value is ActivePendingGeneration
     typeof item.feature === "string" &&
     typeof item.label === "string" &&
     typeof item.tab === "string" &&
-    (item.kind === "image" || item.kind === "video") &&
+    (item.kind === "image" || item.kind === "video" || item.kind === "document") &&
     !item.isSubmitting &&
     typeof pending?.generationId === "string" &&
     typeof pending.pollUrl === "string" &&
@@ -346,6 +362,20 @@ function removePersistedProgress(generationId: string): void {
   if (next.length !== current.length) writePersistedProgress(next);
 }
 
+function removeStoredProgress(item: ActivePendingGeneration): void {
+  removePersistedProgress(item.pending.generationId);
+  const stored = window.sessionStorage.getItem(item.key);
+  if (!stored) return;
+
+  try {
+    const parsed = JSON.parse(stored) as { generationId?: string };
+    if (parsed.generationId === item.pending.generationId) window.sessionStorage.removeItem(item.key);
+  } catch {
+    // Ignore malformed stale progress storage and still remove the known key.
+    window.sessionStorage.removeItem(item.key);
+  }
+}
+
 function hasSessionPendingGeneration(generationId: string): boolean {
   if (typeof window === "undefined") return false;
 
@@ -403,22 +433,25 @@ function persistProgress(item: ActivePendingGeneration, progress: GenerationProg
   upsertPersistedProgress(updatedItem);
 }
 
-async function loadActiveGenerations(): Promise<ActivePendingGeneration[]> {
+async function loadActiveGenerations(): Promise<{ active: ActivePendingGeneration[]; complete: boolean }> {
   const responses = await Promise.allSettled(
     generationFeatureOptions.map(({ feature }) => listGenerationHistory(undefined, feature)),
   );
-  return mergeActiveGenerations(
-    ...responses
-      .filter(
-        (response): response is PromiseFulfilledResult<GenerationHistoryItem[]> => response.status === "fulfilled",
-      )
-      .map((response) =>
-        response.value.flatMap((generation) => {
-          const active = toPendingGeneration(generation);
-          return active ? [active] : [];
-        }),
-      ),
-  );
+  return {
+    active: mergeActiveGenerations(
+      ...responses
+        .filter(
+          (response): response is PromiseFulfilledResult<GenerationHistoryItem[]> => response.status === "fulfilled",
+        )
+        .map((response) =>
+          response.value.flatMap((generation) => {
+            const active = toPendingGeneration(generation);
+            return active ? [active] : [];
+          }),
+        ),
+    ),
+    complete: responses.every((response) => response.status === "fulfilled"),
+  };
 }
 
 export function GenerationProgressFloating() {
@@ -449,6 +482,7 @@ export function GenerationProgressFloating() {
   const activeRef = useRef(active);
   const dismissedGenerationIdsRef = useRef(new Set<string>());
   const completedGenerationIdsRef = useRef(new Set<string>());
+  const locallyStartedGenerationIdsRef = useRef(new Set<string>());
   const isAssetsPage = pathname.startsWith("/assets");
 
   useEffect(() => {
@@ -476,6 +510,7 @@ export function GenerationProgressFloating() {
       const requestId = detail.requestId;
       const generationId = detail.generationId ?? `pending:${requestId}`;
       const isSubmitting = !detail.generationId || !detail.pollUrl;
+      locallyStartedGenerationIdsRef.current.add(generationId);
       dismissedGenerationIdsRef.current.delete(generationId);
       clearDismissedGeneration(generationId);
       const config = featureConfig(detail.feature);
@@ -489,7 +524,7 @@ export function GenerationProgressFloating() {
         totalCount: detail.totalCount ?? 1,
         completedCount: detail.completedCount ?? 0,
         output: [],
-        kind: config.kind === "audio" ? "image" : config.kind,
+        kind: pendingKind(config.kind),
       };
       const startedItem = {
         key: config.key,
@@ -517,7 +552,7 @@ export function GenerationProgressFloating() {
           if (item.requestId !== detail.requestId || !item.isSubmitting) return [item];
           // Audio requests are synchronous and have no backend record to poll, so keep the
           // finished request as a completed card (dismissed manually, like image/video).
-          if (item.kind === "audio") {
+          if (item.kind === "audio" || item.kind === "document") {
             return [
               {
                 ...item,
@@ -552,10 +587,30 @@ export function GenerationProgressFloating() {
 
     const refreshFromBackend = async () => {
       try {
-        const backendActive = await loadActiveGenerations();
+        const { active: backendActive, complete } = await loadActiveGenerations();
         if (disposed) return;
+
+        const localActive = readActivePendingGenerations();
+        const backendIds = new Set(backendActive.map((item) => item.pending.generationId));
+        const staleLocal = complete
+          ? localActive.filter(
+              (item) =>
+                item.pending.status !== "completed" &&
+                !backendIds.has(item.pending.generationId) &&
+                !locallyStartedGenerationIdsRef.current.has(item.pending.generationId),
+            )
+          : [];
+        staleLocal.forEach(removeStoredProgress);
+        const staleIds = new Set(staleLocal.map((item) => item.pending.generationId));
+
         backendActive.forEach(upsertPersistedProgress);
-        setActive((current) => mergeActiveGenerations(backendActive, readActivePendingGenerations(), current));
+        setActive((current) =>
+          mergeActiveGenerations(
+            backendActive,
+            readActivePendingGenerations(),
+            current.filter((item) => !staleIds.has(item.pending.generationId)),
+          ),
+        );
       } catch {
         // Authentication/session loading can still be in progress. The next focus or page load retries.
       }
@@ -632,7 +687,7 @@ export function GenerationProgressFloating() {
                   totalCount: progress.totalCount,
                   completedCount: progress.completedCount,
                   output: progress.output,
-                  kind: item.kind === "audio" ? "image" : item.kind,
+                  kind: pendingKind(item.kind),
                 },
               };
               const next = [...current];
@@ -676,18 +731,9 @@ export function GenerationProgressFloating() {
     const generationId = item.pending.generationId;
     dismissedGenerationIdsRef.current.add(generationId);
     dismissGeneration(generationId);
-    removePersistedProgress(generationId);
+    removeStoredProgress(item);
     pollingRef.current.get(generationId)?.abort();
     pollingRef.current.delete(generationId);
-    const stored = window.sessionStorage.getItem(item.key);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as { generationId?: string };
-        if (parsed.generationId === generationId) window.sessionStorage.removeItem(item.key);
-      } catch {
-        // Ignore malformed stale progress storage and still dismiss the visible item.
-      }
-    }
   };
 
   const handleDismiss = (item: ActivePendingGeneration) => {
@@ -723,6 +769,7 @@ export function GenerationProgressFloating() {
         }
         router.push("/create/audio");
       }
+      else if (kind === "document") router.push(`/create/document?tab=${encodeURIComponent(tab)}`);
       else router.push(`${kind === "video" ? "/create/video" : "/create/image"}?tab=${encodeURIComponent(tab)}`);
     };
 
@@ -735,7 +782,7 @@ export function GenerationProgressFloating() {
           aria-label={t("shell.generation.openItem", { label: localizedLabel })}
           title={t("shell.generation.openItemTitle", {
             label: localizedLabel,
-            studio: kind === "video" ? t("shell.nav.video") : kind === "audio" ? t("shell.nav.audio") : t("shell.nav.image"),
+            studio: kind === "document" ? localizedLabel : kind === "video" ? t("shell.nav.video") : kind === "audio" ? t("shell.nav.audio") : t("shell.nav.image"),
           })}
         >
           <div className={styles.itemHeading}>
@@ -778,9 +825,13 @@ export function GenerationProgressFloating() {
                       ? total === 1
                         ? t("shell.generation.audioUnit")
                         : t("shell.generation.audiosUnit")
-                      : total === 1
-                        ? t("shell.generation.imageUnit")
-                        : t("shell.generation.imagesUnit"),
+                      : kind === "document"
+                        ? total === 1
+                          ? t("shell.generation.documentUnit")
+                          : t("shell.generation.documentsUnit")
+                        : total === 1
+                          ? t("shell.generation.imageUnit")
+                          : t("shell.generation.imagesUnit"),
               })}
             </span>
             <span className={styles.eta}>
