@@ -78,6 +78,7 @@ import {
   quoteAudioCleanup,
   quoteDialogue,
   quoteSoundEffects,
+  quoteVideoSoundEffects,
   quoteTextToSpeech,
   quoteTextToSpeechScenes,
   quoteVoiceClone,
@@ -2775,6 +2776,22 @@ function VoiceCloneLayout({
   );
 }
 
+// Reads the length from the file's metadata, so the price can be shown before the upload. Null when the browser cannot tell.
+function readVideoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const probe = document.createElement("video");
+    const finish = (value: number | null) => {
+      URL.revokeObjectURL(url);
+      resolve(value);
+    };
+    probe.preload = "metadata";
+    probe.onloadedmetadata = () => finish(Number.isFinite(probe.duration) && probe.duration > 0 ? probe.duration : null);
+    probe.onerror = () => finish(null);
+    probe.src = url;
+  });
+}
+
 function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
   const { t } = useLocale();
   const [sourceMode, setSourceMode] = useState<"text" | "video">("text");
@@ -2783,6 +2800,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   const [effectDuration, setEffectDuration] = useState(4);
   const [variationCount, setVariationCount] = useState(4);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [videoDescription, setVideoDescription] = useState("");
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [variants, setVariants] = useState<SoundEffectVariant[]>([]);
@@ -2812,7 +2830,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
 
   useEffect(() => {
     let active = true;
-    if (sourceMode !== "text") {
+    if (sourceMode === "video" && videoDuration === null) {
       const resetTimer = window.setTimeout(() => {
         if (!active) return;
         setCreditQuote(null);
@@ -2825,7 +2843,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
     }
     const timer = window.setTimeout(() => {
       setCreditQuoteLoading(true);
-      void quoteSoundEffects({ durationSeconds: effectDuration, variationCount })
+      void (sourceMode === "video" ? quoteVideoSoundEffects(Math.min(180, Math.max(1, Math.ceil(videoDuration ?? 1)))) : quoteSoundEffects({ durationSeconds: effectDuration, variationCount }))
         .then((quote) => {
           if (active) setCreditQuote(quote);
         })
@@ -2840,7 +2858,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       active = false;
       window.clearTimeout(timer);
     };
-  }, [sourceMode, effectDuration, variationCount]);
+  }, [sourceMode, effectDuration, variationCount, videoDuration]);
 
   const handleGenerate = async () => {
     const inputVideoFile = videoFile;
@@ -3045,7 +3063,12 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
               hidden
               type="file"
               accept="video/mp4,video/quicktime,video/webm,video/x-m4v,image/gif,video/*"
-              onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setVideoFile(file);
+                setVideoDuration(null);
+                if (file) void readVideoDuration(file).then((seconds) => setVideoDuration(seconds));
+              }}
             />
             <button
               type="button"
@@ -3261,9 +3284,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
                 <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} />
               </strong>
               <b>
-                {sourceMode === "video"
-                  ? "—"
-                  : creditQuoteLoading
+                {creditQuoteLoading
                     ? t("create.audio.calculating")
                     : creditQuote
                       ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditQuote.creditCost) })

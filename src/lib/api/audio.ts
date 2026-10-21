@@ -605,6 +605,18 @@ export async function createVideoSoundEffect(input: { video: File; description?:
 
 export type SoundEffectsQuote = { provider: "wavespeed"; model: string; creditCost: number; pricingSource: "provider" | "fallback" };
 
+export async function quoteVideoSoundEffects(durationSeconds: number, signal?: AbortSignal): Promise<SoundEffectsQuote> {
+  const response = await userAudioRequest("/audio/sound-effects/video/quote", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: JSON.stringify({ durationSeconds }),
+    signal,
+  });
+  const payload = await response.json().catch(() => null) as { data?: SoundEffectsQuote } | null;
+  if (!payload?.data) throw new Error("Sound effects pricing unavailable");
+  return payload.data;
+}
+
 export async function quoteSoundEffects(input: { durationSeconds: number; variationCount: number }, signal?: AbortSignal): Promise<SoundEffectsQuote> {
   const response = await userAudioRequest("/audio/sound-effects/quote", {
     method: "POST",
