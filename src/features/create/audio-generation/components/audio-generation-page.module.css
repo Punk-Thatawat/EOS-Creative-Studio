@@ -5492,3 +5492,57 @@
 .tabBody > * {
   flex: 1 1 auto;
 }
+
+/* Podcast tab: flat sections split by straight lines and a straight divider before the settings column, like the other audio tabs. */
+.podcastLayout {
+  gap: 0;
+  padding-top: 0;
+  align-items: stretch;
+}
+
+.podcastMainColumn {
+  gap: 0;
+  padding: 0 20px;
+}
+
+.podcastHeaderSection {
+  padding: 24px 0 18px;
+}
+
+.podcastSection,
+.podcastPreviewCard,
+.podcastMainColumn .historyPanel {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--audio-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 18px 0;
+}
+
+.podcastSettingsCard {
+  position: static;
+  border: 0;
+  border-left: 1px solid var(--audio-line);
+  border-radius: 0;
+}
+
+@media (max-width: 1279.98px) {
+  .podcastSettingsCard {
+    border-left: 0;
+    border-top: 1px solid var(--audio-line);
+  }
+}
+
+@media (max-width: 639.98px) {
+  .podcastMainColumn {
+    padding: 0 12px;
+  }
+
+  .podcastSection,
+  .podcastPreviewCard,
+  .podcastMainColumn .historyPanel {
+    padding: 14px 0;
+  }
+}

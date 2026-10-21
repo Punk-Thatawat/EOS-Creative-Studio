@@ -748,6 +748,8 @@ body:has(:is(.audio-studio-page, .document-studio-page)) .page-gutter { max-widt
 body:has(:is(.audio-studio-page, .document-studio-page)) .page-gutter > main { width: 100%; }
 /* Audio tabs differ in height; without a reserved gutter the scrollbar comes and goes between them and the whole page shifts sideways. */
 html:has(.audio-studio-page) { scrollbar-gutter: stable; }
+/* The sticky header (z-50 once scrolled) ties with the dialog overlay (z-50) and could stay undimmed above it; drop it below while a dialog is open. */
+body:has([data-slot="dialog-overlay"]) .eos-studio-header { z-index: 30 !important; }
 @media (max-width: 767.98px) {
   /* Bottom space is NOT set here: this rule sits after the two central ones
      above and would win, and the audio studio floats an action dock that
