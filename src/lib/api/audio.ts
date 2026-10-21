@@ -1,4 +1,5 @@
 import { getApiAccessToken } from "@/lib/auth/access-token";
+import { requestCreditBalanceSync } from "@/lib/credits/credit-events";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendOrigin = configuredBackendUrl.replace(/\/api\/v1$/, "");
@@ -287,6 +288,9 @@ async function adminRequest(path: string, init: RequestInit = {}): Promise<unkno
   return payload;
 }
 
+// Endpoints that take credits, so the header balance is refreshed after they succeed.
+const CHARGED_AUDIO_PATH = /^\/audio\/(tts|tts\/scenes|dialogue|cleanup|sound-effects|sound-effects\/video|voice-clones|voice-clones\/[^/]+\/preview)$/;
+
 async function userAudioRequest(path: string, init: RequestInit = {}): Promise<Response> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in before generating audio");
@@ -305,6 +309,7 @@ async function userAudioRequest(path: string, init: RequestInit = {}): Promise<R
     const payload = await response.json().catch(() => null);
     throw new Error(getErrorMessage(payload));
   }
+  if (init.method === "POST" && CHARGED_AUDIO_PATH.test(path)) requestCreditBalanceSync();
   return response;
 }
 
