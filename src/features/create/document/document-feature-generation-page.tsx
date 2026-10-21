@@ -2,14 +2,17 @@
 
 import {
   ArrowUpRight,
+  BarChart3,
   ChevronDown,
   CloudUpload,
+  Columns2,
   Download,
   FileCheck2,
   FileText,
   Hand,
   Languages,
   ListChecks,
+  MessageSquarePlus,
   NotebookPen,
   Play,
   Plus,
@@ -19,11 +22,9 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import Image from "next/image";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
-import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { Dropdown } from "@/components/ui/dropdown";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { VideoModelDropdown } from "../video-model-dropdown";
@@ -52,7 +53,6 @@ import { downloadBlob, downloadOcrResult, ocrResultToText } from "./ocr-download
 import { OcrHistoryPanel } from "./ocr-history";
 import { OcrFullTextView, OcrResultView } from "./ocr-result-view";
 import { ImageTutorialButton } from "../image-generation/components/image-tutorial-button";
-import { failDocumentGeneration, finishDocumentGeneration, startDocumentGeneration } from "./document-generation-progress";
 import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -65,7 +65,7 @@ const FORM_EXPORT_FORMATS: ReadonlyArray<{ id: FormExportFormat; label: string }
   { id: "json", label: "JSON" },
 ];
 
-type ModeId = "ocr" | "summarize" | "translate" | "contract" | "form";
+type ModeId = "ocr" | "summarize" | "translate" | "contract" | "report" | "form";
 type SummaryStyle = "executive" | "bullets";
 
 const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
@@ -73,6 +73,7 @@ const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "summarize", icon: NotebookPen, available: true },
   { id: "translate", icon: Languages, available: true },
   { id: "contract", icon: FileCheck2, available: true },
+  { id: "report", icon: BarChart3, available: true },
   { id: "form", icon: ListChecks, available: true },
 ];
 
@@ -81,6 +82,7 @@ const documentTutorialFeatureByMode: Record<ModeId, string> = {
   summarize: "document-summary",
   translate: "document-translate",
   contract: "document-contract",
+  report: "document-report",
   form: "document-form",
 };
 
@@ -96,12 +98,14 @@ const guides = [
   { title: K("guide.ocr"), detail: K("guide.ocrDetail"), time: "03:21", tone: "orange" },
   { title: K("guide.contract"), detail: K("guide.contractDetail"), time: "04:35", tone: "pink" },
   { title: K("guide.prompt"), detail: K("guide.promptDetail"), time: "05:12", tone: "yellow" },
+  { title: K("guide.reports"), detail: K("guide.reportsDetail"), time: "06:08", tone: "blue" },
 ];
 
 const documentTools = [
   { title: K("tool.ocr"), detail: K("tool.ocrDetail"), icon: ScanText },
   { title: K("tool.contract"), detail: K("tool.contractDetail"), icon: FileCheck2 },
   { title: K("tool.meeting"), detail: K("tool.meetingDetail"), icon: NotebookPen },
+  { title: K("tool.report"), detail: K("tool.reportDetail"), icon: BarChart3 },
 ];
 
 /** Renders a translated string, turning "\n" into line breaks (used by the hero artwork). */
@@ -181,9 +185,9 @@ export function DocumentFeatureGenerationPage() {
     else params.set(MODE_PARAM, id);
     const query = params.toString();
 
-    // Summary and translation are rendered by the shared page. Route
+    // Summary, translation and report are rendered by the shared page. Route
     // through the URL so the parent can switch away from the feature page.
-    if (id === "summarize" || id === "translate") {
+    if (id === "summarize" || id === "translate" || id === "report") {
       router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
       return;
     }
@@ -201,7 +205,7 @@ export function DocumentFeatureGenerationPage() {
   const [summaryLanguage, setSummaryLanguage] = useState<"auto" | "English" | "Thai">("auto");
   const [focusAreas, setFocusAreas] = useState({ keyTakeaways: true, actionItems: true, importantDates: true });
   const [summaryOptions, setSummaryOptions] = useState({ model: "google/gemini-3.5-flash", credits: 1 });
-  const [ocrType, setOcrType] = useState<OcrDocumentTypeId>("general");
+  const [ocrType, setOcrType] = useState<OcrDocumentTypeId | "">("");
   const [ocrTypes, setOcrTypes] = useState<OcrDocumentTypeInfo[]>([]);
   const [ocrLanguage, setOcrLanguage] = useState<"th" | "en">(locale === "en" ? "en" : "th");
   const [ocrConfidence, setOcrConfidence] = useState(true);
@@ -547,6 +551,10 @@ export function DocumentFeatureGenerationPage() {
 
   const runOcr = async () => {
     if (!selectedFile || isOcrRunning) return;
+    if (!ocrType) {
+      setOcrError(t(K("ocr.typePlaceholder")));
+      return;
+    }
     const problem = ocrFileProblem(selectedFile, ocrExtensions, ocrMaxMegabytes);
     if (problem) {
       setOcrError(problem);
@@ -565,7 +573,6 @@ export function DocumentFeatureGenerationPage() {
       setOcrError(t(K("ocr.errorPageRangeBounds"), { count: pdfPageCount }));
       return;
     }
-    const requestId = startDocumentGeneration("document-ocr");
     setIsOcrRunning(true);
     setOcrError("");
     setOcrResult(null);
@@ -589,9 +596,7 @@ export function DocumentFeatureGenerationPage() {
       setOcrFromHistory(false);
       setOcrTab("result");
       setHistoryKey((key) => key + 1);
-      finishDocumentGeneration("document-ocr", requestId);
     } catch (error) {
-      failDocumentGeneration("document-ocr", requestId);
       setOcrError(error instanceof Error ? error.message : t(K("ocr.errorGeneral")));
     } finally {
       setIsOcrRunning(false);
@@ -701,7 +706,6 @@ export function DocumentFeatureGenerationPage() {
       setFormError(t(K("form.errorFields")));
       return;
     }
-    const requestId = startDocumentGeneration("document-form");
     setIsFormRunning(true);
     setFormError("");
     setFormResult(null);
@@ -719,9 +723,7 @@ export function DocumentFeatureGenerationPage() {
       setFormDocumentSaved(false);
       if (result.pages.length) setFormOptions((current) => ({ ...current, credits: result.creditsUsed / result.pages.length }));
       setFormHistoryKey((key) => key + 1);
-      finishDocumentGeneration("document-form", requestId);
     } catch (error) {
-      failDocumentGeneration("document-form", requestId);
       setFormError(error instanceof Error ? error.message : t(K("form.errorGeneral")));
     } finally {
       setIsFormRunning(false);
@@ -826,7 +828,6 @@ export function DocumentFeatureGenerationPage() {
 
   const runContract = async () => {
     if (!selectedFile || isContractRunning) return;
-    const requestId = startDocumentGeneration("document-contract");
     setIsContractRunning(true);
     setContractError("");
     setContractResult(null);
@@ -838,9 +839,7 @@ export function DocumentFeatureGenerationPage() {
       setContractFromHistory(false);
       setContractCredits(result.creditsUsed);
       setContractHistoryKey((key) => key + 1);
-      finishDocumentGeneration("document-contract", requestId);
     } catch (error) {
-      failDocumentGeneration("document-contract", requestId);
       setContractTab("preview");
       setContractError(error instanceof Error ? error.message : t(K("contract.errorGeneral")));
     } finally {
@@ -850,7 +849,6 @@ export function DocumentFeatureGenerationPage() {
 
   const generateSummary = async () => {
     if (!selectedFile || isSummarizing) return;
-    const requestId = startDocumentGeneration("document-summary");
     setIsSummarizing(true);
     setSummaryError("");
     try {
@@ -866,9 +864,7 @@ export function DocumentFeatureGenerationPage() {
       });
       setSummaryResult(response.summary);
       setSummaryOptions((current) => ({ ...current, model: response.model, credits: response.creditsUsed }));
-      finishDocumentGeneration("document-summary", requestId);
     } catch (error) {
-      failDocumentGeneration("document-summary", requestId);
       setSummaryError(error instanceof Error ? error.message : t(K("summary.errorGeneral")));
     } finally {
       setIsSummarizing(false);
@@ -878,16 +874,26 @@ export function DocumentFeatureGenerationPage() {
   return (
     <div className={`${styles.page} document-studio-page`}>
       <header className={styles.hero}>
-        <div className={styles.heroBanner}>
-          <Image
-            className={styles.heroBannerImage}
-            src="/generated-assets/gen-document-hero-v2.png"
-            alt="GEN DOCUMENT — AI document generation studio"
-            width={2400}
-            height={435}
-            priority
-            sizes="100vw"
-          />
+        <div className={styles.heroCopy}>
+          <span className={styles.heroEyebrow}>EOS CREATIVE STUDIO</span>
+          <h1>GEN DOCUMENT</h1>
+          <div className={styles.heroStamp}>{t(K("hero.stamp"))}</div>
+          <p>{t(K("hero.tagline"))}</p>
+        </div>
+        <div className={styles.heroArtwork} aria-hidden="true">
+          <div className={styles.heroBrush}><Lines text={t(K("hero.brush"))} /></div>
+          <div className={`${styles.paper} ${styles.paperBack}`}>
+            <span>{t(K("hero.paper"))}</span>
+            <i /><i /><i />
+            <div className={styles.miniChart}><b /><b /><b /><b /><b /></div>
+          </div>
+          <div className={styles.smartSticker}><Lines text={t(K("hero.sticker"))} /></div>
+          <div className={`${styles.paper} ${styles.paperFront}`}>
+            <span>OCR</span>
+            <i /><i /><i /><i />
+            <div className={styles.scanCorners} />
+          </div>
+          <div className={styles.orangeBurst} />
         </div>
       </header>
 
@@ -915,677 +921,675 @@ export function DocumentFeatureGenerationPage() {
             })}
           </nav>
         }
-        mobileTabs={
-          <MobileModeDropdown
-            menuId="document-mode-menu"
-            value={activeMode}
-            options={modes.filter((mode) => mode.available).map(({ id, icon }) => ({
-              value: id,
-              label: t(K(`mode.${id}`)),
-              icon,
-            }))}
-            ariaLabel={t(K("a11y.tools"))}
-            currentModeLabel={t("create.mode.current")}
-            switchModeLabel={t("create.mode.switch")}
-            otherModesLabel={t("create.mode.other")}
-            onChange={(nextMode) => {
-              if (nextMode !== activeMode) selectMode(nextMode);
-            }}
-          />
-        }
         left={
           <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
-          <div className={styles.tutorialTop}><ImageTutorialButton feature={documentTutorialFeatureByMode[activeMode]} featureName={t(K(`mode.${activeMode}`))} /></div>
-          <PanelHeading step="1">{t(K("source.heading"))}</PanelHeading>
-          <div
-            className={styles.dropzone}
-            role="button"
-            tabIndex={0}
-            onClick={() => uploadInputRef.current?.click()}
-            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); uploadInputRef.current?.click(); } }}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => { event.preventDefault(); setFileFromList(event.dataTransfer.files); }}
-          >
-            <CloudUpload size={29} strokeWidth={1.7} aria-hidden="true" />
-            <strong>{selectedFile ? t(K("source.dropReplace")) : t(K("source.dropTitle"))}</strong>
-            <span>{t(K("source.dropHint"))}</span>
-            <small>{isOcr ? t(K("ocr.dropTypes"), { types: ocrExtensions.join(", ").toUpperCase(), max: ocrMaxMegabytes }) : isForm ? t(K("ocr.dropTypes"), { types: "PDF, JPG, JPEG, PNG", max: 25 }) : t(K("source.dropTypes"), { max: 25 })}</small>
-          </div>
-          <input ref={uploadInputRef} className={styles.fileInput} type="file" accept={isOcr ? ocrExtensions.map((extension) => `.${extension}`).join(",") : isForm ? ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" : ".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"} onChange={(event) => setFileFromList(event.currentTarget.files)} />
-          <div className={styles.filePlaceholder}>
-            <span className={styles.fileIcon}><FileText size={17} aria-hidden="true" /></span>
-            <span className={styles.fileCopy}><strong>{selectedFile?.name ?? t(K("source.filesTitle"))}</strong><small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("source.filesHint"))}</small></span>
-            <button type="button" className={styles.replaceFileButton} aria-label={t(K("source.chooseFile"))} onClick={() => uploadInputRef.current?.click()}><Plus size={16} aria-hidden="true" /></button>
-          </div>
-          {!isOcr && !isContract && !isForm && <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />}
-          <div className={styles.sectionRule} />
-          <PanelHeading step="2">{isOcr ? t(K("ocr.typeHeading")) : isContract ? t(K("contract.typeHeading")) : isForm ? t(K("form.howHeading")) : isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
-          {isOcr ? (
-            <div className={styles.ocrTypeGrid} role="radiogroup" aria-label={t(K("ocr.typeHeading"))}>
-              {OCR_DOCUMENT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="radio"
-                  aria-checked={ocrType === id}
-                  className={`${styles.ocrTypeButton} ${ocrType === id ? styles.ocrTypeActive : ""}`}
-                  onClick={() => changeOcrType(id)}
-                >
-                  <TypeIcon size={15} aria-hidden="true" />
-                  <span>{t(K(`ocr.type.${id}`))}</span>
-                </button>
-              ))}
+            <div className={styles.tutorialTop}><ImageTutorialButton feature={documentTutorialFeatureByMode[activeMode]} featureName={t(K(`mode.${activeMode}`))} /></div>
+            <PanelHeading step="1">{t(K("source.heading"))}</PanelHeading>
+            <div
+              className={styles.dropzone}
+              role="button"
+              tabIndex={0}
+              onClick={() => uploadInputRef.current?.click()}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); uploadInputRef.current?.click(); } }}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => { event.preventDefault(); setFileFromList(event.dataTransfer.files); }}
+            >
+              <CloudUpload size={29} strokeWidth={1.7} aria-hidden="true" />
+              <strong>{selectedFile ? t(K("source.dropReplace")) : t(K("source.dropTitle"))}</strong>
+              <span>{t(K("source.dropHint"))}</span>
+              <small>{isOcr ? t(K("ocr.dropTypes"), { types: ocrExtensions.join(", ").toUpperCase(), max: ocrMaxMegabytes }) : isForm ? t(K("ocr.dropTypes"), { types: "PDF, JPG, JPEG, PNG", max: 25 }) : t(K("source.dropTypes"), { max: 25 })}</small>
             </div>
-          ) : isContract ? (
-            <>
-              <div className={styles.ocrTypeGrid} role="radiogroup" aria-label={t(K("contract.typeHeading"))}>
-                {CONTRACT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={contractType === id}
-                    className={`${styles.ocrTypeButton} ${contractType === id ? styles.ocrTypeActive : ""}`}
-                    onClick={() => changeContractType(id)}
-                  >
-                    <TypeIcon size={15} aria-hidden="true" />
-                    <span>{t(K(`contract.type.${id}`))}</span>
-                  </button>
-                ))}
-              </div>
-              {CONTRACT_PARTIES[contractType].length > 0 && (
-                <div className={styles.contractParty}>
-                  <strong>{t(K("contract.partyHeading"))}</strong>
-                  <small>{t(K("contract.partyHint"))}</small>
-                  <div className={styles.contractPartyChoices}>
-                    <button type="button" aria-pressed={contractParty === ""} onClick={() => setContractParty("")}>{t(K("contract.partyAny"))}</button>
-                    {CONTRACT_PARTIES[contractType].map((party) => {
-                      const label = t(K(`contract.party.${party}`));
-                      return <button key={party} type="button" aria-pressed={contractParty === label} onClick={() => setContractParty(label)}>{label}</button>;
-                    })}
-                  </div>
-                </div>
-              )}
-            </>
-          ) : isForm ? (
-            <>
-              <div className={styles.formWays} role="radiogroup" aria-label={t(K("form.howHeading"))}>
-                <button type="button" role="radio" aria-checked={formHow === "auto"} className={`${styles.ocrTypeButton} ${formHow === "auto" ? styles.ocrTypeActive : ""}`} onClick={() => setFormHow("auto")}>
-                  <Sparkles size={15} aria-hidden="true" />
-                  <span><strong>{t(K("form.how.auto"))}</strong><small>{t(K("form.how.autoHint"))}</small></span>
-                </button>
-                <button type="button" role="radio" aria-checked={formHow === "custom"} className={`${styles.ocrTypeButton} ${formHow === "custom" ? styles.ocrTypeActive : ""}`} onClick={() => setFormHow("custom")}>
-                  <ListChecks size={15} aria-hidden="true" />
-                  <span><strong>{t(K("form.how.custom"))}</strong><small>{t(K("form.how.customHint"))}</small></span>
-                </button>
-              </div>
-              {formHow === "custom" && (
-                <div className={styles.summaryPrompt}>
-                  <textarea aria-label={t(K("form.fieldsLabel"))} maxLength={600} value={formFieldNames} onChange={(event) => setFormFieldNames(event.target.value)} placeholder={t(K("form.fieldsPlaceholder"))} />
-                  <small>{formFieldNames.length} / 600</small>
-                </div>
-              )}
-            </>
-          ) : isSummarize ? (
-            <>
-              <div className={styles.summaryPrompt}>
-                <textarea aria-label={t(K("summary.promptLabel"))} maxLength={600} value={summaryPrompt} onChange={(event) => setSummaryPrompt(event.target.value)} placeholder={t(K("summary.promptPlaceholder"))} />
-                <small>{summaryPrompt.length} / 600</small>
-              </div>
-              <div className={styles.summaryFormatGroup}>
-                <span>{t(K("summary.format"))}</span>
-                <div className={styles.summaryFormatChoices}>
-                  {(["executive", "bullets"] as const).map((style) => (
+            <input ref={uploadInputRef} className={styles.fileInput} type="file" accept={isOcr ? ocrExtensions.map((extension) => `.${extension}`).join(",") : isForm ? ".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" : ".pdf,.docx,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg"} onChange={(event) => setFileFromList(event.currentTarget.files)} />
+            <div className={styles.filePlaceholder}>
+              <span className={styles.fileIcon}><FileText size={17} aria-hidden="true" /></span>
+              <span className={styles.fileCopy}><strong>{selectedFile?.name ?? t(K("source.filesTitle"))}</strong><small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("source.filesHint"))}</small></span>
+              <button type="button" className={styles.replaceFileButton} aria-label={t(K("source.chooseFile"))} onClick={() => uploadInputRef.current?.click()}><Plus size={16} aria-hidden="true" /></button>
+            </div>
+            {!isOcr && !isContract && !isForm && <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />}
+            <div className={styles.sectionRule} />
+            <PanelHeading step="2">{isOcr ? t(K("ocr.typeHeading")) : isContract ? t(K("contract.typeHeading")) : isForm ? t(K("form.howHeading")) : isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
+            {isOcr ? (
+              <Dropdown
+                value={ocrType}
+                placeholder={<span className="font-normal text-muted-foreground">{t(K("ocr.typePlaceholder"))}</span>}
+                options={OCR_DOCUMENT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => ({
+                  value: id,
+                  label: (
+                    <span className="flex items-center gap-2">
+                      <TypeIcon size={15} className="shrink-0" aria-hidden="true" />
+                      <span className="truncate">{t(K(`ocr.type.${id}`))}</span>
+                    </span>
+                  ),
+                }))}
+                onChange={(value) => changeOcrType(value as OcrDocumentTypeId)}
+                ariaLabel={t(K("ocr.typeHeading"))}
+                menuPosition="fixed"
+                triggerClassName="h-11 rounded-lg border-[#dfe2e7] px-3 text-[13px]"
+                optionClassName="px-2.5 py-2 text-[13px]"
+              />
+            ) : isContract ? (
+              <>
+                <div className={styles.ocrTypeGrid} role="radiogroup" aria-label={t(K("contract.typeHeading"))}>
+                  {CONTRACT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => (
                     <button
-                      key={style}
+                      key={id}
                       type="button"
-                      className={summaryStyle === style ? styles.summaryFormatActive : ""}
-                      aria-pressed={summaryStyle === style}
-                      onClick={() => setSummaryStyle(style)}
+                      role="radio"
+                      aria-checked={contractType === id}
+                      className={`${styles.ocrTypeButton} ${contractType === id ? styles.ocrTypeActive : ""}`}
+                      onClick={() => changeContractType(id)}
                     >
-                      {style === "executive" ? <NotebookPen size={14} aria-hidden="true" /> : <ListChecks size={14} aria-hidden="true" />}
-                      {t(K(`summary.${style}`))}
+                      <TypeIcon size={15} aria-hidden="true" />
+                      <span>{t(K(`contract.type.${id}`))}</span>
                     </button>
                   ))}
                 </div>
-              </div>
-            </>
-          ) : (
-            <div className={styles.instructionPlaceholder}>
-              <span>{t(K("instructions.placeholder"))}</span>
-              <small>0 / 600</small>
-            </div>
-          )}
-          {!isOcr && !isContract && !isForm && <div className={styles.checkList}>
-            {isSummarize ? (
+                {CONTRACT_PARTIES[contractType].length > 0 && (
+                  <div className={styles.contractParty}>
+                    <strong>{t(K("contract.partyHeading"))}</strong>
+                    <small>{t(K("contract.partyHint"))}</small>
+                    <div className={styles.contractPartyChoices}>
+                      <button type="button" aria-pressed={contractParty === ""} onClick={() => setContractParty("")}>{t(K("contract.partyAny"))}</button>
+                      {CONTRACT_PARTIES[contractType].map((party) => {
+                        const label = t(K(`contract.party.${party}`));
+                        return <button key={party} type="button" aria-pressed={contractParty === label} onClick={() => setContractParty(label)}>{label}</button>;
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : isForm ? (
               <>
-                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.keyTakeaways} onChange={(event) => setFocusAreas((current) => ({ ...current, keyTakeaways: event.target.checked }))} />{t(K("summary.checkTakeaways"))}</label>
-                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.actionItems} onChange={(event) => setFocusAreas((current) => ({ ...current, actionItems: event.target.checked }))} />{t(K("summary.checkActions"))}</label>
-                <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.importantDates} onChange={(event) => setFocusAreas((current) => ({ ...current, importantDates: event.target.checked }))} />{t(K("summary.checkDates"))}</label>
+                <div className={styles.formWays} role="radiogroup" aria-label={t(K("form.howHeading"))}>
+                  <button type="button" role="radio" aria-checked={formHow === "auto"} className={`${styles.ocrTypeButton} ${formHow === "auto" ? styles.ocrTypeActive : ""}`} onClick={() => setFormHow("auto")}>
+                    <Sparkles size={15} aria-hidden="true" />
+                    <span><strong>{t(K("form.how.auto"))}</strong><small>{t(K("form.how.autoHint"))}</small></span>
+                  </button>
+                  <button type="button" role="radio" aria-checked={formHow === "custom"} className={`${styles.ocrTypeButton} ${formHow === "custom" ? styles.ocrTypeActive : ""}`} onClick={() => setFormHow("custom")}>
+                    <ListChecks size={15} aria-hidden="true" />
+                    <span><strong>{t(K("form.how.custom"))}</strong><small>{t(K("form.how.customHint"))}</small></span>
+                  </button>
+                </div>
+                {formHow === "custom" && (
+                  <div className={styles.summaryPrompt}>
+                    <textarea aria-label={t(K("form.fieldsLabel"))} maxLength={600} value={formFieldNames} onChange={(event) => setFormFieldNames(event.target.value)} placeholder={t(K("form.fieldsPlaceholder"))} />
+                    <small>{formFieldNames.length} / 600</small>
+                  </div>
+                )}
+              </>
+            ) : isSummarize ? (
+              <>
+                <div className={styles.summaryPrompt}>
+                  <textarea aria-label={t(K("summary.promptLabel"))} maxLength={600} value={summaryPrompt} onChange={(event) => setSummaryPrompt(event.target.value)} placeholder={t(K("summary.promptPlaceholder"))} />
+                  <small>{summaryPrompt.length} / 600</small>
+                </div>
+                <div className={styles.summaryFormatGroup}>
+                  <span>{t(K("summary.format"))}</span>
+                  <div className={styles.summaryFormatChoices}>
+                    {(["executive", "bullets"] as const).map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        className={summaryStyle === style ? styles.summaryFormatActive : ""}
+                        aria-pressed={summaryStyle === style}
+                        onClick={() => setSummaryStyle(style)}
+                      >
+                        {style === "executive" ? <NotebookPen size={14} aria-hidden="true" /> : <ListChecks size={14} aria-hidden="true" />}
+                        {t(K(`summary.${style}`))}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </>
             ) : (
-              <>
-                <div><i className={styles.checkedBox} />{t(K("instructions.extractTables"))}</div>
-                <div><i className={styles.checkedBox} />{t(K("instructions.handwriting"))}</div>
-                <div><i className={styles.checkedBox} />{t(K("instructions.layout"))}</div>
-              </>
+              <div className={styles.instructionPlaceholder}>
+                <span>{t(K("instructions.placeholder"))}</span>
+                <small>0 / 600</small>
+              </div>
             )}
-          </div>}
+            {!isOcr && !isContract && !isForm && <div className={styles.checkList}>
+              {isSummarize ? (
+                <>
+                  <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.keyTakeaways} onChange={(event) => setFocusAreas((current) => ({ ...current, keyTakeaways: event.target.checked }))} />{t(K("summary.checkTakeaways"))}</label>
+                  <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.actionItems} onChange={(event) => setFocusAreas((current) => ({ ...current, actionItems: event.target.checked }))} />{t(K("summary.checkActions"))}</label>
+                  <label><input className={styles.summaryCheckbox} type="checkbox" checked={focusAreas.importantDates} onChange={(event) => setFocusAreas((current) => ({ ...current, importantDates: event.target.checked }))} />{t(K("summary.checkDates"))}</label>
+                </>
+              ) : (
+                <>
+                  <div><i className={styles.checkedBox} />{t(K("instructions.extractTables"))}</div>
+                  <div><i className={styles.checkedBox} />{t(K("instructions.handwriting"))}</div>
+                  <div><i className={styles.checkedBox} />{t(K("instructions.layout"))}</div>
+                </>
+              )}
+            </div>}
           </aside>
         }
         preview={
           <main className={styles.previewPanel} aria-label={t(K("a11y.preview"))}>
-          <div className={styles.previewHeader}>
-            <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : isContract ? t(K("contract.workspace")) : isForm ? t(K("form.workspace")) : t(K("preview.canvas"))}</small></div>
-            {isOcr || isContract || isForm ? (
-              <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
-                {showPreviewTools && (
-                  <>
-                <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomOut"))} title={hasPreview ? t(K("ocr.tool.zoomOut")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom <= 25} onClick={() => setOcrZoom((zoom) => Math.max(25, zoom - 25))}>
-                  <ZoomOut size={14} aria-hidden="true" />
-                </button>
-                <button type="button" className={`${styles.toolbarButton} ${styles.toolbarZoomValue}`} aria-label={t(K("ocr.tool.zoom"))} title={hasPreview ? t(K("ocr.tool.zoom")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => setOcrZoom(100)}>
-                  {ocrZoom}%
-                </button>
-                <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomIn"))} title={hasPreview ? t(K("ocr.tool.zoomIn")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom >= 300} onClick={() => setOcrZoom((zoom) => Math.min(300, zoom + 25))}>
-                  <ZoomIn size={14} aria-hidden="true" />
-                </button>
-                <span className={styles.toolbarDivider} />
-                  </>
-                )}
-                {isForm ? (
-                  <ExportMenu
-                    formats={FORM_EXPORT_FORMATS}
-                    hasResult={formFields.length > 0}
-                    busy={isFormExporting}
-                    isUnavailable={() => formFields.length === 0}
-                    hint={t(K("form.exportNeedResult"))}
-                    onPick={(format) => void exportForm(format)}
-                  />
-                ) : (
-                  <ExportMenu
-                    hasResult={isContract ? !!contractResult : !!ocrResult}
-                    busy={isContract ? isContractExporting : isToolbarExporting}
-                    {...(isOcr ? { active: ocrFormat } : {})}
-                    // Before a document is read, an OCR card sets the format the next run will produce instead.
-                    isUnavailable={(format) => (isContract ? !contractResult : !ocrResult && !!ocrTypeInfo && !ocrTypeInfo.outputFormats.includes(format))}
-                    hint={isContract ? t(K("contract.exportNeedResult")) : t(K("ocr.exportNeedResult"))}
-                    onPick={(format) => (isContract ? void exportContract(format) : ocrResult ? void exportFromToolbar(format) : setOcrFormat(format))}
-                  />
-                )}
-              </div>
-            ) : (
-              <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
-                <ZoomIn size={14} aria-hidden="true" />
-                <ZoomOut size={14} aria-hidden="true" />
-                <span>100% <ChevronDown size={12} /></span>
-                <Hand size={14} aria-hidden="true" />
-                <span className={styles.toolbarDivider} />
-                <span>{t(K("preview.compare"))}</span>
-                <span>{t(K("preview.annotate"))}</span>
-                <span><Download size={13} />{t(K("preview.export"))}</span>
-              </div>
-            )}
-          </div>
-
-
-          {isContract && (
-            <>
-              {contractTab === "preview" && (
-                <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
-                  {selectedFile && canPreviewFile(selectedFile) ? (
-                    <DocumentPreview key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} file={selectedFile} running={isContractRunning} zoom={ocrZoom} pan={ocrPan} annotate={ocrAnnotate} compareText={compareText} />
-                  ) : (
-                    <div className={styles.canvas}>
-                      <div className={styles.canvasEmptyState}>
-                        <span><FileText size={22} aria-hidden="true" /></span>
-                        <strong>{selectedFile ? selectedFile.name : t(K("contract.emptyTitle"))}</strong>
-                        <small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("contract.emptyHint"))}</small>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {contractTab === "review" && (
-                <div className={styles.ocrResultsPanel}>
-                  {isContractRunning ? (
-                    <div className={styles.contractLoading}>
-                      <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("contract.loading"))}</strong><span>{t(K("contract.loadingHint"))}</span></div>
-                    </div>
-                  ) : contractResult ? (
+            <div className={styles.previewHeader}>
+              <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : isContract ? t(K("contract.workspace")) : isForm ? t(K("form.workspace")) : t(K("preview.canvas"))}</small></div>
+              {isOcr || isContract || isForm ? (
+                <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
+                  {showPreviewTools && (
                     <>
-                      {contractFromHistory && <div className={styles.ocrNotice} role="status">{t(K("contract.history.notice"))}</div>}
-                      <ContractReviewView review={contractResult.review} fileName={contractResultName} creditsUsed={contractResult.creditsUsed} />
+                      <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomIn"))} title={hasPreview ? t(K("ocr.tool.zoomIn")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom >= 300} onClick={() => setOcrZoom((zoom) => Math.min(300, zoom + 25))}>
+                        <ZoomIn size={14} aria-hidden="true" />
+                      </button>
+                      <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomOut"))} title={hasPreview ? t(K("ocr.tool.zoomOut")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom <= 25} onClick={() => setOcrZoom((zoom) => Math.max(25, zoom - 25))}>
+                        <ZoomOut size={14} aria-hidden="true" />
+                      </button>
+                      <span className={styles.zoomDropdown} title={hasPreview ? undefined : t(K("ocr.tool.needFile"))}>
+                        <Dropdown
+                          value={String(ocrZoom)}
+                          options={Array.from({ length: 12 }, (_, index) => ({ value: String((index + 1) * 25), label: `${(index + 1) * 25}%` }))}
+                          onChange={(value) => setOcrZoom(Number(value))}
+                          ariaLabel={t(K("ocr.tool.zoom"))}
+                          disabled={!hasPreview}
+                          menuPosition="fixed"
+                          triggerClassName="h-[26px] min-h-0 w-[68px] gap-1 rounded-md border-transparent bg-transparent px-2 text-[10px] font-medium text-[#59626b] hover:bg-[#fff2ea]"
+                          menuClassName="min-w-[96px]"
+                          optionClassName="px-2.5 py-1.5 text-[11px]"
+                        />
+                      </span>
+                      <button type="button" className={`${styles.toolbarButton} ${ocrPan ? styles.toolbarButtonActive : ""}`} aria-label={t(K("ocr.tool.pan"))} aria-pressed={ocrPan} title={hasPreview ? t(K("ocr.tool.pan")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrPan((value) => !value); setOcrAnnotate(false); setFormDraw(false); }}>
+                        <Hand size={14} aria-hidden="true" />
+                      </button>
+                      <span className={styles.toolbarDivider} />
+                      {!isForm && (
+                        <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !compareReady ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !compareReady} onClick={() => setOcrCompare((value) => !value)}>
+                          <Columns2 size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.compare"))}</span>
+                        </button>
+                      )}
+                      <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); setFormDraw(false); }}>
+                        <MessageSquarePlus size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.annotate"))}</span>
+                      </button>
                     </>
+                  )}
+                  {isForm ? (
+                    <ExportMenu
+                      formats={FORM_EXPORT_FORMATS}
+                      hasResult={formFields.length > 0}
+                      busy={isFormExporting}
+                      isUnavailable={() => formFields.length === 0}
+                      hint={t(K("form.exportNeedResult"))}
+                      onPick={(format) => void exportForm(format)}
+                    />
                   ) : (
-                    <p className={styles.ocrMissing}>{t(K("contract.reviewEmpty"))}</p>
+                    <ExportMenu
+                      hasResult={isContract ? !!contractResult : !!ocrResult}
+                      busy={isContract ? isContractExporting : isToolbarExporting}
+                      {...(isOcr ? { active: ocrFormat } : {})}
+                      // Before a document is read, an OCR card sets the format the next run will produce instead.
+                      isUnavailable={(format) => (isContract ? !contractResult : !ocrResult && !!ocrTypeInfo && !ocrTypeInfo.outputFormats.includes(format))}
+                      hint={isContract ? t(K("contract.exportNeedResult")) : t(K("ocr.exportNeedResult"))}
+                      onPick={(format) => (isContract ? void exportContract(format) : ocrResult ? void exportFromToolbar(format) : setOcrFormat(format))}
+                    />
                   )}
                 </div>
-              )}
-              {contractTab === "history" && (
-                <div className={styles.ocrResultsPanel}>
-                  <ContractHistoryPanel refreshKey={contractHistoryKey} onOpen={openContractFromHistory} />
+              ) : (
+                <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
+                  <ZoomIn size={14} aria-hidden="true" />
+                  <ZoomOut size={14} aria-hidden="true" />
+                  <span>100% <ChevronDown size={12} /></span>
+                  <Hand size={14} aria-hidden="true" />
+                  <span className={styles.toolbarDivider} />
+                  <span>{t(K("preview.compare"))}</span>
+                  <span>{t(K("preview.annotate"))}</span>
+                  <span><Download size={13} />{t(K("preview.export"))}</span>
                 </div>
               )}
-              <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("contract.tab.label"))}>
-                <button type="button" role="tab" aria-selected={contractTab === "preview"} className={contractTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setContractTab("preview")}>{t(K("contract.tab.preview"))}</button>
-                <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
-                <button type="button" role="tab" aria-selected={contractTab === "history"} className={contractTab === "history" ? styles.previewTabActive : undefined} onClick={() => setContractTab("history")}>{t(K("contract.tab.history"))}</button>
-              </div>
-            </>
-          )}
+            </div>
 
-          {isForm && signaturePadOpen && (
-            <SignaturePad
-              onCancel={() => setSignaturePadOpen(false)}
-              onDone={(signature) => {
-                setFormSignature(signature);
-                setSignaturePadOpen(false);
-                setFormTool("signature");
-              }}
-            />
-          )}
-          {isForm && (
-            <>
-              {/* Kept mounted when another tab is open, so the marks made on the form are still there and can be exported. */}
-              <div style={{ display: formTab === "preview" ? "contents" : "none" }}>
-                <>
-                  <FormToolbar
-                    tool={formTool}
-                    onTool={selectFormTool}
-                    zoom={ocrZoom}
-                    onZoom={setOcrZoom}
-                    fit={formFit.mode}
-                    onFit={(mode) => setFormFit({ mode, nonce: Date.now() })}
-                    reflow={formReflow}
-                    onReflow={() => setFormReflow((value) => !value)}
-                    reflowDisabled={!hasPreview || !formResult?.blocks?.length || formFromHistory}
-                    showValues={formShowValues}
-                    onShowValues={() => setFormShowValues((value) => !value)}
-                    onRotate={(direction) => setFormRotation((value) => ((value + (direction === 1 ? 90 : 270)) % 360) as PreviewRotation)}
-                    hasPreview={hasPreview}
-                    hasFields={formFields.length > 0}
-                    canDraw={!!formResult && !formFromHistory}
-                    canSave={!!formHistoryId}
-                    saving={isSavingMarks}
-                    onSave={() => void saveFormChanges()}
-                    onCopy={(kind) => void copyFormFields(kind)}
-                    hasSignature={!!formSignature}
-                    onNewSignature={() => setSignaturePadOpen(true)}
-                    textStyle={textStyle}
-                    onTextStyle={changeTextStyle}
-                    highlightColor={highlightColor}
-                    onHighlightColor={changeHighlightColor}
-                  />
-                  {formNotice && <div className={styles.formNotice} role="status">{formNotice}</div>}
+
+            {isContract && (
+              <>
+                {contractTab === "preview" && (
                   <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
                     {selectedFile && canPreviewFile(selectedFile) ? (
-                      <DocumentPreview
-                        key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`}
-                        file={selectedFile}
-                        running={isFormRunning}
-                        zoom={ocrZoom}
-                        pan={formTool === "hand"}
-                        annotate={formTool === "notes"}
-                        compareText={formReflow && formResult?.blocks?.length && !formFromHistory ? reflowText : null}
-                        textOnly={formReflow}
-                        overlay={formOverlay}
-                        onOverlaySelect={setFormSelectedId}
-                        draw={formDraw}
-                        onDrawn={handleFormDrawn}
-                        rotation={formRotation}
-                        {...(formGoToPage ? { goToPage: formGoToPage } : {})}
-                        markTool={(["text", "highlight", "check", "cross", "date", "signature", "snapshot"] as const).includes(formTool as MarkTool) ? (formTool as MarkTool) : null}
-                        markStyle={textStyle}
-                        highlightColor={highlightColor}
-                        signature={formSignature}
-                        handleRef={formPreviewRef}
-                        initialMarks={formInitialMarks}
-                        onNotice={showFormNotice}
-                        {...(formFit.nonce ? { fit: formFit } : {})}
-                        onFitZoom={setOcrZoom}
-                      />
+                      <DocumentPreview key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} file={selectedFile} running={isContractRunning} zoom={ocrZoom} pan={ocrPan} annotate={ocrAnnotate} compareText={compareText} />
                     ) : (
                       <div className={styles.canvas}>
                         <div className={styles.canvasEmptyState}>
                           <span><FileText size={22} aria-hidden="true" /></span>
-                          <strong>{selectedFile ? selectedFile.name : t(K("form.emptyTitle"))}</strong>
-                          <small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("form.emptyHint"))}</small>
+                          <strong>{selectedFile ? selectedFile.name : t(K("contract.emptyTitle"))}</strong>
+                          <small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("contract.emptyHint"))}</small>
                         </div>
                       </div>
                     )}
                   </div>
-                  {selectedFile && !formResult && !isFormRunning && <div className={styles.ocrNotice} role="status" style={{ marginTop: 10 }}>{t(K("form.beforeRead"))}</div>}
-                  {formRegion && (
-                    <div className={styles.formStrip}>
-                      <h5>{t(K("form.region.title"))}</h5>
-                      <div className={styles.formStripRow}>
-                        <label>{t(K("form.region.label"))}<input value={formRegionLabel} maxLength={120} onChange={(event) => setFormRegionLabel(event.target.value)} /></label>
-                        <label>{t(K("form.region.value"))}<input value={formRegionValue} maxLength={1000} onChange={(event) => setFormRegionValue(event.target.value)} /></label>
+                )}
+                {contractTab === "review" && (
+                  <div className={styles.ocrResultsPanel}>
+                    {isContractRunning ? (
+                      <div className={styles.contractLoading}>
+                        <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("contract.loading"))}</strong><span>{t(K("contract.loadingHint"))}</span></div>
                       </div>
-                      {!formRegionValue && <p className={styles.formStripNote}>{t(K("form.region.noText"))}</p>}
-                      <div className={styles.formStripRow}>
-                        <button type="button" className={styles.formStripPrimary} disabled={!formRegionLabel.trim()} onClick={addRegionField}>{t(K("form.region.add"))}</button>
-                        <button type="button" onClick={() => setFormRegion(null)}>{t(K("form.region.cancel"))}</button>
-                      </div>
-                    </div>
-                  )}
-                </>
-              </div>
-              {formTab === "results" && (
-                <div className={styles.ocrResultsPanel}>
-                  {formFromHistory && <div className={styles.ocrNotice} role="status">{t(K("form.history.notice"))}</div>}
-                  <FormResultsView
-                    fields={formFields}
-                    selectedId={formSelectedId}
-                    onSelect={setFormSelectedId}
-                    onChange={changeFormValue}
-                    title={formResult ? selectedFile?.name ?? undefined : undefined}
-                    {...(hasPreview && !formFromHistory ? { onLocate: locateFormField } : {})}
-                  />
-                </div>
-              )}
-              {formTab === "history" && (
-                <div className={styles.ocrResultsPanel}>
-                  <FormHistoryPanel refreshKey={formHistoryKey} onOpen={openFormFromHistory} />
-                </div>
-              )}
-              <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("form.tab.label"))}>
-                <button type="button" role="tab" aria-selected={formTab === "preview"} className={formTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setFormTab("preview")}>{t(K("form.tab.preview"))}</button>
-                <button type="button" role="tab" aria-selected={formTab === "results"} className={formTab === "results" ? styles.previewTabActive : undefined} disabled={formFields.length === 0} title={formFields.length ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setFormTab("results")}>{t(K("form.tab.results"))}</button>
-                <button type="button" role="tab" aria-selected={formTab === "history"} className={formTab === "history" ? styles.previewTabActive : undefined} onClick={() => setFormTab("history")}>{t(K("form.tab.history"))}</button>
-              </div>
-            </>
-          )}
-
-          {!isContract && !isForm && (!isOcr || ocrTab === "preview") && (
-            <>
-          <div className={`${styles.previewStage} ${isSummarize ? styles.previewStageSummary : ""} ${isOcr && selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : ""}`}>
-            {isSummarize ? (
-              <div className={styles.summaryStage}>
-                <article className={styles.summaryDocument}>
-                  <div className={styles.summaryDocumentTopline}>
-                    <span className={styles.sampleBadge}>{summaryResult ? t(K("summary.generated")) : t(K("summary.sample"))}</span>
-                    <span>{selectedFile?.name ?? t(K("summary.sampleDoc"))}</span>
+                    ) : contractResult ? (
+                      <>
+                        {contractFromHistory && <div className={styles.ocrNotice} role="status">{t(K("contract.history.notice"))}</div>}
+                        <ContractReviewView review={contractResult.review} fileName={contractResultName} creditsUsed={contractResult.creditsUsed} />
+                      </>
+                    ) : (
+                      <p className={styles.ocrMissing}>{t(K("contract.reviewEmpty"))}</p>
+                    )}
                   </div>
-                  <div className={styles.summaryDocumentHeading}>
-                    <small>{t(K(`summary.${summaryStyle}`)).toUpperCase()}</small>
-                    <h3>{summaryResult?.title ?? t(K("summary.docTitle"))}</h3>
-                    <p>{summaryResult?.executiveSummary ?? `${t(K("summary.leadBefore"))}${t(K("summary.leadValue"))}${t(K("summary.leadAfter"))}`}</p>
+                )}
+                {contractTab === "history" && (
+                  <div className={styles.ocrResultsPanel}>
+                    <ContractHistoryPanel refreshKey={contractHistoryKey} onOpen={openContractFromHistory} />
                   </div>
-                  {!summaryResult && <div className={styles.summaryMetric}>
-                    <span><small>{t(K("summary.totalRevenue"))}</small><strong>$8.42M</strong><em>{t(K("summary.vsQ1"), { value: "+18.6%" })}</em></span>
-                    <span><small>{t(K("summary.netProfit"))}</small><strong>$1.68M</strong><em>{t(K("summary.vsQ1"), { value: "+34.4%" })}</em></span>
-                    <span><small>{t(K("summary.grossProfit"))}</small><strong>$3.92M</strong><em>{t(K("summary.vsQ1"), { value: "+22.1%" })}</em></span>
-                  </div>}
-                  {(summaryResult?.keyTakeaways.length ?? 2) > 0 && <div className={styles.summaryTakeaways}>
-                    <h4>{t(K("summary.takeawaysHeading"))}</h4>
-                    <ul>{(summaryResult?.keyTakeaways ?? [t(K("summary.takeaway1")), t(K("summary.takeaway2"))]).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
-                  </div>}
-                  {summaryResult?.actionItems.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.actionItems"))}</h4><ul>{summaryResult.actionItems.map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul></div> : null}
-                  {summaryResult?.decisions.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.decisions"))}</h4><ul>{summaryResult.decisions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul></div> : null}
-                  {summaryResult?.importantDates.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.importantDates"))}</h4><ul>{summaryResult.importantDates.map((item, index) => <li key={`${index}-${item.date}-${item.event}`}>{item.date} · {item.event}</li>)}</ul></div> : null}
-                  <div className={styles.summaryDocumentFooter}>{summaryResult ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
-                </article>
-                {isSummarizing && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("summary.loading"))}</strong><span>{t(K("summary.loadingHint"))}</span></div>}
-              </div>
-            ) : isOcr && selectedFile && canPreviewFile(selectedFile) ? (
-              <DocumentPreview key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} file={selectedFile} running={isOcrRunning} zoom={ocrZoom} pan={ocrPan} annotate={ocrAnnotate} compareText={compareText} />
-            ) : (
-              <>
-                <div className={styles.pageRail} aria-hidden="true">
-                  {[1, 2, 3, 4].map((page) => (
-                    <div key={page} className={`${styles.pageThumb} ${page === 1 ? styles.pageThumbActive : ""}`}>
-                      <span>{page}</span>
-                      <div><i /><i /><i /></div>
-                    </div>
-                  ))}
-                </div>
-                <div className={styles.canvas}>
-                  <div className={styles.documentSheet} aria-hidden="true">
-                    <div className={styles.sheetTopline}><span /><span>{t(K("preview.sheetLabel"))}</span></div>
-                    <div className={styles.sheetTitle} />
-                    <div className={styles.sheetSubtitle} />
-                    <div className={styles.sheetParagraph}><i /><i /><i /><i /></div>
-                    <div className={styles.sheetDataRow}>
-                      <div className={styles.sheetTable}><i /><i /><i /><i /><i /><i /></div>
-                      <div className={styles.sheetChart}><b /><b /><b /><b /><b /></div>
-                    </div>
-                    <div className={styles.sheetParagraph}><i /><i /><i /></div>
-                  </div>
-                  {!(isOcr && isOcrRunning) && (
-                    <div className={styles.canvasEmptyState}>
-                      <span><FileText size={22} aria-hidden="true" /></span>
-                      <strong>{isOcr && selectedFile ? selectedFile.name : t(K("preview.emptyTitle"))}</strong>
-                      <small>{isOcr && selectedFile ? formatFileSize(selectedFile.size) : t(K("preview.emptyHint"))}</small>
-                    </div>
-                  )}
-                  {isOcr && isOcrRunning && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("ocr.loading"))}</strong><span>{t(K("ocr.loadingHint"))}</span></div>}
-                  <div className={styles.canvasPageNumber}>{t(K("preview.pageOf"))}</div>
+                )}
+                <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("contract.tab.label"))}>
+                  <button type="button" role="tab" aria-selected={contractTab === "preview"} className={contractTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setContractTab("preview")}>{t(K("contract.tab.preview"))}</button>
+                  <button type="button" role="tab" aria-selected={contractTab === "review"} className={contractTab === "review" ? styles.previewTabActive : undefined} onClick={() => setContractTab("review")}>{t(K("contract.tab.review"))}</button>
+                  <button type="button" role="tab" aria-selected={contractTab === "history"} className={contractTab === "history" ? styles.previewTabActive : undefined} onClick={() => setContractTab("history")}>{t(K("contract.tab.history"))}</button>
                 </div>
               </>
             )}
-          </div>
 
-          {isSummarize ? (
-            <div className={styles.summaryOutputCards}>
-              <article><div><NotebookPen size={13} /><strong>{t(K("summary.cardExecutive"))}</strong></div><p>{summaryResult?.executiveSummary ?? t(K("summary.cardExecutiveBody"))}</p></article>
-              <article><div><ListChecks size={13} /><strong>{t(K("summary.takeawaysHeading"))}</strong></div><p>{summaryResult?.keyTakeaways.join(" · ") ?? t(K("summary.cardTakeawaysBody"))}</p></article>
-              <article><div><Sparkles size={13} /><strong>{summaryResult ? t(K("summary.actionItems")) : t(K("summary.cardNext"))}</strong></div><p>{summaryResult ? [...summaryResult.actionItems.map((item) => item.task), ...summaryResult.importantDates.map((item) => `${item.date}: ${item.event}`)].join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardNextBody"))}</p></article>
-            </div>
-          ) : (
-            <div className={styles.outputCards}>
-              {isOcr && ocrResult ? (
-                buildOcrCards(ocrResult, locale, t).map((card, index) => {
-                  const Icon = outputs[index]?.icon ?? Sparkles;
-                  return (
-                    // A div, not a button: buttons centre their content vertically and the page-wide text floor
-                    // forces buttons and list items to a larger size than the rest of the card.
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      className={`${styles.outputCard} ${styles.outputCardFilled}`}
-                      key={card.slot}
-                      title={t(K("cards.openResult"))}
-                      onClick={() => setOcrTab("result")}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setOcrTab("result");
-                        }
-                      }}
-                    >
-                      <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{card.title}</strong></div>
-                      <div className={`${styles.outputCardBody} ${card.muted ? styles.outputCardMuted : ""}`}>
-                        {card.lines.map((line, lineIndex) => <span key={lineIndex}>{line}</span>)}
-                      </div>
+            {isForm && signaturePadOpen && (
+              <SignaturePad
+                onCancel={() => setSignaturePadOpen(false)}
+                onDone={(signature) => {
+                  setFormSignature(signature);
+                  setSignaturePadOpen(false);
+                  setFormTool("signature");
+                }}
+              />
+            )}
+            {isForm && (
+              <>
+                {/* Kept mounted when another tab is open, so the marks made on the form are still there and can be exported. */}
+                <div style={{ display: formTab === "preview" ? "contents" : "none" }}>
+                  <>
+                    <FormToolbar
+                      tool={formTool}
+                      onTool={selectFormTool}
+                      zoom={ocrZoom}
+                      onZoom={setOcrZoom}
+                      fit={formFit.mode}
+                      onFit={(mode) => setFormFit({ mode, nonce: Date.now() })}
+                      reflow={formReflow}
+                      onReflow={() => setFormReflow((value) => !value)}
+                      reflowDisabled={!hasPreview || !formResult?.blocks?.length || formFromHistory}
+                      showValues={formShowValues}
+                      onShowValues={() => setFormShowValues((value) => !value)}
+                      onRotate={(direction) => setFormRotation((value) => ((value + (direction === 1 ? 90 : 270)) % 360) as PreviewRotation)}
+                      hasPreview={hasPreview}
+                      hasFields={formFields.length > 0}
+                      canDraw={!!formResult && !formFromHistory}
+                      canSave={!!formHistoryId}
+                      saving={isSavingMarks}
+                      onSave={() => void saveFormChanges()}
+                      onCopy={(kind) => void copyFormFields(kind)}
+                      hasSignature={!!formSignature}
+                      onNewSignature={() => setSignaturePadOpen(true)}
+                      textStyle={textStyle}
+                      onTextStyle={changeTextStyle}
+                      highlightColor={highlightColor}
+                      onHighlightColor={changeHighlightColor}
+                    />
+                    {formNotice && <div className={styles.formNotice} role="status">{formNotice}</div>}
+                    <div className={`${styles.previewStage} ${selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
+                      {selectedFile && canPreviewFile(selectedFile) ? (
+                        <DocumentPreview
+                          key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`}
+                          file={selectedFile}
+                          running={isFormRunning}
+                          zoom={ocrZoom}
+                          pan={formTool === "hand"}
+                          annotate={formTool === "notes"}
+                          compareText={formReflow && formResult?.blocks?.length && !formFromHistory ? reflowText : null}
+                          textOnly={formReflow}
+                          overlay={formOverlay}
+                          onOverlaySelect={setFormSelectedId}
+                          draw={formDraw}
+                          onDrawn={handleFormDrawn}
+                          rotation={formRotation}
+                          {...(formGoToPage ? { goToPage: formGoToPage } : {})}
+                          markTool={(["text", "highlight", "check", "cross", "date", "signature", "snapshot"] as const).includes(formTool as MarkTool) ? (formTool as MarkTool) : null}
+                          markStyle={textStyle}
+                          highlightColor={highlightColor}
+                          signature={formSignature}
+                          handleRef={formPreviewRef}
+                          initialMarks={formInitialMarks}
+                          onNotice={showFormNotice}
+                          {...(formFit.nonce ? { fit: formFit } : {})}
+                          onFitZoom={setOcrZoom}
+                        />
+                      ) : (
+                        <div className={styles.canvas}>
+                          <div className={styles.canvasEmptyState}>
+                            <span><FileText size={22} aria-hidden="true" /></span>
+                            <strong>{selectedFile ? selectedFile.name : t(K("form.emptyTitle"))}</strong>
+                            <small>{selectedFile ? formatFileSize(selectedFile.size) : t(K("form.emptyHint"))}</small>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  );
-                })
-              ) : outputs.map(({ key, icon: Icon }) => (
-                <div className={styles.outputCard} key={key}>
-                  <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{t(key)}</strong></div>
-                  <i /><i /><i />
-                  <small>{t(K("output.pending"))}</small>
+                    {selectedFile && !formResult && !isFormRunning && <div className={styles.ocrNotice} role="status" style={{ marginTop: 10 }}>{t(K("form.beforeRead"))}</div>}
+                    {formRegion && (
+                      <div className={styles.formStrip}>
+                        <h5>{t(K("form.region.title"))}</h5>
+                        <div className={styles.formStripRow}>
+                          <label>{t(K("form.region.label"))}<input value={formRegionLabel} maxLength={120} onChange={(event) => setFormRegionLabel(event.target.value)} /></label>
+                          <label>{t(K("form.region.value"))}<input value={formRegionValue} maxLength={1000} onChange={(event) => setFormRegionValue(event.target.value)} /></label>
+                        </div>
+                        {!formRegionValue && <p className={styles.formStripNote}>{t(K("form.region.noText"))}</p>}
+                        <div className={styles.formStripRow}>
+                          <button type="button" className={styles.formStripPrimary} disabled={!formRegionLabel.trim()} onClick={addRegionField}>{t(K("form.region.add"))}</button>
+                          <button type="button" onClick={() => setFormRegion(null)}>{t(K("form.region.cancel"))}</button>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 </div>
-              ))}
-            </div>
-          )}
-            </>
-          )}
-          {isOcr && ocrFromHistory && ocrResult && (ocrTab === "result" || ocrTab === "text") && <div className={styles.ocrNotice} role="status">{t(K("ocr.history.notice"))}</div>}
-          {isOcr && ocrTab === "history" && (
-            <div className={styles.ocrResultsPanel}>
-              <OcrHistoryPanel refreshKey={historyKey} onOpen={openFromHistory} />
-            </div>
-          )}
-          {isOcr && ocrTab === "text" && ocrResult && (
-            <div className={styles.ocrResultsPanel}>
-              <OcrFullTextView result={ocrResult} />
-            </div>
-          )}
-          {isOcr && ocrTab === "result" && ocrResult && (
-            <div className={styles.ocrResultsPanel}>
-              <div className={styles.ocrStats}>
-                <article><small>{t(K("ocr.statPages"))}</small><strong>{ocrResult.pages}</strong></article>
-                <article><small>{t(K("ocr.statDocuments"))}</small><strong>{ocrResult.text.length ? ocrResult.text.length : ocrResult.documents.length}</strong></article>
-                <article><small>{t(K("ocr.statCredits"))}</small><strong>{ocrResult.creditsUsed + (ocrResult.styleCreditsUsed ?? 0)}</strong></article>
-                <article><small>{t(K("ocr.statTime"))}</small><strong>{ocrResult.processMs !== undefined ? `${(ocrResult.processMs / 1000).toFixed(1)}s` : "—"}</strong></article>
+                {formTab === "results" && (
+                  <div className={styles.ocrResultsPanel}>
+                    {formFromHistory && <div className={styles.ocrNotice} role="status">{t(K("form.history.notice"))}</div>}
+                    <FormResultsView
+                      fields={formFields}
+                      selectedId={formSelectedId}
+                      onSelect={setFormSelectedId}
+                      onChange={changeFormValue}
+                      title={formResult ? selectedFile?.name ?? undefined : undefined}
+                      {...(hasPreview && !formFromHistory ? { onLocate: locateFormField } : {})}
+                    />
+                  </div>
+                )}
+                {formTab === "history" && (
+                  <div className={styles.ocrResultsPanel}>
+                    <FormHistoryPanel refreshKey={formHistoryKey} onOpen={openFormFromHistory} />
+                  </div>
+                )}
+                <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("form.tab.label"))}>
+                  <button type="button" role="tab" aria-selected={formTab === "preview"} className={formTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setFormTab("preview")}>{t(K("form.tab.preview"))}</button>
+                  <button type="button" role="tab" aria-selected={formTab === "results"} className={formTab === "results" ? styles.previewTabActive : undefined} disabled={formFields.length === 0} title={formFields.length ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setFormTab("results")}>{t(K("form.tab.results"))}</button>
+                  <button type="button" role="tab" aria-selected={formTab === "history"} className={formTab === "history" ? styles.previewTabActive : undefined} onClick={() => setFormTab("history")}>{t(K("form.tab.history"))}</button>
+                </div>
+              </>
+            )}
+
+            {!isContract && !isForm && (!isOcr || ocrTab === "preview") && (
+              <>
+                <div className={`${styles.previewStage} ${isSummarize ? styles.previewStageSummary : ""} ${isOcr && selectedFile && canPreviewFile(selectedFile) ? styles.previewStageDocument : styles.previewStageSingle}`}>
+                  {isSummarize ? (
+                    <div className={styles.summaryStage}>
+                      <article className={styles.summaryDocument}>
+                        <div className={styles.summaryDocumentTopline}>
+                          <span className={styles.sampleBadge}>{summaryResult ? t(K("summary.generated")) : t(K("summary.sample"))}</span>
+                          <span>{selectedFile?.name ?? t(K("summary.sampleDoc"))}</span>
+                        </div>
+                        <div className={styles.summaryDocumentHeading}>
+                          <small>{t(K(`summary.${summaryStyle}`)).toUpperCase()}</small>
+                          <h3>{summaryResult?.title ?? t(K("summary.docTitle"))}</h3>
+                          <p>{summaryResult?.executiveSummary ?? `${t(K("summary.leadBefore"))}${t(K("summary.leadValue"))}${t(K("summary.leadAfter"))}`}</p>
+                        </div>
+                        {!summaryResult && <div className={styles.summaryMetric}>
+                          <span><small>{t(K("summary.totalRevenue"))}</small><strong>$8.42M</strong><em>{t(K("summary.vsQ1"), { value: "+18.6%" })}</em></span>
+                          <span><small>{t(K("summary.netProfit"))}</small><strong>$1.68M</strong><em>{t(K("summary.vsQ1"), { value: "+34.4%" })}</em></span>
+                          <span><small>{t(K("summary.grossProfit"))}</small><strong>$3.92M</strong><em>{t(K("summary.vsQ1"), { value: "+22.1%" })}</em></span>
+                        </div>}
+                        {(summaryResult?.keyTakeaways.length ?? 2) > 0 && <div className={styles.summaryTakeaways}>
+                          <h4>{t(K("summary.takeawaysHeading"))}</h4>
+                          <ul>{(summaryResult?.keyTakeaways ?? [t(K("summary.takeaway1")), t(K("summary.takeaway2"))]).map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul>
+                        </div>}
+                        {summaryResult?.actionItems.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.actionItems"))}</h4><ul>{summaryResult.actionItems.map((item, index) => <li key={`${index}-${item.task}`}>{item.task}{item.owner ? ` · ${item.owner}` : ""}{item.dueDate ? ` · ${item.dueDate}` : ""}</li>)}</ul></div> : null}
+                        {summaryResult?.decisions.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.decisions"))}</h4><ul>{summaryResult.decisions.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}</ul></div> : null}
+                        {summaryResult?.importantDates.length ? <div className={styles.summaryTakeaways}><h4>{t(K("summary.importantDates"))}</h4><ul>{summaryResult.importantDates.map((item, index) => <li key={`${index}-${item.date}-${item.event}`}>{item.date} · {item.event}</li>)}</ul></div> : null}
+                        <div className={styles.summaryDocumentFooter}>{summaryResult ? t(K("summary.generatedBy"), { model: summaryOptions.model }) : t(K("summary.footer"))}</div>
+                      </article>
+                      {isSummarizing && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("summary.loading"))}</strong><span>{t(K("summary.loadingHint"))}</span></div>}
+                    </div>
+                  ) : isOcr && selectedFile && canPreviewFile(selectedFile) ? (
+                    <DocumentPreview key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} file={selectedFile} running={isOcrRunning} zoom={ocrZoom} pan={ocrPan} annotate={ocrAnnotate} compareText={compareText} />
+                  ) : (
+                    <>
+                      <div className={styles.canvas}>
+                        <div className={`${styles.documentSheet} ${selectedFile ? "" : styles.documentSheetSample}`} aria-hidden="true">
+                          <div className={styles.sheetTopline}><span /><span>{t(K("preview.sheetLabel"))}</span></div>
+                          <div className={styles.sheetTitle} />
+                          <div className={styles.sheetSubtitle} />
+                          <div className={styles.sheetParagraph}><i /><i /><i /><i /></div>
+                          <div className={styles.sheetDataRow}>
+                            <div className={styles.sheetTable}><i /><i /><i /><i /><i /><i /></div>
+                            <div className={styles.sheetChart}><b /><b /><b /><b /><b /></div>
+                          </div>
+                          <div className={styles.sheetParagraph}><i /><i /><i /></div>
+                        </div>
+                        {!(isOcr && isOcrRunning) && !(isOcr && !selectedFile) && (
+                          <div className={styles.canvasEmptyState}>
+                            <span><FileText size={22} aria-hidden="true" /></span>
+                            <strong>{isOcr && selectedFile ? selectedFile.name : t(K("preview.emptyTitle"))}</strong>
+                            <small>{isOcr && selectedFile ? formatFileSize(selectedFile.size) : t(K("preview.emptyHint"))}</small>
+                          </div>
+                        )}
+                        {isOcr && isOcrRunning && <div className={styles.summaryLoading} role="status"><Sparkles size={18} aria-hidden="true" /><strong>{t(K("ocr.loading"))}</strong><span>{t(K("ocr.loadingHint"))}</span></div>}
+                        <div className={styles.canvasPageNumber}>{t(K("preview.pageOf"))}</div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {isSummarize ? (
+                  <div className={styles.summaryOutputCards}>
+                    <article><div><NotebookPen size={13} /><strong>{t(K("summary.cardExecutive"))}</strong></div><p>{summaryResult?.executiveSummary ?? t(K("summary.cardExecutiveBody"))}</p></article>
+                    <article><div><ListChecks size={13} /><strong>{t(K("summary.takeawaysHeading"))}</strong></div><p>{summaryResult?.keyTakeaways.join(" · ") ?? t(K("summary.cardTakeawaysBody"))}</p></article>
+                    <article><div><Sparkles size={13} /><strong>{summaryResult ? t(K("summary.actionItems")) : t(K("summary.cardNext"))}</strong></div><p>{summaryResult ? [...summaryResult.actionItems.map((item) => item.task), ...summaryResult.importantDates.map((item) => `${item.date}: ${item.event}`)].join(" · ") || t(K("summary.noneFound")) : t(K("summary.cardNextBody"))}</p></article>
+                  </div>
+                ) : (
+                  <div className={styles.outputCards}>
+                    {isOcr && ocrResult ? (
+                      buildOcrCards(ocrResult, locale, t).map((card, index) => {
+                        const Icon = outputs[index]?.icon ?? Sparkles;
+                        return (
+                          // A div, not a button: buttons centre their content vertically and the page-wide text floor
+                          // forces buttons and list items to a larger size than the rest of the card.
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className={`${styles.outputCard} ${styles.outputCardFilled}`}
+                            key={card.slot}
+                            title={t(K("cards.openResult"))}
+                            onClick={() => setOcrTab("result")}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setOcrTab("result");
+                              }
+                            }}
+                          >
+                            <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{card.title}</strong></div>
+                            <div className={`${styles.outputCardBody} ${card.muted ? styles.outputCardMuted : ""}`}>
+                              {card.lines.map((line, lineIndex) => <span key={lineIndex}>{line}</span>)}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : outputs.map(({ key, icon: Icon }) => (
+                      <div className={styles.outputCard} key={key}>
+                        <div className={styles.outputTitle}><Icon size={13} aria-hidden="true" /><strong>{t(key)}</strong></div>
+                        <i /><i /><i />
+                        <small>{t(K("output.pending"))}</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {isOcr && ocrFromHistory && ocrResult && (ocrTab === "result" || ocrTab === "text") && <div className={styles.ocrNotice} role="status">{t(K("ocr.history.notice"))}</div>}
+            {isOcr && ocrTab === "history" && (
+              <div className={styles.ocrResultsPanel}>
+                <OcrHistoryPanel refreshKey={historyKey} onOpen={openFromHistory} />
               </div>
-              <OcrResultView result={ocrResult} fileName={ocrResultName} showConfidence={ocrConfidence} exportFormat={ocrFormat} showStyled={ocrShowStyled} onShowStyledChange={setOcrShowStyled} />
-            </div>
-          )}
-          {isOcr && (
-            <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("ocr.tab.label"))}>
-              <button type="button" role="tab" aria-selected={ocrTab === "preview"} className={ocrTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("preview")}>{t(K("ocr.tab.preview"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "result"} className={ocrTab === "result" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("result")}>{t(K("ocr.tab.result"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "text"} className={ocrTab === "text" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("text")}>{t(K("ocr.tab.text"))}</button>
-              <button type="button" role="tab" aria-selected={ocrTab === "history"} className={ocrTab === "history" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("history")}>{t(K("ocr.tab.history"))}</button>
-            </div>
-          )}
+            )}
+            {isOcr && ocrTab === "text" && ocrResult && (
+              <div className={styles.ocrResultsPanel}>
+                <OcrFullTextView result={ocrResult} />
+              </div>
+            )}
+            {isOcr && ocrTab === "result" && ocrResult && (
+              <div className={styles.ocrResultsPanel}>
+                <div className={styles.ocrStats}>
+                  <article><small>{t(K("ocr.statPages"))}</small><strong>{ocrResult.pages}</strong></article>
+                  <article><small>{t(K("ocr.statDocuments"))}</small><strong>{ocrResult.text.length ? ocrResult.text.length : ocrResult.documents.length}</strong></article>
+                  <article><small>{t(K("ocr.statCredits"))}</small><strong>{ocrResult.creditsUsed + (ocrResult.styleCreditsUsed ?? 0)}</strong></article>
+                  <article><small>{t(K("ocr.statTime"))}</small><strong>{ocrResult.processMs !== undefined ? `${(ocrResult.processMs / 1000).toFixed(1)}s` : "—"}</strong></article>
+                </div>
+                <OcrResultView result={ocrResult} fileName={ocrResultName} showConfidence={ocrConfidence} exportFormat={ocrFormat} showStyled={ocrShowStyled} onShowStyledChange={setOcrShowStyled} />
+              </div>
+            )}
+            {isOcr && (
+              <div className={`${styles.previewTabs} ${styles.previewTabsBottom}`} role="tablist" aria-label={t(K("ocr.tab.label"))}>
+                <button type="button" role="tab" aria-selected={ocrTab === "preview"} className={ocrTab === "preview" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("preview")}>{t(K("ocr.tab.preview"))}</button>
+                <button type="button" role="tab" aria-selected={ocrTab === "result"} className={ocrTab === "result" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("result")}>{t(K("ocr.tab.result"))}</button>
+                <button type="button" role="tab" aria-selected={ocrTab === "text"} className={ocrTab === "text" ? styles.previewTabActive : undefined} disabled={!ocrResult} title={ocrResult ? undefined : t(K("ocr.tool.needResult"))} onClick={() => setOcrTab("text")}>{t(K("ocr.tab.text"))}</button>
+                <button type="button" role="tab" aria-selected={ocrTab === "history"} className={ocrTab === "history" ? styles.previewTabActive : undefined} onClick={() => setOcrTab("history")}>{t(K("ocr.tab.history"))}</button>
+              </div>
+            )}
           </main>
         }
         right={
           <aside className={styles.settingsPanel} aria-label={t(K("a11y.settings"))}>
-          <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
-          <div className={styles.settingGroup}>
-            <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
-            {isContract ? <>
-              <VideoModelDropdown
-                models={contractModels}
-                value={selectedContractModel}
-                loading={contractModelsLoading}
-                ariaLabel={t(K("contract.modelOptions"))}
-                placeholder={t(K("summary.noModel"))}
-                onChange={setSelectedContractModel}
-              />
-              {contractModelsError ? <p className={styles.modelLoadError} role="alert">
-                {contractModelsError}
-                <button type="button" onClick={() => setContractModelRetry((current) => current + 1)}>{t("create.video.common.retry")}</button>
-              </p> : null}
-            </> : isForm ? <>
-              <VideoModelDropdown
-                models={formModels}
-                value={selectedFormModel}
-                loading={formModelsLoading}
-                ariaLabel={t(K("form.modelOptions"))}
-                placeholder={t(K("summary.noModel"))}
-                onChange={setSelectedFormModel}
-              />
-              {formModelsError ? <p className={styles.modelLoadError} role="alert">
-                {formModelsError}
-                <button type="button" onClick={() => setFormModelRetry((current) => current + 1)}>{t("create.video.common.retry")}</button>
-              </p> : null}
-            </> : isSummarize || isOcr || isContract ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{isOcr ? t(K("ocr.modelName")) : t(K("summary.modelName"))}</strong><small>{isOcr ? t(K("ocr.modelHint")) : t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
-              <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("settings.standard"))}</strong><small>{t(K("settings.standardHint"))}</small></div>
-              <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
-            </div>}
-          </div>
-          {/* Gen Document picks its file format from the Export button instead of here. */}
-          {!isOcr && !isContract && !isForm && (
+            <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
             <div className={styles.settingGroup}>
-              <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
-              <div className={styles.formatCards}>
-                {["DOCX", "PDF", "TXT", "JSON"].map((format, index) => (
-                  <div key={format} className={`${styles.formatCard} ${index === 0 ? styles.formatCardActive : ""}`}>
-                    <FileText size={18} aria-hidden="true" /><span>{format}</span>
-                  </div>
-                ))}
-              </div>
+              <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
+              {isContract ? <>
+                <VideoModelDropdown
+                  models={contractModels}
+                  value={selectedContractModel}
+                  loading={contractModelsLoading}
+                  ariaLabel={t(K("contract.modelOptions"))}
+                  placeholder={t(K("summary.noModel"))}
+                  onChange={setSelectedContractModel}
+                />
+                {contractModelsError ? <p className={styles.modelLoadError} role="alert">
+                  {contractModelsError}
+                  <button type="button" onClick={() => setContractModelRetry((current) => current + 1)}>{t("create.video.common.retry")}</button>
+                </p> : null}
+              </> : isForm ? <>
+                <VideoModelDropdown
+                  models={formModels}
+                  value={selectedFormModel}
+                  loading={formModelsLoading}
+                  ariaLabel={t(K("form.modelOptions"))}
+                  placeholder={t(K("summary.noModel"))}
+                  onChange={setSelectedFormModel}
+                />
+                {formModelsError ? <p className={styles.modelLoadError} role="alert">
+                  {formModelsError}
+                  <button type="button" onClick={() => setFormModelRetry((current) => current + 1)}>{t("create.video.common.retry")}</button>
+                </p> : null}
+              </> : isSummarize || isOcr || isContract ? <div className={`${styles.modelCards} ${styles.singleModel}`}><div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{isOcr ? t(K("ocr.modelName")) : t(K("summary.modelName"))}</strong><small>{isOcr ? t(K("ocr.modelHint")) : t(K("summary.modelHint"))}</small></div></div> : <div className={styles.modelCards}>
+                <div className={`${styles.modelCard} ${styles.modelCardActive}`}><i /><strong>{t(K("settings.standard"))}</strong><small>{t(K("settings.standardHint"))}</small></div>
+                <div className={styles.modelCard}><i /><strong>{t(K("settings.premium"))}</strong><small>{t(K("settings.premiumHint"))}</small></div>
+              </div>}
             </div>
-          )}
-          {isOcr ? (
-            <>
-              {ocrTypeInfo?.supports.targetLang && (
+            {/* Gen Document picks its file format from the Export button instead of here. */}
+            {!isOcr && !isContract && !isForm && (
+              <div className={styles.settingGroup}>
+                <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
+                <div className={styles.formatCards}>
+                  {["DOCX", "PDF", "TXT", "JSON"].map((format, index) => (
+                    <div key={format} className={`${styles.formatCard} ${index === 0 ? styles.formatCardActive : ""}`}>
+                      <FileText size={18} aria-hidden="true" /><span>{format}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {isOcr ? (
+              <>
+                {ocrTypeInfo?.supports.targetLang && (
+                  <SelectControl
+                    label={t(K("ocr.language"))}
+                    value={ocrLanguage}
+                    onChange={(value) => setOcrLanguage(value as "th" | "en")}
+                    options={[{ value: "th", label: t(K("ocr.langThai")) }, { value: "en", label: t(K("ocr.langEnglish")) }]}
+                  />
+                )}
                 <SelectControl
-                  label={t(K("ocr.language"))}
-                  value={ocrLanguage}
-                  onChange={(value) => setOcrLanguage(value as "th" | "en")}
-                  options={[{ value: "th", label: t(K("ocr.langThai")) }, { value: "en", label: t(K("ocr.langEnglish")) }]}
+                  label={t(K("settings.pageRange"))}
+                  value={ocrPageRangeMode}
+                  onChange={(value) => setOcrPageRangeMode(value as "all" | "custom")}
+                  options={[
+                    { value: "all", label: pdfPageCount ? t(K("ocr.pageRangeAllCount"), { count: pdfPageCount }) : t(K("source.allPages")) },
+                    { value: "custom", label: t(K("ocr.pageRangeCustom")) },
+                  ]}
+                  disabled={!selectedIsPdf}
+                  title={selectedIsPdf ? undefined : t(K("ocr.pageRangePdfOnly"))}
                 />
-              )}
-              <SelectControl
-                label={t(K("settings.pageRange"))}
-                value={ocrPageRangeMode}
-                onChange={(value) => setOcrPageRangeMode(value as "all" | "custom")}
-                options={[
-                  { value: "all", label: pdfPageCount ? t(K("ocr.pageRangeAllCount"), { count: pdfPageCount }) : t(K("source.allPages")) },
-                  { value: "custom", label: t(K("ocr.pageRangeCustom")) },
-                ]}
-                disabled={!selectedIsPdf}
-                title={selectedIsPdf ? undefined : t(K("ocr.pageRangePdfOnly"))}
-              />
-              {selectedIsPdf && ocrPageRangeMode === "custom" && (
-                <input
-                  className={`${styles.controlSelect} ${styles.pageRangeInput}`}
-                  type="text"
-                  inputMode="numeric"
-                  aria-label={t(K("settings.pageRange"))}
-                  value={ocrPageRange}
-                  maxLength={100}
-                  placeholder={t(K("ocr.pageRangePlaceholder"))}
-                  onChange={(event) => setOcrPageRange(event.target.value)}
-                />
-              )}
-              {ocrTypeInfo?.depths && (
-                <SelectControl
-                  label={t(K("settings.depth"))}
-                  value={ocrDepth}
-                  onChange={(value) => {
-                    setOcrDepth(value as OcrDepth);
-                    if (value === "advanced") setOcrStyle("original");
-                  }}
-                  options={[{ value: "basic", label: t(K("ocr.depthBasic")) }, { value: "advanced", label: t(K("ocr.depthAdvanced")) }]}
-                />
-              )}
-              {ocrTypeInfo?.styles && (
-                <SelectControl
-                  label={t(K("settings.tone"))}
-                  value={ocrDepth === "advanced" ? "original" : ocrStyle}
-                  onChange={(value) => setOcrStyle(value as OcrStyleChoice)}
-                  options={ocrTypeInfo.styles.map((style) => ({ value: style, label: t(K(`ocr.style.${style}`)) }))}
-                  disabled={ocrDepth === "advanced"}
-                  title={ocrDepth === "advanced" ? t(K("ocr.notSupported")) : undefined}
-                />
-              )}
-              {ocrTypeInfo && ocrTypeInfo.id !== "general" && (
-                <label className={styles.ocrToggle}>
-                  <input className={styles.summaryCheckbox} type="checkbox" checked={ocrConfidence} onChange={(event) => setOcrConfidence(event.target.checked)} />{t(K("ocr.confidence"))}
-                </label>
-              )}
-              {ocrTypeInfo?.supports.returnOcr && (
-                <label className={styles.ocrToggle}>
-                  <input className={styles.summaryCheckbox} type="checkbox" checked={ocrReturnRaw} onChange={(event) => setOcrReturnRaw(event.target.checked)} />{t(K("ocr.returnRaw"))}
-                </label>
-              )}
-            </>
-          ) : isForm ? (
-            <div className={styles.summaryFocusNote}>{t(K("form.pagesNote"), { max: formOptions.maxPages })}</div>
-          ) : isContract ? (
-            <SelectControl label={t(K("settings.language"))} value={contractLanguage} onChange={(value) => setContractLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
-          ) : isSummarize ? (
-            <>
-              <SelectControl label={t(K("settings.language"))} value={summaryLanguage} onChange={(value) => setSummaryLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
-              <SelectControl label={t(K("summary.length"))} value={summaryLength} onChange={(value) => setSummaryLength(value as "brief" | "standard" | "detailed")} options={[{ value: "brief", label: t(K("summary.lengthBrief")) }, { value: "standard", label: t(K("summary.lengthStandard")) }, { value: "detailed", label: t(K("summary.lengthDetailed")) }]} />
-              <div className={styles.summaryFocusNote}>{t(K("summary.focus"))}: {[focusAreas.keyTakeaways && t(K("summary.focusTakeaways")), focusAreas.actionItems && t(K("summary.focusActions")), focusAreas.importantDates && t(K("summary.focusDates"))].filter(Boolean).join(", ") || t(K("summary.focusGeneral"))}</div>
-              <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("summary.toneValue"))} />
-            </>
+                {selectedIsPdf && ocrPageRangeMode === "custom" && (
+                  <input
+                    className={`${styles.controlSelect} ${styles.pageRangeInput}`}
+                    type="text"
+                    inputMode="numeric"
+                    aria-label={t(K("settings.pageRange"))}
+                    value={ocrPageRange}
+                    maxLength={100}
+                    placeholder={t(K("ocr.pageRangePlaceholder"))}
+                    onChange={(event) => setOcrPageRange(event.target.value)}
+                  />
+                )}
+                {ocrTypeInfo?.depths && (
+                  <SelectControl
+                    label={t(K("settings.depth"))}
+                    value={ocrDepth}
+                    onChange={(value) => {
+                      setOcrDepth(value as OcrDepth);
+                      if (value === "advanced") setOcrStyle("original");
+                    }}
+                    options={[{ value: "basic", label: t(K("ocr.depthBasic")) }, { value: "advanced", label: t(K("ocr.depthAdvanced")) }]}
+                  />
+                )}
+                {ocrTypeInfo?.styles && (
+                  <SelectControl
+                    label={t(K("settings.tone"))}
+                    value={ocrDepth === "advanced" ? "original" : ocrStyle}
+                    onChange={(value) => setOcrStyle(value as OcrStyleChoice)}
+                    options={ocrTypeInfo.styles.map((style) => ({ value: style, label: t(K(`ocr.style.${style}`)) }))}
+                    disabled={ocrDepth === "advanced"}
+                    title={ocrDepth === "advanced" ? t(K("ocr.notSupported")) : undefined}
+                  />
+                )}
+                {ocrTypeInfo && ocrTypeInfo.id !== "general" && (
+                  <label className={styles.ocrToggle}>
+                    <input className={styles.summaryCheckbox} type="checkbox" checked={ocrConfidence} onChange={(event) => setOcrConfidence(event.target.checked)} />{t(K("ocr.confidence"))}
+                  </label>
+                )}
+                {ocrTypeInfo?.supports.returnOcr && (
+                  <label className={styles.ocrToggle}>
+                    <input className={styles.summaryCheckbox} type="checkbox" checked={ocrReturnRaw} onChange={(event) => setOcrReturnRaw(event.target.checked)} />{t(K("ocr.returnRaw"))}
+                  </label>
+                )}
+              </>
+            ) : isForm ? (
+              <div className={styles.summaryFocusNote}>{t(K("form.pagesNote"), { max: formOptions.maxPages })}</div>
+            ) : isContract ? (
+              <SelectControl label={t(K("settings.language"))} value={contractLanguage} onChange={(value) => setContractLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
+            ) : isSummarize ? (
+              <>
+                <SelectControl label={t(K("settings.language"))} value={summaryLanguage} onChange={(value) => setSummaryLanguage(value as "auto" | "English" | "Thai")} options={[{ value: "auto", label: t(K("summary.languageAuto")) }, { value: "English", label: t(K("summary.languageEnglish")) }, { value: "Thai", label: t(K("summary.languageThai")) }]} />
+                <SelectControl label={t(K("summary.length"))} value={summaryLength} onChange={(value) => setSummaryLength(value as "brief" | "standard" | "detailed")} options={[{ value: "brief", label: t(K("summary.lengthBrief")) }, { value: "standard", label: t(K("summary.lengthStandard")) }, { value: "detailed", label: t(K("summary.lengthDetailed")) }]} />
+                <div className={styles.summaryFocusNote}>{t(K("summary.focus"))}: {[focusAreas.keyTakeaways && t(K("summary.focusTakeaways")), focusAreas.actionItems && t(K("summary.focusActions")), focusAreas.importantDates && t(K("summary.focusDates"))].filter(Boolean).join(", ") || t(K("summary.focusGeneral"))}</div>
+                <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("summary.toneValue"))} />
+              </>
             ) : (
               <>
-              <SelectPlaceholder label={t(K("settings.language"))} value={t(K("settings.languageValue"))} />
-              <SelectPlaceholder label={t(K("settings.pageRange"))} value={t(K("source.allPages"))} />
-              <SelectPlaceholder label={t(K("settings.depth"))} value={t(K("settings.depthValue"))} />
-              <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
-            </>
-          )}
-          <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isForm ? t(K("form.credits"), { value: formOptions.credits }) : isContract ? t(K("contract.credits"), { value: contractCredits }) : isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
-          {isOcr && showStyleCredits && <div className={styles.summaryFocusNote}>{t(K("ocr.styleCreditsNote"), { value: ocrTypeInfo?.styleCredits ?? 0 })}</div>}
-          <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr && !isContract && !isForm) || !selectedFile || isSummarizing || isOcrRunning || isContractRunning || isFormRunning} title={!selectedFile ? (isForm ? t(K("form.needFile")) : isContract ? t(K("contract.needFile")) : undefined) : undefined} onClick={() => void (isOcr ? runOcr() : isContract ? runContract() : isForm ? runForm() : generateSummary())}>
-            <span>{isOcrRunning ? t(K("ocr.running")) : isFormRunning ? t(K("form.running")) : isContractRunning ? t(K("contract.running")) : isSummarizing ? t(K("summary.generating")) : isOcr ? t(K("ocr.run")) : isContract ? t(K("contract.run")) : isForm ? t(K("form.run")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
-            <Sparkles size={17} aria-hidden="true" />
-          </button>
-          {(isOcr ? ocrError : isContract ? contractError : isForm ? formError : summaryError) && <div className={styles.summaryError} role="alert">{isOcr ? ocrError : isContract ? contractError : isForm ? formError : summaryError}</div>}
-          <div className={styles.secureNote}><span />{isForm ? t(K("form.secure")) : isContract ? t(K("contract.secure")) : isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
+                <SelectPlaceholder label={t(K("settings.language"))} value={t(K("settings.languageValue"))} />
+                <SelectPlaceholder label={t(K("settings.pageRange"))} value={t(K("source.allPages"))} />
+                <SelectPlaceholder label={t(K("settings.depth"))} value={t(K("settings.depthValue"))} />
+                <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
+              </>
+            )}
+            <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isForm ? t(K("form.credits"), { value: formOptions.credits }) : isContract ? t(K("contract.credits"), { value: contractCredits }) : isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
+            {isOcr && showStyleCredits && <div className={styles.summaryFocusNote}>{t(K("ocr.styleCreditsNote"), { value: ocrTypeInfo?.styleCredits ?? 0 })}</div>}
+            <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr && !isContract && !isForm) || !selectedFile || (isOcr && !ocrType) || isSummarizing || isOcrRunning || isContractRunning || isFormRunning} title={!selectedFile ? (isForm ? t(K("form.needFile")) : isContract ? t(K("contract.needFile")) : undefined) : undefined} onClick={() => void (isOcr ? runOcr() : isContract ? runContract() : isForm ? runForm() : generateSummary())}>
+              <span>{isOcrRunning ? t(K("ocr.running")) : isFormRunning ? t(K("form.running")) : isContractRunning ? t(K("contract.running")) : isSummarizing ? t(K("summary.generating")) : isOcr ? t(K("ocr.run")) : isContract ? t(K("contract.run")) : isForm ? t(K("form.run")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
+              <Sparkles size={17} aria-hidden="true" />
+            </button>
+            {(isOcr ? ocrError : isContract ? contractError : isForm ? formError : summaryError) && <div className={styles.summaryError} role="alert">{isOcr ? ocrError : isContract ? contractError : isForm ? formError : summaryError}</div>}
+            <div className={styles.secureNote}><span />{isForm ? t(K("form.secure")) : isContract ? t(K("contract.secure")) : isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
           </aside>
         }
       />

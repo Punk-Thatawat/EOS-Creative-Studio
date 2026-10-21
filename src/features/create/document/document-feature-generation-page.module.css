@@ -3629,3 +3629,8 @@
 .previewTabsBottom {
   margin-top: 14px;
 }
+
+/* Nothing uploaded in OCR: the sample page is shown at full strength, with no card over it. */
+.documentSheetSample {
+  opacity: 1;
+}
