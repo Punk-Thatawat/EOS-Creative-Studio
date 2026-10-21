@@ -3776,6 +3776,8 @@ export function AudioGenerationPage() {
   const [tabBodyMinHeight, setTabBodyMinHeight] = useState<number | null>(null);
 
   const changeActiveTab = (tab: AudioTab) => {
+    // A shorter tab would shrink the page and the browser would clamp the scroll position, jerking the banner and tab
+    // bar upwards. While the page is scrolled, the tab being left holds its height so the new one opens where it was.
     const body = tabBodyRef.current;
     if (body && window.scrollY > 0) {
       const lockedHeight = body.style.minHeight;
