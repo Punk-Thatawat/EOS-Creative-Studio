@@ -3671,7 +3671,19 @@ export function AudioGenerationPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const tabBodyRef = useRef<HTMLDivElement>(null);
+  const [tabBodyMinHeight, setTabBodyMinHeight] = useState<number | null>(null);
+
   const changeActiveTab = (tab: AudioTab) => {
+    const body = tabBodyRef.current;
+    if (body && window.scrollY > 0) {
+      const lockedHeight = body.style.minHeight;
+      body.style.minHeight = "";
+      setTabBodyMinHeight(body.offsetHeight);
+      body.style.minHeight = lockedHeight;
+    } else {
+      setTabBodyMinHeight(null);
+    }
     setActiveTab(tab);
     try {
       window.localStorage.setItem(AUDIO_TAB_STORAGE_KEY, tab);
@@ -4593,7 +4605,7 @@ export function AudioGenerationPage() {
           </nav>
         }
         content={
-          <>
+          <div ref={tabBodyRef} className={styles.tabBody} style={tabBodyMinHeight ? { minHeight: tabBodyMinHeight } : undefined}>
             {activeTab === "Text to Speech" ? (
               <div className={styles.audioGrid}>
                 <section className={styles.scriptPanel} aria-label={t("create.audio.a11y.scriptPanel")}>
@@ -5339,7 +5351,7 @@ export function AudioGenerationPage() {
             ) : (
               <AudioCleanupLayout />
             )}
-          </>
+          </div>
         }
       />
       <Dialog
