@@ -1953,6 +1953,7 @@ function VoiceCloneLayout({
       "At least one voice sample is required": t("create.audio.clone.error.noSample"),
       "Voice samples must be valid audio files": t("create.audio.clone.error.invalidFile"),
       "Voice Clone is not routed to WaveSpeed": t("create.audio.clone.error.notConfigured"),
+      "Insufficient credits": t("create.audio.error.insufficientCredits"),
     };
     return known[message] ?? `${t("create.audio.clone.error.generic")}: ${message}`;
   };
@@ -2905,7 +2906,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       finishAudioProgress("audio-sound-effects", requestId);
     } catch (cause) {
       failAudioProgress("audio-sound-effects", requestId);
-      setError(cause instanceof Error ? cause.message : "Sound effect generation failed");
+      setError(cause instanceof Error ? (cause.message === "Insufficient credits" ? t("create.audio.error.insufficientCredits") : cause.message) : "Sound effect generation failed");
       setStatus("error");
     }
   };
@@ -4268,7 +4269,7 @@ export function AudioGenerationPage() {
           url = URL.createObjectURL(result.blob);
           clonePreviewUrlsRef.current.set(voiceKey, url);
         } catch (error) {
-          setErrorMessage(error instanceof Error ? error.message : "Unable to preview this voice");
+          setErrorMessage(error instanceof Error ? (error.message === "Insufficient credits" ? t("create.audio.error.insufficientCredits") : error.message) : "Unable to preview this voice");
           return;
         } finally {
           setPreviewLoadingKey(null);
@@ -4276,7 +4277,7 @@ export function AudioGenerationPage() {
       }
       startVoicePreview(audio, voiceKey, url);
     },
-    [language, startVoicePreview, stopVoicePreview, updatePreviewingVoiceKey],
+    [language, startVoicePreview, stopVoicePreview, t, updatePreviewingVoiceKey],
   );
 
   useEffect(() => {
