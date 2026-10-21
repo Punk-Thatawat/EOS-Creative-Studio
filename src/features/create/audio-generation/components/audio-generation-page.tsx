@@ -614,7 +614,6 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const [backgroundMusicPreset, setBackgroundMusicPreset] = useState("");
   const [backgroundMusicPresets, setBackgroundMusicPresets] = useState<AudioBackgroundMusic[]>([]);
   const [backgroundMusicLoading, setBackgroundMusicLoading] = useState(true);
-  const [normalizeAudio, setNormalizeAudio] = useState(true);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -714,7 +713,6 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           outputFormat,
           backgroundMusicEnabled: backgroundMusic,
           ...(backgroundMusicPreset ? { backgroundMusicKey: backgroundMusicPreset } : {}),
-          normalizeAudio,
         }
       : null;
   const podcastCreditQuoteKey = JSON.stringify(podcastCreditQuoteInput);
@@ -898,7 +896,6 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
         outputFormat,
         backgroundMusicEnabled: backgroundMusic,
         ...(backgroundMusicPreset ? { backgroundMusicKey: backgroundMusicPreset } : {}),
-        normalizeAudio,
         idempotencyKey: createAudioIdempotencyKey(),
       });
       const nextUrl = URL.createObjectURL(result.blob);
@@ -914,7 +911,6 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           language,
           backgroundMusic,
           backgroundMusicPreset,
-          normalizeAudio,
           speed,
         },
       };
@@ -1611,20 +1607,6 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           </div>
         </div>
         <div className={styles.podcastToggleGroup}>
-          <label>
-            <span>
-              <strong>{t("create.audio.podcast.normalizeAudio")}</strong>
-              <small>ปรับระดับเสียงให้สม่ำเสมอ</small>
-            </span>
-            <button
-              type="button"
-              className={normalizeAudio ? styles.podcastToggleOn : styles.podcastToggleOff}
-              onClick={() => setNormalizeAudio((current) => !current)}
-              aria-pressed={normalizeAudio}
-            >
-              <i />
-            </button>
-          </label>
           <label>
             <span>
               <strong>{t("create.audio.podcast.backgroundMusic")}</strong>

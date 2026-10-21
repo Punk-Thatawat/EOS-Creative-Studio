@@ -141,7 +141,6 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
   const textAspectRatioField = isTextToImage ? findSchemaField(schemaProperties, ["aspect_ratio", "aspectRatio", "ratio"]) : undefined;
   const textResolutionField = isTextToImage ? findSchemaField(schemaProperties, ["resolution", "output_resolution", "outputResolution"]) : undefined;
   const textSizeField = isTextToImage ? findSchemaField(schemaProperties, ["size", "image_size", "imageSize"]) : undefined;
-  const textSeedField = isTextToImage ? findSchemaField(schemaProperties, ["seed"]) : undefined;
   const textSizeFieldName = textSizeField?.name;
   const textSizeSchemaValuesKey = (textSizeField?.property.enum ?? []).map((item) => String(item)).join("\u001f");
   const modelSupportedSizesKey = (modelCapabilities?.supportedSizes ?? []).join("\u001f");
@@ -202,7 +201,6 @@ export function SettingsPanel({ activeTab, canGenerate, count, countOptions, bac
     {isUpscale ? <ResolutionControl resolution={resolution} resolutionOptions={resolutionOptions} onChange={onResolutionChange} secondaryLabel="AI output resolution" /> : <>{showGenericResolution && <ResolutionControl resolution={resolution} resolutionOptions={resolutionOptions} onChange={onResolutionChange} descriptions={imageResolutionSizes[ratio]} />}</>}
     {isTextToImage && textResolutionField && <SchemaFieldControl field={textResolutionField} value={modelParams[textResolutionField.name]} onChange={(value) => onModelParamChange(textResolutionField.name, value)} />}
     {showTextSizeField && textSizeField && <SchemaFieldControl field={textSizeField} value={modelParams[textSizeField.name]} options={textSizeOptions.length > 0 ? textSizeOptions : undefined} onChange={handleSizeChange} />}
-    {isTextToImage && textSeedField && <SchemaFieldControl field={textSeedField} value={modelParams[textSeedField.name]} onChange={(value) => onModelParamChange(textSeedField.name, value)} />}
     {qualityEnabled && <div className={cx("gen-setting-block")}><h3>{t("create.settings.quality")} <InfoTooltip content={t("create.settings.info.quality")} size={12} /></h3><Segmented items={qualityOptions} value={quality} onChange={onQualityChange} labelFor={qualityLabel} />{qualityIsPromptBased && <p className={cx("gen-model-options-note")}>{t("create.settings.qualityPromptNote")}</p>}</div>}
     {outputFormatOptions.length > 0 && <div className={cx("gen-setting-block")}><h3>{t("create.settings.outputFormat")} <InfoTooltip content={t("create.settings.info.outputFormat")} size={12} /></h3><Segmented items={outputFormatOptions} value={outputFormat && outputFormatOptions.includes(outputFormat) ? outputFormat : outputFormatOptions[0] ?? ""} onChange={onOutputFormatChange} /><p className={cx("gen-model-options-note")}>{t("create.settings.outputFormatNote")}</p></div>}
     {showCountControl && <div className={cx("gen-setting-block")}><h3>{t("create.settings.numberOfImages")} <InfoTooltip content={t("create.settings.info.numberOfImages")} size={12} /></h3><Segmented items={countOptions} value={count} onChange={onCountChange} /></div>}
