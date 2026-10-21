@@ -27,7 +27,6 @@ import { Card } from "@/components/ui/card";
 import { CookieSettingsButton } from "@/components/privacy/cookie-settings-button";
 import { legalDocuments } from "@/features/legal/legal-documents";
 import { changePasswordWithBackend, getStoredBackendSession } from "@/lib/auth/backend-auth";
-import { fetchHeaderAccountData } from "@/lib/api/account";
 import { getApiAccessToken } from "@/lib/auth/access-token";
 import { fetchBackendAuthProvider, fetchBackendAuthSessions, type BackendSessionSummary } from "@/lib/auth/backend-session";
 import { useLocale, type Locale, type TranslationKey } from "@/lib/i18n/locale-provider";
@@ -109,9 +108,7 @@ const settingsKeys = {
 
 type Copy = { [Key in keyof typeof settingsKeys]: string };
 
-const sectionIds = ["legal", "language", "security"] as const;
-// Only administrators manage API keys, so that section and its menu item are added for them alone.
-type SectionId = (typeof sectionIds)[number] | "apikeys";
+const sectionIds = ["legal", "language", "security", "apikeys"] as const;
 const showNotificationSettings = false;
 const SETTINGS_CACHE_TTL_MS = 60_000;
 let cachedAuthProvider: { value: "email" | "google" | "unknown"; cachedAt: number } | null = null;
@@ -227,8 +224,7 @@ export function SettingsPageClient() {
   const { locale, setLocale, persistLocale, t: translateKey } = useLocale();
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState<SectionId>("legal");
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [activeSection, setActiveSection] = useState<(typeof sectionIds)[number]>("legal");
   const [notifications, setNotifications] = useState({ email: true, project: true, security: true });
   const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" });
   const [passwordVisible, setPasswordVisible] = useState({ current: false, next: false, confirm: false });
@@ -265,18 +261,6 @@ export function SettingsPageClient() {
         cachedAuthProvider = { value: "unknown", cachedAt: Date.now() };
         if (active) setAuthProvider("unknown");
       });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void fetchHeaderAccountData()
-      .then((account) => {
-        if (active) setIsAdmin(account.role === "Admin");
-      })
-      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -357,7 +341,7 @@ export function SettingsPageClient() {
     }
   }
 
-  function scrollToSection(id: SectionId) {
+  function scrollToSection(id: (typeof sectionIds)[number]) {
     setActiveSection(id);
     document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -390,7 +374,7 @@ export function SettingsPageClient() {
       <div className={styles.layout}>
         <aside className={styles.sectionNav} aria-label={t.overview}>
           <p className={styles.navLabel}>{t.overview}</p>
-          {(isAdmin ? [...sectionIds, "apikeys" as const] : sectionIds).map((id) => {
+          {sectionIds.map((id) => {
             const labels = { legal: t.legal, language: t.language, security: t.security, apikeys: t.apiKeysNav };
             const icons = { legal: FileText, language: Languages, security: LockKeyhole, apikeys: KeyRound };
             const Icon = icons[id];
@@ -469,7 +453,7 @@ export function SettingsPageClient() {
             </div>
           </Card>
 
-          {isAdmin ? <ApiKeysSection /> : null}
+          <ApiKeysSection />
 
           {showNotificationSettings && <Card className={styles.settingsCard} id="settings-notifications">
             <SectionHeading icon={Bell} title={t.notifications} description={t.notificationsDescription} tone="yellow" />
