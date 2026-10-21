@@ -621,6 +621,8 @@ export default function AssetsPage() {
     ? assetsData.filters.tags.filter((item) => !groupAssetTags.has(item.name.trim().toLocaleLowerCase()))
     : [];
   const duplicateTag = Boolean(groupDialog?.assetId) && groupAssetTags.has(groupName.trim().toLocaleLowerCase());
+  // Adding an asset to a tag only makes sense once a tag exists; tags are created with "+ แท็ก".
+  const noTagsYet = Boolean(groupDialog?.assetId) && assetsData.filters.tags.length === 0;
   const startItem =
     assetsData.pagination.total === 0 ? 0 : (assetsData.pagination.page - 1) * assetsData.pagination.limit + 1;
   const endItem = Math.min(assetsData.pagination.total, startItem + assetsData.pagination.limit - 1);
@@ -1084,7 +1086,12 @@ export default function AssetsPage() {
                 ×
               </button>
             </div>
-            {groupDialog.assetId ? (
+            {noTagsYet ? (
+              <span className="assets-group-dialog-error" role="alert">
+                ยังไม่มีแท็ก กรุณาสร้างแท็กก่อน โดยกดปุ่ม “+ แท็ก” ด้านบนรายการแอสเซ็ต
+              </span>
+            ) : null}
+            {groupDialog.assetId && !noTagsYet ? (
               <div className="assets-group-options">
                 {groupOptions.length ? (
                   groupOptions.map((item) => (
@@ -1103,16 +1110,18 @@ export default function AssetsPage() {
                 )}
               </div>
             ) : null}
-            <input
-              autoFocus
-              value={groupName}
-              onChange={(event) => setGroupName(event.target.value)}
-              placeholder="ชื่อแท็ก"
-              maxLength={120}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void handleSaveGroup();
-              }}
-            />
+            {noTagsYet ? null : (
+              <input
+                autoFocus
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+                placeholder="ชื่อแท็ก"
+                maxLength={120}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void handleSaveGroup();
+                }}
+              />
+            )}
             {duplicateTag ? (
               <span className="assets-group-dialog-error" role="alert">
                 แอสเซ็ตนี้มีแท็กนี้อยู่แล้ว
@@ -1125,7 +1134,7 @@ export default function AssetsPage() {
               <button
                 type="button"
                 onClick={() => void handleSaveGroup()}
-                disabled={groupSaving || !groupName.trim() || duplicateTag}
+                disabled={groupSaving || !groupName.trim() || duplicateTag || noTagsYet}
               >
                 {groupSaving ? "กำลังบันทึก..." : groupDialog.assetId ? "บันทึก" : "สร้าง"}
               </button>
