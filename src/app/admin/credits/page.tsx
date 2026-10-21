@@ -217,6 +217,8 @@ function audioModelName(model: string): string {
         ? "Eleven Turbo v2.5"
         : model === "eleven_v3"
           ? "Eleven v3"
+          : model === "eleven_v4" || model === "elevenlabs/eleven-v4"
+            ? "Eleven v4"
           : model === "music_v1"
             ? "ElevenLabs Music v1"
             : model === "music_v2"
@@ -1140,6 +1142,8 @@ function AdminCreditsContent() {
   const [modelSearch, setModelSearch] = useState("");
   const [signupBonusEnabled, setSignupBonusEnabled] = useState(false);
   const [signupBonusCredits, setSignupBonusCredits] = useState("0");
+  const [signupBonusStartDate, setSignupBonusStartDate] = useState("");
+  const [signupBonusEndDate, setSignupBonusEndDate] = useState("");
   const [signupBonusDirty, setSignupBonusDirty] = useState(false);
 
   const load = useCallback(async () => {
@@ -1170,6 +1174,8 @@ function AdminCreditsContent() {
       setRoundingDecimals(settings.defaults.roundingDecimals);
       setSignupBonusEnabled(signupBonus.enabled);
       setSignupBonusCredits(String(signupBonus.credits));
+      setSignupBonusStartDate(signupBonus.startDate ?? "");
+      setSignupBonusEndDate(signupBonus.endDate ?? "");
       setSignupBonusDirty(false);
       setGlobalDirty(false);
       const nextRows = [
@@ -1425,12 +1431,23 @@ function AdminCreditsContent() {
       setError("Welcome credits must be between 0 and 1,000,000");
       return;
     }
+    if (signupBonusStartDate && signupBonusEndDate && signupBonusEndDate < signupBonusStartDate) {
+      setError("End date must be on or after the start date");
+      return;
+    }
     setSavingKey("signup-bonus");
     setError("");
     try {
-      const savedSettings = await updateAdminSignupCreditGrant({ enabled: signupBonusEnabled, credits });
+      const savedSettings = await updateAdminSignupCreditGrant({
+        enabled: signupBonusEnabled,
+        credits,
+        startDate: signupBonusStartDate || null,
+        endDate: signupBonusEndDate || null,
+      });
       setSignupBonusEnabled(savedSettings.enabled);
       setSignupBonusCredits(String(savedSettings.credits));
+      setSignupBonusStartDate(savedSettings.startDate ?? "");
+      setSignupBonusEndDate(savedSettings.endDate ?? "");
       setSignupBonusDirty(false);
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2800);
@@ -1714,13 +1731,13 @@ function AdminCreditsContent() {
                   <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
-                        New user welcome credits
+                        New user credit campaign
                       </p>
                       <h2 className="mt-1 text-xl font-bold tracking-tight">
-                        เครดิตต้อนรับผู้สมัครใหม่
+                        แคมเปญเครดิตผู้สมัครใหม่
                       </h2>
                       <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                        แจกอัตโนมัติครั้งเดียวหลังสมัครสมาชิกสำเร็จ ใช้ idempotency กันการแจกซ้ำ
+                        แจกเครดิตครั้งเดียวให้ผู้สมัครใหม่ เฉพาะผู้ที่สมัครภายในช่วงวันที่กำหนด
                       </p>
                     </div>
                     <Button
@@ -1756,6 +1773,37 @@ function AdminCreditsContent() {
                       />
                       เปิดใช้งานการแจกเครดิตอัตโนมัติ
                     </label>
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <label className="block text-xs font-semibold text-foreground">
+                      วันเริ่มแคมเปญ
+                      <input
+                        type="date"
+                        value={signupBonusStartDate}
+                        max={signupBonusEndDate || undefined}
+                        onChange={(event) => {
+                          setSignupBonusStartDate(event.target.value);
+                          setSignupBonusDirty(true);
+                        }}
+                        className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-foreground">
+                      วันสิ้นสุดแคมเปญ
+                      <input
+                        type="date"
+                        value={signupBonusEndDate}
+                        min={signupBonusStartDate || undefined}
+                        onChange={(event) => {
+                          setSignupBonusEndDate(event.target.value);
+                          setSignupBonusDirty(true);
+                        }}
+                        className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"
+                      />
+                    </label>
+                    <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+                      ระบบนับรวมวันเริ่มต้นและวันสิ้นสุดตามเวลาไทย เว้นวันที่ว่างไว้หากต้องการให้แคมเปญไม่มีวันจำกัด
+                    </p>
                   </div>
                 </Card>
 

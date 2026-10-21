@@ -865,6 +865,9 @@ body:has(:is(.audio-studio-page, .document-studio-page)) .page-gutter > main { w
 .auth-strength-bars { display:flex; flex:1; gap:4px; }
 .auth-strength-bars span { height:4px; flex:1; border-radius:99px; background:#e5e5e9; }
 .auth-strength-bars span.is-filled { background:linear-gradient(90deg,#ff6819,#f51591); }
+.auth-captcha { display:flex; justify-content:center; min-height:65px; margin:2px 0 12px; overflow:hidden; }
+.auth-captcha > div { min-height:65px; }
+.auth-captcha iframe { max-width:100%; }
 @media (min-width: 801px) {
   .auth-modal-panel--register { top:3%; max-height:94%; padding-top:28px; padding-bottom:18px; }
   .auth-modal-panel--register .auth-field { margin-bottom:10px; }

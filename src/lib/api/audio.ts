@@ -200,7 +200,8 @@ export type AdminAudioVoiceSettings = {
 };
 export type AdminAudioVoiceProfile = { id: string; name: string; description: string; imageUrl: string; previewUrl: string; previewStorageKey?: string };
 export type AdminAudioModelProfile = { voices: AdminAudioVoiceProfile[] };
-export type AdminAudioFeatureProfile = { modelId: string; voices: AdminAudioVoiceProfile[]; models: Record<string, AdminAudioModelProfile> };
+export type AdminAudioDialogueSettings = { stability: number; similarity: number };
+export type AdminAudioFeatureProfile = { modelId: string; voices: AdminAudioVoiceProfile[]; models: Record<string, AdminAudioModelProfile>; settings?: AdminAudioDialogueSettings };
 export type AdminAudioBackgroundMusicPreset = {
   key: string;
   name: string;
@@ -783,7 +784,7 @@ function normalizeAdminFeatureProfiles(value: unknown, modelProfiles: Record<str
   const activeVoices = modelProfiles[modelId]?.voices ?? fallbackVoices;
   const defaults: Record<AudioFeatureKey, AdminAudioFeatureProfile> = {
     textToSpeech: { modelId, voices: activeVoices, models: { [modelId]: { voices: activeVoices } } },
-    podcastDialogue: { modelId, voices: activeVoices, models: { [modelId]: { voices: activeVoices } } },
+    podcastDialogue: { modelId: "eleven_v4", voices: activeVoices, models: { eleven_v4: { voices: activeVoices } }, settings: { stability: 0.5, similarity: 0.75 } },
     voiceClone: { modelId: "minimax/speech-2.6-hd", voices: activeVoices, models: { "minimax/speech-2.6-hd": { voices: activeVoices } } },
     soundEffects: { modelId: "mirelo-ai/sfx-1.6/text-to-audio", voices: [], models: { "mirelo-ai/sfx-1.6/text-to-audio": { voices: [] } } },
     audioCleanup: { modelId: "internal", voices: [], models: { internal: { voices: [] } } },
@@ -797,7 +798,16 @@ function normalizeAdminFeatureProfiles(value: unknown, modelProfiles: Record<str
     const baseVoices = models[selectedModelId]?.voices ?? modelProfiles[selectedModelId]?.voices ?? defaults[key].voices;
     const voices = profile.voices === undefined ? baseVoices : normalizeAdminVoiceProfiles(profile.voices, baseVoices);
     models[selectedModelId] = { voices };
-    return [key, { modelId: selectedModelId, voices: models[selectedModelId].voices, models }];
+    const settings = profile.settings && typeof profile.settings === "object" && !Array.isArray(profile.settings)
+      ? profile.settings as Record<string, unknown>
+      : {};
+    const clamp = (value: unknown, fallback: number) => typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
+    return [key, {
+      modelId: selectedModelId,
+      voices: models[selectedModelId].voices,
+      models,
+      ...(key === "podcastDialogue" ? { settings: { stability: clamp(settings.stability, 0.5), similarity: clamp(settings.similarity, 0.75) } } : {}),
+    }];
   })) as Record<AudioFeatureKey, AdminAudioFeatureProfile>;
 }
 
@@ -846,6 +856,7 @@ export async function getAdminAudioSettings(): Promise<AdminAudioSettings> {
 export async function updateAdminAudioSettings(input: AdminAudioSettingsPatch): Promise<AdminAudioSettings> {
   const payload = await adminRequest("/api/v1/admin/audio-settings", { method: "PATCH", body: JSON.stringify(input) }) as { data?: AdminAudioSettings };
   if (!payload.data) throw new Error("Unable to save audio settings");
+  audioCatalogCache.clear();
   return normalizeAdminAudioSettings(payload.data);
 }
 

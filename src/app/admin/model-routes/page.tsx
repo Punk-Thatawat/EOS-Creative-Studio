@@ -549,6 +549,7 @@ const waveSpeedAudioModelOptions = [
   { id: "elevenlabs/flash-v2.5", label: "ElevenLabs · Flash v2.5" },
   { id: "elevenlabs/turbo-v2.5", label: "ElevenLabs · Turbo v2.5" },
   { id: "elevenlabs/eleven-v3", label: "ElevenLabs · Eleven v3" },
+  { id: "eleven_v4", label: "ElevenLabs · Eleven v4" },
   { id: "minimax/speech-2.6-hd", label: "WaveSpeed · MiniMax Speech 2.6 HD" },
   { id: "mirelo-ai/sfx-1.6/text-to-audio", label: "WaveSpeed · Mirelo SFX 1.6" },
   { id: "elevenlabs/music", label: "WaveSpeed · Eleven Music" },
@@ -930,12 +931,15 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
   const selectedProviderSettings = draft?.providerSettings[selectedFeatureProvider];
   const selectedProviderTimeoutMs = selectedFeatureProvider === "internal" ? undefined : draft?.providerSettings[selectedFeatureProvider === "elevenlabs" ? "elevenlabs" : "wavespeed"]?.timeoutMs;
   const configuredFeatureModelIds = Object.keys(selectedFeatureProfile?.models ?? {});
+  const dialogueSettings = selectedFeatureProfile?.settings ?? { stability: 0.5, similarity: 0.75 };
   const modelOptionMap = new Map<string, { id: string; label: string }>();
   [...configuredFeatureModelIds, selectedFeatureModelId].forEach((modelId) => {
     if (modelId && !waveSpeedAudioModelOptions.some((option) => option.id === modelId)) modelOptionMap.set(modelId, { id: modelId, label: `Custom · ${modelId}` });
   });
   waveSpeedAudioModelOptions.forEach((option) => modelOptionMap.set(option.id, option));
-  const modelOptions = Array.from(modelOptionMap.values());
+  const modelOptions = Array.from(modelOptionMap.values()).filter((option) =>
+    selectedFeature !== "podcastDialogue" || !["eleven_v3", "elevenlabs_v3", "elevenlabs/eleven-v3"].includes(option.id),
+  );
   const activeVoices = selectedFeatureProfile?.models?.[selectedFeatureModelId]?.voices ?? selectedFeatureProfile?.voices ?? [];
   const selectFeatureModel = (modelId: string) => setDraft((current) => {
     if (!current) return current;
@@ -943,11 +947,26 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
     const currentModelId = currentFeatureProfile.modelId;
     const currentModelVoices = currentFeatureProfile.models?.[currentModelId]?.voices ?? currentFeatureProfile.voices ?? [];
     const models = { ...(currentFeatureProfile.models ?? {}), [currentModelId]: { voices: currentModelVoices } };
+    const canReuseElevenLabsVoices = current.routing[selectedFeature] === "elevenlabs"
+      && modelId === "eleven_v4"
+      && currentModelId.startsWith("eleven");
     const voices = selectedFeature === "soundEffects" || selectedFeature === "audioCleanup"
       ? []
-      : models[modelId]?.voices ?? [];
+      : models[modelId]?.voices ?? (canReuseElevenLabsVoices ? currentModelVoices : []);
     if (!models[modelId]) models[modelId] = { voices };
-    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { modelId, voices, models } } };
+    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...currentFeatureProfile, modelId, voices, models } } };
+  });
+  const updateDialogueSetting = (setting: "stability" | "similarity", value: number) => setDraft((current) => {
+    if (!current) return current;
+    const profile = current.featureProfiles.podcastDialogue ?? { modelId: "eleven_v4", voices: [], models: {} };
+    const settings = profile.settings ?? { stability: 0.5, similarity: 0.75 };
+    return {
+      ...current,
+      featureProfiles: {
+        ...current.featureProfiles,
+        podcastDialogue: { ...profile, settings: { ...settings, [setting]: Math.min(1, Math.max(0, value)) } },
+      },
+    };
   });
   const updateActiveVoice = (index: number, patch: Partial<AdminAudioVoiceProfile>) => setDraft((current) => {
     if (!current) return current;
@@ -1060,6 +1079,7 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
         <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Provider</span><select value={draft.routing[selectedFeature]} onChange={(event) => setDraft((current) => current ? { ...current, routing: { ...current.routing, [selectedFeature]: event.target.value as AdminAudioProvider } } : current)} disabled={audioProviderOptions(selectedFeature).length === 1} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioFeatureProfileRows.find((row) => row.key === selectedFeature)?.label ?? selectedFeature} provider`}>{audioProviderOptions(selectedFeature).map((provider) => <option key={provider} value={provider}>{audioProviderLabel(provider)}</option>)}</select></label></div>
         <label className="mt-4 block max-w-xl"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{audioFeatureProfileRows.find((row) => row.key === selectedFeature)?.label} model</span><select value={selectedFeatureModelId} onChange={(event) => selectFeatureModel(event.target.value)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${selectedFeature} model`}>{modelOptions.map((option) => <option key={option.id} value={option.id}>{option.label} ({option.id})</option>)}</select><span className="mt-1 block text-[10px] text-muted-foreground">ตั้ง model แยกเฉพาะ tab นี้</span></label>
         <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Default format</span><select value={selectedProviderSettings?.defaultFormat ?? "mp3"} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, [selectedFeatureProvider]: { ...current.providerSettings[selectedFeatureProvider], defaultFormat: event.target.value as "mp3" | "wav" | "ogg" } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioProviderLabel(selectedFeatureProvider)} default format`}><option value="mp3">MP3</option><option value="wav">WAV</option><option value="ogg">OGG</option></select></label>{selectedFeatureProvider === "internal" ? null : <label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Request timeout (ms)</span><input type="number" min="1000" max="180000" step="1000" value={selectedProviderTimeoutMs ?? 60000} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, [selectedFeatureProvider]: { ...current.providerSettings[selectedFeatureProvider], timeoutMs: Number(event.target.value) } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioProviderLabel(selectedFeatureProvider)} request timeout`} /></label>}</div>
+        {selectedFeature === "podcastDialogue" && selectedFeatureModelId === "eleven_v4" ? <div className="mt-4 rounded-xl border border-[#eaded6] bg-white p-4"><div><h4 className="text-xs font-bold">Eleven v4 dialogue settings</h4><p className="mt-1 text-[10px] leading-4 text-muted-foreground">ปรับความคงที่ของการแสดงอารมณ์และความคล้ายของเสียง ตั้งแต่ 0 ถึง 1</p></div><div className="mt-3 grid gap-4 sm:grid-cols-2">{(["stability", "similarity"] as const).map((setting) => <label key={setting} className="block"><span className="mb-2 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground"><span>{setting === "stability" ? "Stability" : "Similarity"}</span><span className="font-mono text-foreground">{dialogueSettings[setting].toFixed(2)}</span></span><input type="range" min="0" max="1" step="0.01" value={dialogueSettings[setting]} onChange={(event) => updateDialogueSetting(setting, Number(event.target.value))} className="w-full accent-[#f26b38]" aria-label={`Eleven v4 ${setting}`} /><span className="mt-1 flex justify-between text-[9px] text-muted-foreground"><span>0</span><span>1</span></span></label>)}</div></div> : null}
         <div className="mt-4 space-y-3">
           <input ref={voiceImageInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file && voiceImageUploadIndex !== null) void uploadVoiceImage(voiceImageUploadIndex, file); event.currentTarget.value = ""; }} />
           <input ref={voiceAudioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/ogg,audio/mp4,audio/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file && voiceAudioUploadIndex !== null) void uploadVoiceAudio(voiceAudioUploadIndex, file); event.currentTarget.value = ""; }} />
