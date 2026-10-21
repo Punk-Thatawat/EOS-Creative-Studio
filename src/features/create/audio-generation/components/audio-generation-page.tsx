@@ -3299,7 +3299,7 @@ function formatAudioFileSize(bytes: number): string {
 }
 
 function AudioCleanupLayout() {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -3318,6 +3318,44 @@ function AudioCleanupLayout() {
   const [creditEstimate, setCreditEstimate] = useState<AudioCleanupCreditQuote | null>(null);
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
+  const [cleanupHistory, setCleanupHistory] = useState<AudioHistoryItem[]>([]);
+  const [cleanupHistoryLoadingId, setCleanupHistoryLoadingId] = useState<string | null>(null);
+  const [pendingCleanupHistoryDelete, setPendingCleanupHistoryDelete] = useState<AudioHistoryItem | null>(null);
+  const cleanupHistoryRef = useRef<AudioHistoryItem[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void listAudioHistory({ feature: "audio-cleanup", limit: AUDIO_HISTORY_LIMIT })
+      .then((items) => {
+        if (!active) return;
+        const savedHistory = items.map((item) => ({
+          ...item,
+          url: item.url ?? item.audioUrl ?? item.downloadUrl ?? "",
+          localUrl: false,
+          persisted: true,
+        }));
+        const localHistory = cleanupHistoryRef.current.filter((item) => item.localUrl);
+        const history = [
+          ...localHistory,
+          ...savedHistory.filter((item) => !localHistory.some((localItem) => localItem.id === item.id)),
+        ].slice(0, AUDIO_HISTORY_LIMIT);
+        cleanupHistoryRef.current = history;
+        setCleanupHistory(history);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      cleanupHistoryRef.current
+        .filter((item) => item.localUrl && item.url)
+        .forEach((item) => URL.revokeObjectURL(item.url));
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!file) {
@@ -3331,12 +3369,6 @@ function AudioCleanupLayout() {
       URL.revokeObjectURL(url);
     };
   }, [file]);
-
-  useEffect(() => {
-    return () => {
-      if (cleanedUrl) URL.revokeObjectURL(cleanedUrl);
-    };
-  }, [cleanedUrl]);
 
   useEffect(() => {
     if (!file || durationSeconds <= 0) {
@@ -3390,6 +3422,71 @@ function AudioCleanupLayout() {
     preview.src = previewUrl;
   };
 
+  const appendCleanupHistory = (item: AudioHistoryItem) => {
+    const nextHistory = [item, ...cleanupHistoryRef.current];
+    const removedItems = nextHistory.slice(AUDIO_HISTORY_LIMIT);
+    removedItems
+      .filter((removed) => removed.localUrl && removed.url)
+      .forEach((removed) => URL.revokeObjectURL(removed.url));
+    const limitedHistory = nextHistory.slice(0, AUDIO_HISTORY_LIMIT);
+    cleanupHistoryRef.current = limitedHistory;
+    setCleanupHistory(limitedHistory);
+  };
+
+  const playCleanupHistory = async (item: AudioHistoryItem) => {
+    setCleanupHistoryLoadingId(item.id);
+    setError(null);
+    try {
+      let nextUrl = item.url;
+      if (!nextUrl) {
+        const result = await fetchAudioHistoryAudio(item.id);
+        nextUrl = URL.createObjectURL(result.blob);
+        const nextHistory = cleanupHistoryRef.current.map((historyItem) =>
+          historyItem.id === item.id ? { ...historyItem, url: nextUrl, localUrl: true } : historyItem,
+        );
+        cleanupHistoryRef.current = nextHistory;
+        setCleanupHistory(nextHistory);
+      }
+      setCleanedUrl(nextUrl);
+      setStatus("done");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to load saved audio cleanup");
+    } finally {
+      setCleanupHistoryLoadingId(null);
+    }
+  };
+
+  const removeCleanupHistory = (item: AudioHistoryItem) => {
+    setPendingCleanupHistoryDelete(item);
+  };
+
+  const confirmRemoveCleanupHistory = () => {
+    const item = pendingCleanupHistoryDelete;
+    if (!item) return;
+    setPendingCleanupHistoryDelete(null);
+
+    const removeFromView = () => {
+      if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
+      const nextHistory = cleanupHistoryRef.current.filter((historyItem) => historyItem.id !== item.id);
+      cleanupHistoryRef.current = nextHistory;
+      setCleanupHistory(nextHistory);
+      if (item.url && item.url === cleanedUrl) {
+        setCleanedUrl(null);
+        setStatus(file ? "ready" : "empty");
+      }
+    };
+
+    if (!item.persisted) {
+      removeFromView();
+      return;
+    }
+    void deleteAudioHistory(item.id)
+      .then(removeFromView)
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Unable to delete saved audio cleanup");
+      });
+  };
+
   const handleCleanup = async () => {
     if (!file) {
       setError(t("create.audio.cleanup.selectFile"));
@@ -3408,7 +3505,31 @@ function AudioCleanupLayout() {
     setError(null);
     try {
       const result = await cleanupAudio({ audio: file, durationSeconds, ...options, outputFormat });
-      setCleanedUrl(URL.createObjectURL(result.blob));
+      const nextUrl = URL.createObjectURL(result.blob);
+      const historyItem: AudioHistoryItem = {
+        id: result.localHistoryId ?? `audio-cleanup-local-${Date.now()}`,
+        feature: "audio-cleanup",
+        label: file.name || "Cleaned audio",
+        provider: creditEstimate?.provider ?? "internal",
+        outputFormat,
+        mimeType: result.contentType || file.type || "audio/mpeg",
+        sizeBytes: result.blob.size,
+        createdAt: new Date().toISOString(),
+        durationSeconds,
+        metadata: {
+          noiseReduction: options.noiseReduction,
+          voiceClarity: options.voiceClarity,
+          removeReverb: options.removeReverb,
+          normalizeLoudness: options.normalizeLoudness,
+          preserveTone: options.preserveTone,
+          creditCost: creditEstimate?.creditCost,
+        },
+        url: nextUrl,
+        localUrl: true,
+        persisted: Boolean(result.localHistoryId),
+      };
+      appendCleanupHistory(historyItem);
+      setCleanedUrl(nextUrl);
       setStatus("done");
       finishAudioProgress("audio-cleanup", requestId);
     } catch (cleanupError) {
@@ -3571,6 +3692,62 @@ function AudioCleanupLayout() {
             <span>{file ? `เลือกไว้ ${optionRows.filter((option) => options[option.key]).length} เครื่องมือ · เสียงต้นฉบับจะยังคงโทนธรรมชาติ` : "อัปโหลดไฟล์เพื่อเริ่มดูตัวอย่างการปรับปรุงเสียง"}</span>
           </div>
         </div>
+        <section className={styles.historyPanel} aria-label={t("create.audio.a11y.historyPanel")}>
+          <div className={styles.sectionHeading}>
+            <h2>
+              <History size={13} /> {t("create.audio.generationHistory")}
+            </h2>
+            <span className={styles.timelineHint}>
+              {cleanupHistory.length
+                ? cleanupHistory.length === 1
+                  ? t("create.audio.resultCountOne")
+                  : t("create.audio.resultCountMany", { count: cleanupHistory.length })
+                : t("create.audio.noResults")}
+            </span>
+          </div>
+          {cleanupHistory.length ? (
+            <div className={styles.historyList}>
+              {cleanupHistory.map((item) => (
+                <div
+                  key={item.id}
+                  className={item.url === cleanedUrl ? styles.historyItemRowActive : styles.historyItemRow}
+                >
+                  <button
+                    type="button"
+                    className={item.url === cleanedUrl ? styles.historyItemActive : styles.historyItem}
+                    onClick={() => void playCleanupHistory(item)}
+                    disabled={cleanupHistoryLoadingId === item.id}
+                    aria-busy={cleanupHistoryLoadingId === item.id}
+                  >
+                    <span className={cleanupHistoryLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>
+                      {cleanupHistoryLoadingId === item.id ? null : <Play size={13} fill="currentColor" />}
+                    </span>
+                    <span className={styles.historyCopy}>
+                      <strong>{item.label}</strong>
+                      <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
+                    </span>
+                    <span className={styles.historyCurrent}>
+                      {item.url === cleanedUrl ? t("create.audio.historyCurrent") : t("create.audio.historyPlay")}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.historyDelete}
+                    aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
+                    onClick={() => removeCleanupHistory(item)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.historyEmpty}>
+              <History size={15} />
+              <span>{t("create.audio.historyEmpty")}</span>
+            </div>
+          )}
+        </section>
       </section>
 
       <aside className={`${styles.alternateSettings} ${styles.cleanupSettingsPanel}`}>
@@ -3651,6 +3828,15 @@ function AudioCleanupLayout() {
           </p>
         </div>
       </aside>
+      <PodcastConfirmationDialog
+        open={Boolean(pendingCleanupHistoryDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingCleanupHistoryDelete(null);
+        }}
+        title="ลบประวัติการปรับปรุงเสียงหรือไม่?"
+        description={`“${pendingCleanupHistoryDelete?.label ?? "รายการนี้"}” จะถูกลบออกจากประวัติการสร้างและกู้คืนไม่ได้`}
+        onConfirm={confirmRemoveCleanupHistory}
+      />
     </div>
   );
 }
