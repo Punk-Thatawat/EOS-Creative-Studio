@@ -47,7 +47,7 @@
 .saveButton { min-width: 8.5rem; box-shadow: 0 7px 16px rgb(242 107 56 / 18%); }
 
 .layout { display: grid; grid-template-columns: 13rem minmax(0, 1fr); align-items: start; gap: 1.25rem; }
-.sectionNav { position: sticky; top: 1.25rem; padding: 0.35rem; }
+.sectionNav { position: sticky; top: calc(80px + 1.25rem); padding: 0.35rem; }
 .navLabel { padding: 0 0.75rem; margin: 0 0 0.65rem; color: #9c918a; font-size: 0.62rem; }
 .navItem { display: flex; align-items: center; width: 100%; gap: 0.65rem; border-radius: 0.75rem; color: #756d67; font-size: 0.78rem; font-weight: 600; padding: 0.7rem 0.75rem; text-align: left; transition: 160ms ease; }
 .navItem:hover { background: #f7f3f0; color: var(--settings-ink); }
@@ -58,7 +58,7 @@
 .navTip p { font-size: 0.68rem; line-height: 1.55; }
 
 .sections { display: grid; gap: 0.9rem; min-width: 0; }
-.settingsCard { scroll-margin-top: 1.25rem; overflow: hidden; }
+.settingsCard { scroll-margin-top: calc(80px + 1.25rem); overflow: hidden; }
 .sectionHeading { display: flex; align-items: center; gap: 0.8rem; border-bottom: 1px solid var(--settings-line); padding: 1.15rem 1.25rem 1rem; }
 .sectionHeading h2 { font-size: 0.95rem; font-weight: 800; letter-spacing: -0.01em; }
 .sectionHeading p { margin-top: 0.18rem; color: var(--settings-muted); font-size: 0.72rem; line-height: 1.45; }

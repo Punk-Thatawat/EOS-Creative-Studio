@@ -399,8 +399,8 @@ export async function quoteTextToSpeechScenes(input: Omit<TextToSpeechScenesInpu
   throw new Error("Audio pricing unavailable");
 }
 
-export async function getAudioCreditBalance(): Promise<AudioCreditBalance> {
-  const response = await userAudioRequest("/users/me/credits", { headers: { Accept: "application/json" } });
+export async function getAudioCreditBalance(signal?: AbortSignal): Promise<AudioCreditBalance> {
+  const response = await userAudioRequest("/users/me/credits", { headers: { Accept: "application/json" }, signal });
   const payload = await response.json().catch(() => null) as { data?: { balance?: unknown } } | { balance?: unknown } | null;
   const data = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
   const balance = data && typeof data === "object" && "balance" in data ? Number(data.balance) : NaN;

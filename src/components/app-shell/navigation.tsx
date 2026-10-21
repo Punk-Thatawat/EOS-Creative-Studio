@@ -136,6 +136,7 @@ function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; 
   const selectedFeature = requestedFeature === "video" ? "image-to-video" : (requestedFeature ?? "text-to-image");
   const isImageFeature = adminImageFeatures.some((item) => item.id === selectedFeature);
   const isVideoFeature = adminVideoFeatures.some((item) => item.id === selectedFeature);
+  const isAiPresenterFeature = selectedFeature === "ai-presenter";
   const isAudioFeature = selectedFeature === "audio" || adminAudioFeatures.some((item) => item.id === selectedFeature);
   const isDocumentFeature = adminDocumentFeatures.some((item) => item.id === selectedFeature);
 
@@ -195,6 +196,28 @@ function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; 
                   </Link>
                 );
               })}
+            </div>
+          </details>
+        </SidebarMenuItem>
+        <SidebarMenuItem>
+          <details open={isAiPresenterFeature} className="group">
+            <summary
+              className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${isAiPresenterFeature ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+            >
+              <Clapperboard size={18} strokeWidth={isAiPresenterFeature ? 2.5 : 2} />
+              <span>AI Presenter</span>
+              <span className="ml-auto">
+                <ChevronDown size={15} className="transition-transform group-open:rotate-180" />
+              </span>
+            </summary>
+            <div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">
+              <Link
+                href="/admin/model-routes?feature=ai-presenter"
+                aria-current={pathname === "/admin/model-routes" && isAiPresenterFeature ? "page" : undefined}
+                className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${pathname === "/admin/model-routes" && isAiPresenterFeature ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+              >
+                Presenter Video
+              </Link>
             </div>
           </details>
         </SidebarMenuItem>

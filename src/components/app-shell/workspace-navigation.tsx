@@ -19,7 +19,7 @@ const createItems: { kind?: GenerationKind; label: string; href: string; icon: L
   { kind: "video", label: "Video", href: "/create/video", icon: Video },
   { kind: "audio", label: "Audio", href: "/create/audio", icon: AudioLines },
   { label: "Document", href: "/create/document", icon: FileText },
-  { label: "AI Presenter", href: "/create/video?template=ai-presenter-video", icon: UserRound },
+  { label: "AI Presenter", href: "/create/ai-presenter", icon: UserRound },
 ];
 const mainClass = "flex min-h-11 select-none items-center gap-2 rounded-[11px] px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary";
 const activeClass = "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary";

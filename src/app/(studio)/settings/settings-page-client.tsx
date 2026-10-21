@@ -433,9 +433,7 @@ export function SettingsPageClient() {
                   <p className={styles.rowTitle}>{t.password}</p>
                   <p className={styles.rowDescription}>{authProvider === "google" ? t.passwordManagedByGoogle : t.passwordDescription}</p>
                 </div>
-                {authProvider === "google" ? (
-                  <p className={styles.passwordGoogleNote} role="status">{t.passwordManagedByGoogle}</p>
-                ) : authProvider === "loading" ? (
+                {authProvider === "google" ? null : authProvider === "loading" ? (
                   <p className={styles.passwordGoogleNote} role="status">{t.authenticationLoading}</p>
                 ) : (
                   <form className={styles.passwordForm} onSubmit={handleChangePassword}>
