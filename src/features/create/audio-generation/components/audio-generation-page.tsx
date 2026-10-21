@@ -3617,14 +3617,6 @@ function AudioCleanupLayout() {
             menuPosition="fixed"
           />
         </div>
-        <div className={styles.cleanupSettingsSummary}>
-          <div className={styles.cleanupSettingsSummaryHeader}><span>สรุปการตั้งค่า</span><strong>{optionRows.filter((option) => options[option.key]).length + (options.preserveTone ? 1 : 0)} รายการ</strong></div>
-          <div className={styles.cleanupSelectedTags}>
-            {optionRows.filter((option) => options[option.key]).map((option) => <span key={option.key}>{option.label}</span>)}
-            {options.preserveTone ? <span>คงโทนเสียง</span> : null}
-          </div>
-          <p>เหมาะสำหรับเสียงพูด พอดแคสต์ และบทสนทนา</p>
-        </div>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
           <div className={styles.creditEstimate}>
             <div className={styles.creditEstimateHeader}>

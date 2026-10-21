@@ -5082,12 +5082,6 @@
   color: #8b929c;
   font-size: 8px;
 }
-.cleanupSettingsSummaryHeader {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
 .cleanupProcessBoard {
   margin-top: 18px;
   border: 1px solid #e9edf0;
@@ -5200,45 +5194,6 @@
   flex: none;
   color: #ef6b32;
 }
-.cleanupSettingsSummary {
-  margin-top: 18px;
-  border: 1px solid #edf0f2;
-  border-radius: 11px;
-  background: #fbfcfd;
-  padding: 12px;
-}
-.cleanupSettingsSummaryHeader > span {
-  color: #525b66;
-  font-size: 9px;
-  font-weight: 850;
-}
-.cleanupSettingsSummaryHeader > strong {
-  color: #ef6b32;
-  font-size: 9px;
-  font-weight: 850;
-}
-.cleanupSelectedTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 9px;
-}
-.cleanupSelectedTags span {
-  border: 1px solid #f2d8c9;
-  border-radius: 999px;
-  background: #fff4ed;
-  padding: 4px 7px;
-  color: #c9602c;
-  font-size: 8px;
-  font-weight: 750;
-}
-.cleanupSettingsSummary p {
-  margin: 10px 0 0;
-  color: #9299a2;
-  font-size: 8px;
-  line-height: 1.4;
-}
-
 @media (min-width: 1280px) {
   .cleanupLayout .cleanupSourcePanel,
   .cleanupLayout .cleanupPreviewPanel,
@@ -5260,8 +5215,7 @@
     margin-top: 14px;
   }
   .cleanupSourceGuide,
-  .cleanupProcessBoard,
-  .cleanupSettingsSummary {
+  .cleanupProcessBoard {
     margin-top: 14px;
   }
   .cleanupProcessTrack {
@@ -5440,11 +5394,6 @@
   margin-top: -6px;
 }
 
-.cleanupLayout .cleanupSettingsSummary {
-  border-radius: 8px;
-  background: #f8f9fa;
-}
-
 .cleanupLayout .generateButton {
   min-height: 48px;
   border-radius: 8px;
@@ -5470,10 +5419,6 @@
 
   .cleanupLayout .cleanupPreviewCard {
     min-height: 174px;
-  }
-
-  .cleanupLayout .cleanupSettingsSummary {
-    margin-top: 18px;
   }
 
   .cleanupLayout .mobileActionDock {
