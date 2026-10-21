@@ -1,6 +1,6 @@
 "use client";
 
-import { Captions, Check, Maximize, Pause, Play, RotateCcw, RotateCw, Settings, Volume2, VolumeX } from "lucide-react";
+import { Check, Maximize, Pause, Play, RotateCcw, RotateCw, Settings, Volume2, VolumeX } from "lucide-react";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
@@ -237,7 +237,6 @@ export function EosVideoPlayer({
             <span className="intro-video-time">{formatVideoDuration(currentTime)} / {formatVideoDuration(duration)}</span>
           </div>
           <div className="intro-video-extra-controls">
-            <button type="button" className="intro-video-icon-button" aria-label={t("create.video.common.captions")}><Captions size={16} /></button>
             <div className="intro-video-settings">
               {isSettingsOpen ? (
                 <div className="intro-video-settings-popover" role="dialog" aria-label={t("create.video.common.videoSettings")}>
