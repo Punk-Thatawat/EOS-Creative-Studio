@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, LockKeyhole } from "lucide-react";
+import { ArrowRight, Check, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { resetPasswordWithBackend } from "@/lib/auth/backend-auth";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -11,6 +11,8 @@ export default function ResetPasswordPage() {
   const [inviteMode, setInviteMode] = useState(false);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmationVisible, setConfirmationVisible] = useState(false);
   const [state, setState] = useState<"form" | "success" | "error">("form");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,8 +39,8 @@ export default function ResetPasswordPage() {
     <h1>{state === "success" ? t("auth.reset.updated") : inviteMode ? t("auth.invite.pageTitle") : t("auth.reset.pageTitle")}</h1>
     <p>{state === "success" ? t("auth.reset.updated") : inviteMode ? t("auth.invite.pageSubtitle") : t("auth.reset.pageSubtitle")}</p>
     {state === "form" && <form onSubmit={submit}>
-      <label>{inviteMode ? t("auth.invite.newPassword") : t("auth.reset.newPassword")}<input type="password" autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-      <label>{inviteMode ? t("auth.invite.confirmPassword") : t("auth.reset.confirmPassword")}<input type="password" autoComplete="new-password" minLength={8} required value={confirmation} onChange={(e) => setConfirmation(e.target.value)} /></label>
+      <label>{inviteMode ? t("auth.invite.newPassword") : t("auth.reset.newPassword")}<span className="auth-reset-field"><input type={passwordVisible ? "text" : "password"} autoComplete="new-password" minLength={8} required value={password} onChange={(e) => setPassword(e.target.value)} /><button type="button" className="auth-reset-toggle" aria-label={passwordVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onClick={() => setPasswordVisible((visible) => !visible)}>{passwordVisible ? <Eye size={18} /> : <EyeOff size={18} />}</button></span></label>
+      <label>{inviteMode ? t("auth.invite.confirmPassword") : t("auth.reset.confirmPassword")}<span className="auth-reset-field"><input type={confirmationVisible ? "text" : "password"} autoComplete="new-password" minLength={8} required value={confirmation} onChange={(e) => setConfirmation(e.target.value)} /><button type="button" className="auth-reset-toggle" aria-label={confirmationVisible ? t("auth.a11y.hidePassword") : t("auth.a11y.showPassword")} onClick={() => setConfirmationVisible((visible) => !visible)}>{confirmationVisible ? <Eye size={18} /> : <EyeOff size={18} />}</button></span></label>
       {message && <p className="auth-reset-error" role="alert">{message}</p>}
       <button type="submit" disabled={loading}>{loading ? t("auth.action.sending") : inviteMode ? t("auth.invite.submit") : t("auth.reset.update")} <ArrowRight size={18} /></button>
     </form>}
