@@ -71,6 +71,7 @@ const features: Record<string, string> = {
   "extend-image": "ขยายภาพ",
   upscale: "เพิ่มความละเอียด",
   "image-to-video": "ภาพเป็นวิดีโอ",
+  "ai-presenter-video": "วิดีโอ AI Presenter",
   "text-to-video": "ข้อความเป็นวิดีโอ",
   "reference-to-video": "วิดีโอจากภาพอ้างอิง",
   "people-video": "พรีเซนเตอร์ AI",
@@ -98,6 +99,7 @@ const dateLabel = (value: string) =>
         minute: "2-digit",
       }).format(new Date(value));
 function creatorHref(item: HistoryItem) {
+  if (item.feature === "ai-presenter-video") return "/create/ai-presenter";
   if (item.mediaKind !== "image") return `/create/${item.mediaKind}`;
   return `/create/image?tab=${encodeURIComponent(item.feature === "style-transfer" ? "image-to-image" : item.feature)}`;
 }
@@ -407,13 +409,18 @@ export function HistoryPageClient() {
   const historyCacheRef = useRef(new Map<string, { data: HistoryResponse; cachedAt: number }>());
   const cacheRefreshRef = useRef(refresh);
   useEffect(() => {
-    const requestedType = new URLSearchParams(window.location.search).get("type");
-    if (!requestedType || !historyTypeValues.has(requestedType as HistoryType)) return;
+    const params = new URLSearchParams(window.location.search);
+    const requestedType = params.get("type");
+    const requestedSearch = params.get("search")?.trim() ?? "";
+    const validType = requestedType && historyTypeValues.has(requestedType as HistoryType) ? requestedType as HistoryType : undefined;
+    if (!validType && !requestedSearch) return;
     // Sync the initial URL filter once after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setQuery((current) =>
-      current.type === requestedType ? current : { ...current, type: requestedType as HistoryType, offset: 0 },
-    );
+    setQuery((current) => {
+      const type = validType ?? current.type;
+      if (current.type === type && current.search === requestedSearch) return current;
+      return { ...current, type, search: requestedSearch, offset: 0 };
+    });
   }, []);
   useEffect(() => {
     const controller = new AbortController();

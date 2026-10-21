@@ -243,7 +243,7 @@ export async function quoteVideoStoryboard(input: Omit<VideoGenerationInput, "id
   }) as VideoCreditQuoteResponse;
 }
 
-export async function composePresenterVideo(storyboardId: string, scenes: PresenterSceneMediaInput[], voiceover: Blob, signal?: AbortSignal): Promise<PresenterVideoCompositionResponse> {
+export async function composePresenterVideo(storyboardId: string, scenes: PresenterSceneMediaInput[], signal?: AbortSignal): Promise<PresenterVideoCompositionResponse> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in before finalizing a presenter video");
   const formData = new FormData();
@@ -251,7 +251,6 @@ export async function composePresenterVideo(storyboardId: string, scenes: Presen
     scenes: scenes.map(({ sceneIndex, startSeconds, endSeconds }) => ({ sceneIndex, startSeconds, endSeconds })),
   }));
   for (const scene of scenes) formData.append("media", scene.file, scene.file.name);
-  formData.append("voiceover", voiceover, "elevenlabs-presenter.mp3");
   const response = await fetch(`${backendApiUrl}/generations/presenter/storyboard/${encodeURIComponent(storyboardId)}/compose`, {
     method: "POST",
     headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
