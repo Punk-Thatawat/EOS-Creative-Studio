@@ -819,6 +819,7 @@ export function AiPresenterPage() {
   const estimatedCredits = speechQuote && videoCreditCost !== null
     ? speechQuote.creditCost + videoCreditCost
     : null;
+  const creditEstimateLoading = speechQuoteLoading || videoQuoteLoading;
   const requiredCreditCost = videoCreditCost !== null && (currentSpeech || speechQuote !== null)
     ? videoCreditCost + (currentSpeech ? 0 : speechQuote?.creditCost ?? 0)
     : null;
@@ -1730,7 +1731,7 @@ export function AiPresenterPage() {
                 </div>
                 <span>
                   {isThai ? `${scenes.length} ฉาก × ${Math.ceil(duration)} วินาที` : `${scenes.length} scene${scenes.length === 1 ? "" : "s"} × ${Math.ceil(duration)} sec`}
-                  <strong>{estimatedCredits === null ? "—" : `= ${estimatedCredits.toLocaleString(isThai ? "th-TH" : "en-US")} ${isThai ? "เครดิต" : "credits"}`}</strong>
+                  <strong>{creditEstimateLoading ? (isThai ? "กำลังคำนวณ…" : "Calculating…") : estimatedCredits === null ? "—" : `= ${estimatedCredits.toLocaleString(isThai ? "th-TH" : "en-US")} ${isThai ? "เครดิต" : "credits"}`}</strong>
                 </span>
               </div>
               {!isGenerating && presenterValidationMessage ? <p className={videoPreviewStyles.settingsError} role="status">{presenterValidationMessage}</p> : null}
