@@ -1615,6 +1615,7 @@ button.settingRow {
   }
 
   .settingsPanel > .panelTitle,
+  .actionBlock,
   .estimateCard,
   .generateButton,
   .securityNote {
@@ -1706,6 +1707,7 @@ button.settingRow {
   }
 
   .settingsPanel > .panelTitle,
+  .actionBlock,
   .estimateCard,
   .generateButton,
   .securityNote {
@@ -1759,6 +1761,7 @@ button.settingRow {
   }
 
   .settingsPanel > .panelTitle,
+  .actionBlock,
   .estimateCard,
   .generateButton,
   .securityNote {

@@ -16,6 +16,7 @@ import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/gene
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
 import { fetchHistory } from "@/lib/api/history";
 import type { HistoryItem } from "@/lib/api/history";
+import { InfoTooltip } from "../components/info-tooltip";
 import { ModelPreviewMedia } from "../model-preview-media";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "../video-preview-placeholder";
 import videoPreviewStyles from "../video-generation-page.module.css";
@@ -383,7 +384,7 @@ function isElevenLabsSpeechModel(model: AudioModel): boolean {
 }
 
 export function AiPresenterPage() {
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const isThai = locale === "th";
   const sourceInputRef = useRef<HTMLInputElement>(null);
   const sceneMediaInputRef = useRef<HTMLInputElement>(null);
@@ -1284,6 +1285,23 @@ export function AiPresenterPage() {
   const supportedRatios = selectedVideoModel?.capabilities.supportedRatios?.filter((value) => aspectOptions.some((ratio) => ratio === value)) ?? [];
   const missingSceneVisual = scenes.find((scene) => (scene.visualMode ?? "presenter") !== "presenter" && !scene.media);
   const canGenerate = Boolean(sourceMedia && (sourceMedia.remoteUrl || sourceMedia.defaultAsset) && !sourceMedia.error && script.trim() && allScenesHaveScript && !missingSceneVisual && !sceneReferenceAudioTooLong && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !creditPreflightBusy && !catalogLoading && !voiceLoading);
+  const presenterValidationMessage = catalogLoading
+    ? (isThai ? "กำลังโหลดโมเดลวิดีโอ" : "Loading presenter video models")
+    : !sourceMedia || sourceMedia.error
+      ? (isThai ? "อัปโหลดภาพพรีเซนเตอร์ก่อนสร้าง" : "Upload a presenter image before generating")
+      : !script.trim()
+        ? (isThai ? "เพิ่มบทพูดก่อนสร้าง" : "Add spoken lines before generating")
+        : !allScenesHaveScript
+          ? (isThai ? "ทุกซีนต้องมีบทพูดก่อนสร้าง" : "Every scene needs spoken lines before generating")
+          : !selectedVideoModel
+            ? (isThai ? "เลือกโมเดลวิดีโอก่อนสร้าง" : "Select a presenter video model before generating")
+            : !selectedVoice
+              ? (isThai ? "เลือกเสียงพรีเซนเตอร์ก่อนสร้าง" : "Select a presenter voice before generating")
+              : missingSceneVisual
+                ? (isThai ? "เพิ่มภาพหรือวิดีโอให้ซีนที่ซ่อนพรีเซนเตอร์" : "Add media to scenes that hide the presenter")
+                : sceneReferenceAudioTooLong
+                  ? (isThai ? "แบ่งบทซีนที่ยาวเกิน 15 วินาทีออกเป็นซีนเพิ่ม" : "Split scenes whose reference audio exceeds 15 seconds")
+                  : null;
 
   return (
     <div className={styles.page}>
@@ -1705,33 +1723,27 @@ export function AiPresenterPage() {
               <div className={styles.formatChoices}>{(supportedRatios.length ? supportedRatios : aspectOptions).map((value) => <button key={value} type="button" className={`${styles.formatOption} ${aspect === value ? styles.formatOptionActive : ""}`} onClick={() => { clearFinalVideoPreview(); setAspect(value as (typeof aspectOptions)[number]); }} disabled={isLocked}><span className={`${styles.formatShape} ${value === "9:16" ? styles.formatPortrait : value === "1:1" ? styles.formatSquare : ""}`} /><strong>{value}</strong><small>{value === "16:9" ? "Landscape" : value === "9:16" ? "Portrait" : "Square"}</small></button>)}</div>
             </div>
 
-            <div className={styles.estimateCard}>
-              <div><strong>{isThai ? "เครดิตโดยประมาณ" : "Estimated credits"}</strong><span className={styles.estimateIcon}><Sparkles size={18} /></span></div>
-              <div className={styles.estimateLine}><span>{isThai ? "เสียงพูด" : "Speech"}</span><b>{speechQuoteLoading ? "…" : speechQuote ? speechQuote.creditCost.toLocaleString() : "—"}</b></div>
-              <div className={styles.estimateLine}><span>{isThai ? "วิดีโอ" : "Video"}</span><b>{videoQuoteLoading ? "…" : videoCreditCost === null ? "—" : videoCreditCost.toLocaleString()}</b></div>
-              <b className={styles.estimateTotal}>{estimatedCredits === null ? "—" : estimatedCredits.toLocaleString()} <small>{isThai ? "เครดิตรวม" : "credits total"}</small></b>
-              <div className={styles.estimateLine}><span>{isThai ? "เครดิตคงเหลือ" : "Available balance"}</span><b>{creditBalanceLoading ? "…" : creditBalance === null ? "—" : creditBalance.toLocaleString()}</b></div>
-              <div className={styles.estimateLine}><span>{isThai ? (currentSpeech ? "ต้องใช้เพิ่มก่อนสร้าง" : "ต้องมีขั้นต่ำ") : (currentSpeech ? "Needed to continue" : "Needed before generation")}</span><b>{requiredCreditCost === null ? "—" : requiredCreditCost.toLocaleString()}</b></div>
-              <span className={styles.creditStatus} data-insufficient={!creditBalanceLoading && creditBalance !== null && requiredCreditCost !== null && !creditsSufficient ? "true" : undefined}>
-                {creditBalanceLoading || requiredCreditCost === null
-                  ? (isThai ? "กำลังตรวจราคาและยอดเครดิต…" : "Checking prices and credit balance…")
-                  : creditBalance === null
-                    ? (isThai ? "ตรวจยอดเครดิตไม่ได้ จึงยังเริ่มสร้างไม่ได้" : "Could not verify your balance, so generation is blocked.")
-                    : creditsSufficient
-                      ? (isThai ? "เครดิตพอสำหรับงานที่กำลังจะสร้าง" : "Balance covers the remaining generation steps.")
-                      : (isThai ? "เครดิตไม่พอ กรุณาเติมก่อนสร้าง" : "Not enough credits. Add credits before generating.")}
-              </span>
-              <span>{isThai ? `ความยาวประมาณ ${duration} วินาที · คิดเครดิตแยกตามงาน` : `About ${duration} seconds · each step is charged separately`}</span>
+            <div data-mobile-action-dock className={`${videoPreviewStyles.estimateBlock} ${styles.actionBlock}`}>
+              <div className={videoPreviewStyles.estimate} title={t("create.video.common.info.estimatedCredits")}>
+                <div>
+                  {t("create.video.common.estimatedCredits")} <InfoTooltip content={t("create.video.common.info.estimatedCredits")} size={11} />
+                </div>
+                <span>
+                  {isThai ? `${scenes.length} ฉาก × ${Math.ceil(duration)} วินาที` : `${scenes.length} scene${scenes.length === 1 ? "" : "s"} × ${Math.ceil(duration)} sec`}
+                  <strong>{estimatedCredits === null ? "—" : `= ${estimatedCredits.toLocaleString(isThai ? "th-TH" : "en-US")} ${isThai ? "เครดิต" : "credits"}`}</strong>
+                </span>
+              </div>
+              {!isGenerating && presenterValidationMessage ? <p className={videoPreviewStyles.settingsError} role="status">{presenterValidationMessage}</p> : null}
+              {generationError ? <p className={videoPreviewStyles.settingsError} role="alert">{generationError}</p> : null}
+              <button type="button" className={videoPreviewStyles.generate} onClick={() => void handleGenerateVideo()} disabled={!canGenerate}>
+                {isGenerating || creditPreflightBusy ? <LoaderCircle size={17} className={styles.spin} /> : <WandSparkles size={17} />}{creditPreflightBusy ? (isThai ? "กำลังตรวจเครดิต…" : "Checking credits…") : isGenerating ? (isThai ? "กำลังสร้างวิดีโอ…" : "Generating video…") : (isThai ? "สร้างวิดีโอ" : "Generate video")}
+              </button>
+              <p className={videoPreviewStyles.privateNote}><LockKeyhole size={12} /> {t("create.settings.privateSecure")}</p>
             </div>
             {sceneReferenceAudioTooLong ? <p className={styles.formError} role="status">{overlongSceneAudioIndex >= 0 && currentSpeech ? (isThai ? `ซีน ${overlongSceneAudioIndex + 1} มีเสียงจริง ${currentSpeech.sceneAudio[overlongSceneAudioIndex]?.durationSeconds.toFixed(2)} วินาที เกิน 15 วินาที กรุณาแบ่งบทของซีนนี้เป็นซีนเพิ่ม` : `Scene ${overlongSceneAudioIndex + 1} is ${currentSpeech.sceneAudio[overlongSceneAudioIndex]?.durationSeconds.toFixed(2)} seconds long, over the 15-second limit. Split this scene's script into additional scenes.`) : (isThai ? "เสียงอ้างอิงแต่ละซีนต้องไม่เกิน 15 วินาที ถ้าบทซีนยาวกว่านี้ให้แบ่งเป็นซีนเพิ่ม" : "Each scene's reference audio must be 15 seconds or less. Split longer scene scripts into additional scenes.")}</p> : null}
-            <p className={styles.creditNote}>{isThai ? "การฟังตัวอย่างไม่เสียเครดิต · สร้างเสียงตามบทเมื่อกดสร้างพรีเซนเตอร์เท่านั้น" : "Listening to the sample is free. Script audio is generated only when you create the presenter."}</p>
-            <button type="button" className={styles.generateButton} onClick={() => void handleGenerateVideo()} disabled={!canGenerate}>
-              {isGenerating || creditPreflightBusy ? <LoaderCircle size={17} className={styles.spin} /> : <Sparkles size={17} />}{creditPreflightBusy ? (isThai ? "กำลังตรวจเครดิต…" : "Checking credits…") : isGenerating ? (isThai ? "กำลังสร้างวิดีโอ…" : "Generating video…") : (isThai ? "สร้างพรีเซนเตอร์" : "Generate presenter")}
-            </button>
             {catalogError ? <p className={styles.formError}>{catalogError}</p> : null}
             {!catalogLoading && !availableReferenceVideoModels.length ? <p className={styles.formError}>{isThai ? "ยังไม่มีโมเดล AI Presenter ที่รองรับภาพและเสียงอ้างอิง กรุณาตั้งค่าโมเดลที่ Admin > AI Presenter > Presenter Video" : "No AI Presenter model is configured with image and audio reference inputs. Configure it in Admin > AI Presenter > Presenter Video."}</p> : null}
             {!voiceLoading && selectedAudioModel && !voices.length ? <p className={styles.formError}>{isThai ? "ไม่พบเสียงที่ใช้งานได้ในโมเดลนี้" : "No available voices for this speech model."}</p> : null}
-            <p className={styles.securityNote}><LockKeyhole size={12} /> {isThai ? "สคริปต์และไฟล์จะส่งไปยังผู้ให้บริการเพื่อสร้างงาน" : "Your script and media are sent to generation providers."}</p>
           </aside>
         </div>
       </section>
