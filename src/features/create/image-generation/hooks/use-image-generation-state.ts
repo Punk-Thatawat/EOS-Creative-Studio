@@ -902,10 +902,12 @@ export function useImageGenerationState() {
   // currently shown in the UI. The backend still performs the same
   // reconciliation for direct API callers.
   const genericRatioOwnsDimensions = Boolean(selectedModelCapabilities && !selectedModelCapabilities.aspectRatioParameter && activeTab !== "Upscale");
-  const requestModelParams = Object.fromEntries(Object.entries(modelParams).filter(([name]) =>
-    !providerControlledModelParameters.has(name)
-    && !(genericRatioOwnsDimensions && genericImageDimensionParameters.has(name)),
-  ));
+  const requestModelParams = Object.fromEntries(Object.entries(modelParams)
+    .filter(([name]) =>
+      !providerControlledModelParameters.has(name)
+      && !(genericRatioOwnsDimensions && genericImageDimensionParameters.has(name)),
+    )
+    .map(([name, value]) => [name, /^seed$/i.test(name) ? -1 : value]));
   const nativeQuoteRatio = modelParameterValue(modelParams, selectedModelCapabilities?.aspectRatioParameter, ["aspect_ratio", "aspectRatio", "ratio"]);
   const nativeQuoteResolution = modelParameterValue(modelParams, selectedModelCapabilities?.resolutionParameter, ["resolution", "output_resolution", "outputResolution"]);
   const smartEnhanceQuoteEnabled = promptOptimizerEnabled
@@ -955,6 +957,10 @@ export function useImageGenerationState() {
         const next: Record<string, unknown> = {};
         for (const [name, property] of Object.entries(properties)) {
           if (providerControlledModelParameters.has(name)) continue;
+          if (/^seed$/i.test(name)) {
+            next[name] = -1;
+            continue;
+          }
           const enumValues = Array.isArray(property.enum) ? property.enum : undefined;
           if (current[name] !== undefined && (!enumValues || enumValues.some((value) => String(value) === String(current[name])))) next[name] = current[name];
           else if (property.default !== undefined) next[name] = property.default;
