@@ -5273,19 +5273,28 @@
   }
 }
 
-/* Audio cleanup: separate the source, comparison, and controls into focused cards. */
+/* Audio cleanup: flat, square panels split by straight divider lines, like the other audio tabs. */
 .cleanupLayout {
-  gap: 14px;
+  gap: 0;
 }
 
 .cleanupLayout .cleanupSourcePanel,
 .cleanupLayout .cleanupPreviewPanel,
 .cleanupLayout .cleanupSettingsPanel {
   min-height: 0;
-  border: 1px solid #e8e5e2;
-  border-radius: 16px;
+  border: 0;
+  border-radius: 0;
   background: #fff;
-  box-shadow: 0 8px 24px rgba(40, 31, 24, 0.045);
+  box-shadow: none;
+}
+
+.cleanupLayout .cleanupSourcePanel {
+  border-right: 1px solid var(--audio-line);
+}
+
+.cleanupLayout .cleanupSettingsPanel {
+  border-top: 1px solid var(--audio-line);
+  border-left: 1px solid var(--audio-line);
 }
 
 .cleanupLayout .cleanupSourcePanel,
@@ -5300,7 +5309,7 @@
 
 .cleanupLayout .cleanupDropzone {
   min-height: 156px;
-  border-radius: 14px;
+  border-radius: 10px;
   background: linear-gradient(145deg, #fff9f5, #fffdfb);
 }
 
@@ -5311,7 +5320,7 @@
 .cleanupSourceGuide {
   margin-top: 20px;
   border: 1px solid #eee9e5;
-  border-radius: 14px;
+  border-radius: 8px;
   background: #fbfaf9;
   padding: 15px;
 }
@@ -5377,17 +5386,13 @@
   line-height: 1.55;
 }
 
-.cleanupLayout .cleanupPreviewPanel {
-  background: linear-gradient(180deg, #fff 0%, #fdfcfb 100%);
-}
-
 .cleanupLayout .cleanupPreviewGrid {
   gap: 12px;
 }
 
 .cleanupLayout .cleanupPreviewCard {
   min-height: 166px;
-  border-radius: 14px;
+  border-radius: 8px;
   padding: 14px;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -5421,7 +5426,7 @@
 
 .cleanupLayout .cleanupProcessBoard {
   margin-top: 18px;
-  border-radius: 15px;
+  border-radius: 8px;
   background: linear-gradient(145deg, #f9fbfa 0%, #f5f8f7 100%);
   padding: 18px;
 }
@@ -5436,20 +5441,20 @@
 }
 
 .cleanupLayout .cleanupSettingsSummary {
-  border-radius: 13px;
+  border-radius: 8px;
   background: #f8f9fa;
 }
 
 .cleanupLayout .generateButton {
   min-height: 48px;
-  border-radius: 11px;
-  box-shadow: 0 7px 16px rgba(255, 98, 11, 0.16);
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 @media (min-width: 1280px) {
   .cleanupLayout {
     grid-template-columns: minmax(270px, 0.9fr) minmax(440px, 1.55fr) minmax(310px, 0.98fr);
-    gap: 14px;
+    gap: 0;
     align-items: stretch;
   }
 
@@ -5488,6 +5493,7 @@
 
   .cleanupLayout .cleanupSettingsPanel {
     grid-column: 1 / -1;
+    border-left: 0;
   }
 
   .cleanupLayout .cleanupToolList {
@@ -5496,6 +5502,18 @@
 }
 
 @media (max-width: 767.98px) {
+  .cleanupLayout .cleanupSourcePanel {
+    border-right: 0;
+  }
+
+  .cleanupLayout .cleanupPreviewPanel {
+    border-top: 1px solid var(--audio-line);
+  }
+
+  .cleanupLayout .cleanupSettingsPanel {
+    border-left: 0;
+  }
+
   .cleanupLayout .cleanupSourcePanel,
   .cleanupLayout .cleanupPreviewPanel,
   .cleanupLayout .cleanupSettingsPanel {
@@ -5539,5 +5557,69 @@
     height: 32px;
     min-width: 32px;
     min-height: 32px;
+  }
+}
+
+/* Wraps the active audio tab; the page can pin its min-height while switching tabs (see changeActiveTab). */
+.tabBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.tabBody > * {
+  flex: 1 1 auto;
+}
+
+/* Podcast tab: flat sections split by straight lines and a straight divider before the settings column, like the other audio tabs. */
+.podcastLayout {
+  gap: 0;
+  padding-top: 0;
+  align-items: stretch;
+}
+
+.podcastMainColumn {
+  gap: 0;
+  padding: 0 20px;
+}
+
+.podcastHeaderSection {
+  padding: 24px 0 18px;
+}
+
+.podcastSection,
+.podcastPreviewCard,
+.podcastMainColumn .historyPanel {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--audio-line);
+  border-radius: 0;
+  background: transparent;
+  padding: 18px 0;
+}
+
+.podcastSettingsCard {
+  position: static;
+  border: 0;
+  border-left: 1px solid var(--audio-line);
+  border-radius: 0;
+}
+
+@media (max-width: 1279.98px) {
+  .podcastSettingsCard {
+    border-left: 0;
+    border-top: 1px solid var(--audio-line);
+  }
+}
+
+@media (max-width: 639.98px) {
+  .podcastMainColumn {
+    padding: 0 12px;
+  }
+
+  .podcastSection,
+  .podcastPreviewCard,
+  .podcastMainColumn .historyPanel {
+    padding: 14px 0;
   }
 }
