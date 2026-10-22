@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   Languages,
   ListChecks,
+  LockKeyhole,
   NotebookPen,
   ScanText,
   Sparkles,
@@ -27,7 +28,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
@@ -40,6 +41,7 @@ import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { VideoModelDropdown } from "../video-model-dropdown";
 import { DocumentFeatureGenerationPage } from "./document-feature-generation-page";
+import { DocumentHero } from "./document-hero";
 import { failDocumentGeneration, finishDocumentGeneration, startDocumentGeneration } from "./document-generation-progress";
 import { ImageTutorialButton } from "../image-generation/components/image-tutorial-button";
 import styles from "./document-generation-page.module.css";
@@ -110,16 +112,6 @@ const outputs = [
   { key: K("output.translated"), icon: Languages },
   { key: K("output.notes"), icon: Sparkles },
 ];
-
-/** Renders a translated string, turning "\n" into line breaks (used by the hero artwork). */
-function Lines({ text }: { text: string }) {
-  return text.split("\n").map((line, index) => (
-    <Fragment key={index}>
-      {index > 0 ? <br /> : null}
-      {line}
-    </Fragment>
-  ));
-}
 
 function PanelHeading({ step, children }: { step: string; children: string }) {
   return (
@@ -1121,19 +1113,7 @@ function SummaryTranslationPage() {
 
   return (
     <div className={`${styles.page} document-studio-page`}>
-      <header className={styles.hero}>
-        <div className={styles.heroBanner}>
-          <Image
-            className={styles.heroBannerImage}
-            src="/generated-assets/gen-document-hero-v2.png"
-            alt="GEN DOCUMENT — AI document generation studio"
-            width={2400}
-            height={435}
-            priority
-            sizes="100vw"
-          />
-        </div>
-      </header>
+      <DocumentHero />
 
       <CreatorWorkspaceLayout
         tabs={
@@ -1616,7 +1596,7 @@ function SummaryTranslationPage() {
               <span>{isSummarizing ? t(K(isReport ? "report.generating" : "summary.generating")) : isTranslating ? t(K("translate.translating")) : isReport ? t(K("report.generate")) : isSummarize ? t(K("summary.generate")) : isTranslate ? t(K("translate.generate")) : t(K("settings.generate"))}</span>
               <Sparkles size={17} aria-hidden="true" />
             </button>
-            <div className={styles.secureNote}><span />{isSummaryLike ? t(K(isReport ? "report.processingNote" : "summary.processingNote")) : isTranslate ? t(K("translate.processingNote")) : t(K("settings.secure"))}</div>
+            <div className={styles.secureNote}><LockKeyhole size={12} aria-hidden="true" />{isSummaryLike ? t(K(isReport ? "report.processingNote" : "summary.processingNote")) : isTranslate ? t(K("translate.processingNote")) : t(K("settings.secure"))}</div>
           </div>
           </aside>
         }

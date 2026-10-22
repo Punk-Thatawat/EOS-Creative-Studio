@@ -44,7 +44,8 @@ function AssetCard({ asset, locale, t }: { asset: AssetsApiAsset; locale: "th" |
   const typeLabel = t(assetTypeKeys[asset.type]);
   const previewUrl = asset.previewUrl ?? asset.url;
   const thumbnailClassName = "absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105";
-  const metadata = [typeLabel, formatAssetDate(asset.createdAt, locale), asset.sizeLabel].filter(Boolean).join(" · ");
+  const sizeLabel = asset.sizeBytes === 0 ? null : asset.sizeLabel;
+  const metadata = [typeLabel, formatAssetDate(asset.createdAt, locale), sizeLabel].filter(Boolean).join(" · ");
 
   return <Link href={`/assets?asset=${encodeURIComponent(asset.id)}`} className="group block min-w-[220px] snap-start rounded-2xl border border-border bg-surface p-2 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] sm:min-w-[250px]" aria-label={t("home.openAsset", { title: asset.title })}>
     <div className={`relative flex h-28 items-center justify-center overflow-hidden rounded-xl ${assetBackgrounds[asset.type]}`}>

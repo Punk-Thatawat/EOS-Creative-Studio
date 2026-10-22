@@ -54,7 +54,7 @@ type Asset = {
   id: string;
   title: string;
   date: string;
-  size: string;
+  size: string | null;
   type: string;
   image: string;
   filter: Exclude<FilterType, "All Types">;
@@ -195,7 +195,7 @@ function mapApiAsset(asset: AssetsApiAsset, locale: "th" | "en", untitled: strin
         ? metadataString(asset.metadata, "userPrompt") || untitled
         : asset.title,
     date: formatDate(asset.createdAt, locale),
-    size: asset.sizeLabel || formatBytes(asset.sizeBytes),
+    size: asset.sizeBytes === 0 ? null : asset.sizeLabel || (asset.sizeBytes == null ? null : formatBytes(asset.sizeBytes)),
     type,
     image:
       asset.previewUrl ??
@@ -966,7 +966,7 @@ export default function AssetsPage() {
                       <div>
                         <strong>{asset.title}</strong>
                         <span>
-                          {asset.date} <i>•</i> {asset.size}
+                          {asset.date}{asset.size ? <> <i>•</i> {asset.size}</> : null}
                         </span>
                       </div>
                       <div className="asset-card-actions">

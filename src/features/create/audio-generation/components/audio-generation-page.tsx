@@ -423,6 +423,7 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(78);
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const { t } = useLocale();
 
   useEffect(() => {
     audioRef.current?.pause();
@@ -455,57 +456,58 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
       <div className={styles.cleanupPlayerWaveform}>
         <PreviewWaveform audioUrl={src} progress={progress} isPlaying={isPlaying} />
       </div>
-      <div className={styles.cleanupPlayerControls}>
+      <div className={`${styles.playerRow} ${styles.cleanupPlayerControls}`}>
         <button
           type="button"
-          className={`${styles.podcastPlayButton} ${styles.cleanupPlayerPlay}`}
+          className={styles.playButton}
           onClick={() => void togglePlayback()}
           disabled={!src}
-          aria-label={isPlaying ? "หยุดเสียงชั่วคราว" : "เล่นเสียง"}
+          aria-label={t(isPlaying ? "create.audio.a11y.pause" : "create.audio.a11y.play")}
         >
-          {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+          {isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}
         </button>
         <button
           type="button"
-          className={styles.cleanupSkipButton}
+          className={styles.skipButton}
           onClick={() => seekBy(-10)}
           disabled={!src || duration <= 0}
-          aria-label="ย้อนกลับ 10 วินาที"
-          title="ย้อนกลับ 10 วินาที"
+          aria-label={t("create.audio.a11y.rewind10")}
         >
-          <RotateCcw size={15} aria-hidden="true" /><span>10</span>
+          <RotateCcw size={17} aria-hidden="true" /><small>10</small>
         </button>
         <button
           type="button"
-          className={styles.cleanupSkipButton}
+          className={styles.skipButton}
           onClick={() => seekBy(10)}
           disabled={!src || duration <= 0}
-          aria-label="ข้ามไปข้างหน้า 10 วินาที"
-          title="ข้ามไปข้างหน้า 10 วินาที"
+          aria-label={t("create.audio.a11y.forward10")}
         >
-          <RotateCw size={15} aria-hidden="true" /><span>10</span>
+          <RotateCw size={17} aria-hidden="true" /><small>10</small>
         </button>
-        <span className={styles.cleanupPlayerTime}>
+        <span className={styles.timeLabel}>
           {formatSceneSeconds(currentTime)} / {formatSceneSeconds(duration)}
         </span>
         <input
-          className={styles.cleanupSeekSlider}
+          className={styles.scrubber}
           type="range"
           min="0"
-          max={duration || 1}
-          step="0.01"
-          value={Math.min(currentTime, duration || 0)}
+          max="100"
+          step="0.1"
+          value={progress}
           onChange={(event) => {
-            const nextTime = Number(event.target.value);
-            if (audioRef.current && duration > 0) audioRef.current.currentTime = nextTime;
-            setCurrentTime(nextTime);
+            const nextProgress = Number(event.target.value);
+            if (audioRef.current && duration > 0) {
+              const nextTime = (nextProgress / 100) * duration;
+              audioRef.current.currentTime = nextTime;
+              setCurrentTime(nextTime);
+            }
           }}
-          aria-label={`${label}: ตำแหน่งเสียง`}
+          aria-label={t("create.audio.a11y.audioProgress")}
           disabled={!src || duration <= 0}
         />
-        <Volume2 size={15} className={styles.cleanupVolumeIcon} aria-hidden="true" />
+        <Volume2 size={17} className={styles.volumeIcon} aria-hidden="true" />
         <input
-          className={styles.cleanupVolumeSlider}
+          className={styles.volumeSlider}
           type="range"
           min="0"
           max="100"
@@ -515,7 +517,7 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
             setVolume(nextVolume);
             if (audioRef.current) audioRef.current.volume = nextVolume / 100;
           }}
-          aria-label={`${label}: ระดับเสียง`}
+          aria-label={t("create.audio.a11y.volume")}
           disabled={!src}
         />
       </div>
@@ -3672,19 +3674,19 @@ function AudioCleanupLayout() {
           </div>
           <div className={`${styles.cleanupPreviewCard} ${styles.cleanupPreviewCardAfter}`}>
             <div className={styles.cleanupPreviewLabel}>
-              <span>{t("create.audio.cleanup.cleaned")}</span>
+              <span>{t("create.audio.preview")}</span>
               <span className={styles.cleanupPreviewLabelActions}>
                 <small>{cleanedUrl ? outputFormat.toUpperCase() : "—"}</small>
                 {cleanedUrl ? (
                   <a
-                    className={styles.cleanupInlineDownload}
+                    className={styles.cleanupDownload}
                     href={cleanedUrl}
                     download={`cleaned-audio.${outputFormat}`}
-                    aria-label={t("create.audio.cleanup.download")}
-                    title={t("create.audio.cleanup.download")}
+                    aria-label={t("create.audio.download")}
+                    title={t("create.audio.download")}
                   >
                     <Download size={13} aria-hidden="true" />
-                    <span>{t("create.audio.cleanup.download")}</span>
+                    <span>{t("create.audio.download")}</span>
                   </a>
                 ) : null}
               </span>

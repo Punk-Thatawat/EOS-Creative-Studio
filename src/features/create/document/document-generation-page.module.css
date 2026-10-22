@@ -727,10 +727,10 @@
 .estimate { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-top: 22px; border-top: 1px solid #eeece9; padding-top: 14px; color: #7c848c; font-size: 10px; }
 .estimate strong { color: #454c54; font-size: 11px; }
 .mobileActionDock { display: contents; }
-.generateButton { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; border: 0; border-radius: 8px; background: linear-gradient(90deg, #f64d00, #fa6a0a); color: #fff; font: inherit; font-size: 11px; font-weight: 900; letter-spacing: 0.04em; box-shadow: 0 5px 12px rgba(241, 87, 14, 0.16); }
+.generateButton { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; border: 0; border-radius: 8px; background: #ff620b url("/generated-assets/generate-button-bg.png") center / 100% 100% no-repeat; color: #fff; font: inherit; font-size: 11px; font-weight: 900; letter-spacing: 0.04em; box-shadow: 0 5px 12px rgba(241, 87, 14, 0.16); }
 .generateButton:disabled { cursor: not-allowed; opacity: 0.58; }
 .secureNote { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: #969ca2; font-size: 10px; }
-.secureNote > span { width: 5px; height: 5px; border-radius: 50%; background: #42a87c; }
+.secureNote > svg { flex: none; color: #969ca2; }
 
 .resourceShelf { display: grid; min-width: 0; grid-template-columns: 1.75fr 1fr; gap: 18px; border: 1px solid var(--doc-line); border-radius: 12px; background: #fff; padding: 16px; }
 .learnArea,

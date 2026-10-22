@@ -12,6 +12,7 @@ import {
   Hand,
   Languages,
   ListChecks,
+  LockKeyhole,
   MessageSquarePlus,
   NotebookPen,
   Play,
@@ -22,10 +23,11 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
+import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { VideoModelDropdown } from "../video-model-dropdown";
 import { listDocumentOcrTypes, runDocumentOcr, type DocumentOcrResult, type OcrDocumentTypeId, type OcrDepth, type OcrDocumentTypeInfo, type OcrHistoryItem, type OcrOutputFormat, type OcrStyleChoice } from "@/lib/api/document-ocr";
@@ -53,6 +55,7 @@ import { downloadBlob, downloadOcrResult, ocrResultToText } from "./ocr-download
 import { OcrHistoryPanel } from "./ocr-history";
 import { OcrFullTextView, OcrResultView } from "./ocr-result-view";
 import { ImageTutorialButton } from "../image-generation/components/image-tutorial-button";
+import { DocumentHero } from "./document-hero";
 import styles from "./document-feature-generation-page.module.css";
 
 const K = (key: string) => `create.document.${key}` as TranslationKey;
@@ -76,6 +79,7 @@ const modes: { id: ModeId; icon: typeof ScanText; available?: boolean }[] = [
   { id: "report", icon: BarChart3, available: true },
   { id: "form", icon: ListChecks, available: true },
 ];
+const visibleModes = modes.filter(({ id }) => id !== "report");
 
 const documentTutorialFeatureByMode: Record<ModeId, string> = {
   ocr: "document-ocr",
@@ -108,19 +112,9 @@ const documentTools = [
   { title: K("tool.report"), detail: K("tool.reportDetail"), icon: BarChart3 },
 ];
 
-/** Renders a translated string, turning "\n" into line breaks (used by the hero artwork). */
-function Lines({ text }: { text: string }) {
-  return text.split("\n").map((line, index) => (
-    <Fragment key={index}>
-      {index > 0 ? <br /> : null}
-      {line}
-    </Fragment>
-  ));
-}
-
 /** Which tool is open lives in the URL (`?tab=contract`), so a refresh or a shared link comes back to the same tool. */
 const MODE_PARAM = "tab";
-const modeFromId = (value: string | null) => modes.find((mode) => mode.id === value && mode.available)?.id;
+const modeFromId = (value: string | null) => visibleModes.find((mode) => mode.id === value && mode.available)?.id;
 
 function PanelHeading({ step, children }: { step: string; children: string }) {
   return (
@@ -877,35 +871,13 @@ export function DocumentFeatureGenerationPage() {
 
   return (
     <div className={`${styles.page} document-studio-page`}>
-      <header className={styles.hero}>
-        <div className={styles.heroCopy}>
-          <span className={styles.heroEyebrow}>EOS CREATIVE STUDIO</span>
-          <h1>GEN DOCUMENT</h1>
-          <div className={styles.heroStamp}>{t(K("hero.stamp"))}</div>
-          <p>{t(K("hero.tagline"))}</p>
-        </div>
-        <div className={styles.heroArtwork} aria-hidden="true">
-          <div className={styles.heroBrush}><Lines text={t(K("hero.brush"))} /></div>
-          <div className={`${styles.paper} ${styles.paperBack}`}>
-            <span>{t(K("hero.paper"))}</span>
-            <i /><i /><i />
-            <div className={styles.miniChart}><b /><b /><b /><b /><b /></div>
-          </div>
-          <div className={styles.smartSticker}><Lines text={t(K("hero.sticker"))} /></div>
-          <div className={`${styles.paper} ${styles.paperFront}`}>
-            <span>OCR</span>
-            <i /><i /><i /><i />
-            <div className={styles.scanCorners} />
-          </div>
-          <div className={styles.orangeBurst} />
-        </div>
-      </header>
+      <DocumentHero />
 
       <CreatorWorkspaceLayout
         className={styles.docShell}
         tabs={
           <nav className={styles.modeTabs} aria-label={t(K("a11y.tools"))}>
-            {modes.map(({ id, icon: Icon, available }) => {
+            {visibleModes.map(({ id, icon: Icon, available }) => {
               const isActive = activeMode === id;
               const label = t(K(`mode.${id}`));
               return (
@@ -924,6 +896,24 @@ export function DocumentFeatureGenerationPage() {
               );
             })}
           </nav>
+        }
+        mobileTabs={
+          <MobileModeDropdown
+            menuId="document-feature-mode-menu"
+            value={activeMode}
+            options={visibleModes.filter((mode) => mode.available).map(({ id, icon }) => ({
+              value: id,
+              label: t(K(`mode.${id}`)),
+              icon,
+            }))}
+            ariaLabel={t(K("a11y.tools"))}
+            currentModeLabel={t("create.mode.current")}
+            switchModeLabel={t("create.mode.switch")}
+            otherModesLabel={t("create.mode.other")}
+            onChange={(nextMode) => {
+              if (nextMode !== activeMode) selectMode(nextMode);
+            }}
+          />
         }
         left={
           <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
@@ -1598,7 +1588,7 @@ export function DocumentFeatureGenerationPage() {
               <Sparkles size={17} aria-hidden="true" />
             </button>
             {(isOcr ? ocrError : isContract ? contractError : isForm ? formError : summaryError) && <div className={styles.summaryError} role="alert">{isOcr ? ocrError : isContract ? contractError : isForm ? formError : summaryError}</div>}
-            <div className={styles.secureNote}><span />{isForm ? t(K("form.secure")) : isContract ? t(K("contract.secure")) : isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
+            <div className={styles.secureNote}><LockKeyhole size={12} aria-hidden="true" />{isForm ? t(K("form.secure")) : isContract ? t(K("contract.secure")) : isSummarize ? t(K("summary.processingNote")) : t(K("settings.secure"))}</div>
           </aside>
         }
       />

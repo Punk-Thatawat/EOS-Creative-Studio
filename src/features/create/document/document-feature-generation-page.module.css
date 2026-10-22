@@ -1181,7 +1181,7 @@
   margin-top: 14px;
   border: 0;
   border-radius: 8px;
-  background: linear-gradient(90deg, #f64d00, #fa6a0a);
+  background: #ff620b url("/generated-assets/generate-button-bg.png") center / 100% 100% no-repeat;
   color: #fff;
   font: inherit;
   font-size: 11px;
@@ -1201,12 +1201,7 @@
   color: #969ca2;
   font-size: 10px;
 }
-.secureNote > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #42a87c;
-}
+.secureNote > svg { flex: none; color: #7b818a; }
 
 .resourceShelf {
   display: grid;
@@ -1520,6 +1515,12 @@
   .settingsPanel .estimate,
   .settingsPanel .generateButton {
     max-width: none;
+  }
+  .settingsPanel .generateButton {
+    border: 1px solid rgba(255, 255, 255, .22);
+    border-radius: 9px;
+    background: #ff620b url("/generated-assets/generate-button-bg.png") center / 100% 100% no-repeat;
+    box-shadow: 0 8px 18px rgba(242, 107, 56, .26);
   }
   .resourceShelf {
     gap: 11px;
