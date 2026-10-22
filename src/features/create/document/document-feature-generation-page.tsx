@@ -1114,7 +1114,8 @@ export function DocumentFeatureGenerationPage() {
                       hint={t(K("form.exportNeedResult"))}
                       onPick={(format) => void exportForm(format)}
                     />
-                  ) : (
+                  ) : isOcr && !ocrResult ? null : (
+                    // OCR has nothing to export until a document has been read, so the button stays hidden until then.
                     <ExportMenu
                       hasResult={isContract ? !!contractResult : !!ocrResult}
                       busy={isContract ? isContractExporting : isToolbarExporting}
