@@ -232,7 +232,7 @@ export function DocumentFeatureGenerationPage() {
   const [ocrResult, setOcrResult] = useState<DocumentOcrResult | null>(null);
   const [ocrError, setOcrError] = useState("");
   const [isOcrRunning, setIsOcrRunning] = useState(false);
-  const [contractType, setContractType] = useState<ContractTypeId>("auto");
+  const [contractType, setContractType] = useState<ContractTypeId | "">("");
   const [contractParty, setContractParty] = useState("");
   const [contractLanguage, setContractLanguage] = useState<"auto" | "English" | "Thai">(locale === "en" ? "English" : "Thai");
   const [contractResult, setContractResult] = useState<ContractReviewResult | null>(null);
@@ -828,6 +828,10 @@ export function DocumentFeatureGenerationPage() {
 
   const runContract = async () => {
     if (!selectedFile || isContractRunning) return;
+    if (!contractType) {
+      setContractError(t(K("contract.typePlaceholder")));
+      return;
+    }
     setIsContractRunning(true);
     setContractError("");
     setContractResult(null);
@@ -969,22 +973,25 @@ export function DocumentFeatureGenerationPage() {
               />
             ) : isContract ? (
               <>
-                <div className={styles.ocrTypeGrid} role="radiogroup" aria-label={t(K("contract.typeHeading"))}>
-                  {CONTRACT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      role="radio"
-                      aria-checked={contractType === id}
-                      className={`${styles.ocrTypeButton} ${contractType === id ? styles.ocrTypeActive : ""}`}
-                      onClick={() => changeContractType(id)}
-                    >
-                      <TypeIcon size={15} aria-hidden="true" />
-                      <span>{t(K(`contract.type.${id}`))}</span>
-                    </button>
-                  ))}
-                </div>
-                {CONTRACT_PARTIES[contractType].length > 0 && (
+                <Dropdown
+                  value={contractType}
+                  placeholder={<span className="font-normal text-muted-foreground">{t(K("contract.typePlaceholder"))}</span>}
+                  options={CONTRACT_TYPE_OPTIONS.map(({ id, icon: TypeIcon }) => ({
+                    value: id,
+                    label: (
+                      <span className="flex items-center gap-2">
+                        <TypeIcon size={15} className="shrink-0" aria-hidden="true" />
+                        <span className="truncate">{t(K(`contract.type.${id}`))}</span>
+                      </span>
+                    ),
+                  }))}
+                  onChange={(value) => changeContractType(value as ContractTypeId)}
+                  ariaLabel={t(K("contract.typeHeading"))}
+                  menuPosition="fixed"
+                  triggerClassName="h-11 rounded-lg border-[#dfe2e7] px-3 text-[13px]"
+                  optionClassName="px-2.5 py-2 text-[13px]"
+                />
+                {contractType && CONTRACT_PARTIES[contractType].length > 0 && (
                   <div className={styles.contractParty}>
                     <strong>{t(K("contract.partyHeading"))}</strong>
                     <small>{t(K("contract.partyHint"))}</small>
@@ -1584,7 +1591,7 @@ export function DocumentFeatureGenerationPage() {
             )}
             <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isForm ? t(K("form.credits"), { value: formOptions.credits }) : isContract ? t(K("contract.credits"), { value: contractCredits }) : isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
             {isOcr && showStyleCredits && <div className={styles.summaryFocusNote}>{t(K("ocr.styleCreditsNote"), { value: ocrTypeInfo?.styleCredits ?? 0 })}</div>}
-            <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr && !isContract && !isForm) || !selectedFile || (isOcr && !ocrType) || isSummarizing || isOcrRunning || isContractRunning || isFormRunning} title={!selectedFile ? (isForm ? t(K("form.needFile")) : isContract ? t(K("contract.needFile")) : undefined) : undefined} onClick={() => void (isOcr ? runOcr() : isContract ? runContract() : isForm ? runForm() : generateSummary())}>
+            <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr && !isContract && !isForm) || !selectedFile || (isOcr && !ocrType) || (isContract && !contractType) || isSummarizing || isOcrRunning || isContractRunning || isFormRunning} title={!selectedFile ? (isForm ? t(K("form.needFile")) : isContract ? t(K("contract.needFile")) : undefined) : undefined} onClick={() => void (isOcr ? runOcr() : isContract ? runContract() : isForm ? runForm() : generateSummary())}>
               <span>{isOcrRunning ? t(K("ocr.running")) : isFormRunning ? t(K("form.running")) : isContractRunning ? t(K("contract.running")) : isSummarizing ? t(K("summary.generating")) : isOcr ? t(K("ocr.run")) : isContract ? t(K("contract.run")) : isForm ? t(K("form.run")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>
               <Sparkles size={17} aria-hidden="true" />
             </button>
