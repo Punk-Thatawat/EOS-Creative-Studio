@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { CalendarDays } from "lucide-react";
-import { useLocale } from "@/lib/i18n/locale-provider";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { useLocale, type Locale } from "@/lib/i18n/locale-provider";
 
 export type DateFieldProps = {
   /** The chosen day as `yyyy-mm-dd`, or "" when none is chosen. */
@@ -16,6 +17,24 @@ export type DateFieldProps = {
   ariaLabel?: string;
   className?: string;
 };
+
+const COPY: Record<Locale, { placeholder: string; openCalendar: string; previous: string; next: string; today: string; clear: string }> = {
+  th: { placeholder: "วว/ดด/ปปปป", openCalendar: "เลือกวันจากปฏิทิน", previous: "เดือนก่อนหน้า", next: "เดือนถัดไป", today: "วันนี้", clear: "ล้าง" },
+  en: { placeholder: "dd/mm/yyyy", openCalendar: "Pick a date from the calendar", previous: "Previous month", next: "Next month", today: "Today", clear: "Clear" },
+};
+
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function toIso(year: number, month: number, day: number): string {
+  return `${year}-${pad(month + 1)}-${pad(day)}`;
+}
+
+function todayIso(): string {
+  const now = new Date();
+  return toIso(now.getFullYear(), now.getMonth(), now.getDate());
+}
 
 function isoToDisplay(iso: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
@@ -42,17 +61,174 @@ function displayToIso(text: string, min?: string, max?: string): string {
   return iso;
 }
 
+function isOutOfRange(iso: string, min?: string, max?: string): boolean {
+  return Boolean((min && iso < min) || (max && iso > max));
+}
+
+/** The month shown first: the chosen day's, otherwise today's (or the earliest allowed day if that is later). */
+function initialMonth(value: string, min?: string): { year: number; month: number } {
+  const source = value || (min && min > todayIso() ? min : todayIso());
+  return { year: Number(source.slice(0, 4)), month: Number(source.slice(5, 7)) - 1 };
+}
+
+const CALENDAR_WIDTH = 272;
+const CALENDAR_HEIGHT = 340;
+
+function Calendar({
+  value,
+  min,
+  max,
+  locale,
+  style,
+  popupRef,
+  onPick,
+  onClear,
+}: {
+  value: string;
+  min?: string;
+  max?: string;
+  locale: Locale;
+  style: CSSProperties;
+  popupRef: React.RefObject<HTMLDivElement | null>;
+  onPick: (iso: string) => void;
+  onClear: () => void;
+}) {
+  const copy = COPY[locale];
+  const [view, setView] = useState(() => initialMonth(value, min));
+  const today = todayIso();
+  // Always the Gregorian calendar, so the year matches the one typed into the field.
+  const formatLocale = locale === "th" ? "th-TH-u-ca-gregory" : "en-US";
+
+  const monthLabel = useMemo(
+    () => new Intl.DateTimeFormat(formatLocale, { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(view.year, view.month, 1))),
+    [formatLocale, view.month, view.year],
+  );
+  const weekdays = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(formatLocale, { weekday: "short", timeZone: "UTC" });
+    // 4 January 2026 is a Sunday.
+    return Array.from({ length: 7 }, (_, index) => formatter.format(new Date(Date.UTC(2026, 0, 4 + index))));
+  }, [formatLocale]);
+
+  const firstWeekday = new Date(Date.UTC(view.year, view.month, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(view.year, view.month + 1, 0)).getUTCDate();
+  const cells: Array<number | null> = [...Array.from({ length: firstWeekday }, () => null), ...Array.from({ length: daysInMonth }, (_, index) => index + 1)];
+
+  const moveMonth = (delta: number) => {
+    setView((current) => {
+      const next = new Date(Date.UTC(current.year, current.month + delta, 1));
+      return { year: next.getUTCFullYear(), month: next.getUTCMonth() };
+    });
+  };
+
+  const navButton = "grid size-7 place-items-center rounded-md text-[#554d47] hover:bg-[#fff2ea] hover:text-[#f26b38]";
+
+  return (
+    <div
+      ref={popupRef}
+      role="dialog"
+      aria-label={copy.openCalendar}
+      style={{ ...style, width: CALENDAR_WIDTH }}
+      className="fixed z-[200] rounded-xl border border-[#e9e3df] bg-white p-3 shadow-[0_14px_32px_rgba(33,29,25,0.16)]"
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <button type="button" className={navButton} aria-label={copy.previous} onClick={() => moveMonth(-1)}>
+          <ChevronLeft size={16} aria-hidden="true" />
+        </button>
+        <strong className="text-sm text-[#171412]">
+          {monthLabel} {view.year}
+        </strong>
+        <button type="button" className={navButton} aria-label={copy.next} onClick={() => moveMonth(1)}>
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center text-xs">
+        {weekdays.map((weekday) => (
+          <span key={weekday} className="py-1 font-semibold text-[#8b817a]">
+            {weekday}
+          </span>
+        ))}
+        {cells.map((day, index) => {
+          if (day === null) return <span key={`blank-${index}`} />;
+          const iso = toIso(view.year, view.month, day);
+          const disabled = isOutOfRange(iso, min, max);
+          const selected = iso === value;
+          return (
+            <button
+              key={iso}
+              type="button"
+              disabled={disabled}
+              aria-pressed={selected}
+              aria-current={iso === today ? "date" : undefined}
+              className={`grid size-8 place-items-center rounded-lg text-[#171412] ${
+                selected
+                  ? "bg-[#f26b38] font-bold text-white"
+                  : iso === today
+                    ? "border border-[#f26b38] hover:bg-[#fff2ea]"
+                    : "hover:bg-[#fff2ea]"
+              } disabled:cursor-not-allowed disabled:text-[#c8c0ba] disabled:hover:bg-transparent`}
+              onClick={() => onPick(iso)}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center justify-between border-t border-[#f0ebe7] pt-2 text-xs font-semibold">
+        <button type="button" className="rounded-md px-2 py-1 text-[#f26b38] hover:bg-[#fff2ea]" onClick={onClear}>
+          {copy.clear}
+        </button>
+        <button
+          type="button"
+          disabled={isOutOfRange(today, min, max)}
+          className="rounded-md px-2 py-1 text-[#f26b38] hover:bg-[#fff2ea] disabled:cursor-not-allowed disabled:opacity-40"
+          onClick={() => onPick(today)}
+        >
+          {copy.today}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /**
- * A day field that always reads day / month / year, whatever the browser's language is (a native date input follows
- * the browser, so an English browser shows mm/dd/yyyy). The calendar button still opens the browser's own calendar.
+ * A day field that always reads day / month / year, whatever the browser's language is. A native date input and its
+ * calendar follow the browser, so an English browser showed mm/dd/yyyy and an English calendar on a Thai page; this one
+ * follows the language chosen in the app.
  */
 export function DateField({ value, onChange, min, max, disabled = false, ariaLabel, className }: DateFieldProps) {
   const { locale } = useLocale();
+  const copy = COPY[locale];
   // What is typed while it is not yet a complete, valid day; null means "show the chosen value".
   const [draft, setDraft] = useState<string | null>(null);
-  const pickerRef = useRef<HTMLInputElement>(null);
+  // Where the calendar sits on screen while it is open (it is drawn above the page, so no card can clip it).
+  const [anchor, setAnchor] = useState<CSSProperties | null>(null);
+  const open = anchor !== null;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const shown = draft ?? isoToDisplay(value);
   const isInvalid = draft !== null && draft.length === 10;
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setAnchor(null);
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!rootRef.current?.contains(target) && !popupRef.current?.contains(target)) close();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
 
   const handleType = (raw: string) => {
     const next = maskDigits(raw);
@@ -61,19 +237,27 @@ export function DateField({ value, onChange, min, max, disabled = false, ariaLab
     if (iso || value) onChange(iso);
   };
 
-  const openPicker = () => {
-    const picker = pickerRef.current;
-    if (!picker) return;
-    try {
-      picker.showPicker();
-    } catch {
-      picker.focus();
-      picker.click();
+  const pick = (iso: string) => {
+    setDraft(null);
+    onChange(iso);
+    setAnchor(null);
+  };
+
+  const toggleCalendar = () => {
+    if (open) {
+      setAnchor(null);
+      return;
     }
+    const rect = rootRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - CALENDAR_WIDTH - 8));
+    const spaceBelow = window.innerHeight - rect.bottom;
+    // Open upwards when there is not room below and there is more above.
+    setAnchor(spaceBelow < CALENDAR_HEIGHT && rect.top > spaceBelow ? { left, bottom: window.innerHeight - rect.top + 4 } : { left, top: rect.bottom + 4 });
   };
 
   return (
-    <div className={className} style={{ position: "relative" }}>
+    <div ref={rootRef} className={className} style={{ position: "relative" }}>
       <input
         type="text"
         inputMode="numeric"
@@ -81,7 +265,7 @@ export function DateField({ value, onChange, min, max, disabled = false, ariaLab
         maxLength={10}
         value={shown}
         disabled={disabled}
-        placeholder={locale === "th" ? "วว/ดด/ปปปป" : "dd/mm/yyyy"}
+        placeholder={copy.placeholder}
         aria-label={ariaLabel}
         aria-invalid={isInvalid || undefined}
         style={{ paddingRight: "2.2rem" }}
@@ -90,28 +274,19 @@ export function DateField({ value, onChange, min, max, disabled = false, ariaLab
       <button
         type="button"
         disabled={disabled}
-        aria-label={locale === "th" ? "เลือกวันจากปฏิทิน" : "Pick a date from the calendar"}
+        aria-label={copy.openCalendar}
+        aria-expanded={open}
         className="absolute top-1/2 right-2 -translate-y-1/2 text-[#8b817a] hover:text-[#f26b38] disabled:opacity-50"
-        onClick={openPicker}
+        onClick={toggleCalendar}
       >
         <CalendarDays size={16} aria-hidden="true" />
       </button>
-      {/* The browser's calendar, kept invisible and laid over the field so it opens right under it. */}
-      <input
-        ref={pickerRef}
-        type="date"
-        tabIndex={-1}
-        aria-hidden="true"
-        value={value}
-        min={min}
-        max={max}
-        disabled={disabled}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, pointerEvents: "none", border: 0, padding: 0 }}
-        onChange={(event) => {
-          setDraft(null);
-          onChange(event.target.value);
-        }}
-      />
+      {anchor && !disabled && typeof document !== "undefined"
+        ? createPortal(
+            <Calendar value={value} min={min} max={max} locale={locale} style={anchor} popupRef={popupRef} onPick={pick} onClear={() => pick("")} />,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
