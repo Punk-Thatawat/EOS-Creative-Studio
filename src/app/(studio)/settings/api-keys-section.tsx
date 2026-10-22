@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import { Check, Copy, KeyRound, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DateField } from "@/components/ui/date-field";
 import {
   workspaceApiKeysApi,
   type CreatedWorkspaceApiKey,
@@ -222,11 +223,11 @@ export function ApiKeysSection({ api = workspaceApiKeysApi }: { api?: WorkspaceA
           </label>
           <label>
             {t("settings.apiKeys.expiresLabel")}
-            <input
-              type="date"
+            <DateField
               value={expiresDay}
               min={todayInputValue()}
-              onChange={(event) => setExpiresDay(event.target.value)}
+              onChange={setExpiresDay}
+              ariaLabel={t("settings.apiKeys.expiresLabel")}
             />
             <span className={styles.hint}>{t("settings.apiKeys.expiresHint")}</span>
           </label>
