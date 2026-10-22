@@ -458,6 +458,7 @@ const featurePhraseTranslations: Record<string, string> = {
   "Unable to resume image upscaling": "ไม่สามารถเพิ่มความละเอียดรูปภาพต่อได้",
   "Unable to resume style transfer": "ไม่สามารถถ่ายโอนสไตล์ต่อได้",
   "Unable to resume background generation": "ไม่สามารถสร้างพื้นหลังต่อได้",
+  "Video Storyboard": "สตอรี่บอร์ดวิดีโอ",
 };
 
 const translatableAttributes = ["aria-label", "placeholder", "title", "alt"] as const;

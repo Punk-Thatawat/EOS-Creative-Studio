@@ -181,7 +181,7 @@ function mapApiAsset(asset: AssetsApiAsset): Asset {
   return {
     id: asset.id,
     title:
-      /^(create a high-quality image|preserve the entire original image|upscale the provided image|continue the source image)/i.test(
+      /^(create a high-quality image|preserve the entire original image|upscale the provided image|continue the source image|create a coherent video that follows the user instruction)/i.test(
         asset.title.trim(),
       )
         ? metadataString(asset.metadata, "userPrompt") || "ผลงานสร้างสรรค์"
