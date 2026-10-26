@@ -63,6 +63,54 @@ type AudioSceneSegment = { file: File; startSeconds: number; endSeconds: number;
 type SpeechPreview = { key: string; blob: Blob; url: string; durationSeconds: number; sceneAudio: AudioSceneSegment[]; remoteUrl?: string };
 type PresenterVisualMode = "presenter" | "scene-only" | "presenter-scene";
 type PresenterScene = { id: string; title: string; script: string; direction: string; visualMode?: PresenterVisualMode; durationSeconds?: number; media?: SceneMedia; presenterMedia?: ScenePresenterMedia; mediaError?: string };
+const presenterVisualModeLabel = (mode: PresenterVisualMode, isThai: boolean) => mode === "scene-only"
+  ? (isThai ? "สินค้า / B-roll · ไม่มีคน" : "Product / B-roll · No person")
+  : mode === "presenter-scene"
+    ? (isThai ? "พรีเซนเตอร์ + ฉาก" : "Presenter + scene")
+    : (isThai ? "พรีเซนเตอร์" : "Presenter");
+const sceneTemplateOptions = [
+  { key: "intro", visualMode: "presenter" },
+  { key: "key-message", visualMode: "presenter" },
+  { key: "product-highlight", visualMode: "scene-only" },
+  { key: "cta", visualMode: "presenter" },
+] as const;
+
+function sceneTemplateTitle(key: (typeof sceneTemplateOptions)[number]["key"]): string {
+  return key === "intro" ? "Intro" : key === "key-message" ? "Key Message" : key === "product-highlight" ? "Product Highlight" : "CTA";
+}
+
+function sceneTemplateDirection(key: (typeof sceneTemplateOptions)[number]["key"], isThai: boolean): string {
+  if (isThai) {
+    return key === "intro"
+      ? "เปิดด้วยพรีเซนเตอร์มองกล้องและเกริ่นให้คนหยุดดู"
+      : key === "key-message"
+        ? "ให้พรีเซนเตอร์อธิบายประเด็นหลักอย่างกระชับ"
+        : key === "product-highlight"
+          ? "ตัดเป็นภาพสินค้า เน้นรายละเอียดหรือวิธีใช้ โดยไม่มีพรีเซนเตอร์ในซีนนี้"
+          : "กลับมาที่พรีเซนเตอร์ สรุปและชวนให้ลงมือทำ";
+  }
+  return key === "intro"
+    ? "Open with the presenter facing camera and give viewers a reason to keep watching."
+    : key === "key-message"
+      ? "Have the presenter explain the main point clearly and briefly."
+      : key === "product-highlight"
+        ? "Cut to the product and show its details or use, with no presenter in this scene."
+        : "Return to the presenter for a concise close and call to action.";
+}
+
+function sceneScriptPlaceholder(title: string, isThai: boolean): string {
+  const normalizedTitle = title.trim().toLowerCase();
+  if (normalizedTitle === "intro") return isThai ? "เช่น วันนี้อยากชวนคุณมารู้จัก…" : "Example: Today, let me show you…";
+  if (normalizedTitle === "key message") return isThai ? "เช่น จุดเด่นที่ทำให้สิ่งนี้แตกต่างคือ…" : "Example: What makes this different is…";
+  if (normalizedTitle === "product highlight") return isThai ? "เช่น เนื้อสัมผัสบางเบา ใช้ง่ายในทุกวัน…" : "Example: It feels lightweight and fits easily into your routine…";
+  if (normalizedTitle === "cta") return isThai ? "เช่น ลองดูรายละเอียดเพิ่มเติมได้วันนี้…" : "Example: Explore the details and try it today…";
+  return isThai ? "พิมพ์เฉพาะประโยคที่ต้องการให้อ่านออกเสียง…" : "Write only the words that should be spoken…";
+}
+
+function formatSceneTime(seconds: number): string {
+  const wholeSeconds = Math.max(0, Math.round(seconds));
+  return `${String(Math.floor(wholeSeconds / 60)).padStart(2, "0")}:${String(wholeSeconds % 60).padStart(2, "0")}`;
+}
 type SavedAiPresenterScene = Omit<PresenterScene, "media" | "presenterMedia" | "mediaError"> & {
   media?: { fileName: string; kind: SceneMedia["kind"]; remoteUrl?: string; hasFile: boolean } | null;
   presenterMedia?: { fileName: string; kind: SceneMedia["kind"]; remoteUrl?: string; hasFile: boolean } | null;
@@ -402,9 +450,12 @@ export function AiPresenterPage() {
   const [scenes, setScenes] = useState<PresenterScene[]>([{ id: "scene-1", title: "Intro", script: sampleScript, direction: "", visualMode: "presenter" }]);
   const [activeSceneId, setActiveSceneId] = useState("scene-1");
   const [isAddSceneOpen, setIsAddSceneOpen] = useState(false);
+  const [sceneModeDialogId, setSceneModeDialogId] = useState<string | null>(null);
+  const [sceneModeDraft, setSceneModeDraft] = useState<PresenterVisualMode>("presenter");
   const [newSceneTitle, setNewSceneTitle] = useState("");
   const [newSceneScript, setNewSceneScript] = useState("");
   const [newSceneDirection, setNewSceneDirection] = useState("");
+  const [newSceneVisualMode, setNewSceneVisualMode] = useState<PresenterVisualMode>("presenter");
   const [newSceneMedia, setNewSceneMedia] = useState<SceneMedia | null>(null);
   const [newSceneMediaError, setNewSceneMediaError] = useState("");
   const [newSceneError, setNewSceneError] = useState("");
@@ -1042,6 +1093,7 @@ export function AiPresenterPage() {
     setNewSceneTitle(`Scene ${scenes.length + 1}`);
     setNewSceneScript("");
     setNewSceneDirection("");
+    setNewSceneVisualMode("presenter");
     setNewSceneMedia(null);
     setNewSceneMediaError("");
     setNewSceneError("");
@@ -1058,6 +1110,21 @@ export function AiPresenterPage() {
     window.setTimeout(() => addSceneButtonRef.current?.focus(), 0);
   }, [newSceneMedia]);
 
+  const openSceneModeDialog = (scene: PresenterScene) => {
+    if (isLocked) return;
+    setActiveSceneId(scene.id);
+    setSceneModeDraft(scene.visualMode ?? "presenter");
+    setSceneModeDialogId(scene.id);
+  };
+
+  const saveSceneMode = () => {
+    if (!sceneModeDialogId || isLocked) return;
+    setScenes((current) => current.map((scene) => scene.id === sceneModeDialogId ? { ...scene, visualMode: sceneModeDraft } : scene));
+    clearFinalVideoPreview();
+    setGenerationError("");
+    setSceneModeDialogId(null);
+  };
+
   useEffect(() => {
     if (!isAddSceneOpen) return;
     const previousOverflow = document.body.style.overflow;
@@ -1071,6 +1138,20 @@ export function AiPresenterPage() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [isAddSceneOpen, closeAddScene]);
+
+  useEffect(() => {
+    if (!sceneModeDialogId) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSceneModeDialogId(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [sceneModeDialogId]);
 
   const handleNewSceneMediaChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1110,6 +1191,10 @@ export function AiPresenterPage() {
       setNewSceneError(isThai ? "กรอกชื่อฉากและบทพูดก่อนเพิ่มฉาก" : "Enter a scene title and spoken lines before adding the scene.");
       return;
     }
+    if (newSceneVisualMode !== "presenter" && !newSceneMedia) {
+      setNewSceneError(isThai ? "โหมดนี้ต้องเพิ่มภาพสินค้าหรือฉาก หรือวิดีโอ ก่อนเพิ่มซีน" : "This scene mode needs a product or scene image, or a video, before it can be added.");
+      return;
+    }
     const combinedScriptLength = script.length + (script ? 2 : 0) + cleanScript.length;
     if (combinedScriptLength > 5000) {
       setNewSceneError(isThai ? `บทพูดรวมได้ไม่เกิน 5,000 ตัวอักษร (เหลือ ${Math.max(0, 5000 - script.length - (script ? 2 : 0))})` : `All scene scripts are limited to 5,000 characters (${Math.max(0, 5000 - script.length - (script ? 2 : 0))} remaining).`);
@@ -1121,7 +1206,7 @@ export function AiPresenterPage() {
       title: cleanTitle.slice(0, 40),
       script: cleanScript,
       direction: newSceneDirection.trim().slice(0, maxSceneDirectionLength),
-      visualMode: "presenter",
+      visualMode: newSceneVisualMode,
       ...(newSceneMedia ? { media: newSceneMedia } : {}),
     };
     if (newSceneMedia?.previewUrl.startsWith("blob:")) sceneMediaUrlsRef.current.set(id, newSceneMedia.previewUrl);
@@ -1466,6 +1551,12 @@ export function AiPresenterPage() {
     };
   });
   const missingSceneVisual = scenes.find((scene) => (scene.visualMode ?? "presenter") !== "presenter" && !scene.media);
+  const sceneModeDialogScene = sceneModeDialogId ? scenes.find((scene) => scene.id === sceneModeDialogId) ?? null : null;
+  const sceneVisualModeOptions = [
+    { value: "presenter", label: isThai ? "พรีเซนเตอร์พูดกับกล้อง" : "Presenter on camera" },
+    { value: "scene-only", label: isThai ? "สินค้า / B-roll · ไม่ใส่คน" : "Product / B-roll · No person" },
+    { value: "presenter-scene", label: isThai ? "พรีเซนเตอร์พร้อมฉาก" : "Presenter with scene" },
+  ] as const;
   const scenePresenterUploading = scenes.some((scene) => (scene.visualMode ?? "presenter") !== "scene-only" && scene.presenterMedia?.uploading);
   const scenePresenterNeedsRetry = scenes.some((scene) => (scene.visualMode ?? "presenter") !== "scene-only" && scene.presenterMedia && (!scene.presenterMedia.remoteUrl || scene.presenterMedia.error));
   const canGenerate = Boolean(sourceMedia?.remoteUrl && !sourceMedia.error && script.trim() && allScenesHaveScript && !missingSceneVisual && !sceneReferenceAudioTooLong && !scenePresenterUploading && !scenePresenterNeedsRetry && selectedVideoModel && selectedVoice && !sourceMedia.uploading && !isGenerating && !creditPreflightBusy && !catalogLoading && !voiceLoading);
@@ -1492,25 +1583,21 @@ export function AiPresenterPage() {
                   : null;
 
   return (
-    <div className={styles.page}>
-      <section className={styles.hero} aria-label="AI Presenter">
-        <div className={styles.heroArtwork}><Image src="/generated-icons-v2/projects/ai-presenter.png" alt="AI presenter in a modern studio" fill priority sizes="(max-width: 760px) 100vw, 65vw" /></div>
-        <div className={styles.heroWash} />
-        <div className={styles.heroCopy}>
-          <span className={styles.heroEyebrow}><Sparkles size={13} /> AI VIDEO STUDIO</span>
-          <h1>GEN AI<br /><span>PRESENTER</span></h1>
-          <p>{isThai ? "ใส่สคริปต์ เลือกเสียง แล้วสร้างวิดีโอพรีเซนเตอร์จากภาพของคุณ" : "Add a script, choose a voice, and make a presenter video from your image."}</p>
-          <span className={styles.heroPill}><span /> {isThai ? "เชื่อมต่อระบบสร้างจริง" : "Live generation"}</span>
-        </div>
-        <div className={styles.heroCallout}><AudioLines size={22} /><span>MAKE IT<br /><strong>SPEAK.</strong></span></div>
-      </section>
-
-      <div className={styles.prototypeNotice} role="status">
-        <span className={styles.prototypeDot} />
-        {isThai ? "เลือกได้ในแต่ละซีนว่าจะให้พรีเซนเตอร์ออกกล้องหรือใช้ภาพสินค้าแทน · เสียงที่โมเดลสร้างจะคงอยู่ในวิดีโอ" : "Choose per scene whether the presenter appears or the product takes over. Generated scene audio stays in the video."}
-      </div>
-
+    <div className={`${styles.page} ai-presenter-studio-page`}>
       <section className={styles.workspace} aria-label={isThai ? "พื้นที่สร้าง AI Presenter" : "AI Presenter workspace"}>
+        <section className="studio-hero-frame" aria-label="AI Presenter">
+          <picture>
+            <source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/create-ai-presenter-mobile.webp" />
+            <Image
+              src="/generated-assets/studio-heroes-v4/create-ai-presenter-desktop.webp"
+              alt={isThai ? "Gen AI Presenter — สร้างวิดีโอพรีเซนเตอร์ด้วย AI" : "Gen AI Presenter — AI video presenter studio"}
+              width={2400}
+              height={435}
+              priority
+              sizes="100vw"
+            />
+          </picture>
+        </section>
         <nav className={styles.modeTabs} aria-label={isThai ? "โหมด AI Presenter" : "AI Presenter modes"}>
           <span className={`${styles.modeTab} ${styles.modeTabActive}`}><Video size={16} /><span>Presenter Video</span></span>
           <span className={styles.mvpTag}>{isThai ? "สคริปต์หลายฉาก" : "Multi-scene script"}</span>
@@ -1532,16 +1619,30 @@ export function AiPresenterPage() {
               <div><span className={styles.stepNumber}>1.</span><h2 id="presenter-script-heading">SCRIPT / CONTENT</h2></div>
               <button type="button" className={styles.iconButton} aria-label={isThai ? "คัดลอกสคริปต์" : "Copy script"} onClick={() => void handleCopyScript()} title={copied ? "Copied" : "Copy script"}>{copied ? <Check size={15} /> : <Copy size={15} />}</button>
             </div>
-            <p className={styles.panelHint}>{isThai ? "กรอกบทพูดและคำสั่งฉากแยกกัน เพื่อไม่ให้ ElevenLabs อ่านคำสั่งออกเสียง" : "Keep spoken lines and visual directions separate so ElevenLabs never reads the directions aloud."}</p>
-            <label className={styles.formGroup}>
-              <span className={styles.formLabel}>{isThai ? "ชื่อฉาก" : "Scene title"}</span>
-              <input className={styles.textInput} value={activeScene?.title ?? ""} onChange={(event) => updateActiveScene({ title: event.target.value.slice(0, 40) })} maxLength={40} disabled={isLocked} />
-            </label>
-            <div className={styles.sceneDurationControl}>
-              <label className={styles.sceneDurationField}>
-                <span className={styles.formLabel}>{isThai ? "ความยาวฉากที่เลือก" : "Selected scene duration"}</span>
-                <span className={styles.sceneDurationInputWrap}>
+            <p className={styles.panelHint}>{isThai ? "แยกบทพูดกับคำสั่งฉากให้ชัดเจน" : "Keep speech and scene directions separate."}</p>
+            {activeScene ? (
+              <div className={styles.activeSceneContext} aria-live="polite">
+                <span className={styles.activeSceneContextIndex}>{isThai ? `ซีน ${Math.max(0, activeSceneIndex) + 1} / ${scenes.length}` : `SCENE ${Math.max(0, activeSceneIndex) + 1} / ${scenes.length}`}</span>
+                <strong>{activeScene.title || (isThai ? "ฉากไม่มีชื่อ" : "Untitled scene")}</strong>
+                <span>{presenterVisualModeLabel(activeScene.visualMode ?? "presenter", isThai)}</span>
+              </div>
+            ) : null}
+            <div className={styles.sceneDetailsRow}>
+              <label className={styles.formGroup}>
+                <span className={styles.formLabel}>{isThai ? "ชื่อฉาก" : "Scene title"}</span>
+                <input className={styles.textInput} value={activeScene?.title ?? ""} onChange={(event) => updateActiveScene({ title: event.target.value.slice(0, 40) })} maxLength={40} disabled={isLocked} />
+              </label>
+              <div className={styles.sceneDurationField}>
+                <div className={styles.sceneDurationTopline}>
+                  <label htmlFor="presenter-scene-duration" className={styles.formLabel}>{isThai ? "ความยาว" : "Duration"}</label>
+                  <span className={styles.sceneDurationMeta}>
+                    <small>{activeScene?.durationSeconds !== undefined ? (isThai ? "กำหนดเอง" : "Custom") : (isThai ? "อัตโนมัติ" : "Auto")}</small>
+                    {activeScene?.durationSeconds !== undefined ? <button type="button" onClick={resetActiveSceneDuration} disabled={isLocked}>{isThai ? "อัตโนมัติ" : "Auto"}</button> : null}
+                  </span>
+                </div>
+                <label className={styles.sceneDurationInputWrap} htmlFor="presenter-scene-duration">
                   <input
+                    id="presenter-scene-duration"
                     type="number"
                     min={1}
                     max={maxSceneDurationSeconds}
@@ -1552,18 +1653,14 @@ export function AiPresenterPage() {
                     aria-label={isThai ? "ความยาวฉากเป็นวินาที" : "Scene duration in seconds"}
                   />
                   <span>{isThai ? "วินาที" : "sec"}</span>
-                </span>
-              </label>
-              <div className={styles.sceneDurationMeta}>
-                <small>{activeScene?.durationSeconds !== undefined ? (isThai ? "กำหนดเอง" : "Custom") : (isThai ? "อัตโนมัติตามบทพูด" : "Auto from script")}</small>
-                {activeScene?.durationSeconds !== undefined ? <button type="button" onClick={resetActiveSceneDuration} disabled={isLocked}>{isThai ? "อัตโนมัติ" : "Auto"}</button> : null}
+                </label>
               </div>
             </div>
-            <p className={styles.sceneDurationHint}>{isThai ? "เสียงพูดแต่ละซีนสร้างแยกกัน และต้องยาวไม่เกิน 15 วินาที ก่อนนำมาต่อเป็นแทร็กเดียว" : "Each scene gets its own speech clip, up to 15 seconds, then the clips are joined into one soundtrack."}</p>
+            <p className={styles.sceneDurationHint}>{isThai ? "จำกัด 15 วินาทีต่อซีน" : "Up to 15 seconds per scene."}</p>
             <div className={`${styles.sceneFieldCard} ${styles.spokenSceneField}`}>
               <div className={styles.sceneFieldHeader}>
                 <span className={`${styles.sceneFieldIcon} ${styles.spokenSceneIcon}`}><AudioLines size={15} /></span>
-                <span className={styles.sceneFieldTitle}><strong>{isThai ? "บทพูด" : "Spoken lines"}</strong><small>{isThai ? "ส่งให้ ElevenLabs อ่านและซิงก์ปาก" : "Sent to ElevenLabs and used for lip sync"}</small></span>
+                <span className={styles.sceneFieldTitle}><strong>{isThai ? "บทพูด" : "Spoken lines"}</strong></span>
                 <span className={`${styles.sceneFieldBadge} ${styles.spokenSceneBadge}`}>{isThai ? "อ่านออกเสียง" : "Spoken"}</span>
               </div>
               <textarea className={styles.scriptInput} value={activeScene?.script ?? ""} onChange={(event) => updateActiveScene({ script: event.target.value.slice(0, activeSceneMaxLength) })} maxLength={activeSceneMaxLength} disabled={isLocked} placeholder={isThai ? "พิมพ์เฉพาะประโยคที่ต้องการให้พรีเซนเตอร์พูด" : "Write only the words you want the presenter to say"} aria-label={isThai ? "บทพูดของซีนนี้ ส่งให้ ElevenLabs อ่าน" : "Spoken lines for this scene, sent to ElevenLabs"} />
@@ -1625,20 +1722,15 @@ export function AiPresenterPage() {
             </div>
 
             <div className={styles.formGroup}>
-              <div className={styles.formLabel}>{isThai ? "พรีเซนเตอร์ในซีนนี้" : "Presenter in this scene"}</div>
-              <input ref={scenePresenterInputRef} className={styles.hiddenInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void handleScenePresenterChange(event)} disabled={isLocked} />
-              <div className={styles.sceneVisualModes} role="group" aria-label={isThai ? "เลือกการแสดงพรีเซนเตอร์ในซีน" : "Choose presenter visibility for this scene"}>
-                {([
-                  { value: "presenter", label: isThai ? "พรีเซนเตอร์" : "Presenter", detail: isThai ? "พูดกับกล้อง" : "On camera" },
-                  { value: "scene-only", label: isThai ? "สินค้า / B-roll" : "Product / B-roll", detail: isThai ? "ไม่มีคนในภาพ" : "No person shown" },
-                  { value: "presenter-scene", label: isThai ? "พรีเซนเตอร์ + ฉาก" : "Presenter + scene", detail: isThai ? "ให้ทั้งคู่ปรากฏ" : "Show both" },
-                ] as const).map((option) => {
-                  const activeMode = activeScene?.visualMode ?? "presenter";
-                  return <button key={option.value} type="button" className={`${styles.sceneVisualMode} ${activeMode === option.value ? styles.sceneVisualModeActive : ""}`} onClick={() => updateActiveScene({ visualMode: option.value })} disabled={isLocked} aria-pressed={activeMode === option.value}>
-                    <strong>{option.label}</strong><small>{option.detail}</small>
-                  </button>;
-                })}
+              <div className={styles.formLabel}>
+                <span>{isThai ? "พรีเซนเตอร์ในซีนนี้" : "Presenter in this scene"}</span>
+                {activeScene ? (
+                  <button type="button" className={styles.sceneModeTrigger} onClick={() => openSceneModeDialog(activeScene)} disabled={isLocked}>
+                    <span>{presenterVisualModeLabel(activeScene.visualMode ?? "presenter", isThai)}</span><Pencil size={11} />
+                  </button>
+                ) : null}
               </div>
+              <input ref={scenePresenterInputRef} className={styles.hiddenInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void handleScenePresenterChange(event)} disabled={isLocked} />
               {activeScene?.presenterMedia ? (
                 <div className={styles.scenePersonCard}>
                   <span className={styles.scenePersonThumb}>
@@ -1833,9 +1925,9 @@ export function AiPresenterPage() {
                 {isReorderingScenes ? (isThai ? "เสร็จสิ้น" : "Done") : (isThai ? "เรียงฉากใหม่" : "Reorder Scenes")}
               </button>
             </div>
-            <p className={styles.timelineNote}>{isReorderingScenes ? (isThai ? "ลากฉากเพื่อเปลี่ยนลำดับ" : "Drag scenes to change their order.") : (isThai ? "เวลาบนการ์ดประเมินจากบทก่อนสร้างเสียง และจะแสดงเวลาจริงหลังสร้างเสียง แต่ละซีนจำกัด 15 วินาที" : "Scene times are estimated from text before speech generation and show actual duration afterward. Each scene is limited to 15 seconds.")}</p>
+            <p className={styles.timelineNote}>{isReorderingScenes ? (isThai ? "ลากฉากเพื่อเปลี่ยนลำดับ" : "Drag scenes to change their order.") : (isThai ? "คลิกชื่อหรือภาพเพื่อเลือกซีน แล้วแก้บททางซ้าย · เวลาเป็นค่าประเมินก่อนสร้างเสียง และจำกัด 15 วินาทีต่อซีน" : "Select a scene by clicking its title or image, then edit it on the left. Times are estimated until speech is generated; each scene is limited to 15 seconds.")}</p>
             <div className={styles.sceneTimeline} aria-label={isThai ? "ไทม์ไลน์ฉาก" : "Scene timeline"}>
-              {sceneTimeline.map(({ scene }, index) => {
+              {sceneTimeline.map(({ scene, start, end }, index) => {
                 const audioDuration = currentSpeech?.sceneAudio[index]?.durationSeconds;
                 const estimatedSpeechDuration = scene.script.trim() ? estimatedDuration(scene.script, language, voicePace) : null;
                 const speechDuration = audioDuration ?? estimatedSpeechDuration;
@@ -1871,13 +1963,15 @@ export function AiPresenterPage() {
                 >
                   <article className={`${styles.sceneCard} ${activeSceneId === scene.id ? styles.sceneCardActive : ""}`}>
                     <div className={styles.sceneCardHeader}>
-                      <strong title={scene.title || `${isThai ? "ฉาก" : "Scene"} ${index + 1}`}>{scene.title || `${isThai ? "ฉาก" : "Scene"} ${index + 1}`}</strong>
+                      <button type="button" className={styles.sceneCardSelect} onClick={() => setActiveSceneId(scene.id)} aria-pressed={activeSceneId === scene.id} disabled={isLocked} title={scene.title || `${isThai ? "ฉาก" : "Scene"} ${index + 1}`}>
+                        {scene.title || `${isThai ? "ฉาก" : "Scene"} ${index + 1}`}
+                      </button>
                       <span className={styles.sceneCardDuration} data-warning={speechNearLimit ? "true" : undefined} data-over={speechOverLimit ? "true" : undefined}>{durationLabel}</span>
                       {isReorderingScenes ? (
                         <span className={styles.sceneCardGrip}><GripVertical size={13} /></span>
                       ) : (
                         <>
-                          <button type="button" className={styles.sceneCardEdit} onClick={() => setActiveSceneId(scene.id)} aria-label={isThai ? `แก้ไขฉาก ${index + 1}` : `Edit scene ${index + 1}`} title={isThai ? "เลือกฉากเพื่อแก้ไข" : "Select scene to edit"} disabled={isLocked}><Pencil size={11} /></button>
+                          <button type="button" className={styles.sceneCardEdit} onClick={() => openSceneModeDialog(scene)} aria-label={isThai ? `แก้ไขการแสดงผลฉาก ${index + 1}` : `Edit scene ${index + 1} display`} title={isThai ? "แก้ไขการแสดงผล" : "Edit scene display"} disabled={isLocked}><Pencil size={11} /></button>
                           {scenes.length > 1 ? <button type="button" className={styles.sceneCardDelete} onClick={() => removeScene(scene.id)} aria-label={isThai ? `ลบฉาก ${index + 1}` : `Remove scene ${index + 1}`} title={isThai ? "ลบฉาก" : "Remove scene"} disabled={isLocked}><X size={12} /></button> : null}
                         </>
                       )}
@@ -1886,23 +1980,8 @@ export function AiPresenterPage() {
                       {scenePreview?.kind === "image" ? <Image src={scenePreview.previewUrl} alt="" fill unoptimized sizes="180px" /> : scenePreview?.kind === "video" ? <video src={scenePreview.previewUrl} muted playsInline autoPlay loop /> : <span className={styles.scenePreviewPlaceholder}><Video size={17} /><small>{(scene.visualMode ?? "presenter") === "scene-only" ? (isThai ? "เพิ่มภาพฉาก" : "Add scene visual") : (isThai ? "ภาพพรีเซนเตอร์" : "Presenter preview")}</small></span>}
                     </button>
                     <div className={styles.sceneCardFooter}>
-                      <select
-                        className={styles.scenePresenterSelect}
-                        value={scene.visualMode ?? "presenter"}
-                        onChange={(event) => {
-                          const visualMode = event.target.value as PresenterVisualMode;
-                          setScenes((current) => current.map((item) => item.id === scene.id ? { ...item, visualMode } : item));
-                          clearFinalVideoPreview();
-                          setGenerationError("");
-                        }}
-                        disabled={isLocked || isReorderingScenes}
-                        aria-label={isThai ? `เลือกคนในซีน ${index + 1}` : `Choose presenter for scene ${index + 1}`}
-                        title={scene.presenterMedia?.fileName ?? sourceMedia?.fileName ?? (isThai ? "พรีเซนเตอร์ที่อัปโหลด" : "Uploaded presenter")}
-                      >
-                        <option value="presenter">{assignedPresenter?.fileName || (isThai ? "พรีเซนเตอร์" : "Presenter")}</option>
-                        <option value="scene-only">{isThai ? "ไม่ใส่คน" : "No person"}</option>
-                        <option value="presenter-scene">{`${assignedPresenter?.fileName || (isThai ? "พรีเซนเตอร์" : "Presenter")} + ${isThai ? "ฉาก" : "scene"}`}</option>
-                      </select>
+                      <span className={styles.sceneTimeRange}>{formatSceneTime(start)} – {formatSceneTime(end)}</span>
+                      <span className={styles.sceneModeSummary} title={presenterVisualModeLabel(scene.visualMode ?? "presenter", isThai)}>{presenterVisualModeLabel(scene.visualMode ?? "presenter", isThai)}</span>
                     </div>
                   </article>
                 </div>
@@ -1922,14 +2001,45 @@ export function AiPresenterPage() {
           <aside className={styles.settingsPanel} aria-labelledby="presenter-settings-heading">
             <div className={styles.panelTitle}><div><span className={styles.stepNumber}>3.</span><h2 id="presenter-settings-heading">SETTINGS</h2></div><Sparkles size={15} className={styles.settingsSparkle} /></div>
 
-            <label className={styles.settingCard}>
+            <div className={styles.settingCard}>
               <span className={styles.settingLabel}>{isThai ? "โมเดลสร้างวิดีโอ" : "Presenter video model"}</span>
-              <span className={styles.settingSelect}><Video size={14} /><select value={selectedReferenceVideoModel} onChange={(event) => { clearFinalVideoPreview(); setSelectedReferenceVideoModel(event.target.value); }} disabled={catalogLoading || isLocked}><option value="">{catalogLoading ? (isThai ? "กำลังโหลดโมเดล…" : "Loading models…") : (isThai ? "เลือกโมเดล" : "Select a model")}</option>{availableReferenceVideoModels.map((model) => <option key={model.model} value={model.model}>{model.displayName}</option>)}</select><ChevronDown size={14} /></span>
-            </label>
-            <label className={styles.settingCard}>
+              <span className={styles.settingSelect}>
+                <Dropdown
+                  value={selectedReferenceVideoModel}
+                  options={availableReferenceVideoModels.map((model) => ({ value: model.model, label: model.displayName }))}
+                  onChange={(value) => { clearFinalVideoPreview(); setSelectedReferenceVideoModel(value); }}
+                  placeholder={isThai ? "เลือกโมเดล" : "Select a model"}
+                  triggerLabel={<span className={styles.settingModelValue}><Video size={14} /><span>{availableReferenceVideoModels.find((model) => model.model === selectedReferenceVideoModel)?.displayName ?? (isThai ? "เลือกโมเดล" : "Select a model")}</span></span>}
+                  ariaLabel={isThai ? "โมเดลสร้างวิดีโอ" : "Presenter video model"}
+                  loading={catalogLoading}
+                  disabled={isLocked}
+                  className={styles.modelDropdown}
+                  triggerClassName={styles.modelDropdownTrigger}
+                  menuClassName={styles.modelDropdownMenu}
+                  optionClassName={styles.modelDropdownOption}
+                  menuPosition="fixed"
+                />
+              </span>
+            </div>
+            <div className={styles.settingCard}>
               <span className={styles.settingLabel}>{isThai ? "โมเดลเสียงพูด (ElevenLabs)" : "Speech model (ElevenLabs)"}</span>
-              <span className={styles.selectWrap}><select value={selectedAudioModel} onChange={(event) => { clearFinalVideoPreview(); setSelectedAudioModel(event.target.value); }} disabled={catalogLoading || isLocked}>{availableAudioModels.map((model) => <option key={model.key} value={model.key}>{model.name}</option>)}</select><ChevronDown size={14} /></span>
-            </label>
+              <span className={styles.selectWrap}>
+                <Dropdown
+                  value={selectedAudioModel}
+                  options={availableAudioModels.map((model) => ({ value: model.key, label: model.name }))}
+                  onChange={(value) => { clearFinalVideoPreview(); setSelectedAudioModel(value); }}
+                  placeholder={isThai ? "เลือกโมเดลเสียง" : "Select a speech model"}
+                  ariaLabel={isThai ? "โมเดลเสียงพูด ElevenLabs" : "ElevenLabs speech model"}
+                  loading={catalogLoading}
+                  disabled={isLocked}
+                  className={styles.modelDropdown}
+                  triggerClassName={styles.modelDropdownTrigger}
+                  menuClassName={styles.modelDropdownMenu}
+                  optionClassName={styles.modelDropdownOption}
+                  menuPosition="fixed"
+                />
+              </span>
+            </div>
             <div className={styles.settingCard}>
               <div className={styles.settingLabel}>{isThai ? "เสียงพรีเซนเตอร์" : "Presenter voice"}</div>
               <PresenterVoicePicker
@@ -1976,7 +2086,7 @@ export function AiPresenterPage() {
             </div>
 
             <div data-mobile-action-dock className={`${videoPreviewStyles.estimateBlock} ${styles.actionBlock}`}>
-              <div className={videoPreviewStyles.estimate} title={t("create.video.common.info.estimatedCredits")}>
+              <div className={`${videoPreviewStyles.estimate} ${styles.actionEstimate}`} title={t("create.video.common.info.estimatedCredits")}>
                 <div>
                   {t("create.video.common.estimatedCredits")} <InfoTooltip content={t("create.video.common.info.estimatedCredits")} size={11} />
                 </div>
@@ -1985,12 +2095,12 @@ export function AiPresenterPage() {
                   <strong>{creditEstimateLoading ? (isThai ? "กำลังคำนวณ…" : "Calculating…") : estimatedCredits === null ? "—" : `= ${estimatedCredits.toLocaleString(isThai ? "th-TH" : "en-US")} ${isThai ? "เครดิต" : "credits"}`}</strong>
                 </span>
               </div>
-              {!isGenerating && presenterValidationMessage ? <p className={videoPreviewStyles.settingsError} role="status">{presenterValidationMessage}</p> : null}
-              {generationError ? <p className={videoPreviewStyles.settingsError} role="alert">{generationError}</p> : null}
-              <button type="button" className={videoPreviewStyles.generate} onClick={() => void handleGenerateVideo()} disabled={!canGenerate}>
+              {!isGenerating && presenterValidationMessage ? <p className={`${videoPreviewStyles.settingsError} ${styles.actionValidation}`} role="status">{presenterValidationMessage}</p> : null}
+              {generationError ? <p className={`${videoPreviewStyles.settingsError} ${styles.actionValidation}`} role="alert">{generationError}</p> : null}
+              <button type="button" className={`${videoPreviewStyles.generate} ${styles.actionGenerate}`} onClick={() => void handleGenerateVideo()} disabled={!canGenerate}>
                 {isGenerating || creditPreflightBusy ? <LoaderCircle size={17} className={styles.spin} /> : <WandSparkles size={17} />}{creditPreflightBusy ? (isThai ? "กำลังตรวจเครดิต…" : "Checking credits…") : isGenerating ? (isThai ? "กำลังสร้างวิดีโอ…" : "Generating video…") : (isThai ? "สร้างวิดีโอ" : "Generate video")}
               </button>
-              <p className={videoPreviewStyles.privateNote}><LockKeyhole size={12} /> {t("create.settings.privateSecure")}</p>
+              <p className={`${videoPreviewStyles.privateNote} ${styles.actionPrivateNote}`}><LockKeyhole size={12} /> {t("create.settings.privateSecure")}</p>
             </div>
             {sceneReferenceAudioTooLong ? <p className={styles.formError} role="status">{overlongSceneAudioIndex >= 0 && currentSpeech ? (isThai ? `ซีน ${overlongSceneAudioIndex + 1} มีเสียงจริง ${currentSpeech.sceneAudio[overlongSceneAudioIndex]?.durationSeconds.toFixed(2)} วินาที เกิน 15 วินาที กรุณาแบ่งบทของซีนนี้เป็นซีนเพิ่ม` : `Scene ${overlongSceneAudioIndex + 1} is ${currentSpeech.sceneAudio[overlongSceneAudioIndex]?.durationSeconds.toFixed(2)} seconds long, over the 15-second limit. Split this scene's script into additional scenes.`) : (isThai ? "เสียงอ้างอิงแต่ละซีนต้องไม่เกิน 15 วินาที ถ้าบทซีนยาวกว่านี้ให้แบ่งเป็นซีนเพิ่ม" : "Each scene's reference audio must be 15 seconds or less. Split longer scene scripts into additional scenes.")}</p> : null}
             {catalogError ? <p className={styles.formError}>{catalogError}</p> : null}
@@ -2018,6 +2128,35 @@ export function AiPresenterPage() {
               </header>
 
               <div className={styles.sceneModalBody}>
+                <div className={styles.sceneTemplatePicker}>
+                  <div className={styles.sceneTemplateHeading}>
+                    <strong>{isThai ? "เลือกช่วงของวิดีโอ" : "Choose a scene type"}</strong>
+                    <small>{isThai ? "เติมชื่อกับแนวภาพให้ตามช่วง แล้วเขียนบทพูดของซีนนี้" : "Set the title and visual direction, then write this scene’s spoken lines."}</small>
+                  </div>
+                  <div className={styles.sceneTemplateOptions}>
+                    {sceneTemplateOptions.map((option) => {
+                      const title = sceneTemplateTitle(option.key);
+                      const selected = newSceneTitle.trim().toLowerCase() === title.toLowerCase();
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          className={`${styles.sceneTemplateOption} ${selected ? styles.sceneTemplateOptionActive : ""}`}
+                          onClick={() => {
+                            setNewSceneTitle(title);
+                            setNewSceneVisualMode(option.visualMode);
+                            setNewSceneDirection(sceneTemplateDirection(option.key, isThai));
+                            setNewSceneError("");
+                          }}
+                          aria-pressed={selected}
+                        >
+                          <strong>{title}</strong>
+                          <small>{option.visualMode === "scene-only" ? (isThai ? "สินค้า / B-roll" : "Product / B-roll") : (isThai ? "พรีเซนเตอร์" : "Presenter")}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <label className={styles.sceneModalField}>
                   <span>{isThai ? "ชื่อฉาก" : "Scene title"}<small>{isThai ? "ใช้ระบุฉากใน timeline" : "Shown on the timeline"}</small></span>
                   <input autoFocus value={newSceneTitle} onChange={(event) => { setNewSceneTitle(event.target.value.slice(0, 40)); setNewSceneError(""); }} maxLength={40} placeholder={isThai ? "เช่น แนะนำสินค้า" : "e.g. Product introduction"} />
@@ -2030,7 +2169,7 @@ export function AiPresenterPage() {
                     onChange={(event) => { setNewSceneScript(event.target.value); setNewSceneError(""); }}
                     maxLength={Math.max(0, 5000 - script.length - (script ? 2 : 0))}
                     rows={4}
-                    placeholder={isThai ? "พิมพ์บทพูดของฉากนี้…" : "Write what the presenter should say…"}
+                    placeholder={sceneScriptPlaceholder(newSceneTitle, language === "th")}
                     required
                   />
                   <small className={styles.sceneModalCounter}>{newSceneScript.length} / {Math.max(0, 5000 - script.length - (script ? 2 : 0))} {isThai ? "ตัวอักษรที่เหลือในโปรเจกต์" : "characters available in this project"}</small>
@@ -2047,8 +2186,24 @@ export function AiPresenterPage() {
                   />
                 </label>
 
+                <label className={styles.sceneModalField}>
+                  <span>{isThai ? "การแสดงผลในซีนนี้" : "Scene presentation"}<small>{isThai ? "เลือกว่าจะให้ใครหรืออะไรอยู่ในภาพ" : "Choose who or what appears in the scene"}</small></span>
+                  <Dropdown
+                    value={newSceneVisualMode}
+                    options={sceneVisualModeOptions}
+                    onChange={(value) => setNewSceneVisualMode(value as PresenterVisualMode)}
+                    ariaLabel={isThai ? "การแสดงผลในซีนนี้" : "Scene presentation"}
+                    className={styles.sceneModeDropdown}
+                    triggerClassName={styles.sceneModeDropdownTrigger}
+                    menuClassName={styles.sceneModeDropdownMenu}
+                    optionClassName={styles.sceneModeDropdownOption}
+                    menuPosition="fixed"
+                  />
+                  {newSceneVisualMode !== "presenter" ? <small className={styles.sceneModeHint}>{isThai ? "เพิ่มรูปหรือวิดีโอประกอบฉากด้านล่าง" : "Add a scene image or video below"}</small> : null}
+                </label>
+
                 <div className={styles.sceneModalField}>
-                  <span>{isThai ? "รูป / วิดีโอประกอบฉาก" : "Scene image or video"}<small>{isThai ? "ไม่บังคับ · เพิ่มหรือเปลี่ยนภายหลังได้" : "Optional · you can add or replace it later"}</small></span>
+                  <span>{isThai ? "รูป / วิดีโอประกอบฉาก" : "Scene image or video"}<small>{newSceneVisualMode === "presenter" ? (isThai ? "ไม่บังคับ · เพิ่มหรือเปลี่ยนภายหลังได้" : "Optional · you can add or replace it later") : (isThai ? "จำเป็นสำหรับโหมดที่ไม่มีพรีเซนเตอร์" : "Required when the presenter is hidden or combined with a scene")}</small></span>
                   <input ref={addSceneMediaInputRef} className={styles.hiddenInput} type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" onChange={handleNewSceneMediaChange} />
                   {newSceneMedia ? (
                     <div className={styles.newSceneMediaCard}>
@@ -2073,9 +2228,52 @@ export function AiPresenterPage() {
 
               <footer className={styles.sceneModalFooter}>
                 <button type="button" className={styles.sceneModalCancel} onClick={closeAddScene}>{isThai ? "ยกเลิก" : "Cancel"}</button>
-                <button type="submit" className={styles.sceneModalSubmit} disabled={!newSceneTitle.trim() || !newSceneScript.trim() || isLocked}>
+                <button type="submit" className={styles.sceneModalSubmit} disabled={!newSceneTitle.trim() || !newSceneScript.trim() || (newSceneVisualMode !== "presenter" && !newSceneMedia) || isLocked}>
                   <Plus size={16} />{isThai ? "เพิ่มฉากเข้า timeline" : "Add scene to timeline"}
                 </button>
+              </footer>
+            </form>
+          </section>
+        </div>,
+        document.body,
+      ) : null}
+
+      {sceneModeDialogScene && typeof document !== "undefined" ? createPortal(
+        <div
+          className={styles.sceneModalBackdrop}
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setSceneModeDialogId(null); }}
+        >
+          <section className={styles.sceneModal} role="dialog" aria-modal="true" aria-labelledby="scene-mode-dialog-title" aria-describedby="scene-mode-dialog-description">
+            <form onSubmit={(event) => { event.preventDefault(); saveSceneMode(); }}>
+              <header className={styles.sceneModalHeader}>
+                <div>
+                  <span className={styles.sceneModalEyebrow}>{isThai ? "ตั้งค่าซีน" : "SCENE SETTINGS"}</span>
+                  <h2 id="scene-mode-dialog-title">{sceneModeDialogScene.title || (isThai ? "ฉาก" : "Scene")}</h2>
+                  <p id="scene-mode-dialog-description">{isThai ? "กำหนดว่าจะให้พรีเซนเตอร์ปรากฏในฉากนี้อย่างไร" : "Choose how the presenter appears in this scene."}</p>
+                </div>
+                <button type="button" className={styles.sceneModalClose} onClick={() => setSceneModeDialogId(null)} aria-label={isThai ? "ปิดหน้าต่าง" : "Close dialog"}><X size={18} /></button>
+              </header>
+              <div className={styles.sceneModalBody}>
+                <label className={styles.sceneModalField}>
+                  <span>{isThai ? "การแสดงผลในซีนนี้" : "Scene presentation"}<small>{isThai ? "เลือกว่าจะให้ใครหรืออะไรอยู่ในภาพ" : "Choose who or what appears in the scene"}</small></span>
+                  <Dropdown
+                    value={sceneModeDraft}
+                    options={sceneVisualModeOptions}
+                    onChange={(value) => setSceneModeDraft(value as PresenterVisualMode)}
+                    ariaLabel={isThai ? "การแสดงผลในซีนนี้" : "Scene presentation"}
+                    className={styles.sceneModeDropdown}
+                    triggerClassName={styles.sceneModeDropdownTrigger}
+                    menuClassName={styles.sceneModeDropdownMenu}
+                    optionClassName={styles.sceneModeDropdownOption}
+                    menuPosition="fixed"
+                  />
+                  {sceneModeDraft !== "presenter" ? <small className={styles.sceneModeHint}>{sceneModeDraft === "scene-only" ? (isThai ? "เสียงพากย์จะเล่นต่อ โดยไม่มีคนอยู่ในภาพ" : "Narration continues as voiceover with no person on screen") : (isThai ? "ใช้ทั้งภาพพรีเซนเตอร์และภาพฉากที่อัปโหลด" : "Use both the presenter and the uploaded scene visual")}</small> : null}
+                </label>
+              </div>
+              <footer className={styles.sceneModalFooter}>
+                <button type="button" className={styles.sceneModalCancel} onClick={() => setSceneModeDialogId(null)}>{isThai ? "ยกเลิก" : "Cancel"}</button>
+                <button type="submit" className={styles.sceneModalSubmit} disabled={isLocked}>{isThai ? "บันทึก" : "Save"}</button>
               </footer>
             </form>
           </section>
