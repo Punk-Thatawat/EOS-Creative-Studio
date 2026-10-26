@@ -60,6 +60,7 @@ import {
 } from "@/lib/api/templates";
 import s from "./templates-page.module.css";
 import { templateCopy } from "./template-copy";
+import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 const kindKeys: Record<TemplateKind | "all", StudioCopyKey> = {
   all: "templates.kind.all",
@@ -880,17 +881,52 @@ function EditWorkspace({ tool, poster }: { tool: EditToolId; poster?: string }) 
   );
 }
 
+/**
+ * The models the creator offers for one feature, shaped for the model and quality pickers. Nothing is listed until they load
+ * (or when the visitor is signed out), and the pickers then fall back to what the templates themselves say.
+ */
+function useModelPicker(feature: string) {
+  const { c } = useStudioCopy();
+  const [models, setModels] = useState<GenerationModelOption[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listGenerationModels(feature)
+      .then((list) => {
+        if (alive) setModels(list.filter((m) => m.enabled));
+      })
+      .catch(() => {
+        if (alive) setModels([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [feature]);
+  const qualitiesOf = (id: string): string[] => {
+    const capabilities = models.find((m) => m.model === id)?.capabilities;
+    return capabilities?.supportedResolutions?.length ? capabilities.supportedResolutions : (capabilities?.qualityValues ?? []);
+  };
+  const options: FlyoutOption[] = models.map((m) => ({
+    id: m.model,
+    label: m.displayName || m.model,
+    chips: qualitiesOf(m.model).slice(0, 4),
+    badge: m.isDefault ? c("templates.sortRecommended") : undefined,
+  }));
+  const labelOf = (id: string) => options.find((o) => o.id === id)?.label ?? id;
+  return { options, qualitiesOf, labelOf };
+}
+
 function MotionWorkspace({ t }: { t?: Template }) {
   const { c, locale } = useStudioCopy();
   const [character, setCharacter] = useState<string | null>(null);
   const [sceneControl, setSceneControl] = useState(true);
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
-  const [model, setModel] = useState("Kling 3.0 Motion Control");
-  const [quality, setQuality] = useState("720p");
+  const [model, setModel] = useState("");
+  const [quality, setQuality] = useState("");
+  const picker = useModelPicker("motion-transfer");
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => () => { if (character) URL.revokeObjectURL(character); }, [character]);
-  const modelOptions: FlyoutOption[] = ["Kling 3.0 Motion Control", "Kling 2.6 Motion Control"].map((label) => ({ id: label, label }));
-  const qualityOptions: FlyoutOption[] = ["720p", "1080p"].map((label) => ({ id: label, label }));
+  const modelOptions = picker.options;
+  const qualityOptions: FlyoutOption[] = (picker.qualitiesOf(model).length ? picker.qualitiesOf(model) : ["720p", "1080p"]).map((label) => ({ id: label, label }));
   return (
     <>
       <div className={s.motionAssets}>
@@ -904,8 +940,8 @@ function MotionWorkspace({ t }: { t?: Template }) {
         </button>
       </div>
       <input ref={inputRef} className={s.visuallyHidden} type="file" accept="image/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) setCharacter(URL.createObjectURL(file)); event.currentTarget.value = ""; }} />
-      <PickerRow label={c("templates.edit.setting.model")} value={model} heading={c("templates.composer.featuredModels")} empty={c("templates.composer.noModels")} options={modelOptions} selectedId={model} onPick={setModel} />
-      <PickerRow label={c("templates.edit.setting.quality")} value={quality} heading={c("templates.edit.setting.quality")} empty={c("templates.composer.noModels")} options={qualityOptions} selectedId={quality} onPick={setQuality} />
+      <PickerRow label={c("templates.edit.setting.model")} value={model ? picker.labelOf(model) : c("templates.composer.pickModel")} placeholder={!model} heading={c("templates.composer.featuredModels")} empty={c("templates.composer.noModels")} options={modelOptions} selectedId={model} onPick={(id) => { setModel(id); setQuality(""); }} />
+      <PickerRow label={c("templates.edit.setting.quality")} value={quality || c("templates.composer.pickQuality")} placeholder={!quality} heading={c("templates.edit.setting.quality")} empty={c("templates.composer.noModels")} options={qualityOptions} selectedId={quality} onPick={setQuality} />
       <section className={s.motionSceneControl} data-scene-enabled={sceneControl}>
         <button type="button" role="switch" aria-checked={sceneControl} onClick={() => setSceneControl((value) => !value)}>
           <strong>{c("templates.motion.sceneControl")}</strong><i />
@@ -1093,6 +1129,7 @@ function Composer({
   const [useFree, setUseFree] = useState(false);
   // What was picked in the two lists; for now it only changes what the rows show.
   const [picks, setPicks] = useState<{ templateId: string; model?: string; quality?: string }>({ templateId: "" });
+  const picker = useModelPicker(mode === "motion" ? "motion-transfer" : mode === "edit" ? "extend-video" : "text-to-video");
   const tabs = (
     <div className={s.composerTabs} role="tablist" aria-label={c("templates.mode.aria")}>
       {modes.map((m) => (
@@ -1279,16 +1316,17 @@ function Composer({
     }
     modelMap.set(model, entry);
   }
-  const modelOptions = [...modelMap.values()];
-  const qualityIds = new Set(["480p", "720p", "1080p"]);
+  // The creator's own list of models when it loads; until then, the ones the templates mention.
+  const modelOptions = picker.options.length ? picker.options : [...modelMap.values()];
+  // Nothing picked and nothing in the template: the rows ask for a choice.
+  const shownModel = (picks.templateId === t.id && picks.model) || primary.find((f) => f.key === "model")?.value || "";
+  const shownQuality = (picks.templateId === t.id && picks.quality) || primary.find((f) => f.key === "resolution")?.value || "";
+  const qualityIds = new Set(picker.qualitiesOf(shownModel).length ? picker.qualitiesOf(shownModel) : ["480p", "720p", "1080p"]);
   for (const o of [t, ...options]) {
     const resolution = o.settings?.resolution;
     if (typeof resolution === "string") qualityIds.add(resolution);
   }
   const qualityOptions: FlyoutOption[] = [...qualityIds].map((id) => ({ id, label: id }));
-  // Nothing picked and nothing in the template: the rows ask for a choice.
-  const shownModel = (picks.templateId === t.id && picks.model) || primary.find((f) => f.key === "model")?.value || "";
-  const shownQuality = (picks.templateId === t.id && picks.quality) || primary.find((f) => f.key === "resolution")?.value || "";
   return (
     <aside className={s.composer} aria-label={c("templates.composer.aria")}>
       {tabs}
@@ -1357,7 +1395,7 @@ function Composer({
       </section>
       <PickerRow
         label={c("templates.preview.factModel")}
-        value={shownModel || c("templates.composer.pickModel")}
+        value={shownModel ? picker.labelOf(shownModel) : c("templates.composer.pickModel")}
         placeholder={!shownModel}
         badge={c("templates.tab.new")}
         heading={c("templates.composer.featuredModels")}
