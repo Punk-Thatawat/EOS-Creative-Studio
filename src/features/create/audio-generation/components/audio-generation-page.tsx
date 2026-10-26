@@ -2778,22 +2778,6 @@ function VoiceCloneLayout({
   );
 }
 
-// Reads the length from the file's metadata, so the price can be shown before the upload. Null when the browser cannot tell.
-function readVideoDuration(file: File): Promise<number | null> {
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const probe = document.createElement("video");
-    const finish = (value: number | null) => {
-      URL.revokeObjectURL(url);
-      resolve(value);
-    };
-    probe.preload = "metadata";
-    probe.onloadedmetadata = () => finish(Number.isFinite(probe.duration) && probe.duration > 0 ? probe.duration : null);
-    probe.onerror = () => finish(null);
-    probe.src = url;
-  });
-}
-
 function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCallback }) {
   const { t } = useLocale();
   const [sourceMode, setSourceMode] = useState<"text" | "video">("text");
@@ -2803,6 +2787,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   const [variationCount, setVariationCount] = useState(4);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [videoDurationError, setVideoDurationError] = useState(false);
   const [videoDescription, setVideoDescription] = useState("");
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [variants, setVariants] = useState<SoundEffectVariant[]>([]);
@@ -2817,6 +2802,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   const [volume, setVolume] = useState(80);
   const [creditQuote, setCreditQuote] = useState<SoundEffectsQuote | null>(null);
   const [creditQuoteLoading, setCreditQuoteLoading] = useState(false);
+  const [creditQuoteError, setCreditQuoteError] = useState(false);
   const audioUrlsRef = useRef<Record<number, string>>({});
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -2831,36 +2817,79 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   );
 
   useEffect(() => {
+    if (!videoFile) return;
     let active = true;
-    if (sourceMode === "video" && videoDuration === null) {
-      const resetTimer = window.setTimeout(() => {
-        if (!active) return;
-        setCreditQuote(null);
-        setCreditQuoteLoading(false);
-      }, 0);
-      return () => {
-        active = false;
-        window.clearTimeout(resetTimer);
-      };
-    }
+    let released = false;
+    const videoUrl = URL.createObjectURL(videoFile);
+    const video = document.createElement("video");
+    const releaseVideoUrl = () => {
+      if (released) return;
+      released = true;
+      video.onloadedmetadata = null;
+      video.onerror = null;
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(videoUrl);
+    };
+
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
+      if (active) {
+        setVideoDuration(duration);
+        setVideoDurationError(duration === null);
+      }
+      releaseVideoUrl();
+    };
+    video.onerror = () => {
+      if (active) {
+        setVideoDuration(null);
+        setVideoDurationError(true);
+      }
+      releaseVideoUrl();
+    };
+    video.src = videoUrl;
+
+    return () => {
+      active = false;
+      releaseVideoUrl();
+    };
+  }, [videoFile]);
+
+  useEffect(() => {
+    let active = true;
     const timer = window.setTimeout(() => {
+      setCreditQuote(null);
+      setCreditQuoteError(false);
+      const quoteRequest = sourceMode === "video"
+        ? videoFile && videoDuration !== null && !videoDurationError
+          ? quoteVideoSoundEffects(Math.min(180, Math.max(1, Math.ceil(videoDuration))))
+          : null
+        : quoteSoundEffects({ durationSeconds: effectDuration, variationCount });
+      if (!quoteRequest) {
+        setCreditQuoteLoading(false);
+        return;
+      }
       setCreditQuoteLoading(true);
-      void (sourceMode === "video" ? quoteVideoSoundEffects(Math.min(180, Math.max(1, Math.ceil(videoDuration ?? 1)))) : quoteSoundEffects({ durationSeconds: effectDuration, variationCount }))
+      void quoteRequest
         .then((quote) => {
           if (active) setCreditQuote(quote);
         })
         .catch(() => {
-          if (active) setCreditQuote(null);
+          if (active) {
+            setCreditQuote(null);
+            setCreditQuoteError(true);
+          }
         })
         .finally(() => {
           if (active) setCreditQuoteLoading(false);
         });
-    }, 400);
+    }, sourceMode === "text" ? 400 : 0);
     return () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [sourceMode, effectDuration, variationCount, videoDuration]);
+  }, [sourceMode, effectDuration, variationCount, videoFile, videoDuration, videoDurationError]);
 
   const handleGenerate = async () => {
     const inputVideoFile = videoFile;
@@ -3069,7 +3098,11 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
                 const file = event.target.files?.[0] ?? null;
                 setVideoFile(file);
                 setVideoDuration(null);
-                if (file) void readVideoDuration(file).then((seconds) => setVideoDuration(seconds));
+                setVideoDurationError(false);
+                setCreditQuote(null);
+                setCreditQuoteLoading(false);
+                setCreditQuoteError(false);
+                event.target.value = "";
               }}
             />
             <button
@@ -3285,8 +3318,20 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
                 {t("create.audio.estimatedCredits")}{" "}
                 <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} />
               </strong>
-              <b>
-                {creditQuoteLoading
+              <b title={creditQuoteError ? t("create.audio.sfx.videoQuoteUnavailableHint") : undefined}>
+                {sourceMode === "video"
+                  ? creditQuoteLoading
+                    ? t("create.audio.calculating")
+                    : creditQuote
+                      ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditQuote.creditCost) })
+                      : creditQuoteError
+                        ? t("create.audio.sfx.videoQuoteUnavailable")
+                        : !videoFile
+                          ? t("create.audio.sfx.videoUploadFirst")
+                          : videoDurationError
+                            ? t("create.audio.sfx.videoDurationUnreadable")
+                            : t("create.audio.sfx.videoReadingDuration")
+                  : creditQuoteLoading
                     ? t("create.audio.calculating")
                     : creditQuote
                       ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditQuote.creditCost) })
@@ -3295,7 +3340,17 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
             </div>
             <p className={styles.creditEstimateCount}>
               {sourceMode === "video"
-                ? t("create.audio.sfx.videoLabel")
+                ? creditQuote
+                  ? `${formatSceneSeconds(videoDuration ?? 0)} · ${t("create.audio.sfx.videoLabel")}`
+                  : creditQuoteError
+                    ? t("create.audio.sfx.videoQuoteUnavailableHint")
+                    : videoDurationError
+                      ? t("create.audio.sfx.videoDurationUnreadableHint")
+                      : videoFile
+                        ? videoDuration === null
+                          ? t("create.audio.sfx.videoReadingDuration")
+                          : t("create.audio.calculating")
+                        : t("create.audio.sfx.videoEstimateHint")
                 : t("create.audio.sfx.variationsLabel", { count: variationCount })}
             </p>
           </div>
