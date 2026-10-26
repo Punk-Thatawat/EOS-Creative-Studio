@@ -655,9 +655,111 @@
   font-weight: 500;
   color: #ffffff80;
 }
+.styleClear {
+  display: grid;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #ffffff99;
+}
+.styleClear:hover {
+  color: #fff;
+}
+/* The Styles tab: a grid of looks, and the card that uploads your own. */
+.styleGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.styleUpload {
+  display: flex;
+  aspect-ratio: 16 / 9;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff0d;
+  padding: 12px;
+  text-align: center;
+  color: #fff;
+}
+.styleUpload:hover {
+  background: #ffffff14;
+}
+.styleUpload strong {
+  font-size: 15px;
+}
+.styleUpload small {
+  font-size: 12px;
+  color: #ffffff80;
+}
+.styleUpload em {
+  font-size: 12px;
+  font-style: normal;
+  color: #ff8a80;
+}
+.styleCard {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #1b1d20;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+.styleCardChosen {
+  outline-color: #f26b38;
+}
+.styleCard > button:first-child {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 0;
+  color: #fff;
+}
+.styleCard > button:first-child span {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 24px 12px 10px;
+  background: linear-gradient(transparent, #000000b3);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.styleCard > button:first-child svg {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #f26b38;
+  padding: 3px;
+}
+.styleRemove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: #000000a6;
+  color: #fff;
+}
 .styleChange {
   margin-left: auto;
   flex: none;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
   background: #ffffff1f;
   padding: 7px 12px;
   font-size: 13px;
