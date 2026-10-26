@@ -1568,7 +1568,6 @@ export function AiPresenterPage() {
                     if (Number.isFinite(measuredDuration) && measuredDuration > 0) setVoiceSampleDurations((current) => ({ ...current, [voiceSampleKey]: measuredDuration }));
                   }}
                 />
-                <small>{isThai ? "ประเมินจังหวะโดยเทียบกับบทตัวอย่างมาตรฐาน ความยาวจริงอาจต่างตามบทและการอ่าน" : "Pacing is estimated against a standard sample script; the actual duration may vary by script and delivery."}</small>
               </div>
             ) : (
               <p className={styles.voiceSampleMissing}>{isThai ? "เสียงนี้ไม่มีไฟล์ตัวอย่าง ใช้ความเร็วพูดมาตรฐานในการประเมิน" : "No sample is configured for this voice; duration uses a standard speaking pace."}</p>
