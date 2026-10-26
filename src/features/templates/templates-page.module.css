@@ -1359,6 +1359,39 @@
 }
 .heroCoverMain { flex: 1 1 55%; }
 .heroCoverSide { flex: 1 1 45%; }
+/* The account's finished videos in the History tab. */
+.myVideos {
+  margin-bottom: 22px;
+}
+.myVideos ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.myVideos li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.myVideos video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  object-fit: contain;
+}
+.myVideos span {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ffffffa6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .libraryTitle {
   display: flex;
   align-items: baseline;

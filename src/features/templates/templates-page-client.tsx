@@ -66,7 +66,8 @@ import { createTextVideoGeneration } from "@/lib/api/text-video-generations";
 import { createMotionTransferGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
 import { formatGenerationError } from "@/lib/api/generation-errors";
-import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
+import { fetchHistory, type HistoryItem } from "@/lib/api/history";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 const kindKeys: Record<TemplateKind | "all", StudioCopyKey> = {
   all: "templates.kind.all",
@@ -1609,6 +1610,51 @@ function LibraryHero({ mode, items }: { mode: Mode; items: Template[] }) {
   );
 }
 
+// The creator features each mode produces, to pick this mode's videos out of the account history.
+const modeFeatures: Record<Mode, string[]> = {
+  create: ["text-to-video", "image-to-video"],
+  edit: ["extend-video", "lipsync", "people-video"],
+  motion: ["motion-transfer"],
+};
+
+/** The videos this account has finished in this mode, newest first, played right here. Reloads whenever a job finishes. */
+function MyVideos({ mode }: { mode: Mode }) {
+  const { c } = useStudioCopy();
+  const [videos, setVideos] = useState<HistoryItem[]>([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = () => {
+      fetchHistory({ type: "video", status: "completed", limit: 24, signal: controller.signal })
+        .then((result) => {
+          if (!controller.signal.aborted) setVideos(result.items.filter((item) => item.outputUrl && modeFeatures[mode].includes(item.feature)).slice(0, 8));
+        })
+        .catch(() => {});
+    };
+    load();
+    window.addEventListener(GENERATION_COMPLETED_EVENT, load);
+    return () => {
+      controller.abort();
+      window.removeEventListener(GENERATION_COMPLETED_EVENT, load);
+    };
+  }, [mode]);
+  if (!videos.length) return null;
+  return (
+    <section className={s.myVideos} aria-label={c("templates.history.mine")}>
+      <div className={s.libraryTitle}>
+        <h2>{c("templates.history.mine")}</h2>
+      </div>
+      <ul>
+        {videos.map((item) => (
+          <li key={item.id}>
+            <video src={item.outputUrl} controls playsInline preload="metadata" aria-label={item.title} />
+            <span>{item.prompt?.trim() || item.title}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** "History": what was opened from here lately; before anything was, an invitation with the three steps. */
 function HistoryPanel({
   mode,
@@ -1632,18 +1678,23 @@ function HistoryPanel({
   const hero = heroKeys[mode];
   if (recent.length)
     return (
-      <section>
-        <div className={s.libraryTitle}>
-          <h2>{c("templates.history.recent")}</h2>
-        </div>
-        <div className={s.masonry}>
-          {recent.map((t) => (
-            <Tile key={t.id} t={t} selected={false} onSelect={onSelect} onExpand={onExpand} />
-          ))}
-        </div>
-      </section>
+      <>
+        <MyVideos mode={mode} />
+        <section>
+          <div className={s.libraryTitle}>
+            <h2>{c("templates.history.recent")}</h2>
+          </div>
+          <div className={s.masonry}>
+            {recent.map((t) => (
+              <Tile key={t.id} t={t} selected={false} onSelect={onSelect} onExpand={onExpand} />
+            ))}
+          </div>
+        </section>
+      </>
     );
   return (
+    <>
+    <MyVideos mode={mode} />
     <section className={s.invite}>
       <div className={s.inviteBanner}>
         <small>{c(hero.tag)}</small>
@@ -1685,6 +1736,7 @@ function HistoryPanel({
         ))}
       </ol>
     </section>
+    </>
   );
 }
 
@@ -1992,6 +2044,11 @@ export function TemplatesPageClient() {
     selectedId === ""
       ? undefined
       : (visible.find((t) => t.id === selectedId) ?? recentForMode.find((t) => t.id === selectedId) ?? visible[0]);
+  useEffect(() => {
+    const showResult = () => setPanel("history");
+    window.addEventListener(GENERATION_COMPLETED_EVENT, showResult);
+    return () => window.removeEventListener(GENERATION_COMPLETED_EVENT, showResult);
+  }, []);
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
     setPanel(nextMode === "motion" ? "how" : "history");
