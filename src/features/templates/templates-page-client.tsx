@@ -63,6 +63,8 @@ import { templateCopy } from "./template-copy";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/api/video-generations";
 import { createTextVideoGeneration } from "@/lib/api/text-video-generations";
+import { createMotionTransferGeneration } from "@/lib/api/motion-transfer-generations";
+import { uploadImageAsset } from "@/lib/api/storage";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
@@ -949,6 +951,8 @@ const creditText = (credits: number | null) => (credits === null ? "" : String(M
 function MotionWorkspace({ t }: { t?: Template }) {
   const { c, locale } = useStudioCopy();
   const [character, setCharacter] = useState<string | null>(null);
+  const [characterFile, setCharacterFile] = useState<File | null>(null);
+  const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
   const [sceneControl, setSceneControl] = useState(true);
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
   const [model, setModel] = useState("");
@@ -959,6 +963,45 @@ function MotionWorkspace({ t }: { t?: Template }) {
   useEffect(() => () => { if (character) URL.revokeObjectURL(character); }, [character]);
   const modelOptions = picker.options;
   const qualityOptions: FlyoutOption[] = (picker.qualitiesOf(model).length ? picker.qualitiesOf(model) : ["720p", "1080p"]).map((label) => ({ id: label, label }));
+  // Generates right here: the character and the template's reference clip go up as files, then the same request the creator
+  // page sends; the app's progress panel follows the job to the result.
+  const generate = async () => {
+    if (!characterFile) return setSending({ state: "error", message: c("templates.motion.needCharacter") });
+    const reference = t?.previewUrl;
+    if (!t || !reference || !valid(reference)) return setSending({ state: "error", message: c("templates.motion.needReference") });
+    if (!model) return setSending({ state: "error", message: c("templates.composer.pickModel") });
+    if (!quality) return setSending({ state: "error", message: c("templates.composer.pickQuality") });
+    const requestId = crypto.randomUUID();
+    setSending({ state: "busy" });
+    emitGenerationSubmitting({ feature: "motion-transfer", requestId });
+    try {
+      const sourceImage = await uploadImageAsset(characterFile, { purpose: "content", feature: "motion-transfer" });
+      let motionVideo: string = reference;
+      if (!/^https?:\/\//i.test(motionVideo)) {
+        const response = await fetch(motionVideo);
+        if (!response.ok) throw new Error(c("templates.motion.referenceFailed"));
+        const blob = await response.blob();
+        motionVideo = await uploadImageAsset(new File([blob], `${t.slug}.${blob.type.includes("webm") ? "webm" : "mp4"}`, { type: blob.type || "video/mp4" }), { purpose: "content", feature: "motion-transfer" });
+      }
+      const created = await createMotionTransferGeneration({
+        sourceImage,
+        motionVideo,
+        model,
+        quality,
+        ...(sceneControl ? { characterOrientation: sceneSource } : {}),
+      });
+      if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
+      const generationId = created.generationId ?? created.id;
+      const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
+      if (generationId && pollUrl) {
+        emitGenerationStarted({ feature: "motion-transfer", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
+      }
+      setSending({ state: "sent", message: c("templates.composer.sent") });
+    } catch (error) {
+      emitGenerationRequestFailed({ feature: "motion-transfer", requestId });
+      setSending({ state: "error", message: formatGenerationError(error, c("templates.composer.generateFailed")) });
+    }
+  };
   return (
     <>
       <div className={s.motionAssets}>
@@ -971,7 +1014,7 @@ function MotionWorkspace({ t }: { t?: Template }) {
           {character ? <Image src={character} alt={c("templates.motion.character")} fill unoptimized sizes="140px" className={s.poster} /> : <><Plus size={20} /><strong>{c("templates.motion.addCharacter")}</strong><small>{c("templates.motion.characterHint")}</small></>}
         </button>
       </div>
-      <input ref={inputRef} className={s.visuallyHidden} type="file" accept="image/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) setCharacter(URL.createObjectURL(file)); event.currentTarget.value = ""; }} />
+      <input ref={inputRef} className={s.visuallyHidden} type="file" accept="image/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) { setCharacter(URL.createObjectURL(file)); setCharacterFile(file); setSending({ state: "idle" }); } event.currentTarget.value = ""; }} />
       <PickerRow label={c("templates.edit.setting.model")} value={model ? picker.labelOf(model) : c("templates.composer.pickModel")} placeholder={!model} heading={c("templates.composer.featuredModels")} empty={c("templates.composer.noModels")} options={modelOptions} selectedId={model} onPick={(id) => { setModel(id); setQuality(""); }} />
       <PickerRow label={c("templates.edit.setting.quality")} value={quality || c("templates.composer.pickQuality")} placeholder={!quality} heading={c("templates.edit.setting.quality")} empty={c("templates.composer.noModels")} options={qualityOptions} selectedId={quality} onPick={setQuality} />
       <section className={s.motionSceneControl} data-scene-enabled={sceneControl}>
@@ -993,7 +1036,10 @@ function MotionWorkspace({ t }: { t?: Template }) {
         </dl>
       </details>
       <div className={s.motionGenerateDock}>
-        <button type="button">{c("templates.edit.generate")} <Sparkles size={15} />{creditText(credits)}</button>
+        <button type="button" disabled={sending.state === "busy"} onClick={() => void generate()}>
+          {sending.state === "busy" ? c("templates.composer.sending") : c("templates.edit.generate")} <Sparkles size={15} />{creditText(credits)}
+        </button>
+        {sending.message && <p role={sending.state === "error" ? "alert" : "status"} className={sending.state === "error" ? s.sendError : s.sendNote}>{sending.message}</p>}
       </div>
     </>
   );
