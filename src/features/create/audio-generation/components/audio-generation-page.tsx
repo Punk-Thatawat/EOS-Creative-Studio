@@ -3626,10 +3626,10 @@ function AudioCleanupLayout() {
 
   const formattedDuration = durationSeconds > 0 ? formatSceneSeconds(durationSeconds) : "—";
   const optionRows = [
-    { key: "noiseReduction" as const, label: t("create.audio.cleanup.noiseReduction"), hint: t("create.audio.cleanup.noiseReductionHint"), provider: "ElevenLabs", icon: VolumeX },
-    { key: "voiceClarity" as const, label: t("create.audio.cleanup.voiceClarity"), hint: t("create.audio.cleanup.voiceClarityHint"), provider: "ElevenLabs", icon: Mic2 },
-    { key: "removeReverb" as const, label: t("create.audio.cleanup.removeReverb"), hint: t("create.audio.cleanup.removeReverbHint"), provider: t("create.audio.cleanup.internalProcessor"), icon: Waves },
-    { key: "normalizeLoudness" as const, label: t("create.audio.cleanup.normalizeLoudness"), hint: t("create.audio.cleanup.normalizeLoudnessHint"), provider: t("create.audio.cleanup.internalProcessor"), icon: SlidersHorizontal },
+    { key: "noiseReduction" as const, label: t("create.audio.cleanup.noiseReduction"), hint: t("create.audio.cleanup.noiseReductionHint"), icon: VolumeX },
+    { key: "voiceClarity" as const, label: t("create.audio.cleanup.voiceClarity"), hint: t("create.audio.cleanup.voiceClarityHint"), icon: Mic2 },
+    { key: "removeReverb" as const, label: t("create.audio.cleanup.removeReverb"), hint: t("create.audio.cleanup.removeReverbHint"), icon: Waves },
+    { key: "normalizeLoudness" as const, label: t("create.audio.cleanup.normalizeLoudness"), hint: t("create.audio.cleanup.normalizeLoudnessHint"), icon: SlidersHorizontal },
   ];
 
   return (
@@ -3827,7 +3827,7 @@ function AudioCleanupLayout() {
               <input type="checkbox" checked={options[option.key]} onChange={() => toggleOption(option.key)} aria-label={option.label} />
               <span className={styles.cleanupToolIcon}><option.icon size={18} strokeWidth={2.1} /></span>
               <span className={styles.cleanupToolCopy}>
-                <span className={styles.cleanupToolTitleRow}><strong>{option.label}</strong><em>{option.provider}</em></span>
+                <span className={styles.cleanupToolTitleRow}><strong>{option.label}</strong></span>
                 <small>{option.hint}</small>
               </span>
               <span className={styles.cleanupToolSwitch} aria-hidden="true"><span /></span>
@@ -3868,7 +3868,7 @@ function AudioCleanupLayout() {
                     : "—"}
               </b>
             </div>
-            <p className={styles.creditEstimateCount}>
+            <p className={`${styles.creditEstimateCount} ${!file ? styles.cleanupEstimateWaiting : ""}`}>
               {creditEstimate
                 ? `${formattedDuration} · ${creditEstimate.provider === "elevenlabs" ? "ElevenLabs Voice Isolator" : t("create.audio.cleanup.internalProcessor")}`
                 : file
