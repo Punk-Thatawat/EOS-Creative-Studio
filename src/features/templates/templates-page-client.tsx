@@ -61,6 +61,7 @@ import {
 import s from "./templates-page.module.css";
 import { templateCopy } from "./template-copy";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
+import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/api/video-generations";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 const kindKeys: Record<TemplateKind | "all", StudioCopyKey> = {
   all: "templates.kind.all",
@@ -915,6 +916,33 @@ function useModelPicker(feature: string) {
   return { options, qualitiesOf, labelOf };
 }
 
+/**
+ * What the creator would charge for the chosen model and quality, from its own quote endpoint. Null until a model is picked or
+ * while the answer is on its way (or when the quote cannot be given), so the button then shows no price rather than a guess.
+ */
+function useCreditQuote(input: Pick<DirectVideoQuoteInput, "feature" | "model" | "aspectRatio"> & { resolution?: string; duration?: number }): number | null {
+  const { feature, model, resolution, duration, aspectRatio } = input;
+  const key = [feature, model, resolution, duration, aspectRatio].join("|");
+  const [quote, setQuote] = useState<{ key: string; credits: number } | null>(null);
+  useEffect(() => {
+    if (!model) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      quoteDirectVideoGeneration({ feature, model, resolution, duration, aspectRatio }, controller.signal)
+        .then((result) => {
+          if (typeof result.creditCost === "number") setQuote({ key, credits: result.creditCost });
+        })
+        .catch(() => {});
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [key, feature, model, resolution, duration, aspectRatio]);
+  return quote?.key === key ? quote.credits : null;
+}
+const creditText = (credits: number | null) => (credits === null ? "" : String(Math.round(credits * 10) / 10));
+
 function MotionWorkspace({ t }: { t?: Template }) {
   const { c, locale } = useStudioCopy();
   const [character, setCharacter] = useState<string | null>(null);
@@ -923,6 +951,7 @@ function MotionWorkspace({ t }: { t?: Template }) {
   const [model, setModel] = useState("");
   const [quality, setQuality] = useState("");
   const picker = useModelPicker("motion-transfer");
+  const credits = useCreditQuote({ feature: "motion-transfer", model, resolution: quality || undefined });
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => () => { if (character) URL.revokeObjectURL(character); }, [character]);
   const modelOptions = picker.options;
@@ -961,7 +990,7 @@ function MotionWorkspace({ t }: { t?: Template }) {
         </dl>
       </details>
       <div className={s.motionGenerateDock}>
-        <button type="button">{c("templates.edit.generate")} <Sparkles size={15} />25</button>
+        <button type="button">{c("templates.edit.generate")} <Sparkles size={15} />{creditText(credits)}</button>
       </div>
     </>
   );
@@ -1130,6 +1159,16 @@ function Composer({
   // What was picked in the two lists; for now it only changes what the rows show.
   const [picks, setPicks] = useState<{ templateId: string; model?: string; quality?: string }>({ templateId: "" });
   const picker = useModelPicker(mode === "motion" ? "motion-transfer" : mode === "edit" ? "extend-video" : "text-to-video");
+  // The price follows the model and quality the panel shows: picked here, else the template's own.
+  const quoteModel = t && picks.templateId === t.id && picks.model ? picks.model : typeof t?.settings?.model === "string" ? t.settings.model : "";
+  const quoteQuality = t && picks.templateId === t.id && picks.quality ? picks.quality : typeof t?.settings?.resolution === "string" ? t.settings.resolution : undefined;
+  const credits = useCreditQuote({
+    feature: "text-to-video",
+    model: mode === "create" ? quoteModel : "",
+    resolution: quoteQuality,
+    duration: typeof t?.settings?.duration === "number" ? t.settings.duration : undefined,
+    aspectRatio: typeof t?.settings?.ratio === "string" ? t.settings.ratio : typeof t?.settings?.aspectRatio === "string" ? t.settings.aspectRatio : undefined,
+  });
   const tabs = (
     <div className={s.composerTabs} role="tablist" aria-label={c("templates.mode.aria")}>
       {modes.map((m) => (
@@ -1455,6 +1494,7 @@ function Composer({
             onClick={() => onUse(t)}
           >
             {c("templates.composer.generate")} <Sparkles size={17} />
+            {creditText(credits)}
           </Link>
         )}
         <p>{c("templates.preview.footerLine1")}</p>
