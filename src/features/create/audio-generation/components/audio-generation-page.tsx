@@ -3754,23 +3754,6 @@ function AudioCleanupLayout() {
             <WandSparkles size={14} /> {t("create.audio.cleanup.previewHint")}
           </div>
         ) : null}
-        <div className={styles.cleanupProcessBoard}>
-          <div className={styles.cleanupProcessHeader}>
-            <div><span>PROCESS OVERVIEW</span><h3>เสียงของคุณจะถูกปรับอย่างไร</h3></div>
-            <span className={file ? styles.cleanupBoardReady : ""}>{file ? "พร้อมเริ่ม" : "รอไฟล์เสียง"}</span>
-          </div>
-          <div className={styles.cleanupProcessTrack}>
-            <div><span>01</span><strong>วิเคราะห์ต้นฉบับ</strong><small>ตรวจระดับเสียงและเสียงรบกวน</small></div>
-            <ChevronRight size={15} />
-            <div><span>02</span><strong>ปรับแต่งเสียง</strong><small>ใช้เครื่องมือที่คุณเลือกไว้</small></div>
-            <ChevronRight size={15} />
-            <div><span>03</span><strong>ฟังและเปรียบเทียบ</strong><small>ตรวจผลก่อนดาวน์โหลด</small></div>
-          </div>
-          <div className={styles.cleanupProcessFooter}>
-            <Sparkles size={15} />
-            <span>{file ? `เลือกไว้ ${optionRows.filter((option) => options[option.key]).length} เครื่องมือ · เสียงต้นฉบับจะยังคงโทนธรรมชาติ` : "อัปโหลดไฟล์เพื่อเริ่มดูตัวอย่างการปรับปรุงเสียง"}</span>
-          </div>
-        </div>
         <section className={styles.historyPanel} aria-label={t("create.audio.a11y.historyPanel")}>
           <div className={styles.sectionHeading}>
             <h2>
