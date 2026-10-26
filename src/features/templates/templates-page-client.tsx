@@ -134,6 +134,10 @@ const titles: Record<string, string> = {
   "AI presenter video": "พรีเซนเตอร์ AI มืออาชีพ",
   "Podcast & dialogue": "พอดแคสต์และบทสนทนา",
   "Training video": "วิดีโออบรมและสอน",
+  "Motion transfer: brand story": "ถ่ายทอดการเคลื่อนไหว: เรื่องราวแบรนด์",
+  "Motion transfer: product showcase": "ถ่ายทอดการเคลื่อนไหว: โชว์สินค้า",
+  "Extend video: continue the scene": "ขยายวิดีโอ: เล่าฉากต่อ",
+  "Lipsync: presenter voice-over": "ลิปซิงก์: พรีเซนเตอร์พากย์เสียง",
 };
 // The prompts of the seeded templates are stored in English; in Thai the panel shows these instead (the rest come from the data).
 const prompts: Record<string, string> = {
@@ -145,6 +149,10 @@ const prompts: Record<string, string> = {
     "สร้างบทสนทนาที่เป็นธรรมชาติ แบ่งช่วงผู้พูดชัดเจน น้ำเสียงอบอุ่น และจังหวะที่มีจุดมุ่งหมาย",
   "Create a clear training video with an easy-to-follow structure, helpful visual examples, and a calm professional tone.":
     "สร้างวิดีโออบรมที่ชัดเจน โครงสร้างติดตามง่าย มีตัวอย่างภาพประกอบที่เป็นประโยชน์ และน้ำเสียงมืออาชีพที่ใจเย็น",
+  "Replace the main character in the source video with my character and keep the original camera movement and timing.":
+    "แทนที่ตัวละครหลักในวิดีโอต้นฉบับด้วยตัวละครของฉัน โดยคงการเคลื่อนกล้องและจังหวะเวลาเดิมไว้",
+  "Show my product in the source video, keeping the same camera motion, lighting direction and pacing.":
+    "แสดงสินค้าของฉันในวิดีโอต้นฉบับ โดยคงการเคลื่อนกล้อง ทิศทางแสง และจังหวะเดิมไว้",
 };
 const promptOf = (t: Template, locale: CopyLocale) => {
   const text = t.prompt?.trim() ?? "";
@@ -1823,13 +1831,12 @@ export function TemplatesPageClient() {
   }, [q, category, sort, page, retry]);
   // The first work on the page is the chosen one until a tile is clicked.
   const ofMode = items.filter((t) => {
-    if (mode === "motion") return t.kind === "video";
     if (mode === "create") return t.kind === "video" && modeOf(t) === "create";
     return modeOf(t) === mode;
   });
   const visible = ofMode;
   const recentForMode = recent.filter((t) =>
-    mode === "motion" ? t.kind === "video" : mode === "create" ? t.kind === "video" && modeOf(t) === "create" : modeOf(t) === mode,
+    mode === "create" ? t.kind === "video" && modeOf(t) === "create" : modeOf(t) === mode,
   );
   // "" means the template was taken off the panel with its cross; null means nothing was chosen yet (the first one shows).
   const selected =
@@ -1863,8 +1870,14 @@ export function TemplatesPageClient() {
   const tabStyles: [PanelId, StudioCopyKey] = ["styles", "templates.tab.styles"];
   const tabHow: [PanelId, StudioCopyKey] = ["how", "templates.tab.how"];
   const panelIcons: Record<PanelId, LucideIcon> = { history: Folder, library: Orbit, styles: WandSparkles, how: BookOpen };
+  // Editing has its own library of sample edits, named for what it holds; the motion mode keeps its gallery under "how it works".
+  const tabEditLibrary: [PanelId, StudioCopyKey] = ["library", "templates.tab.editLibrary"];
   const panelTabs: Array<[PanelId, StudioCopyKey]> =
-    mode === "edit" || mode === "motion" ? [tabHistory, tabHow] : [tabHistory, tabLibrary, tabStyles, tabHow];
+    mode === "edit"
+      ? [tabHistory, tabEditLibrary, tabHow]
+      : mode === "motion"
+        ? [tabHistory, tabHow]
+        : [tabHistory, tabLibrary, tabStyles, tabHow];
   const activePanel = panelTabs.some(([id]) => id === panel) ? panel : mode === "motion" ? "how" : "history";
   const libraryBody = loading ? (
     <div role="status" aria-label={c("templates.loading")} className={s.masonry}>
@@ -1896,7 +1909,8 @@ export function TemplatesPageClient() {
   ) : (
     <section className={s.masonry} aria-label={c("templates.libraryAria")}>
       {visible.map((t) => (
-        <Tile key={t.id} t={t} selected={t.id === selected?.id} onSelect={(x) => setSelectedId(x.id)} onExpand={setPreview} />
+        // In Edit Video the left panel is the tool list, so "Recreate" opens the sample's details, with the button to edit it.
+        <Tile key={t.id} t={t} selected={t.id === selected?.id} onSelect={(x) => (mode === "edit" ? setPreview(x) : setSelectedId(x.id))} onExpand={setPreview} />
       ))}
     </section>
   );
