@@ -25,6 +25,7 @@ import {
   Heart,
   ImagePlus,
   Info,
+  LayoutTemplate,
   Orbit,
   Pause,
   PenLine,
@@ -67,6 +68,7 @@ import { createMotionTransferGeneration } from "@/lib/api/motion-transfer-genera
 import { uploadImageAsset } from "@/lib/api/storage";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
+import { createAdminTemplate } from "@/lib/api/templates";
 import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 const kindKeys: Record<TemplateKind | "all", StudioCopyKey> = {
@@ -1617,10 +1619,96 @@ const modeFeatures: Record<Mode, string[]> = {
   motion: ["motion-transfer"],
 };
 
+const modeCategory: Record<Mode, string> = { create: "Video", edit: "Edit video", motion: "Motion" };
+const modeCover: Record<Mode, string> = {
+  create: "/generated-icons-v2/templates/ai-presenter-video.png",
+  edit: "/generated-icons-v2/templates/training-video.png",
+  motion: "/generated-icons-v2/templates/product-ad.png",
+};
+
+/**
+ * Turns one finished video into a template of the library: its prompt and settings, the clip as the preview and the creator tab
+ * of the feature that made it. The cover is optional; without one the mode's stock cover stands in. Creating templates needs the
+ * admin role, so anyone else gets the server's refusal as the message.
+ */
+function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: () => void }) {
+  const { c } = useStudioCopy();
+  const prompt = item.prompt?.trim() ?? "";
+  const [title, setTitle] = useState((prompt || item.title).slice(0, 80));
+  const [description, setDescription] = useState(prompt.slice(0, 240));
+  const [category, setCategory] = useState(modeCategory[mode]);
+  const [cover, setCover] = useState<File | null>(null);
+  const [state, setState] = useState<{ busy: boolean; error?: string }>({ busy: false });
+  const save = async () => {
+    if (!title.trim()) return setState({ busy: false, error: c("templates.save.needTitle") });
+    setState({ busy: true });
+    try {
+      const thumbnailUrl = cover ? await uploadImageAsset(cover, { purpose: "content", feature: "text-to-video" }) : modeCover[mode];
+      const tab = ["image-to-video", "text-to-video", "people-video", "motion-transfer", "lipsync", "extend-video"].includes(item.feature) ? item.feature : "text-to-video";
+      const slug = `work-${item.id.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`.slice(0, 80);
+      await createAdminTemplate({
+        slug,
+        title: title.trim().slice(0, 80),
+        description: (description.trim() || title.trim()).slice(0, 240),
+        category: category.trim().slice(0, 40) || modeCategory[mode],
+        kind: "video",
+        format: "Video",
+        thumbnailUrl,
+        previewUrl: item.outputUrl ?? "",
+        targetPath: `/create/video?tab=${tab}&template=${slug}`,
+        prompt,
+        tags: [],
+        featured: false,
+        enabled: true,
+        sortOrder: 0,
+        settings: { ...(item.settings ?? {}), feature: tab },
+      });
+      onCreated();
+      onClose();
+    } catch (error) {
+      setState({ busy: false, error: error instanceof Error ? error.message : c("templates.save.failed") });
+    }
+  };
+  return createPortal(
+    <div className={s.saveBackdrop} role="presentation" onClick={onClose}>
+      <div className={s.saveDialog} role="dialog" aria-modal="true" aria-label={c("templates.save.title")} onClick={(event) => event.stopPropagation()}>
+        <h2>{c("templates.save.title")}</h2>
+        <video src={item.outputUrl} muted playsInline preload="metadata" />
+        <label>
+          {c("templates.save.name")}
+          <input value={title} maxLength={80} onChange={(event) => setTitle(event.target.value)} />
+        </label>
+        <label>
+          {c("templates.save.description")}
+          <textarea value={description} maxLength={240} rows={3} onChange={(event) => setDescription(event.target.value)} />
+        </label>
+        <label>
+          {c("templates.save.category")}
+          <input value={category} maxLength={40} onChange={(event) => setCategory(event.target.value)} />
+        </label>
+        <label>
+          {c("templates.save.cover")}
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setCover(event.target.files?.[0] ?? null)} />
+        </label>
+        {!prompt && <p>{c("templates.save.noPrompt")}</p>}
+        {state.error && <p role="alert" className={s.sendError}>{state.error}</p>}
+        <div>
+          <button type="button" onClick={onClose}>{c("templates.save.cancel")}</button>
+          <button type="button" className={s.saveConfirm} disabled={state.busy} onClick={() => void save()}>
+            {state.busy ? c("templates.composer.sending") : c("templates.save.confirm")}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 /** The videos this account has finished in this mode, newest first, played right here. Reloads whenever a job finishes. */
-function MyVideos({ mode }: { mode: Mode }) {
+function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: () => void }) {
   const { c } = useStudioCopy();
   const [videos, setVideos] = useState<HistoryItem[]>([]);
+  const [saving, setSaving] = useState<HistoryItem | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     const load = () => {
@@ -1648,9 +1736,14 @@ function MyVideos({ mode }: { mode: Mode }) {
           <li key={item.id}>
             <video src={item.outputUrl} controls playsInline preload="metadata" aria-label={item.title} />
             <span>{item.prompt?.trim() || item.title}</span>
+            <button type="button" onClick={() => setSaving(item)}>
+              <LayoutTemplate size={14} aria-hidden="true" />
+              {c("templates.save.button")}
+            </button>
           </li>
         ))}
       </ul>
+      {saving && <SaveTemplateDialog item={saving} mode={mode} onClose={() => setSaving(null)} onCreated={onTemplateCreated} />}
     </section>
   );
 }
@@ -1663,6 +1756,7 @@ function HistoryPanel({
   onSelect,
   onExpand,
   onLibrary,
+  onTemplateCreated,
 }: {
   mode: Mode;
   recent: Template[];
@@ -1671,6 +1765,8 @@ function HistoryPanel({
   onExpand: (t: Template) => void;
   /** Absent when this mode has no library to open. */
   onLibrary?: () => void;
+  /** Called after a finished video was saved as a template, so the library can reload. */
+  onTemplateCreated: () => void;
 }) {
   const { c } = useStudioCopy();
   const covers = items.filter((t) => valid(t.thumbnailUrl));
@@ -1679,7 +1775,7 @@ function HistoryPanel({
   if (recent.length)
     return (
       <>
-        <MyVideos mode={mode} />
+        <MyVideos mode={mode} onTemplateCreated={onTemplateCreated} />
         <section>
           <div className={s.libraryTitle}>
             <h2>{c("templates.history.recent")}</h2>
@@ -1694,7 +1790,7 @@ function HistoryPanel({
     );
   return (
     <>
-    <MyVideos mode={mode} />
+    <MyVideos mode={mode} onTemplateCreated={onTemplateCreated} />
     <section className={s.invite}>
       <div className={s.inviteBanner}>
         <small>{c(hero.tag)}</small>
@@ -2158,6 +2254,7 @@ export function TemplatesPageClient() {
               onSelect={(t) => setSelectedId(t.id)}
               onExpand={setPreview}
               onLibrary={mode === "edit" ? undefined : () => setPanel("library")}
+              onTemplateCreated={() => setRetry((n) => n + 1)}
             />
           ) : activePanel === "styles" ? (
             <CategoryPanel
