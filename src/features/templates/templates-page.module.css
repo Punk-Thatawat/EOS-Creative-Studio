@@ -1013,6 +1013,8 @@
   padding: 12px 8px 12px;
 }
 .composerBar .use {
+  border: 0;
+  cursor: pointer;
   width: 100%;
   min-height: 48px;
   gap: 8px;
@@ -1021,6 +1023,12 @@
   box-shadow: 0 3px 0 #b84a1c;
   font-size: 16px;
   font-weight: 700;
+}
+.composerBar .use:disabled {
+  opacity: 0.6;
+}
+.composerBar p.sendError {
+  color: #ff8a80;
 }
 .composerBar p {
   margin: 8px 0 0;

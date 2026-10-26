@@ -62,6 +62,9 @@ import s from "./templates-page.module.css";
 import { templateCopy } from "./template-copy";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/api/video-generations";
+import { createTextVideoGeneration } from "@/lib/api/text-video-generations";
+import { formatGenerationError } from "@/lib/api/generation-errors";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 const kindKeys: Record<TemplateKind | "all", StudioCopyKey> = {
   all: "templates.kind.all",
@@ -1162,13 +1165,36 @@ function Composer({
   // The price follows the model and quality the panel shows: picked here, else the template's own.
   const quoteModel = t && picks.templateId === t.id && picks.model ? picks.model : typeof t?.settings?.model === "string" ? t.settings.model : "";
   const quoteQuality = t && picks.templateId === t.id && picks.quality ? picks.quality : typeof t?.settings?.resolution === "string" ? t.settings.resolution : undefined;
-  const credits = useCreditQuote({
-    feature: "text-to-video",
-    model: mode === "create" ? quoteModel : "",
-    resolution: quoteQuality,
-    duration: typeof t?.settings?.duration === "number" ? t.settings.duration : undefined,
-    aspectRatio: typeof t?.settings?.ratio === "string" ? t.settings.ratio : typeof t?.settings?.aspectRatio === "string" ? t.settings.aspectRatio : undefined,
-  });
+  // The creator's own defaults when the template does not say: 5 seconds, 16:9.
+  const duration = typeof t?.settings?.duration === "number" ? t.settings.duration : 5;
+  const aspectRatio = typeof t?.settings?.ratio === "string" ? t.settings.ratio : typeof t?.settings?.aspectRatio === "string" ? t.settings.aspectRatio : "16:9";
+  const credits = useCreditQuote({ feature: "text-to-video", model: mode === "create" ? quoteModel : "", resolution: quoteQuality, duration, aspectRatio });
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
+  // Generates right here: the same request the creator page sends, then the app's progress panel follows it to the result.
+  const generate = async (template: Template, model: string, resolution: string) => {
+    const prompt = (promptRef.current?.value ?? "").trim();
+    if (!prompt) return setSending({ state: "error", message: c("templates.composer.needPrompt") });
+    if (!model) return setSending({ state: "error", message: c("templates.composer.pickModel") });
+    if (!resolution) return setSending({ state: "error", message: c("templates.composer.pickQuality") });
+    const requestId = crypto.randomUUID();
+    setSending({ state: "busy" });
+    emitGenerationSubmitting({ feature: "text-to-video", requestId });
+    try {
+      const created = await createTextVideoGeneration({ prompt, model, resolution, duration, aspectRatio });
+      if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
+      const generationId = created.generationId ?? created.id;
+      const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
+      if (generationId && pollUrl) {
+        emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
+      }
+      onUse(template);
+      setSending({ state: "sent", message: c("templates.composer.sent") });
+    } catch (error) {
+      emitGenerationRequestFailed({ feature: "text-to-video", requestId });
+      setSending({ state: "error", message: formatGenerationError(error, c("templates.composer.generateFailed")) });
+    }
+  };
   const tabs = (
     <div className={s.composerTabs} role="tablist" aria-label={c("templates.mode.aria")}>
       {modes.map((m) => (
@@ -1340,7 +1366,6 @@ function Composer({
   const facts = presetFacts(t, c);
   const primary = facts.filter((f) => f.key === "model" || f.key === "resolution");
   const advanced = facts.filter((f) => f.key !== "model" && f.key !== "resolution");
-  const canUse = valid(t.targetPath) && t.targetPath.startsWith("/");
   const others = options.filter((o) => o.id !== t.id).slice(0, 1);
   // Models and qualities seen in the templates, each with the details of the first template that uses it.
   const modelMap = new Map<string, FlyoutOption>();
@@ -1424,6 +1449,7 @@ function Composer({
         {showPrompt && (
           <textarea
             key={`${t.id}-${variant}-${locale}`}
+            ref={promptRef}
             className={s.composerPrompt}
             // "Motion transfer" starts from the template's prompt; "Objects swap" starts empty, with the grey example.
             defaultValue={variant === "motion" ? promptOf(t, locale) : ""}
@@ -1487,17 +1513,16 @@ function Composer({
             <i />
           </button>
         </div>
-        {canUse && (
-          <Link
-            href={templateHref(t)}
-            className={s.use}
-            onClick={() => onUse(t)}
-          >
-            {c("templates.composer.generate")} <Sparkles size={17} />
-            {creditText(credits)}
-          </Link>
+        <button type="button" className={s.use} disabled={sending.state === "busy"} onClick={() => void generate(t, shownModel, shownQuality)}>
+          {sending.state === "busy" ? c("templates.composer.sending") : c("templates.edit.generate")} <Sparkles size={17} />
+          {creditText(credits)}
+        </button>
+        {sending.message && (
+          <p role={sending.state === "error" ? "alert" : "status"} className={sending.state === "error" ? s.sendError : undefined}>
+            {sending.message}
+          </p>
         )}
-        <p>{c("templates.preview.footerLine1")}</p>
+        <p>{c("templates.composer.chargeNote")}</p>
       </div>
     </aside>
   );
