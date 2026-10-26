@@ -520,82 +520,25 @@
   margin-top: 0;
 }
 
-.sceneDurationField {
-  display: grid;
-  min-width: 0;
-  gap: 6px;
+.sceneDurationDropdown {
+  width: 100%;
 }
 
-.sceneDurationInputWrap {
-  display: flex;
-  width: 110px;
-  min-height: 33px;
-  align-items: center;
-  justify-content: space-between;
-  border: 1px solid #e8e2de;
-  border-radius: 8px;
-  background: #fff;
-  padding: 0 8px;
-  color: #4a4541;
+.sceneDurationDropdownTrigger {
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  border-color: #e8e2de;
+  border-radius: 10px;
+  padding: 0 10px;
+  color: #37322f;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.sceneDurationInputWrap:focus-within {
+.sceneDurationDropdownTrigger:focus-visible {
   border-color: #ff9c72;
   box-shadow: 0 0 0 3px rgb(255 91 34 / 9%);
-}
-
-.sceneDurationInputWrap input {
-  width: 54px;
-  min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  padding: 0;
-  color: #37322f;
-  font: inherit;
-  font-size: 9px;
-}
-
-.sceneDurationInputWrap > span {
-  color: #817a74;
-  font-size: 8px;
-}
-
-.sceneDurationMeta {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-  min-height: 16px;
-}
-
-.sceneDurationMeta small {
-  color: #817a74;
-  font-size: 8px;
-}
-
-.sceneDurationMeta button {
-  flex: none;
-  border: 1px solid #e8e2de;
-  border-radius: 999px;
-  background: #fff;
-  padding: 4px 7px;
-  color: #665e58;
-  cursor: pointer;
-  font-size: 8px;
-  font-weight: 700;
-}
-
-.sceneDurationMeta button:disabled {
-  cursor: not-allowed;
-  opacity: .5;
-}
-
-.sceneDurationHint {
-  margin: 6px 0 0;
-  color: #817a74;
-  font-size: 8px;
-  line-height: 1.4;
 }
 
 .formLabel,
@@ -2169,21 +2112,17 @@ button.settingRow {
 .workspace .sceneFieldBadge { padding: 5px 8px; font-size: 9px; }
 .workspace .scriptInput { min-height: 170px; padding: 12px; font-size: 13px; line-height: 1.6; }
 .workspace .directionInput { min-height: 108px; padding: 11px 12px; font-size: 12px; line-height: 1.55; }
-.workspace .characterCount,
-.workspace .sceneDurationHint,
-.workspace .sceneDurationMeta small { font-size: 10px; }
+.workspace .characterCount { font-size: 10px; }
 .workspace .spokenSceneMetaRow .characterCount,
 .workspace .spokenSceneMetaRow .speechDurationStatus { font-size: 12px; line-height: 1.4; }
 .workspace .sceneBasicsGrid { gap: 12px; margin-top: 12px; }
 .workspace .sceneBasicsGrid .formGroup,
 .workspace .sceneBasicsGrid .sceneDurationControl { margin-top: 0; }
 .workspace .sceneDurationControl { gap: 6px; }
-.workspace .sceneDurationInputWrap,
 .workspace .textInput,
 .workspace .selectWrap,
-.workspace .settingSelect { min-height: 40px; }
-.workspace .sceneDurationInputWrap { width: 100%; }
-.workspace .sceneDurationInputWrap input,
+.workspace .settingSelect,
+.workspace .sceneDurationDropdownTrigger { min-height: 40px; }
 .workspace .selectWrap select,
 .workspace .settingSelect select,
 .workspace .textInput { font-size: 12px; }

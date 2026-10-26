@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { ArrowRight, AudioLines, Check, ChevronDown, CloudUpload, Copy, GripVertical, LoaderCircle, LockKeyhole, MoreHorizontal, Pause, Play, Plus, Search, Sparkles, Video, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { Dropdown } from "@/components/ui/dropdown";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { getAccountScopedStorageKey } from "@/lib/generation-progress-storage";
 import { createTextToSpeech, getAudioCreditBalance, listAudioModels, listAudioVoices, quoteTextToSpeechScenes, type AudioCreditQuote, type AudioModel, type AudioVoice } from "@/lib/api/audio";
@@ -374,8 +375,13 @@ export function AiPresenterPage() {
   const currentSpeech = speech?.key === speechKey ? speech : null;
   const activeSceneAudioDuration = activeSceneIndex >= 0 ? currentSpeech?.sceneAudio[activeSceneIndex]?.durationSeconds : undefined;
   const activeSceneSpeechDuration = activeSceneAudioDuration ?? (activeScene?.script.trim() ? estimatedDuration(activeScene.script, language, voicePace) : null);
-  const activeSceneSpeechOverLimit = activeSceneSpeechDuration !== null && activeSceneSpeechDuration !== undefined && activeSceneSpeechDuration > maxSceneDurationSeconds;
-  const activeSceneSpeechNearLimit = activeSceneSpeechDuration !== null && activeSceneSpeechDuration !== undefined && activeSceneSpeechDuration >= sceneSpeechWarningSeconds;
+  const sceneDurationOptions = [
+    { value: "auto", label: isThai ? "อัตโนมัติ" : "Auto" },
+    ...Array.from({ length: maxSceneDurationSeconds }, (_, index) => {
+      const seconds = index + 1;
+      return { value: String(seconds), label: isThai ? `${seconds} วินาที` : `${seconds} sec` };
+    }),
+  ];
   const sceneTimeline = useMemo(() => {
     let elapsedSeconds = 0;
     return scenes.map((scene, index) => {
@@ -1231,26 +1237,17 @@ export function AiPresenterPage() {
                 <input className={styles.textInput} value={activeScene?.title ?? ""} onChange={(event) => updateActiveScene({ title: event.target.value.slice(0, 40) })} maxLength={40} disabled={isLocked} />
               </label>
               <div className={styles.sceneDurationControl}>
-                <label className={styles.sceneDurationField}>
-                  <span className={styles.formLabel}>{isThai ? "ความยาว" : "Duration"}</span>
-                  <span className={styles.sceneDurationInputWrap}>
-                    <input
-                      type="number"
-                      min={1}
-                      max={maxSceneDurationSeconds}
-                      step={1}
-                      value={activeScene?.durationSeconds ?? (activeScene ? estimatedDuration(activeScene.script, language, voicePace) : 3)}
-                      onChange={(event) => updateActiveSceneDuration(event.target.value)}
-                      disabled={isLocked}
-                      aria-label={isThai ? "ความยาวฉากเป็นวินาที" : "Scene duration in seconds"}
-                    />
-                    <span>{isThai ? "วินาที" : "sec"}</span>
-                  </span>
-                </label>
-                <div className={styles.sceneDurationMeta}>
-                  <small>{activeScene?.durationSeconds !== undefined ? (isThai ? "กำหนดเอง" : "Custom") : (isThai ? "อัตโนมัติ" : "Auto")}</small>
-                  {activeScene?.durationSeconds !== undefined ? <button type="button" onClick={resetActiveSceneDuration} disabled={isLocked}>{isThai ? "คืนค่า" : "Reset"}</button> : null}
-                </div>
+                <span className={styles.formLabel}>{isThai ? "ความยาว" : "Duration"}</span>
+                <Dropdown
+                  value={activeScene?.durationSeconds !== undefined ? String(activeScene.durationSeconds) : "auto"}
+                  options={sceneDurationOptions}
+                  onChange={(value) => value === "auto" ? resetActiveSceneDuration() : updateActiveSceneDuration(value)}
+                  ariaLabel={isThai ? "เลือกความยาวฉาก" : "Choose scene duration"}
+                  disabled={isLocked}
+                  className={styles.sceneDurationDropdown}
+                  triggerClassName={styles.sceneDurationDropdownTrigger}
+                  menuPosition="fixed"
+                />
               </div>
             </div>
             <div className={styles.sceneSpeakerSettings}>
@@ -1307,7 +1304,6 @@ export function AiPresenterPage() {
                 </div>
               </div>
             </div>
-            <p className={styles.sceneDurationHint}>{isThai ? "คำนวณจากบทพูด · สูงสุด 15 วินาทีต่อซีน" : "Estimated from speech · up to 15 seconds per scene"}</p>
             <div className={`${styles.sceneFieldCard} ${styles.spokenSceneField}`}>
               <div className={styles.sceneFieldHeader}>
                 <span className={`${styles.sceneFieldIcon} ${styles.spokenSceneIcon}`}><AudioLines size={15} /></span>
@@ -1317,15 +1313,10 @@ export function AiPresenterPage() {
               <textarea className={styles.scriptInput} value={activeScene?.script ?? ""} onChange={(event) => updateActiveScene({ script: event.target.value.slice(0, activeSceneMaxLength) })} maxLength={activeSceneMaxLength} disabled={isLocked} placeholder={isThai ? "พิมพ์เฉพาะประโยคที่ต้องการให้พรีเซนเตอร์พูด" : "Write only the words you want the presenter to say"} aria-label={isThai ? "บทพูดของซีนนี้ ส่งให้ ElevenLabs อ่าน" : "Spoken lines for this scene, sent to ElevenLabs"} />
               <div className={styles.spokenSceneMetaRow}>
                 {activeSceneSpeechDuration !== null && activeSceneSpeechDuration !== undefined ? (
-                  <p className={styles.speechDurationStatus} style={{ fontSize: "12px", lineHeight: 1.4 }} data-warning={activeSceneSpeechNearLimit ? "true" : undefined} data-over={activeSceneSpeechOverLimit ? "true" : undefined}>
+                  <p className={styles.speechDurationStatus} style={{ fontSize: "12px", lineHeight: 1.4 }}>
                     {activeSceneAudioDuration !== undefined
                       ? (isThai ? `เสียงจริง ${activeSceneAudioDuration.toFixed(2)} วินาที` : `Actual audio ${activeSceneAudioDuration.toFixed(2)} sec`)
-                      : (isThai ? `บทนี้ประมาณ ${activeSceneSpeechDuration} วินาที` : `Estimated from text: ${activeSceneSpeechDuration} sec`)}
-                    {activeSceneSpeechOverLimit
-                      ? (isThai ? " · คาดว่าเกิน 15 วินาที แนะนำแบ่งตรงจบประโยค" : " · Likely over 15 sec. Split at a sentence boundary.")
-                      : activeSceneSpeechNearLimit
-                        ? (isThai ? " · ใกล้ขีดจำกัด 15 วินาที เผื่อจังหวะพูดไว้ด้วย" : " · Near the 15-second limit; allow room for pauses.")
-                        : ""}
+                      : (isThai ? `ประมาณ ${activeSceneSpeechDuration} วินาที` : `About ${activeSceneSpeechDuration} sec`)}
                   </p>
                 ) : <span />}
                 <div className={styles.characterCount} style={{ fontSize: "12px", lineHeight: 1.4 }}>{script.length.toLocaleString()} / 5,000 {isThai ? "ตัวอักษรบทพูดรวม" : "total spoken characters"}</div>
@@ -1485,7 +1476,7 @@ export function AiPresenterPage() {
                 {isReorderingScenes ? (isThai ? "เสร็จสิ้น" : "Done") : (isThai ? "เรียงฉากใหม่" : "Reorder Scenes")}
               </button>
             </div>
-            <p className={styles.timelineNote}>{isReorderingScenes ? (isThai ? "ลากฉากเพื่อเปลี่ยนลำดับ" : "Drag scenes to change their order.") : (isThai ? "เวลาบนการ์ดประเมินจากบทก่อนสร้างเสียง และจะแสดงเวลาจริงหลังสร้างเสียง แต่ละซีนจำกัด 15 วินาที" : "Scene times are estimated from text before speech generation and show actual duration afterward. Each scene is limited to 15 seconds.")}</p>
+            {isReorderingScenes ? <p className={styles.timelineNote}>{isThai ? "ลากฉากเพื่อเปลี่ยนลำดับ" : "Drag scenes to change their order."}</p> : null}
             <div className={styles.sceneTimeline} aria-label={isThai ? "ไทม์ไลน์ฉาก" : "Scene timeline"}>
               {sceneTimeline.map(({ scene, start, end }, index) => {
                 const audioDuration = currentSpeech?.sceneAudio[index]?.durationSeconds;
