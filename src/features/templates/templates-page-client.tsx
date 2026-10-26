@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowRight,
@@ -996,6 +996,7 @@ function MotionWorkspace({ t }: { t?: Template }) {
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
+      if (generationId) rememberGenerated(generationId);
       if (generationId && pollUrl) {
         emitGenerationStarted({ feature: "motion-transfer", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
       }
@@ -1234,6 +1235,7 @@ function Composer({
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
+      if (generationId) rememberGenerated(generationId);
       if (generationId && pollUrl) {
         emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
       }
@@ -1704,8 +1706,29 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
   );
 }
 
-/** The videos this account has finished in this mode, newest first, played right here. Reloads whenever a job finishes. */
-function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: () => void }) {
+// The ids of the jobs started from this page, so "Your videos" lists only clips made from templates, not the whole account history.
+const generatedKey = "eos.templates.generated";
+function readGenerated(): string[] {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(generatedKey) ?? "[]");
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function rememberGenerated(id: string) {
+  try {
+    window.localStorage.setItem(generatedKey, JSON.stringify([id, ...readGenerated().filter((x) => x !== id)].slice(0, 200)));
+  } catch {
+    // Without storage the clip still shows once its prompt matches a template's.
+  }
+}
+
+/**
+ * The finished clips made from a template in this mode, newest first, played right here: the jobs started from this page, and
+ * any older clip whose prompt is still exactly a template's. Reloads whenever a job finishes.
+ */
+function MyVideos({ mode, templatePrompts, onTemplateCreated }: { mode: Mode; templatePrompts: string[]; onTemplateCreated: () => void }) {
   const { c } = useStudioCopy();
   const [videos, setVideos] = useState<HistoryItem[]>([]);
   const [saving, setSaving] = useState<HistoryItem | null>(null);
@@ -1714,7 +1737,14 @@ function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: 
     const load = () => {
       fetchHistory({ type: "video", status: "completed", limit: 24, signal: controller.signal })
         .then((result) => {
-          if (!controller.signal.aborted) setVideos(result.items.filter((item) => item.outputUrl && modeFeatures[mode].includes(item.feature)).slice(0, 8));
+          if (controller.signal.aborted) return;
+          const generated = new Set(readGenerated());
+          const prompts = new Set(templatePrompts);
+          setVideos(
+            result.items
+              .filter((item) => item.outputUrl && modeFeatures[mode].includes(item.feature) && (generated.has(item.id) || prompts.has(item.prompt?.trim() ?? "")))
+              .slice(0, 8),
+          );
         })
         .catch(() => {});
     };
@@ -1724,7 +1754,7 @@ function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: 
       controller.abort();
       window.removeEventListener(GENERATION_COMPLETED_EVENT, load);
     };
-  }, [mode]);
+  }, [mode, templatePrompts]);
   if (!videos.length) return null;
   return (
     <section className={s.myVideos} aria-label={c("templates.history.mine")}>
@@ -1756,11 +1786,14 @@ function HistoryPanel({
   onSelect,
   onExpand,
   onLibrary,
+  templatePrompts,
   onTemplateCreated,
 }: {
   mode: Mode;
   recent: Template[];
   items: Template[];
+  /** The prompts of every template, to recognise clips made from one. */
+  templatePrompts: string[];
   onSelect: (t: Template) => void;
   onExpand: (t: Template) => void;
   /** Absent when this mode has no library to open. */
@@ -1775,7 +1808,7 @@ function HistoryPanel({
   if (recent.length)
     return (
       <>
-        <MyVideos mode={mode} onTemplateCreated={onTemplateCreated} />
+        <MyVideos mode={mode} templatePrompts={templatePrompts} onTemplateCreated={onTemplateCreated} />
         <section>
           <div className={s.libraryTitle}>
             <h2>{c("templates.history.recent")}</h2>
@@ -1790,7 +1823,7 @@ function HistoryPanel({
     );
   return (
     <>
-    <MyVideos mode={mode} onTemplateCreated={onTemplateCreated} />
+    <MyVideos mode={mode} templatePrompts={templatePrompts} onTemplateCreated={onTemplateCreated} />
     <section className={s.invite}>
       <div className={s.inviteBanner}>
         <small>{c(hero.tag)}</small>
@@ -2145,6 +2178,10 @@ export function TemplatesPageClient() {
     window.addEventListener(GENERATION_COMPLETED_EVENT, showResult);
     return () => window.removeEventListener(GENERATION_COMPLETED_EVENT, showResult);
   }, []);
+  const templatePrompts = useMemo(
+    () => [...new Set(items.flatMap((item) => [item.prompt?.trim() ?? "", prompts[item.prompt?.trim() ?? ""] ?? ""]).filter(Boolean))],
+    [items],
+  );
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
     setPanel(nextMode === "motion" ? "how" : "history");
@@ -2254,6 +2291,7 @@ export function TemplatesPageClient() {
               onSelect={(t) => setSelectedId(t.id)}
               onExpand={setPreview}
               onLibrary={mode === "edit" ? undefined : () => setPanel("library")}
+              templatePrompts={templatePrompts}
               onTemplateCreated={() => setRetry((n) => n + 1)}
             />
           ) : activePanel === "styles" ? (
