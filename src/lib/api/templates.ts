@@ -114,6 +114,23 @@ export async function createAdminTemplate(input: TemplateAdminInput): Promise<Ad
   return payload;
 }
 
+/** A file the admin picked (a preview clip, sound or cover): the server keeps it and answers with the address the page serves it from. */
+export async function uploadTemplateFile(file: File): Promise<{ url: string; type: string; sizeBytes: number }> {
+  const accessToken = await getApiAccessToken();
+  if (!accessToken) throw new Error("Please sign in as an admin");
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch(`${(process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "")}/api/v1/admin/templates/assets/upload`, {
+    method: "POST",
+    headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
+    body,
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => null) as { data?: { url: string; type: string; sizeBytes: number }; message?: string } | null;
+  if (!response.ok || !payload?.data) throw new Error(payload?.message ?? "The file could not be uploaded");
+  return payload.data;
+}
+
 /** The server cuts a frame from the template's preview video, keeps it, and makes it the template's cover. */
 export async function createTemplateCoverFromPreview(id: string): Promise<AdminCreativeTemplate> {
   const payload = await adminRequest(`/admin/templates/${encodeURIComponent(id)}/cover-from-preview`, { method: "POST" }) as AdminCreativeTemplate | undefined;
