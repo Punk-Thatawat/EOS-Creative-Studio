@@ -1577,6 +1577,44 @@
   font-weight: 700;
   color: #fff;
 }
+.savedNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  background: #1f3a2b;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b9f0cf;
+}
+.savedNote span {
+  flex: 1 1 200px;
+}
+.savedNote button {
+  border: 0;
+  border-radius: 0;
+  background: #ffffff1f;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+.savedRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.savedRow span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7fdca4;
+  -webkit-line-clamp: unset;
+}
 .myVideos li button:hover {
   background: #ffffff24;
 }

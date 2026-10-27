@@ -1371,7 +1371,11 @@ function Composer({
     if (!model) return setSending({ state: "error", message: c("templates.composer.pickModel") });
     if (!resolution) return setSending({ state: "error", message: c("templates.composer.pickQuality") });
     const reference = picker.referenceOf(model);
-    if (images.length && !reference) return setSending({ state: "error", message: c("templates.attach.noReference") });
+    if (images.length && !reference) {
+      // Say which models do take them, so the fix is one pick away.
+      const capable = picker.options.filter((o) => picker.referenceOf(o.id)).map((o) => o.label).join(", ");
+      return setSending({ state: "error", message: c("templates.attach.noReference", { models: capable || "-" }) });
+    }
     const requestId = crypto.randomUUID();
     setSending({ state: "busy" });
     emitGenerationSubmitting({ feature: "text-to-video", requestId });
@@ -1878,7 +1882,10 @@ const modeCover: Record<Mode, string> = {
  * of the feature that made it. The cover is optional; without one the mode's stock cover stands in. Creating templates needs the
  * admin role, so anyone else gets the server's refusal as the message.
  */
-function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: () => void }) {
+/** The address of the template made from a clip, so a clip that already became a template can be recognised. */
+const workSlug = (id: string) => `work-${id.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`.slice(0, 80);
+
+function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: (saved: { slug: string; title: string }) => void }) {
   const { c } = useStudioCopy();
   const prompt = item.prompt?.trim() ?? "";
   const [title, setTitle] = useState((prompt || item.title).slice(0, 80));
@@ -1892,7 +1899,7 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
     try {
       const thumbnailUrl = cover ? await uploadImageAsset(cover, { purpose: "content", feature: "text-to-video" }) : modeCover[mode];
       const tab = ["image-to-video", "text-to-video", "people-video", "motion-transfer", "lipsync", "extend-video"].includes(item.feature) ? item.feature : "text-to-video";
-      const slug = `work-${item.id.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`.slice(0, 80);
+      const slug = workSlug(item.id);
       await createAdminTemplate({
         slug,
         title: title.trim().slice(0, 80),
@@ -1910,9 +1917,15 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
         sortOrder: 0,
         settings: { ...Object.fromEntries(Object.entries(item.settings ?? {}).filter(([key]) => key !== "templateSlug")), feature: tab },
       });
-      onCreated();
+      onCreated({ slug, title: title.trim() });
       onClose();
     } catch (error) {
+      // A clip that was already saved once: the template exists, so treat it as saved rather than as a failure.
+      if (error instanceof Error && /slug already exists/i.test(error.message)) {
+        onCreated({ slug: workSlug(item.id), title: title.trim() });
+        onClose();
+        return;
+      }
       setState({ busy: false, error: error instanceof Error ? error.message : c("templates.save.failed") });
     }
   };
@@ -1938,6 +1951,7 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
           <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setCover(event.target.files?.[0] ?? null)} />
         </label>
         {!prompt && <p>{c("templates.save.noPrompt")}</p>}
+        <p>{c("templates.save.publicNote")}</p>
         {state.error && <p role="alert" className={s.sendError}>{state.error}</p>}
         <div>
           <button type="button" onClick={onClose}>{c("templates.save.cancel")}</button>
@@ -1955,8 +1969,22 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
  * The finished clips made from a template in this mode, newest first, played right here. The server marks which clips were started
  * from a template, so this holds on any device. Reloads whenever a job finishes.
  */
-function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: () => void }) {
+function MyVideos({
+  mode,
+  savedSlugs,
+  onTemplateCreated,
+  onUseSaved,
+  onOpenLibrary,
+}: {
+  mode: Mode;
+  /** The addresses of every template in the library, to tell which clips already became one. */
+  savedSlugs: Set<string>;
+  onTemplateCreated: (saved: { slug: string; title: string }) => void;
+  onUseSaved: (slug: string) => void;
+  onOpenLibrary?: () => void;
+}) {
   const { c } = useStudioCopy();
+  const [justSaved, setJustSaved] = useState<{ slug: string; title: string } | null>(null);
   const [videos, setVideos] = useState<HistoryItem[]>([]);
   const [pending, setPending] = useState<HistoryItem[]>([]);
   const [runs, setRuns] = useState<TemplateWorkflowRun[]>([]);
@@ -2000,6 +2028,13 @@ function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: 
       <div className={s.libraryTitle}>
         <h2>{c("templates.history.mine")}</h2>
       </div>
+      {justSaved && (
+        <div className={s.savedNote} role="status">
+          <span>{c("templates.save.done", { name: justSaved.title })}</span>
+          <button type="button" onClick={() => onUseSaved(justSaved.slug)}>{c("templates.save.use")}</button>
+          {onOpenLibrary && <button type="button" onClick={onOpenLibrary}>{c("templates.save.openLibrary")}</button>}
+        </div>
+      )}
       <ul>
         {shownRuns.map((run) => {
           const image = run.steps[0]?.outputUrl;
@@ -2051,14 +2086,34 @@ function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: 
           <li key={item.id}>
             <video src={item.outputUrl} controls playsInline preload="metadata" aria-label={item.title} />
             <span>{item.prompt?.trim() || item.title}</span>
-            <button type="button" onClick={() => setSaving(item)}>
-              <LayoutTemplate size={14} aria-hidden="true" />
-              {c("templates.save.button")}
-            </button>
+            {savedSlugs.has(workSlug(item.id)) ? (
+              <div className={s.savedRow}>
+                <span>
+                  <Check size={13} aria-hidden="true" />
+                  {c("templates.save.already")}
+                </span>
+                <button type="button" onClick={() => onUseSaved(workSlug(item.id))}>{c("templates.save.use")}</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setSaving(item)}>
+                <LayoutTemplate size={14} aria-hidden="true" />
+                {c("templates.save.button")}
+              </button>
+            )}
           </li>
         ))}
       </ul>
-      {saving && <SaveTemplateDialog item={saving} mode={mode} onClose={() => setSaving(null)} onCreated={onTemplateCreated} />}
+      {saving && (
+        <SaveTemplateDialog
+          item={saving}
+          mode={mode}
+          onClose={() => setSaving(null)}
+          onCreated={(saved) => {
+            setJustSaved(saved);
+            onTemplateCreated(saved);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -2071,6 +2126,8 @@ function HistoryPanel({
   onSelect,
   onExpand,
   onLibrary,
+  savedSlugs,
+  onUseSaved,
   onTemplateCreated,
 }: {
   mode: Mode;
@@ -2080,8 +2137,12 @@ function HistoryPanel({
   onExpand: (t: Template) => void;
   /** Absent when this mode has no library to open. */
   onLibrary?: () => void;
+  /** The addresses of the templates in the library. */
+  savedSlugs: Set<string>;
+  /** Puts a saved template on the left panel, ready to use. */
+  onUseSaved: (slug: string) => void;
   /** Called after a finished video was saved as a template, so the library can reload. */
-  onTemplateCreated: () => void;
+  onTemplateCreated: (saved: { slug: string; title: string }) => void;
 }) {
   const { c } = useStudioCopy();
   const covers = items.filter((t) => valid(t.thumbnailUrl));
@@ -2090,7 +2151,7 @@ function HistoryPanel({
   if (recent.length)
     return (
       <>
-        <MyVideos mode={mode} onTemplateCreated={onTemplateCreated} />
+        <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={onLibrary} />
         <section>
           <div className={s.libraryTitle}>
             <h2>{c("templates.history.recent")}</h2>
@@ -2105,7 +2166,7 @@ function HistoryPanel({
     );
   return (
     <>
-    <MyVideos mode={mode} onTemplateCreated={onTemplateCreated} />
+    <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={onLibrary} />
     <section className={s.invite}>
       <div className={s.inviteBanner}>
         <small>{c(hero.tag)}</small>
@@ -2713,6 +2774,11 @@ export function TemplatesPageClient() {
               onSelect={(t) => setSelectedId(t.id)}
               onExpand={setPreview}
               onLibrary={mode === "edit" ? undefined : () => setPanel("library")}
+              savedSlugs={new Set(items.map((item) => item.slug))}
+              onUseSaved={(slug) => {
+                const found = items.find((item) => item.slug === slug);
+                if (found) setSelectedId(found.id);
+              }}
               onTemplateCreated={() => setRetry((n) => n + 1)}
             />
           ) : activePanel === "styles" ? (
