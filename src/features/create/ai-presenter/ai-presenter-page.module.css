@@ -448,6 +448,12 @@
   margin-top: 0;
 }
 
+.sceneTitleField .textInput {
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+}
+
 .sceneDurationDropdown {
   width: 100%;
 }
@@ -2096,8 +2102,7 @@ button.settingRow {
 .workspace .spokenSceneMetaRow .speechDurationStatus { font-size: 12px; line-height: 1.4; }
 .workspace .sceneBasicsGrid { gap: 12px; margin-top: 12px; }
 .workspace .sceneBasicsGrid .formGroup,
-.workspace .sceneBasicsGrid .sceneDurationControl { margin-top: 0; }
-.workspace .sceneDurationControl { gap: 6px; }
+.workspace .sceneBasicsGrid .sceneDurationControl { gap: 6px; margin-top: 0; }
 .workspace .textInput,
 .workspace .presenterDropdownTrigger,
 .workspace .sceneDurationDropdownTrigger { min-height: 40px; }
