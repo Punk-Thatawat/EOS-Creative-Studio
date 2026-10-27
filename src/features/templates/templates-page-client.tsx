@@ -26,6 +26,7 @@ import {
   ImagePlus,
   Info,
   LayoutTemplate,
+  Loader2,
   Orbit,
   Pause,
   PenLine,
@@ -64,14 +65,15 @@ import s from "./templates-page.module.css";
 import { templateCopy } from "./template-copy";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/api/video-generations";
-import { createTextVideoGeneration } from "@/lib/api/text-video-generations";
+import { createTextVideoGeneration, type TextVideoGenerationInput } from "@/lib/api/text-video-generations";
 import { createMotionTransferGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
 import { createAdminTemplate } from "@/lib/api/templates";
 import { listStylePresets } from "@/lib/api/style-presets";
-import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting, GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
+import { listTemplateWorkflows, startTemplateWorkflow, workflowFeature, type TemplateWorkflowRun } from "@/lib/api/template-workflows";
+import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting, GENERATION_COMPLETED_EVENT, GENERATION_STARTED_EVENT } from "@/lib/generation-progress-events";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 const kindKeys: Record<TemplateKind | "all", StudioCopyKey> = {
   all: "templates.kind.all",
@@ -150,6 +152,7 @@ const titles: Record<string, string> = {
   "Motion transfer: product showcase": "ถ่ายทอดการเคลื่อนไหว: โชว์สินค้า",
   "Extend video: continue the scene": "ขยายวิดีโอ: เล่าฉากต่อ",
   "Lipsync: presenter voice-over": "ลิปซิงก์: พรีเซนเตอร์พากย์เสียง",
+  "Image to video workflow": "เวิร์กโฟลว์ ภาพเป็นวิดีโอ",
 };
 // The prompts of the seeded templates are stored in English; in Thai the panel shows these instead (the rest come from the data).
 const prompts: Record<string, string> = {
@@ -163,6 +166,8 @@ const prompts: Record<string, string> = {
     "สร้างวิดีโออบรมที่ชัดเจน โครงสร้างติดตามง่าย มีตัวอย่างภาพประกอบที่เป็นประโยชน์ และน้ำเสียงมืออาชีพที่ใจเย็น",
   "Replace the main character in the source video with my character and keep the original camera movement and timing.":
     "แทนที่ตัวละครหลักในวิดีโอต้นฉบับด้วยตัวละครของฉัน โดยคงการเคลื่อนกล้องและจังหวะเวลาเดิมไว้",
+  "A woman in a white dress stands in a field of flowers at sunset, a gentle breeze moving her hair, soft warm light.":
+    "ผู้หญิงในชุดสีขาวยืนอยู่กลางทุ่งดอกไม้ยามพระอาทิตย์ตก ลมพัดผมเบาๆ แสงอบอุ่นนุ่มนวล",
   "Show my product in the source video, keeping the same camera motion, lighting direction and pacing.":
     "แสดงสินค้าของฉันในวิดีโอต้นฉบับ โดยคงการเคลื่อนกล้อง ทิศทางแสง และจังหวะเดิมไว้",
 };
@@ -896,10 +901,11 @@ function EditWorkspace({ tool, poster }: { tool: EditToolId; poster?: string }) 
  * The models the creator offers for one feature, shaped for the model and quality pickers. Nothing is listed until they load
  * (or when the visitor is signed out), and the pickers then fall back to what the templates themselves say.
  */
-function useModelPicker(feature: string) {
+function useModelPicker(feature: string, enabled = true) {
   const { c } = useStudioCopy();
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   useEffect(() => {
+    if (!enabled) return;
     let alive = true;
     listGenerationModels(feature)
       .then((list) => {
@@ -911,7 +917,10 @@ function useModelPicker(feature: string) {
     return () => {
       alive = false;
     };
-  }, [feature]);
+  }, [feature, enabled]);
+  // Whether the model's qualities are resolutions (720p) or named qualities (low, medium, high).
+  const qualityKeyOf = (id: string): "resolution" | "quality" =>
+    models.find((m) => m.model === id)?.capabilities.supportedResolutions?.length ? "resolution" : "quality";
   const qualitiesOf = (id: string): string[] => {
     const capabilities = models.find((m) => m.model === id)?.capabilities;
     return capabilities?.supportedResolutions?.length ? capabilities.supportedResolutions : (capabilities?.qualityValues ?? []);
@@ -923,7 +932,31 @@ function useModelPicker(feature: string) {
     badge: m.isDefault ? c("templates.sortRecommended") : undefined,
   }));
   const labelOf = (id: string) => options.find((o) => o.id === id)?.label ?? id;
-  return { options, qualitiesOf, labelOf };
+  // The aspect ratios the model accepts; empty when it does not say.
+  const ratiosOf = (id: string): string[] => {
+    const capabilities = models.find((m) => m.model === id)?.capabilities;
+    return capabilities?.supportedAspectRatios?.length ? capabilities.supportedAspectRatios : (capabilities?.supportedRatios ?? []);
+  };
+  // The length to ask for: the wanted one when the model takes it, else the closest it allows (Omni only takes 3 to 10 seconds).
+  const durationFor = (id: string, wanted: number): number => {
+    const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.duration;
+    const allowed = Array.isArray(property?.enum) ? property.enum.filter((value): value is number => typeof value === "number") : [];
+    if (allowed.length) return allowed.includes(wanted) ? wanted : allowed.reduce((best, value) => (Math.abs(value - wanted) < Math.abs(best - wanted) ? value : best));
+    if (typeof property?.minimum === "number" && wanted < property.minimum) return property.minimum;
+    if (typeof property?.maximum === "number" && wanted > property.maximum) return property.maximum;
+    return wanted;
+  };
+  // Where the model takes reference images, if it does: the parameter name and whether it wants a list.
+  const referenceOf = (id: string): { parameter: string; list: boolean } | null => {
+    const capabilities = models.find((m) => m.model === id)?.capabilities;
+    const properties = capabilities?.apiSchema?.request_schema?.properties ?? {};
+    const parameter =
+      capabilities?.referenceImagesParameter ??
+      capabilities?.imageParameter ??
+      Object.keys(properties).find((key) => ["referenceImage", "reference_image", "referenceImages", "reference_images", "image", "image_url"].includes(key));
+    return parameter ? { parameter, list: properties[parameter]?.type === "array" } : null;
+  };
+  return { options, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, referenceOf, labelOf };
 }
 
 /**
@@ -1182,6 +1215,9 @@ function PickerRow({
  * The control column, laid out like a creation panel: type tabs, the chosen template as a card, its prompt, the model and
  * quality rows, the rest of the settings folded under "Advanced", and the button that opens it in the creator.
  */
+/** An image attached in the optional card, with its preview address. */
+type AttachedImage = { id: string; file: File; url: string };
+
 function Composer({
   t,
   mode,
@@ -1220,13 +1256,59 @@ function Composer({
   const [useFree, setUseFree] = useState(false);
   // What was picked in the two lists; for now it only changes what the rows show.
   const [picks, setPicks] = useState<{ templateId: string; model?: string; quality?: string }>({ templateId: "" });
-  const picker = useModelPicker(mode === "motion" ? "motion-transfer" : mode === "edit" ? "extend-video" : "text-to-video");
+  // A workflow template runs two steps on the server (an image, then a video from it), each with its own model and quality.
+  const isWorkflow = t?.settings?.feature === workflowFeature;
+  const picker = useModelPicker(mode === "motion" ? "motion-transfer" : mode === "edit" ? "extend-video" : "text-to-video", !isWorkflow);
+  const imagePicker = useModelPicker("text-to-image", isWorkflow);
+  const videoPicker = useModelPicker("image-to-video", isWorkflow);
+  const [flow, setFlow] = useState({ imageModel: "", imageQuality: "", videoModel: "", videoQuality: "" });
+  // The models the template was set up with start the two steps until the visitor picks others.
+  const flowImageModel = flow.imageModel || (typeof t?.settings?.imageModel === "string" ? t.settings.imageModel : "");
+  const flowVideoModel = flow.videoModel || (typeof t?.settings?.model === "string" ? t.settings.model : "");
+  // Reference images attached in the optional card (up to five), sent with the video request when the model takes them.
+  const [images, setImages] = useState<AttachedImage[]>([]);
+  const [attachError, setAttachError] = useState<string | undefined>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imagesRef = useRef(images);
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+  useEffect(() => () => imagesRef.current.forEach((image) => URL.revokeObjectURL(image.url)), []);
+  const attach = (list: FileList | null) => {
+    if (!list) return;
+    const next = [...images];
+    let error: string | undefined;
+    for (const file of Array.from(list)) {
+      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+        error = c("templates.attach.unsupported");
+        continue;
+      }
+      if (next.length >= 5) {
+        error = c("templates.attach.tooMany");
+        break;
+      }
+      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) });
+    }
+    setImages(next);
+    setAttachError(error);
+    setSending({ state: "idle" });
+  };
+  const detach = (id: string) => {
+    const gone = images.find((image) => image.id === id);
+    if (gone) URL.revokeObjectURL(gone.url);
+    setImages(images.filter((image) => image.id !== id));
+    setAttachError(undefined);
+  };
   // The price follows the model and quality the panel shows: picked here, else the template's own.
   const quoteModel = t && picks.templateId === t.id && picks.model ? picks.model : typeof t?.settings?.model === "string" ? t.settings.model : "";
   const quoteQuality = t && picks.templateId === t.id && picks.quality ? picks.quality : typeof t?.settings?.resolution === "string" ? t.settings.resolution : undefined;
   // The creator's own defaults when the template does not say: 5 seconds, 16:9.
-  const duration = typeof t?.settings?.duration === "number" ? t.settings.duration : 5;
-  const aspectRatio = typeof t?.settings?.ratio === "string" ? t.settings.ratio : typeof t?.settings?.aspectRatio === "string" ? t.settings.aspectRatio : "16:9";
+  const wantedDuration = typeof t?.settings?.duration === "number" ? t.settings.duration : 5;
+  const wantedRatio = typeof t?.settings?.ratio === "string" ? t.settings.ratio : typeof t?.settings?.aspectRatio === "string" ? t.settings.aspectRatio : "16:9";
+  // A template made from another model's clip can name a ratio this model refuses (21:9 on Omni); use one it accepts.
+  const duration = picker.durationFor(quoteModel, wantedDuration);
+  const modelRatios = picker.ratiosOf(quoteModel);
+  const aspectRatio = modelRatios.length && !modelRatios.includes(wantedRatio) ? (modelRatios.includes("16:9") ? "16:9" : modelRatios[0]) : wantedRatio;
   const credits = useCreditQuote({ feature: "text-to-video", model: mode === "create" ? quoteModel : "", resolution: quoteQuality, duration, aspectRatio });
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
@@ -1236,11 +1318,19 @@ function Composer({
     if (!prompt) return setSending({ state: "error", message: c("templates.composer.needPrompt") });
     if (!model) return setSending({ state: "error", message: c("templates.composer.pickModel") });
     if (!resolution) return setSending({ state: "error", message: c("templates.composer.pickQuality") });
+    const reference = picker.referenceOf(model);
+    if (images.length && !reference) return setSending({ state: "error", message: c("templates.attach.noReference") });
     const requestId = crypto.randomUUID();
     setSending({ state: "busy" });
     emitGenerationSubmitting({ feature: "text-to-video", requestId });
     try {
-      const created = await createTextVideoGeneration({ prompt, model, resolution, duration, aspectRatio, templateSlug: template.slug });
+      const request: TextVideoGenerationInput = { prompt, model, resolution, duration, aspectRatio, templateSlug: template.slug };
+      if (images.length && reference) {
+        const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
+        // Model-specific inputs go in modelParams: the server only forwards those to the model (a top-level field is dropped).
+        request.modelParams = { ...(request.modelParams ?? {}), [reference.parameter]: reference.list ? urls : urls[0] };
+      }
+      const created = await createTextVideoGeneration(request);
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
@@ -1251,6 +1341,29 @@ function Composer({
       setSending({ state: "sent", message: c("templates.composer.sent") });
     } catch (error) {
       emitGenerationRequestFailed({ feature: "text-to-video", requestId });
+      setSending({ state: "error", message: formatGenerationError(error, c("templates.composer.generateFailed")) });
+    }
+  };
+  const generateWorkflow = async (template: Template) => {
+    const prompt = (promptRef.current?.value ?? "").trim();
+    if (!prompt) return setSending({ state: "error", message: c("templates.composer.needPrompt") });
+    if (!flowImageModel || !flow.imageQuality) return setSending({ state: "error", message: c("templates.workflow.pickImage") });
+    if (!flowVideoModel || !flow.videoQuality) return setSending({ state: "error", message: c("templates.workflow.pickVideo") });
+    setSending({ state: "busy" });
+    try {
+      const imageRatio = ["1:1", "16:9", "4:3", "3:4", "9:16"].includes(wantedRatio) ? wantedRatio : "16:9";
+      const videoRatios = videoPicker.ratiosOf(flowVideoModel);
+      const videoRatio = videoRatios.length && !videoRatios.includes(imageRatio) ? (videoRatios.includes("16:9") ? "16:9" : videoRatios[0]) : imageRatio;
+      await startTemplateWorkflow({
+        templateSlug: template.slug,
+        prompt,
+        image: { model: flowImageModel, [imagePicker.qualityKeyOf(flowImageModel)]: flow.imageQuality, ratio: imageRatio },
+        video: { model: flowVideoModel, resolution: flow.videoQuality, duration: videoPicker.durationFor(flowVideoModel, wantedDuration), aspectRatio: videoRatio },
+      });
+      window.dispatchEvent(new Event(workflowEvent));
+      onUse(template);
+      setSending({ state: "sent", message: c("templates.workflow.sent") });
+    } catch (error) {
       setSending({ state: "error", message: formatGenerationError(error, c("templates.composer.generateFailed")) });
     }
   };
@@ -1432,7 +1545,6 @@ function Composer({
   const facts = presetFacts(t, c);
   const primary = facts.filter((f) => f.key === "model" || f.key === "resolution");
   const advanced = facts.filter((f) => f.key !== "model" && f.key !== "resolution");
-  const others = options.filter((o) => o.id !== t.id).slice(0, 1);
   // Models and qualities seen in the templates, each with the details of the first template that uses it.
   const modelMap = new Map<string, FlyoutOption>();
   for (const o of [t, ...options]) {
@@ -1447,7 +1559,13 @@ function Composer({
     modelMap.set(model, entry);
   }
   // The creator's own list of models when it loads; until then, the ones the templates mention.
-  const modelOptions = picker.options.length ? picker.options : [...modelMap.values()];
+  const baseModels = picker.options.length ? picker.options : [...modelMap.values()];
+  // With images attached, the models that take them come first and are marked, so the right one is easy to pick.
+  const modelOptions = images.length
+    ? [...baseModels]
+        .sort((a, b) => Number(!!picker.referenceOf(b.id)) - Number(!!picker.referenceOf(a.id)))
+        .map((o) => (picker.referenceOf(o.id) ? { ...o, chips: [c("templates.attach.accepts"), ...(o.chips ?? [])] } : o))
+    : baseModels;
   // Nothing picked and nothing in the template: the rows ask for a choice.
   const shownModel = (picks.templateId === t.id && picks.model) || primary.find((f) => f.key === "model")?.value || "";
   const shownQuality = (picks.templateId === t.id && picks.quality) || primary.find((f) => f.key === "resolution")?.value || "";
@@ -1481,23 +1599,32 @@ function Composer({
           </span>
         </button>
       </div>
-      <div className={s.composerSlots}>
+      {!isWorkflow && <div className={s.composerSlots}>
         <span className={s.slotOptional}>{c("templates.composer.optional")}</span>
-        <button type="button" className={s.slotAdd} onClick={() => setPicking(true)} aria-label={c("templates.composer.related")}>
+        <button type="button" className={s.slotAdd} onClick={() => fileInputRef.current?.click()} aria-label={c("templates.attach.add")}>
           <Plus size={18} aria-hidden="true" />
         </button>
-        {others.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            className={s.slotThumb}
-            style={valid(o.thumbnailUrl) ? { backgroundImage: `url("${o.thumbnailUrl}")` } : undefined}
-            onClick={() => onSelect(o.id)}
-            aria-label={name(o, locale)}
-            title={name(o, locale)}
-          />
+        <input
+          ref={fileInputRef}
+          className={s.visuallyHidden}
+          type="file"
+          multiple
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(event) => {
+            attach(event.currentTarget.files);
+            event.currentTarget.value = "";
+          }}
+        />
+        {images.map((image) => (
+          <span key={image.id} className={s.slotFile} title={image.file.name}>
+            <Image src={image.url} alt={image.file.name} fill unoptimized sizes="46px" />
+            <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
+              <X size={11} aria-hidden="true" />
+            </button>
+          </span>
         ))}
-      </div>
+        <small className={attachError ? s.sendError : undefined} role={attachError ? "alert" : undefined}>{attachError ?? c("templates.attach.hint")}</small>
+      </div>}
       <section className={s.composerBlock}>
         <div className={s.composerLabel}>
           <span>{c("templates.composer.prompt")}</span>
@@ -1524,6 +1651,55 @@ function Composer({
           />
         )}
       </section>
+      {isWorkflow ? (
+        <>
+          <h3 className={s.workflowStep}>{c("templates.workflow.step1")}</h3>
+          <PickerRow
+            label={c("templates.preview.factModel")}
+            value={flowImageModel ? imagePicker.labelOf(flowImageModel) : c("templates.composer.pickModel")}
+            placeholder={!flowImageModel}
+            heading={c("templates.composer.featuredModels")}
+            searchPlaceholder={c("templates.composer.modelSearch")}
+            empty={c("templates.composer.noModels")}
+            options={imagePicker.options}
+            selectedId={flowImageModel}
+            onPick={(id) => setFlow({ ...flow, imageModel: id, imageQuality: "" })}
+          />
+          <PickerRow
+            label={c("templates.composer.quality")}
+            value={flow.imageQuality || c("templates.composer.pickQuality")}
+            placeholder={!flow.imageQuality}
+            heading={c("templates.composer.quality")}
+            empty={c("templates.composer.noModels")}
+            options={imagePicker.qualitiesOf(flowImageModel).map((id) => ({ id, label: id }))}
+            selectedId={flow.imageQuality}
+            onPick={(id) => setFlow({ ...flow, imageQuality: id })}
+          />
+          <h3 className={s.workflowStep}>{c("templates.workflow.step2")}</h3>
+          <PickerRow
+            label={c("templates.preview.factModel")}
+            value={flowVideoModel ? videoPicker.labelOf(flowVideoModel) : c("templates.composer.pickModel")}
+            placeholder={!flowVideoModel}
+            heading={c("templates.composer.featuredModels")}
+            searchPlaceholder={c("templates.composer.modelSearch")}
+            empty={c("templates.composer.noModels")}
+            options={videoPicker.options}
+            selectedId={flowVideoModel}
+            onPick={(id) => setFlow({ ...flow, videoModel: id, videoQuality: "" })}
+          />
+          <PickerRow
+            label={c("templates.composer.quality")}
+            value={flow.videoQuality || c("templates.composer.pickQuality")}
+            placeholder={!flow.videoQuality}
+            heading={c("templates.composer.quality")}
+            empty={c("templates.composer.noModels")}
+            options={videoPicker.qualitiesOf(flowVideoModel).map((id) => ({ id, label: id }))}
+            selectedId={flow.videoQuality}
+            onPick={(id) => setFlow({ ...flow, videoQuality: id })}
+          />
+        </>
+      ) : (
+        <>
       <PickerRow
         label={c("templates.preview.factModel")}
         value={shownModel ? picker.labelOf(shownModel) : c("templates.composer.pickModel")}
@@ -1546,6 +1722,8 @@ function Composer({
         selectedId={shownQuality}
         onPick={(id) => setPicks({ ...picks, templateId: t.id, quality: id })}
       />
+        </>
+      )}
       {advanced.length > 0 && (
         <details className={s.composerAdvanced}>
           <summary>
@@ -1579,9 +1757,9 @@ function Composer({
             <i />
           </button>
         </div>
-        <button type="button" className={s.use} disabled={sending.state === "busy"} onClick={() => void generate(t, shownModel, shownQuality)}>
+        <button type="button" className={s.use} disabled={sending.state === "busy"} onClick={() => void (isWorkflow ? generateWorkflow(t) : generate(t, shownModel, shownQuality))}>
           {sending.state === "busy" ? c("templates.composer.sending") : c("templates.edit.generate")} <Sparkles size={17} />
-          {creditText(credits)}
+          {isWorkflow ? "" : creditText(credits)}
         </button>
         {sending.message && (
           <p role={sending.state === "error" ? "alert" : "status"} className={sending.state === "error" ? s.sendError : undefined}>
@@ -1635,6 +1813,9 @@ const modeFeatures: Record<Mode, string[]> = {
   edit: ["extend-video", "lipsync", "people-video"],
   motion: ["motion-transfer"],
 };
+
+/** Sent when a workflow run starts, so the History tab shows it and follows it. */
+const workflowEvent = "eos:template-workflow-changed";
 
 const modeCategory: Record<Mode, string> = { create: "Video", edit: "Edit video", motion: "Motion" };
 const modeCover: Record<Mode, string> = {
@@ -1728,31 +1909,80 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
 function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: () => void }) {
   const { c } = useStudioCopy();
   const [videos, setVideos] = useState<HistoryItem[]>([]);
+  const [pending, setPending] = useState<HistoryItem[]>([]);
+  const [runs, setRuns] = useState<TemplateWorkflowRun[]>([]);
   const [saving, setSaving] = useState<HistoryItem | null>(null);
   useEffect(() => {
     const controller = new AbortController();
+    let timer: number | undefined;
     const load = () => {
-      fetchHistory({ type: "video", status: "completed", fromTemplate: true, limit: 24, signal: controller.signal })
-        .then((result) => {
+      window.clearTimeout(timer);
+      const workflows = mode === "create" ? listTemplateWorkflows(12, controller.signal).catch(() => [] as TemplateWorkflowRun[]) : Promise.resolve([] as TemplateWorkflowRun[]);
+      Promise.all([fetchHistory({ type: "video", fromTemplate: true, limit: 24, signal: controller.signal }), workflows])
+        .then(([result, flowRuns]) => {
           if (controller.signal.aborted) return;
-          setVideos(result.items.filter((item) => item.outputUrl && modeFeatures[mode].includes(item.feature)).slice(0, 8));
+          setRuns(flowRuns);
+          const ofMode = result.items.filter((item) => modeFeatures[mode].includes(item.feature));
+          setVideos(ofMode.filter((item) => item.status === "completed" && item.outputUrl).slice(0, 8));
+          const running = ofMode.filter((item) => item.status === "queued" || item.status === "processing");
+          setPending(running);
+          // Follow the clips and workflow runs still being made until they are done.
+          if (running.length || flowRuns.some((run) => run.status === "running")) timer = window.setTimeout(load, 6000);
         })
         .catch(() => {});
     };
     load();
     window.addEventListener(GENERATION_COMPLETED_EVENT, load);
+    window.addEventListener(GENERATION_STARTED_EVENT, load);
+    window.addEventListener(workflowEvent, load);
     return () => {
       controller.abort();
+      window.clearTimeout(timer);
       window.removeEventListener(GENERATION_COMPLETED_EVENT, load);
+      window.removeEventListener(GENERATION_STARTED_EVENT, load);
+      window.removeEventListener(workflowEvent, load);
     };
   }, [mode]);
-  if (!videos.length) return null;
+  // Failed runs are listed only until a newer one exists, so an old failure does not stay forever.
+  const shownRuns = runs.filter((run, index) => run.status !== "failed" || index < 2);
+  if (!videos.length && !pending.length && !shownRuns.length) return null;
   return (
     <section className={s.myVideos} aria-label={c("templates.history.mine")}>
       <div className={s.libraryTitle}>
         <h2>{c("templates.history.mine")}</h2>
       </div>
       <ul>
+        {shownRuns.map((run) => {
+          const image = run.steps[0]?.outputUrl;
+          return (
+            <li key={run.id}>
+              {run.status === "completed" && run.resultUrl ? (
+                <video src={run.resultUrl} controls playsInline preload="metadata" aria-label={run.prompt} />
+              ) : (
+                <div
+                  className={`${s.pendingClip} ${run.status === "failed" ? s.failedClip : ""}`}
+                  style={image ? { backgroundImage: `linear-gradient(#000000a6, #000000a6), url("${image}")` } : undefined}
+                  role={run.status === "failed" ? "alert" : "status"}
+                >
+                  {run.status === "running" ? <Loader2 size={22} aria-hidden="true" /> : null}
+                  {run.status === "running"
+                    ? c(run.currentStep >= 2 ? "templates.workflow.makingVideo" : "templates.workflow.makingImage")
+                    : `${c("templates.workflow.failed")}${run.errorMessage ? `: ${run.errorMessage}` : ""}`}
+                </div>
+              )}
+              <span>{run.prompt}</span>
+            </li>
+          );
+        })}
+        {pending.map((item) => (
+          <li key={item.id}>
+            <div className={s.pendingClip} role="status">
+              <Loader2 size={22} aria-hidden="true" />
+              {c("templates.history.making")}
+            </div>
+            <span>{item.prompt?.trim() || item.title}</span>
+          </li>
+        ))}
         {videos.map((item) => (
           <li key={item.id}>
             <video src={item.outputUrl} controls playsInline preload="metadata" aria-label={item.title} />
@@ -2265,7 +2495,13 @@ export function TemplatesPageClient() {
   useEffect(() => {
     const showResult = () => setPanel("history");
     window.addEventListener(GENERATION_COMPLETED_EVENT, showResult);
-    return () => window.removeEventListener(GENERATION_COMPLETED_EVENT, showResult);
+    window.addEventListener(GENERATION_STARTED_EVENT, showResult);
+    window.addEventListener(workflowEvent, showResult);
+    return () => {
+      window.removeEventListener(GENERATION_COMPLETED_EVENT, showResult);
+      window.removeEventListener(GENERATION_STARTED_EVENT, showResult);
+      window.removeEventListener(workflowEvent, showResult);
+    };
   }, []);
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);

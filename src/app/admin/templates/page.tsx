@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
 import { createAdminTemplate, deleteAdminTemplate, listAdminTemplates, updateAdminTemplate, type AdminCreativeTemplate, type TemplateAdminInput, type TemplateKind } from "@/lib/api/templates";
 import { promptMaxLength } from "@/lib/prompt-limits";
+import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 
 const kindOptions: Array<{ value: TemplateKind; label: string; icon: typeof ImageIcon }> = [
   { value: "image", label: "Image", icon: ImageIcon },
@@ -44,6 +45,129 @@ function Toggle({ label, description, checked, onChange }: { label: string; desc
   return <button type="button" onClick={onChange} aria-pressed={checked} className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition-colors ${checked ? "border-[#bfe1cc] bg-[#f3fbf5]" : "border-border bg-white"}`}><span><b className={`block text-xs ${checked ? "text-[#347454]" : "text-foreground"}`}>{label}</b><small className="mt-1 block text-[10px] font-normal text-muted-foreground">{description}</small></span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${checked ? "border-[#4c9b72] bg-[#4c9b72] text-white" : "border-border bg-white"}`}>{checked ? <Check size={13} strokeWidth={3} /> : null}</span></button>;
 }
 
+// How a video template behaves in the public library: which mode it belongs to, and which model it starts with.
+const behaviorModes = [
+  { id: "create", label: "Create Video", feature: "text-to-video", tab: "text-to-video" },
+  { id: "extend", label: "Edit Video · Extend", feature: "extend-video", tab: "extend-video" },
+  { id: "lipsync", label: "Edit Video · Lipsync", feature: "lipsync", tab: "people-video" },
+  { id: "motion", label: "Motion Control", feature: "motion-transfer", tab: "motion-transfer" },
+  { id: "workflow", label: "Workflow · image → video", feature: "workflow-image-to-video", tab: "image-to-video" },
+] as const;
+
+function useModels(feature: string | null) {
+  const [models, setModels] = useState<GenerationModelOption[]>([]);
+  useEffect(() => {
+    if (!feature) return;
+    let alive = true;
+    listGenerationModels(feature)
+      .then((list) => {
+        if (alive) setModels(list.filter((model) => model.enabled));
+      })
+      .catch(() => {
+        if (alive) setModels([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [feature]);
+  return models;
+}
+
+function TemplateBehavior({ draft, update }: { draft: TemplateAdminInput & { id?: string }; update: (patch: Partial<TemplateAdminInput>) => void }) {
+  const settings = draft.settings ?? {};
+  const isVideo = draft.kind === "video";
+  const mode = behaviorModes.find((item) => item.feature === settings.feature) ?? behaviorModes[0];
+  const videoModels = useModels(isVideo ? (mode.id === "workflow" ? "image-to-video" : mode.feature) : draft.kind === "image" ? "text-to-image" : null);
+  const imageModels = useModels(isVideo && mode.id === "workflow" ? "text-to-image" : null);
+  if (!isVideo && draft.kind !== "image") return null;
+  const model = typeof settings.model === "string" ? settings.model : "";
+  const resolutions = (() => {
+    const capabilities = videoModels.find((item) => item.model === model)?.capabilities;
+    return capabilities?.supportedResolutions?.length ? capabilities.supportedResolutions : [];
+  })();
+  const field = "mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary";
+  const changeMode = (id: string) => {
+    const next = behaviorModes.find((item) => item.id === id);
+    if (!next) return;
+    // The model and quality belong to one feature, so they start over; the template's link follows the mode's creator tab.
+    const { model: _model, resolution: _resolution, imageModel: _imageModel, ...rest } = settings as Record<string, unknown>;
+    void _model;
+    void _resolution;
+    void _imageModel;
+    update({
+      settings: { ...rest, feature: next.feature },
+      ...(draft.targetPath.startsWith("/create/video") ? { targetPath: `/create/video?tab=${next.tab}${draft.slug ? `&template=${draft.slug}` : ""}` } : {}),
+    });
+  };
+  const setSetting = (patch: Record<string, unknown>) => update({ settings: { ...settings, ...patch } });
+  return (
+    <section className="rounded-2xl border border-border bg-white p-4" data-no-translate>
+      <h3 className="text-sm font-bold">Behavior · โหมดและโมเดล</h3>
+      <p className="mt-1 text-[10px] text-muted-foreground">Decides which mode of the public Templates page lists this template, and which model it starts with.</p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        {isVideo ? (
+          <label className="text-xs font-semibold">
+            Mode
+            <select value={mode.id} onChange={(event) => changeMode(event.target.value)} className={field}>
+              {behaviorModes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {mode.id === "workflow" && isVideo ? (
+          <label className="text-xs font-semibold">
+            Image model (step 1)
+            <select value={typeof settings.imageModel === "string" ? settings.imageModel : ""} onChange={(event) => setSetting({ imageModel: event.target.value })} className={field}>
+              <option value="">— none —</option>
+              {imageModels.map((item) => (
+                <option key={item.model} value={item.model}>
+                  {item.displayName || item.model}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label className="text-xs font-semibold">
+          {mode.id === "workflow" && isVideo ? "Video model (step 2)" : "Model"}
+          <select
+            value={model}
+            onChange={(event) => {
+              const { resolution: _resolution, ...rest } = settings as Record<string, unknown>;
+              void _resolution;
+              update({ settings: { ...rest, ...(event.target.value ? { model: event.target.value } : {}) } });
+            }}
+            className={field}
+          >
+            <option value="">— none —</option>
+            {model && !videoModels.some((item) => item.model === model) ? <option value={model}>{model}</option> : null}
+            {videoModels.map((item) => (
+              <option key={item.model} value={item.model}>
+                {item.displayName || item.model}
+              </option>
+            ))}
+          </select>
+        </label>
+        {resolutions.length > 0 ? (
+          <label className="text-xs font-semibold">
+            Quality
+            <select value={typeof settings.resolution === "string" ? settings.resolution : ""} onChange={(event) => setSetting({ resolution: event.target.value || undefined })} className={field}>
+              <option value="">— none —</option>
+              {resolutions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function TemplateEditor({ draft, busy, onChange, onSave, onClose }: { draft: (TemplateAdminInput & { id?: string }); busy: boolean; onChange: (next: TemplateAdminInput & { id?: string }) => void; onSave: () => void; onClose: () => void }) {
   const update = (patch: Partial<TemplateAdminInput>) => onChange({ ...draft, ...patch });
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#201d1b]/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="template-editor-title">
@@ -56,6 +180,7 @@ function TemplateEditor({ draft, busy, onChange, onSave, onClose }: { draft: (Te
           <label className="block rounded-2xl border border-border bg-white p-4 text-sm font-semibold" data-no-translate>Preview URL — ไฟล์ตัวอย่าง<input value={draft.previewUrl ?? ""} onChange={event => update({ previewUrl: event.target.value })} maxLength={2000} placeholder="https://…/preview.mp4 หรือ preview.mp3" className="mt-2 h-10 w-full rounded-xl border border-border px-3 text-xs" /><span className="mt-2 block text-xs font-normal text-muted-foreground">วิดีโอ: MP4/WebM · เสียง: MP3/WAV · เว้นว่างเพื่อแสดงเฉพาะภาพปก ไม่ควรใช้ลิงก์หน้า YouTube แทนไฟล์สื่อ</span></label>
           <section className="rounded-2xl border border-border bg-white p-4"><div className="mb-4 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e9] text-primary"><LayoutTemplate size={16} /></span><div><h3 className="text-sm font-bold">Identity</h3><p className="text-[10px] text-muted-foreground">The title and route users will recognize.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Title<input value={draft.title} onChange={(event) => update({ title: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="Product ad" /></label><label className="text-xs font-semibold">Slug<input value={draft.slug} onChange={(event) => update({ slug: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 font-mono text-xs outline-none focus:border-primary" placeholder="product-ad" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Lowercase letters, numbers, and hyphens.</span></label></div><label className="mt-4 block text-xs font-semibold">Description<textarea value={draft.description} onChange={(event) => update({ description: event.target.value })} maxLength={240} required className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-5 outline-none focus:border-primary" placeholder="A short reason to choose this template." /></label></section>
           <section className="rounded-2xl border border-border bg-white p-4"><div className="mb-4 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e9] text-primary"><Star size={16} /></span><div><h3 className="text-sm font-bold">Library placement</h3><p className="text-[10px] text-muted-foreground">Control type, category, visibility, and ordering.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Type<select value={draft.kind} onChange={(event) => update({ kind: event.target.value as TemplateKind })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary">{kindOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="text-xs font-semibold">Category<input value={draft.category} onChange={(event) => update({ category: event.target.value })} maxLength={40} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="Advertising" /></label><label className="text-xs font-semibold">Format<input value={draft.format} onChange={(event) => update({ format: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="16:9 · 9:16" /></label><label className="text-xs font-semibold">Sort order<input type="number" min={0} max={100000} value={draft.sortOrder} onChange={(event) => update({ sortOrder: Number(event.target.value) })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" /></label></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><Toggle label="Published" description="Show this template in the public library." checked={draft.enabled} onChange={() => update({ enabled: !draft.enabled })} /><Toggle label="Featured" description="Place this template in the curated section." checked={draft.featured} onChange={() => update({ featured: !draft.featured })} /></div></section>
+          <TemplateBehavior draft={draft} update={update} />
         </div>
         <div className="space-y-5"><section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Visual and destination</h3><label className="mt-4 block text-xs font-semibold">Thumbnail URL<input value={draft.thumbnailUrl} onChange={(event) => update({ thumbnailUrl: event.target.value })} maxLength={1000} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs outline-none focus:border-primary" placeholder="/generated-icons-v2/templates/product-ad.png" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Use a workspace asset path or a public image URL.</span></label><div className="mt-4 overflow-hidden rounded-2xl border border-border"><TemplateVisual template={draft} large /></div><label className="mt-4 block text-xs font-semibold">Target path<input value={draft.targetPath} onChange={(event) => update({ targetPath: event.target.value })} maxLength={500} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 font-mono text-xs outline-none focus:border-primary" placeholder="/create/image?template=product-ad" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Must start with / so Use template stays inside EOS.</span></label></section><section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Generation instruction</h3><label className="mt-3 block text-xs font-semibold">Prompt<textarea value={draft.prompt} onChange={(event) => update({ prompt: event.target.value })} maxLength={promptMaxLength} className="mt-2 min-h-36 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-6 outline-none focus:border-primary" placeholder="เว้นว่างได้สำหรับงานที่ไม่ต้องใช้ prompt เช่น Extend Image หรือ Upscale" /></label><div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Tags<input value={draft.tags.join(", ")} onChange={(event) => update({ tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs outline-none focus:border-primary" placeholder="product, advertising, campaign" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Separate tags with commas.</span></label><div className="rounded-xl bg-[#fff8f3] p-3 text-[10px] leading-5 text-[#765d50]"><b>Tip</b><br />Keep the prompt focused on visual direction. The user can personalize it after opening the creator.</div></div></section></div>
       </div><footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4 sm:px-7"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="sm" disabled={busy || !draft.title.trim() || !draft.slug.trim() || !draft.thumbnailUrl.trim() || !draft.targetPath.trim()}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}{busy ? "Saving..." : "Save template"}</Button></footer></form>
