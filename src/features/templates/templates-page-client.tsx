@@ -1072,12 +1072,24 @@ function useModelPicker(feature: string, enabled = true) {
       Object.keys(properties).find((key) => ["referenceImage", "reference_image", "referenceImages", "reference_images", "image", "image_url"].includes(key));
     return parameter ? { parameter, list: properties[parameter]?.type === "array" } : null;
   };
+  // The lengths (in seconds) the model takes: its own list, or the usual steps between its shortest and longest.
+  const durationsOf = (id: string): number[] => {
+    const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.duration;
+    const allowed = Array.isArray(property?.enum) ? property.enum.filter((value): value is number => typeof value === "number") : [];
+    if (allowed.length) return allowed;
+    if (typeof property?.minimum === "number" && typeof property?.maximum === "number") {
+      const { minimum, maximum } = property;
+      const steps = [4, 5, 6, 8, 10, 12, 15, 20, 25, 30].filter((value) => value > minimum && value < maximum);
+      return [minimum, ...steps, maximum];
+    }
+    return [];
+  };
   // What a swap model can swap (person, object, background), when it has that choice.
   const modesOf = (id: string): string[] => {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.mode;
     return Array.isArray(property?.enum) ? property.enum.filter((value): value is string => value === "person" || value === "object" || value === "background") : [];
   };
-  return { options, ready, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, referenceOf, modesOf, labelOf };
+  return { options, ready, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, referenceOf, modesOf, labelOf };
 }
 
 /**
@@ -1522,7 +1534,7 @@ function Composer({
   const [showPrompt, setShowPrompt] = useState(true);
   const [useFree, setUseFree] = useState(false);
   // What was picked in the two lists; for now it only changes what the rows show.
-  const [picks, setPicks] = useState<{ templateId: string; model?: string; quality?: string }>({ templateId: "" });
+  const [picks, setPicks] = useState<{ templateId: string; model?: string; quality?: string; duration?: number }>({ templateId: "" });
   // A workflow template runs two steps on the server (an image, then a video from it), each with its own model and quality.
   const isWorkflow = t?.settings?.feature === workflowFeature;
   const picker = useModelPicker(mode === "motion" ? "motion-transfer" : mode === "edit" ? "extend-video" : "text-to-video", !isWorkflow);
@@ -1544,7 +1556,9 @@ function Composer({
   const quoteModel = t && picks.templateId === t.id && picks.model ? picks.model : typeof t?.settings?.model === "string" ? t.settings.model : "";
   const quoteQuality = t && picks.templateId === t.id && picks.quality ? picks.quality : typeof t?.settings?.resolution === "string" ? t.settings.resolution : undefined;
   // The creator's own defaults when the template does not say: 5 seconds, 16:9.
-  const wantedDuration = typeof t?.settings?.duration === "number" ? t.settings.duration : 5;
+  const templateDuration = typeof t?.settings?.duration === "number" ? t.settings.duration : 5;
+  // The length picked in the panel, else the template's own.
+  const wantedDuration = t && picks.templateId === t.id && picks.duration ? picks.duration : templateDuration;
   const wantedRatio = typeof t?.settings?.ratio === "string" ? t.settings.ratio : typeof t?.settings?.aspectRatio === "string" ? t.settings.aspectRatio : "16:9";
   // A template made from another model's clip can name a ratio this model refuses (21:9 on Omni); use one it accepts.
   const duration = picker.durationFor(quoteModel, wantedDuration);
@@ -1957,6 +1971,15 @@ function Composer({
         options={qualityOptions}
         selectedId={shownQuality}
         onPick={(id) => setPicks({ ...picks, templateId: t.id, quality: id })}
+      />
+      <PickerRow
+        label={c("templates.composer.duration")}
+        value={c("templates.preview.seconds", { value: duration })}
+        heading={c("templates.composer.duration")}
+        empty={c("templates.composer.noModels")}
+        options={(picker.durationsOf(shownModel).length ? picker.durationsOf(shownModel) : [5, 10]).map((seconds) => ({ id: String(seconds), label: c("templates.preview.seconds", { value: seconds }) }))}
+        selectedId={String(duration)}
+        onPick={(id) => setPicks({ ...picks, templateId: t.id, duration: Number(id) })}
       />
         </>
       )}
