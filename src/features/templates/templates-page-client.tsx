@@ -70,7 +70,7 @@ import { createMotionTransferGeneration } from "@/lib/api/motion-transfer-genera
 import { uploadImageAsset } from "@/lib/api/storage";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
-import { createAdminTemplate } from "@/lib/api/templates";
+import { createAdminTemplate, createTemplateCoverFromPreview } from "@/lib/api/templates";
 import { listStylePresets } from "@/lib/api/style-presets";
 import { cancelTemplateWorkflow, listTemplateWorkflows, startTemplateWorkflow, workflowFeature, type TemplateWorkflowRun } from "@/lib/api/template-workflows";
 import { listMyTemplateLikes, setTemplateLike } from "@/lib/api/template-likes";
@@ -1885,29 +1885,28 @@ const modeCover: Record<Mode, string> = {
 /** The address of the template made from a clip, so a clip that already became a template can be recognised. */
 const workSlug = (id: string) => `work-${id.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`.slice(0, 80);
 
-function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: (saved: { slug: string; title: string }) => void }) {
+function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: (saved: { slug: string; title: string; coverFailed?: boolean }) => void }) {
   const { c } = useStudioCopy();
   const prompt = item.prompt?.trim() ?? "";
   const [title, setTitle] = useState((prompt || item.title).slice(0, 80));
   const [description, setDescription] = useState(prompt.slice(0, 240));
   const [category, setCategory] = useState(modeCategory[mode]);
-  const [cover, setCover] = useState<File | null>(null);
   const [state, setState] = useState<{ busy: boolean; error?: string }>({ busy: false });
   const save = async () => {
     if (!title.trim()) return setState({ busy: false, error: c("templates.save.needTitle") });
     setState({ busy: true });
     try {
-      const thumbnailUrl = cover ? await uploadImageAsset(cover, { purpose: "content", feature: "text-to-video" }) : modeCover[mode];
       const tab = ["image-to-video", "text-to-video", "people-video", "motion-transfer", "lipsync", "extend-video"].includes(item.feature) ? item.feature : "text-to-video";
       const slug = workSlug(item.id);
-      await createAdminTemplate({
+      const created = await createAdminTemplate({
         slug,
         title: title.trim().slice(0, 80),
         description: (description.trim() || title.trim()).slice(0, 240),
         category: category.trim().slice(0, 40) || modeCategory[mode],
         kind: "video",
         format: "Video",
-        thumbnailUrl,
+        // A stand-in until the server has cut the real cover from the clip below.
+        thumbnailUrl: modeCover[mode],
         previewUrl: item.outputUrl ?? "",
         targetPath: `/create/video?tab=${tab}&template=${slug}`,
         prompt,
@@ -1917,7 +1916,9 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
         sortOrder: 0,
         settings: { ...Object.fromEntries(Object.entries(item.settings ?? {}).filter(([key]) => key !== "templateSlug")), feature: tab },
       });
-      onCreated({ slug, title: title.trim() });
+      // The cover is a frame of the clip, cut and kept by the server. If that fails the template still exists, with the stand-in.
+      const coverFailed = await createTemplateCoverFromPreview(created.id).then(() => false).catch(() => true);
+      onCreated({ slug, title: title.trim(), coverFailed });
       onClose();
     } catch (error) {
       // A clip that was already saved once: the template exists, so treat it as saved rather than as a failure.
@@ -1946,10 +1947,7 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
           {c("templates.save.category")}
           <input value={category} maxLength={40} onChange={(event) => setCategory(event.target.value)} />
         </label>
-        <label>
-          {c("templates.save.cover")}
-          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setCover(event.target.files?.[0] ?? null)} />
-        </label>
+        <p>{c("templates.save.coverAuto")}</p>
         {!prompt && <p>{c("templates.save.noPrompt")}</p>}
         <p>{c("templates.save.publicNote")}</p>
         {state.error && <p role="alert" className={s.sendError}>{state.error}</p>}
@@ -1979,12 +1977,12 @@ function MyVideos({
   mode: Mode;
   /** The addresses of every template in the library, to tell which clips already became one. */
   savedSlugs: Set<string>;
-  onTemplateCreated: (saved: { slug: string; title: string }) => void;
+  onTemplateCreated: (saved: { slug: string; title: string; coverFailed?: boolean }) => void;
   onUseSaved: (slug: string) => void;
   onOpenLibrary?: () => void;
 }) {
   const { c } = useStudioCopy();
-  const [justSaved, setJustSaved] = useState<{ slug: string; title: string } | null>(null);
+  const [justSaved, setJustSaved] = useState<{ slug: string; title: string; coverFailed?: boolean } | null>(null);
   const [videos, setVideos] = useState<HistoryItem[]>([]);
   const [pending, setPending] = useState<HistoryItem[]>([]);
   const [runs, setRuns] = useState<TemplateWorkflowRun[]>([]);
@@ -2030,7 +2028,10 @@ function MyVideos({
       </div>
       {justSaved && (
         <div className={s.savedNote} role="status">
-          <span>{c("templates.save.done", { name: justSaved.title })}</span>
+          <span>
+            {c("templates.save.done", { name: justSaved.title })}
+            {justSaved.coverFailed ? ` · ${c("templates.save.coverFailed")}` : ""}
+          </span>
           <button type="button" onClick={() => onUseSaved(justSaved.slug)}>{c("templates.save.use")}</button>
           {onOpenLibrary && <button type="button" onClick={onOpenLibrary}>{c("templates.save.openLibrary")}</button>}
         </div>

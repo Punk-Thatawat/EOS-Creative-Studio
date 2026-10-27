@@ -107,6 +107,13 @@ export async function createAdminTemplate(input: TemplateAdminInput): Promise<Ad
   return payload;
 }
 
+/** The server cuts a frame from the template's preview video, keeps it, and makes it the template's cover. */
+export async function createTemplateCoverFromPreview(id: string): Promise<AdminCreativeTemplate> {
+  const payload = await adminRequest(`/admin/templates/${encodeURIComponent(id)}/cover-from-preview`, { method: "POST" }) as AdminCreativeTemplate | undefined;
+  if (!payload) throw new Error("The cover could not be made");
+  return payload;
+}
+
 export async function updateAdminTemplate(id: string, input: Partial<TemplateAdminInput>): Promise<AdminCreativeTemplate> {
   const payload = await adminRequest(`/admin/templates/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) }) as AdminCreativeTemplate | undefined;
   if (!payload) throw new Error("Template could not be updated");
