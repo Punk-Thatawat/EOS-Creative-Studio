@@ -1347,22 +1347,24 @@ export function AiPresenterPage() {
         file: sceneTimeline[sceneIndex]!.scene.media!.file!,
       }] : []);
       let resultVideoUrl = videoUrl;
-      try {
-        setGenerationProgress(98);
-        setNotice(isThai ? "กำลังรวมซีนและใส่เสียง ElevenLabs ต้นฉบับด้วย FFmpeg…" : "Joining the scenes and muxing the original ElevenLabs track with FFmpeg…");
-        const composed = await composePresenterVideo(storyboardId, scenesWithMedia, current.blob, controller.signal);
-        resultVideoUrl = composed.url;
-      } catch (error) {
-        if (controller.signal.aborted) throw error;
-        throw new Error(formatGenerationError(error, isThai
-          ? "สร้างวิดีโอแล้ว แต่รวมซีนหรือใส่เสียง ElevenLabs ไม่สำเร็จ"
-          : "The video scenes were generated, but FFmpeg could not join them or attach the exact ElevenLabs track."));
+      if (scenesWithMedia.length > 0) {
+        try {
+          setGenerationProgress(98);
+          setNotice(isThai ? "กำลังรวมภาพฉากและคงเสียงที่สร้างมาพร้อมวิดีโอ…" : "Joining scene visuals while preserving the audio generated with the video…");
+          const composed = await composePresenterVideo(storyboardId, scenesWithMedia, controller.signal);
+          resultVideoUrl = composed.url;
+        } catch (error) {
+          if (controller.signal.aborted) throw error;
+          throw new Error(formatGenerationError(error, isThai
+            ? "สร้างวิดีโอแล้ว แต่รวมภาพฉากเข้ากับวิดีโอไม่สำเร็จ"
+            : "The video scenes were generated, but their visuals could not be joined to the video."));
+        }
       }
 
       setFinalVideoUrl(resultVideoUrl);
       setGenerationProgress(100);
       setGenerationStatus("completed");
-      setNotice(isThai ? "วิดีโอพร้อมแล้ว ใช้เสียง ElevenLabs ต้นฉบับ" : "Your presenter video is ready with the exact ElevenLabs voice track.");
+      setNotice(isThai ? "วิดีโอพร้อมแล้ว ใช้เสียงที่สร้างมาพร้อมวิดีโอ" : "Your presenter video is ready with the audio generated with the video.");
       emitGenerationCompleted({ feature: "image-to-video", generationId: storyboardId });
     } catch (error) {
       emitGenerationRequestFailed({ feature: "image-to-video", requestId });
