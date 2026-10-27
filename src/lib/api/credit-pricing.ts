@@ -52,7 +52,7 @@ export type CreditPricingPreview = {
   provider: string;
   model: string;
   featureKey: string | null;
-  status: "ready" | "unavailable";
+  status: "ready" | "unavailable" | "internal";
   providerCostUsd?: number;
   providerCostThb?: number;
   costCredits?: number;
