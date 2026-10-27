@@ -114,7 +114,7 @@ export type VideoCreditQuoteResponse = {
 };
 
 export type DirectVideoQuoteInput = {
-  feature: "text-to-video" | "people-video" | "lipsync" | "motion-transfer" | "extend-video" | "image-to-video";
+  feature: "text-to-video" | "people-video" | "lipsync" | "motion-transfer" | "video-swap" | "extend-video" | "image-to-video";
   model?: string;
   prompt?: string;
   negativePrompt?: string;

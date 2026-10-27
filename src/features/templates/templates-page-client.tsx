@@ -66,11 +66,11 @@ import { templateCopy } from "./template-copy";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/api/video-generations";
 import { createTextVideoGeneration, type TextVideoGenerationInput } from "@/lib/api/text-video-generations";
-import { createMotionTransferGeneration } from "@/lib/api/motion-transfer-generations";
+import { createMotionTransferGeneration, createVideoSwapGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
-import { createAdminTemplate, createTemplateCoverFromPreview } from "@/lib/api/templates";
+import { createAdminTemplate, createTemplateCoverFromPreview, keepTemplateAssets } from "@/lib/api/templates";
 import { listStylePresets } from "@/lib/api/style-presets";
 import { cancelTemplateWorkflow, listTemplateWorkflows, startTemplateWorkflow, workflowFeature, type TemplateWorkflowRun } from "@/lib/api/template-workflows";
 import { listMyTemplateLikes, setTemplateLike } from "@/lib/api/template-likes";
@@ -118,12 +118,17 @@ const stepsByMode: Record<Mode, Array<[StudioCopyKey, StudioCopyKey]>> = {
     ["templates.how.motion.step3.title", "templates.how.motion.step3.body"],
   ],
 };
-type SortId = "recommended" | "popular" | "newest";
-const sortIcons: Record<SortId, LucideIcon> = { recommended: WandSparkles, popular: TrendingUp, newest: Clock };
-const sortOptions: Array<[SortId, StudioCopyKey]> = [
-  ["recommended", "templates.sortEos"],
-  ["popular", "templates.sortPopular"],
-  ["newest", "templates.sortNewest"],
+/** The three lists of the library, like the example's: the studio's own templates, then the community's, trending and new. */
+type Lane = "eos" | "communityTrending" | "communityNew";
+const laneQuery: Record<Lane, { source: "official" | "community"; sort: "recommended" | "popular" | "newest" }> = {
+  eos: { source: "official", sort: "recommended" },
+  communityTrending: { source: "community", sort: "popular" },
+  communityNew: { source: "community", sort: "newest" },
+};
+const laneOptions: Array<[Lane, StudioCopyKey, LucideIcon]> = [
+  ["eos", "templates.source.eos", WandSparkles],
+  ["communityTrending", "templates.source.communityTrending", TrendingUp],
+  ["communityNew", "templates.source.communityNew", Clock],
 ];
 /** Editing tools shown in the reference UI; destinations are ready to be wired to their EOS tools. */
 type EditToolId = "edit" | "extend" | "reframe" | "upscale" | "removeBackground" | "sdrToHdr" | "fpsBoost" | "depthMap";
@@ -140,7 +145,7 @@ const editTools: Array<{ id: EditToolId; icon: LucideIcon; title: StudioCopyKey;
 function modeOf(t: Template): Mode {
   const feature = typeof t.settings?.feature === "string" ? t.settings.feature : "";
   const hint = `${feature} ${t.targetPath}`.toLowerCase();
-  if (/motion/.test(hint)) return "motion";
+  if (/(motion|swap)/.test(hint)) return "motion";
   if (/(extend|edit|upscale|reframe|lipsync|remove-background)/.test(hint)) return "edit";
   return "create";
 }
@@ -421,6 +426,7 @@ function Tile({
       <Media t={t} tile key={t.id + t.previewUrl} />
       <button type="button" className={s.tileOpen} aria-pressed={selected} onClick={() => onSelect(t)} aria-label={name(t, locale)} />
       <span className={s.kind}>{c(kindKeys[t.kind])}</span>
+      {t.source === "community" && t.authorName && <span className={s.tileAuthor}>{t.authorName}</span>}
       <button
         type="button"
         className={s.tileExpand}
@@ -908,6 +914,97 @@ function EditWorkspace({ tool, poster }: { tool: EditToolId; poster?: string }) 
   );
 }
 
+/** An address on this site (a kept file), which the page can read as a file. */
+const sameOrigin = (address: string) => /^\/(?!\/)/.test(address);
+/** The images a template starts from, in the order its maker used them. */
+function inputImagesOf(t?: Template): string[] {
+  const settings = t?.settings ?? {};
+  const list = Array.isArray(settings.inputImages) ? settings.inputImages : Array.isArray(settings.sourceImages) ? settings.sourceImages : [];
+  const single = typeof settings.sourceImage === "string" ? [settings.sourceImage] : [];
+  return [...new Set([...list, ...single].filter((address): address is string => typeof address === "string" && valid(address)))].slice(0, 5);
+}
+/** The clip a motion or swap template works from: the one its maker used, else the template's own clip. */
+function referenceVideoOf(t?: Template): string | undefined {
+  const own = t?.settings?.sourceVideo;
+  if (typeof own === "string" && valid(own)) return own;
+  return t && valid(t.previewUrl) ? t.previewUrl : undefined;
+}
+/** Which of the two motion-mode tools a template was made with. */
+const variantOf = (t?: Template): "motion" | "swap" => (t?.settings?.feature === "video-swap" || t?.settings?.variant === "swap" ? "swap" : "motion");
+/** Reads the kept images of a template as files, to send again like the visitor's own. What cannot be read is left out. */
+async function loadInputFiles(addresses: string[]): Promise<File[]> {
+  const files = await Promise.all(
+    addresses.filter(sameOrigin).map(async (address, index) => {
+      try {
+        const response = await fetch(address);
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        if (!["image/png", "image/jpeg", "image/webp"].includes(blob.type)) return null;
+        return new File([blob], `template-image-${index + 1}.${blob.type === "image/jpeg" ? "jpg" : blob.type.slice(6)}`, { type: blob.type });
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return files.filter((file): file is File => file !== null);
+}
+/**
+ * The images attached to a panel, up to a limit. A template that has its own input images puts them here when it is opened
+ * (and takes them away again when another one is), while the visitor's own images stay.
+ */
+function useTemplateImages(t: Template | undefined, limit: number, enabled: boolean) {
+  const { c } = useStudioCopy();
+  const [images, setImages] = useState<AttachedImage[]>([]);
+  const [error, setError] = useState<string | undefined>();
+  const imagesRef = useRef(images);
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+  useEffect(() => () => imagesRef.current.forEach((image) => URL.revokeObjectURL(image.url)), []);
+  const addresses = enabled ? inputImagesOf(t).join("\n") : "";
+  useEffect(() => {
+    let alive = true;
+    void loadInputFiles(addresses ? addresses.split("\n") : []).then((files) => {
+      if (!alive) return;
+      const before = imagesRef.current;
+      const own = before.filter((image) => !image.fromTemplate);
+      before.filter((image) => image.fromTemplate).forEach((image) => URL.revokeObjectURL(image.url));
+      const loaded = files.slice(0, Math.max(0, limit - own.length)).map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), fromTemplate: true }));
+      setImages([...own, ...loaded]);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [addresses, limit]);
+  const attach = (list: FileList | null) => {
+    if (!list) return;
+    // A panel that takes one image swaps it for the new one.
+    const next = limit === 1 ? [] : [...images];
+    let problem: string | undefined;
+    for (const file of Array.from(list)) {
+      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+        problem = c("templates.attach.unsupported");
+        continue;
+      }
+      if (next.length >= limit) {
+        problem = c("templates.attach.tooMany");
+        break;
+      }
+      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) });
+    }
+    images.filter((image) => !next.includes(image)).forEach((image) => URL.revokeObjectURL(image.url));
+    setImages(next);
+    setError(problem);
+  };
+  const detach = (id: string) => {
+    const gone = images.find((image) => image.id === id);
+    if (gone) URL.revokeObjectURL(gone.url);
+    setImages(images.filter((image) => image.id !== id));
+    setError(undefined);
+  };
+  return { images, attach, detach, error };
+}
+
 /**
  * The models the creator offers for one feature, shaped for the model and quality pickers. Nothing is listed until they load
  * (or when the visitor is signed out), and the pickers then fall back to what the templates themselves say.
@@ -915,15 +1012,23 @@ function EditWorkspace({ tool, poster }: { tool: EditToolId; poster?: string }) 
 function useModelPicker(feature: string, enabled = true) {
   const { c } = useStudioCopy();
   const [models, setModels] = useState<GenerationModelOption[]>([]);
+  // Whether the list has been asked for and answered, so "no models" is not shown while it loads.
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
     listGenerationModels(feature)
       .then((list) => {
-        if (alive) setModels(list.filter((m) => m.enabled));
+        if (alive) {
+          setModels(list.filter((m) => m.enabled));
+          setReady(true);
+        }
       })
       .catch(() => {
-        if (alive) setModels([]);
+        if (alive) {
+          setModels([]);
+          setReady(true);
+        }
       });
     return () => {
       alive = false;
@@ -967,7 +1072,12 @@ function useModelPicker(feature: string, enabled = true) {
       Object.keys(properties).find((key) => ["referenceImage", "reference_image", "referenceImages", "reference_images", "image", "image_url"].includes(key));
     return parameter ? { parameter, list: properties[parameter]?.type === "array" } : null;
   };
-  return { options, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, referenceOf, labelOf };
+  // What a swap model can swap (person, object, background), when it has that choice.
+  const modesOf = (id: string): string[] => {
+    const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.mode;
+    return Array.isArray(property?.enum) ? property.enum.filter((value): value is string => value === "person" || value === "object" || value === "background") : [];
+  };
+  return { options, ready, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, referenceOf, modesOf, labelOf };
 }
 
 /**
@@ -1032,47 +1142,82 @@ const creditText = (credits: number | null) => (credits === null ? "" : String(M
 
 function MotionWorkspace({ t }: { t?: Template }) {
   const { c, locale } = useStudioCopy();
-  const [character, setCharacter] = useState<string | null>(null);
-  const [characterFile, setCharacterFile] = useState<File | null>(null);
+  // "Motion transfer" moves the clip's motion onto a character; "Objects swap" puts what the images show in place of a person,
+  // an object or the background of the clip. A template opens in the tool it was made with.
+  const [variant, setVariant] = useState<"motion" | "swap">(variantOf(t));
+  const [seen, setSeen] = useState(t?.id);
+  if (seen !== t?.id) {
+    setSeen(t?.id);
+    setVariant(variantOf(t));
+  }
+  const swapping = variant === "swap";
+  const { images, attach, detach, error: attachError } = useTemplateImages(t, swapping ? 4 : 1, true);
   const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
   const [sceneControl, setSceneControl] = useState(true);
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
-  const [model, setModel] = useState("");
-  const [quality, setQuality] = useState("");
-  const picker = useModelPicker("motion-transfer");
-  const credits = useCreditQuote({ feature: "motion-transfer", model, resolution: quality || undefined });
+  // What was picked in each tool; until something is picked, the model, quality and swap target of the template stand.
+  const [picked, setPicked] = useState<Record<"motion" | "swap", { model: string; quality: string; swapMode: string }>>({
+    motion: { model: "", quality: "", swapMode: "" },
+    swap: { model: "", quality: "", swapMode: "" },
+  });
+  const motionPicker = useModelPicker("motion-transfer");
+  const swapPicker = useModelPicker("video-swap");
+  const picker = swapping ? swapPicker : motionPicker;
+  const mine = picked[variant];
+  const own = t && variantOf(t) === variant ? (t.settings ?? {}) : {};
+  const model = mine.model || (typeof own.model === "string" && picker.options.some((option) => option.id === own.model) ? own.model : "");
+  const qualityChoices = picker.qualitiesOf(model).length ? picker.qualitiesOf(model) : ["720p", "1080p"];
+  const ownQuality = [own.quality, own.resolution].find((value): value is string => typeof value === "string");
+  const quality = mine.quality || (ownQuality && qualityChoices.includes(ownQuality) ? ownQuality : "");
+  const swapModes = swapping ? picker.modesOf(model) : [];
+  const swapMode = mine.swapMode || (typeof own.swapMode === "string" && swapModes.includes(own.swapMode) ? own.swapMode : (swapModes[0] ?? ""));
+  const pick = (patch: Partial<typeof mine>) => setPicked({ ...picked, [variant]: { ...mine, ...patch } });
+  const credits = useCreditQuote({ feature: swapping ? "video-swap" : "motion-transfer", model, resolution: quality || undefined });
   const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => () => { if (character) URL.revokeObjectURL(character); }, [character]);
-  const modelOptions = picker.options;
-  const qualityOptions: FlyoutOption[] = (picker.qualitiesOf(model).length ? picker.qualitiesOf(model) : ["720p", "1080p"]).map((label) => ({ id: label, label }));
-  // Generates right here: the character and the template's reference clip go up as files, then the same request the creator
-  // page sends; the app's progress panel follows the job to the result.
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const reference = referenceVideoOf(t);
+  const qualityOptions: FlyoutOption[] = qualityChoices.map((label) => ({ id: label, label }));
+  // A model with a single image field uses the first image only.
+  const firstOnly = swapping && images.length > 1 && !!model && !swapPicker.referenceOf(model)?.list;
+  // Generates right here: the images and the clip go up as files, then the same request the creator page sends; the app's
+  // progress panel follows the job to the result (it names a swap like a motion transfer).
   const generate = async () => {
-    if (!characterFile) return setSending({ state: "error", message: c("templates.motion.needCharacter") });
-    const reference = t?.previewUrl;
-    if (!t || !reference || !valid(reference)) return setSending({ state: "error", message: c("templates.motion.needReference") });
+    if (!images.length) return setSending({ state: "error", message: c(swapping ? "templates.swap.needImage" : "templates.motion.needCharacter") });
+    if (!t || !reference) return setSending({ state: "error", message: c("templates.motion.needReference") });
     if (!model) return setSending({ state: "error", message: c("templates.composer.pickModel") });
     if (!quality) return setSending({ state: "error", message: c("templates.composer.pickQuality") });
     const requestId = crypto.randomUUID();
     setSending({ state: "busy" });
     emitGenerationSubmitting({ feature: "motion-transfer", requestId });
     try {
-      const sourceImage = await uploadImageAsset(characterFile, { purpose: "content", feature: "motion-transfer" });
-      let motionVideo: string = reference;
-      if (!/^https?:\/\//i.test(motionVideo)) {
-        const response = await fetch(motionVideo);
+      const uploaded = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "motion-transfer" })));
+      let video: string = reference;
+      if (!/^https?:\/\//i.test(video)) {
+        const response = await fetch(video);
         if (!response.ok) throw new Error(c("templates.motion.referenceFailed"));
         const blob = await response.blob();
-        motionVideo = await uploadImageAsset(new File([blob], `${t.slug}.${blob.type.includes("webm") ? "webm" : "mp4"}`, { type: blob.type || "video/mp4" }), { purpose: "content", feature: "motion-transfer" });
+        video = await uploadImageAsset(new File([blob], `${t.slug}.${blob.type.includes("webm") ? "webm" : "mp4"}`, { type: blob.type || "video/mp4" }), { purpose: "content", feature: "motion-transfer" });
       }
-      const created = await createMotionTransferGeneration({
-        sourceImage,
-        motionVideo,
-        model,
-        quality,
-        templateSlug: t.slug,
-        ...(sceneControl ? { characterOrientation: sceneSource } : {}),
-      });
+      const instruction = (promptRef.current?.value ?? "").trim();
+      const created = swapping
+        ? await createVideoSwapGeneration({
+            sourceVideo: video,
+            sourceImages: uploaded,
+            inputImages: uploaded,
+            model,
+            resolution: quality,
+            templateSlug: t.slug,
+            ...(swapMode ? { swapMode: swapMode as "person" | "object" | "background" } : {}),
+            ...(instruction ? { prompt: instruction } : {}),
+          })
+        : await createMotionTransferGeneration({
+            sourceImage: uploaded[0],
+            motionVideo: video,
+            model,
+            quality,
+            templateSlug: t.slug,
+            ...(sceneControl ? { characterOrientation: sceneSource } : {}),
+          });
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
@@ -1087,37 +1232,116 @@ function MotionWorkspace({ t }: { t?: Template }) {
   };
   return (
     <>
+      <div className={s.switch} role="group">
+        {(
+          [
+            ["motion", "templates.composer.motionTransfer"],
+            ["swap", "templates.composer.objectsSwap"],
+          ] as const
+        ).map(([id, key]) => (
+          <button key={id} type="button" aria-pressed={variant === id} onClick={() => { setVariant(id); setSending({ state: "idle" }); }}>
+            {c(key)}
+          </button>
+        ))}
+      </div>
       <div className={s.motionAssets}>
         <div className={s.motionReference}>
           {t && valid(t.thumbnailUrl) ? <Image src={t.thumbnailUrl} alt={name(t, locale)} fill unoptimized sizes="140px" className={s.poster} /> : <Video size={22} />}
-          <span>{t ? name(t, locale) : c("templates.motion.reference")}</span>
-          <button type="button" aria-label={c("templates.card.previewAria", { name: t ? name(t, locale) : c("templates.motion.reference") })} onClick={() => t && window.open(t.previewUrl || t.thumbnailUrl, "_blank", "noopener,noreferrer")}><Expand size={13} /></button>
+          <span>{t ? (swapping ? c("templates.swap.videoLabel") : name(t, locale)) : c("templates.motion.reference")}</span>
+          <button type="button" aria-label={c("templates.card.previewAria", { name: t ? name(t, locale) : c("templates.motion.reference") })} onClick={() => t && window.open(reference || t.thumbnailUrl, "_blank", "noopener,noreferrer")}><Expand size={13} /></button>
         </div>
         <button type="button" className={s.motionCharacter} onClick={() => inputRef.current?.click()}>
-          {character ? <Image src={character} alt={c("templates.motion.character")} fill unoptimized sizes="140px" className={s.poster} /> : <><Plus size={20} /><strong>{c("templates.motion.addCharacter")}</strong><small>{c("templates.motion.characterHint")}</small></>}
+          {images[0] ? (
+            <Image src={images[0].url} alt={c("templates.motion.character")} fill unoptimized sizes="140px" className={s.poster} />
+          ) : (
+            <>
+              <Plus size={20} />
+              <strong>{c(swapping ? "templates.swap.addImages" : "templates.motion.addCharacter")}</strong>
+              <small>{c(swapping ? "templates.swap.imagesHint" : "templates.motion.characterHint")}</small>
+            </>
+          )}
         </button>
       </div>
-      <input ref={inputRef} className={s.visuallyHidden} type="file" accept="image/*" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) { setCharacter(URL.createObjectURL(file)); setCharacterFile(file); setSending({ state: "idle" }); } event.currentTarget.value = ""; }} />
-      <PickerRow label={c("templates.edit.setting.model")} value={model ? picker.labelOf(model) : c("templates.composer.pickModel")} placeholder={!model} heading={c("templates.composer.featuredModels")} empty={c("templates.composer.noModels")} options={modelOptions} selectedId={model} onPick={(id) => { setModel(id); setQuality(""); }} />
-      <PickerRow label={c("templates.edit.setting.quality")} value={quality || c("templates.composer.pickQuality")} placeholder={!quality} heading={c("templates.edit.setting.quality")} empty={c("templates.composer.noModels")} options={qualityOptions} selectedId={quality} onPick={setQuality} />
-      <section className={s.motionSceneControl} data-scene-enabled={sceneControl}>
-        <button type="button" role="switch" aria-checked={sceneControl} onClick={() => setSceneControl((value) => !value)}>
-          <strong>{c("templates.motion.sceneControl")}</strong><i />
-        </button>
-        {sceneControl ? <>
-          <div className={s.motionSourceTabs} role="group" aria-label={c("templates.motion.sourceAria")}>
-            {(["video", "image"] as const).map((source) => <button key={source} type="button" aria-pressed={sceneSource === source} onClick={() => setSceneSource(source)}>{source === "video" ? <Video size={13} /> : <ImagePlus size={13} />}{c(source === "video" ? "templates.motion.sourceVideo" : "templates.motion.sourceImage")}</button>)}
-          </div>
-          <p>{c("templates.motion.sceneHint")}</p>
-        </> : <p>{c("templates.motion.sceneDisabledHint")}</p>}
-      </section>
-      <details className={s.composerAdvanced}>
-        <summary>{c("templates.composer.advanced")}<ChevronDown size={15} aria-hidden="true" /></summary>
-        <dl className={s.composerFacts}>
-          <div><dt>{c("templates.motion.setting.motionStrength")}</dt><dd>100%</dd></div>
-          <div><dt>{c("templates.motion.setting.camera")}</dt><dd>{c("templates.motion.setting.followReference")}</dd></div>
-        </dl>
-      </details>
+      <input
+        ref={inputRef}
+        className={s.visuallyHidden}
+        type="file"
+        multiple={swapping}
+        accept="image/png,image/jpeg,image/webp"
+        onChange={(event) => {
+          attach(event.currentTarget.files);
+          setSending({ state: "idle" });
+          event.currentTarget.value = "";
+        }}
+      />
+      {(swapping || attachError || images.some((image) => image.fromTemplate)) && (
+        <div className={s.motionThumbs}>
+          {swapping && images.map((image) => (
+            <span key={image.id} className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
+              <Image src={image.url} alt={image.file.name} fill unoptimized sizes="46px" />
+              <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
+                <X size={11} aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+          {swapping && images.length > 0 && images.length < 4 && (
+            <button type="button" className={s.slotAdd} onClick={() => inputRef.current?.click()} aria-label={c("templates.attach.add")}>
+              <Plus size={18} aria-hidden="true" />
+            </button>
+          )}
+          <small className={attachError ? s.sendError : undefined} role={attachError ? "alert" : undefined}>
+            {attachError ?? (firstOnly ? c("templates.swap.firstOnly") : images.some((image) => image.fromTemplate) ? c("templates.attach.fromTemplate") : "")}
+          </small>
+        </div>
+      )}
+      {swapping && swapPicker.ready && swapPicker.options.length === 0 && <p className={s.sendError} role="alert">{c("templates.swap.noModels")}</p>}
+      <PickerRow label={c("templates.edit.setting.model")} value={model ? picker.labelOf(model) : c("templates.composer.pickModel")} placeholder={!model} heading={c("templates.composer.featuredModels")} empty={c("templates.composer.noModels")} options={picker.options} selectedId={model} onPick={(id) => pick({ model: id, quality: "", swapMode: "" })} />
+      <PickerRow label={c("templates.edit.setting.quality")} value={quality || c("templates.composer.pickQuality")} placeholder={!quality} heading={c("templates.edit.setting.quality")} empty={c("templates.composer.noModels")} options={qualityOptions} selectedId={quality} onPick={(id) => pick({ quality: id })} />
+      {swapping ? (
+        <>
+          {swapModes.length > 0 && (
+            <section className={s.motionSceneControl} data-scene-enabled="true" style={{ height: "auto" }}>
+              <strong>{c("templates.swap.modeLabel")}</strong>
+              <div className={s.motionSourceTabs} role="group" aria-label={c("templates.swap.modeLabel")}>
+                {swapModes.map((id) => (
+                  <button key={id} type="button" aria-pressed={swapMode === id} onClick={() => pick({ swapMode: id })}>
+                    {c(`templates.swap.mode.${id}` as StudioCopyKey)}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+          <textarea
+            key={`${t?.id}-${locale}`}
+            ref={promptRef}
+            className={s.composerPrompt}
+            defaultValue={t && variantOf(t) === "swap" ? promptOf(t, locale) : ""}
+            placeholder={c("templates.swap.promptPlaceholder")}
+            aria-label={c("templates.composer.prompt")}
+          />
+        </>
+      ) : (
+        <>
+          <section className={s.motionSceneControl} data-scene-enabled={sceneControl}>
+            <button type="button" role="switch" aria-checked={sceneControl} onClick={() => setSceneControl((value) => !value)}>
+              <strong>{c("templates.motion.sceneControl")}</strong><i />
+            </button>
+            {sceneControl ? <>
+              <div className={s.motionSourceTabs} role="group" aria-label={c("templates.motion.sourceAria")}>
+                {(["video", "image"] as const).map((source) => <button key={source} type="button" aria-pressed={sceneSource === source} onClick={() => setSceneSource(source)}>{source === "video" ? <Video size={13} /> : <ImagePlus size={13} />}{c(source === "video" ? "templates.motion.sourceVideo" : "templates.motion.sourceImage")}</button>)}
+              </div>
+              <p>{c("templates.motion.sceneHint")}</p>
+            </> : <p>{c("templates.motion.sceneDisabledHint")}</p>}
+          </section>
+          <details className={s.composerAdvanced}>
+            <summary>{c("templates.composer.advanced")}<ChevronDown size={15} aria-hidden="true" /></summary>
+            <dl className={s.composerFacts}>
+              <div><dt>{c("templates.motion.setting.motionStrength")}</dt><dd>100%</dd></div>
+              <div><dt>{c("templates.motion.setting.camera")}</dt><dd>{c("templates.motion.setting.followReference")}</dd></div>
+            </dl>
+          </details>
+        </>
+      )}
       <div className={s.motionGenerateDock}>
         <button type="button" disabled={sending.state === "busy"} onClick={() => void generate()}>
           {sending.state === "busy" ? c("templates.composer.sending") : c("templates.edit.generate")} <Sparkles size={15} />{creditText(credits)}
@@ -1260,7 +1484,7 @@ function PickerRow({
  * quality rows, the rest of the settings folded under "Advanced", and the button that opens it in the creator.
  */
 /** An image attached in the optional card, with its preview address. */
-type AttachedImage = { id: string; file: File; url: string };
+type AttachedImage = { id: string; file: File; url: string; /** Put there by a template, not picked by the visitor. */ fromTemplate?: boolean };
 
 function Composer({
   t,
@@ -1295,7 +1519,6 @@ function Composer({
   const [pickingEditTool, setPickingEditTool] = useState(false);
   const [editToolId, setEditToolId] = useState<EditToolId | null>(null);
   const [pickQuery, setPickQuery] = useState("");
-  const [variant, setVariant] = useState<"motion" | "swap">("motion");
   const [showPrompt, setShowPrompt] = useState(true);
   const [useFree, setUseFree] = useState(false);
   // What was picked in the two lists; for now it only changes what the rows show.
@@ -1310,38 +1533,12 @@ function Composer({
   const flowImageModel = flow.imageModel || (typeof t?.settings?.imageModel === "string" ? t.settings.imageModel : "");
   const flowVideoModel = flow.videoModel || (typeof t?.settings?.model === "string" ? t.settings.model : "");
   // Reference images attached in the optional card (up to five), sent with the video request when the model takes them.
-  const [images, setImages] = useState<AttachedImage[]>([]);
-  const [attachError, setAttachError] = useState<string | undefined>();
+  // The images a template was made with start in it.
+  const { images, attach: attachImages, detach, error: attachError } = useTemplateImages(t, 5, !isWorkflow);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imagesRef = useRef(images);
-  useEffect(() => {
-    imagesRef.current = images;
-  }, [images]);
-  useEffect(() => () => imagesRef.current.forEach((image) => URL.revokeObjectURL(image.url)), []);
   const attach = (list: FileList | null) => {
-    if (!list) return;
-    const next = [...images];
-    let error: string | undefined;
-    for (const file of Array.from(list)) {
-      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
-        error = c("templates.attach.unsupported");
-        continue;
-      }
-      if (next.length >= 5) {
-        error = c("templates.attach.tooMany");
-        break;
-      }
-      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) });
-    }
-    setImages(next);
-    setAttachError(error);
+    attachImages(list);
     setSending({ state: "idle" });
-  };
-  const detach = (id: string) => {
-    const gone = images.find((image) => image.id === id);
-    if (gone) URL.revokeObjectURL(gone.url);
-    setImages(images.filter((image) => image.id !== id));
-    setAttachError(undefined);
   };
   // The price follows the model and quality the panel shows: picked here, else the template's own.
   const quoteModel = t && picks.templateId === t.id && picks.model ? picks.model : typeof t?.settings?.model === "string" ? t.settings.model : "";
@@ -1385,6 +1582,8 @@ function Composer({
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
         // Model-specific inputs go in modelParams: the server only forwards those to the model (a top-level field is dropped).
         request.modelParams = { ...(request.modelParams ?? {}), [reference.parameter]: reference.list ? urls : urls[0] };
+        // Kept with the clip, so it can become a template with the images it was made from.
+        request.inputImages = urls;
       }
       const created = await createTextVideoGeneration(request);
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
@@ -1511,21 +1710,7 @@ function Composer({
       )}
     </div>
   );
-  // As in the example: a two-way switch under the banner and a row that applies a style. Both are the layout only for now.
-  const variantSwitch = (
-    <div className={s.switch} role="group">
-      {(
-        [
-          ["motion", "templates.composer.motionTransfer"],
-          ["swap", "templates.composer.objectsSwap"],
-        ] as const
-      ).map(([id, key]) => (
-        <button key={id} type="button" aria-pressed={variant === id} onClick={() => setVariant(id)}>
-          {c(key)}
-        </button>
-      ))}
-    </div>
-  );
+  // As in the example: a row that applies a style (the layout only for now).
   const styleRow = (
     <div className={s.styleRow}>
       <span
@@ -1590,8 +1775,7 @@ function Composer({
       <aside className={s.composer} aria-label={c("templates.composer.aria")}>
         {tabs}
         {banner}
-        {variantSwitch}
-        {variant === "motion" && styleRow}
+        {styleRow}
         <p className={s.composerEmpty}>{c("templates.composer.empty")}</p>
       </aside>
     );
@@ -1632,8 +1816,7 @@ function Composer({
     <aside className={s.composer} aria-label={c("templates.composer.aria")}>
       {tabs}
       {banner}
-      {variantSwitch}
-      {variant === "motion" && styleRow}
+      {styleRow}
       <div className={s.composerStage}>
         <button type="button" className={s.cardClose} onClick={onClear} aria-label={c("templates.composer.remove")}>
           <X size={14} aria-hidden="true" />
@@ -1648,6 +1831,7 @@ function Composer({
             <strong>{name(t, locale)}</strong>
             <small>
               {t.category} · {t.format}
+              {t.source === "community" && t.authorName ? ` · ${t.authorName}` : ""}
             </small>
           </span>
         </button>
@@ -1669,14 +1853,14 @@ function Composer({
           }}
         />
         {images.map((image) => (
-          <span key={image.id} className={s.slotFile} title={image.file.name}>
+          <span key={image.id} className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
             <Image src={image.url} alt={image.file.name} fill unoptimized sizes="46px" />
             <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
               <X size={11} aria-hidden="true" />
             </button>
           </span>
         ))}
-        <small className={attachError ? s.sendError : undefined} role={attachError ? "alert" : undefined}>{attachError ?? c("templates.attach.hint")}</small>
+        <small className={attachError ? s.sendError : undefined} role={attachError ? "alert" : undefined}>{attachError ?? (images.some((image) => image.fromTemplate) ? c("templates.attach.fromTemplate") : c("templates.attach.hint"))}</small>
       </div>}
       <section className={s.composerBlock}>
         <div className={s.composerLabel}>
@@ -1694,11 +1878,10 @@ function Composer({
         </div>
         {showPrompt && (
           <textarea
-            key={`${t.id}-${variant}-${locale}`}
+            key={`${t.id}-${locale}`}
             ref={promptRef}
             className={s.composerPrompt}
-            // "Motion transfer" starts from the template's prompt; "Objects swap" starts empty, with the grey example.
-            defaultValue={variant === "motion" ? promptOf(t, locale) : ""}
+            defaultValue={promptOf(t, locale)}
             placeholder={c("templates.composer.promptPlaceholder")}
             aria-label={c("templates.composer.prompt")}
           />
@@ -1864,7 +2047,7 @@ function LibraryHero({ mode, items }: { mode: Mode; items: Template[] }) {
 const modeFeatures: Record<Mode, string[]> = {
   create: ["text-to-video", "image-to-video"],
   edit: ["extend-video", "lipsync", "people-video"],
-  motion: ["motion-transfer"],
+  motion: ["motion-transfer", "video-swap"],
 };
 
 /** Sent when a workflow run starts, so the History tab shows it and follows it. */
@@ -1884,8 +2067,10 @@ const modeCover: Record<Mode, string> = {
  */
 /** The address of the template made from a clip, so a clip that already became a template can be recognised. */
 const workSlug = (id: string) => `work-${id.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`.slice(0, 80);
+/** What the page needs to know about a template just saved from a clip. */
+type SavedTemplate = { slug: string; title: string; coverFailed?: boolean; assetsFailed?: boolean };
 
-function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: (saved: { slug: string; title: string; coverFailed?: boolean }) => void }) {
+function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: (saved: SavedTemplate) => void }) {
   const { c } = useStudioCopy();
   const prompt = item.prompt?.trim() ?? "";
   const [title, setTitle] = useState((prompt || item.title).slice(0, 80));
@@ -1896,7 +2081,7 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
     if (!title.trim()) return setState({ busy: false, error: c("templates.save.needTitle") });
     setState({ busy: true });
     try {
-      const tab = ["image-to-video", "text-to-video", "people-video", "motion-transfer", "lipsync", "extend-video"].includes(item.feature) ? item.feature : "text-to-video";
+      const tab = ["image-to-video", "text-to-video", "people-video", "motion-transfer", "video-swap", "lipsync", "extend-video"].includes(item.feature) ? item.feature : "text-to-video";
       const slug = workSlug(item.id);
       const created = await createAdminTemplate({
         slug,
@@ -1904,11 +2089,13 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
         description: (description.trim() || title.trim()).slice(0, 240),
         category: category.trim().slice(0, 40) || modeCategory[mode],
         kind: "video",
+        // Saved from a member's own clip, so it is listed with the community's templates.
+        source: "community",
         format: "Video",
         // A stand-in until the server has cut the real cover from the clip below.
         thumbnailUrl: modeCover[mode],
         previewUrl: item.outputUrl ?? "",
-        targetPath: `/create/video?tab=${tab}&template=${slug}`,
+        targetPath: `/create/video?tab=${tab === "video-swap" ? "motion-transfer" : tab}&template=${slug}`,
         prompt,
         tags: [],
         featured: false,
@@ -1918,7 +2105,9 @@ function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryI
       });
       // The cover is a frame of the clip, cut and kept by the server. If that fails the template still exists, with the stand-in.
       const coverFailed = await createTemplateCoverFromPreview(created.id).then(() => false).catch(() => true);
-      onCreated({ slug, title: title.trim(), coverFailed });
+      // The images and the clip it started from are provider links that expire in a week; the server keeps copies.
+      const assetsFailed = await keepTemplateAssets(created.id).then(() => false).catch(() => true);
+      onCreated({ slug, title: title.trim(), coverFailed, assetsFailed });
       onClose();
     } catch (error) {
       // A clip that was already saved once: the template exists, so treat it as saved rather than as a failure.
@@ -1977,12 +2166,12 @@ function MyVideos({
   mode: Mode;
   /** The addresses of every template in the library, to tell which clips already became one. */
   savedSlugs: Set<string>;
-  onTemplateCreated: (saved: { slug: string; title: string; coverFailed?: boolean }) => void;
+  onTemplateCreated: (saved: SavedTemplate) => void;
   onUseSaved: (slug: string) => void;
   onOpenLibrary?: () => void;
 }) {
   const { c } = useStudioCopy();
-  const [justSaved, setJustSaved] = useState<{ slug: string; title: string; coverFailed?: boolean } | null>(null);
+  const [justSaved, setJustSaved] = useState<SavedTemplate | null>(null);
   const [videos, setVideos] = useState<HistoryItem[]>([]);
   const [pending, setPending] = useState<HistoryItem[]>([]);
   const [runs, setRuns] = useState<TemplateWorkflowRun[]>([]);
@@ -2030,7 +2219,7 @@ function MyVideos({
         <div className={s.savedNote} role="status">
           <span>
             {c("templates.save.done", { name: justSaved.title })}
-            {justSaved.coverFailed ? ` · ${c("templates.save.coverFailed")}` : ""}
+            {justSaved.coverFailed ? ` · ${c("templates.save.coverFailed")}` : ""}{justSaved.assetsFailed ? ` · ${c("templates.save.assetsFailed")}` : ""}
           </span>
           <button type="button" onClick={() => onUseSaved(justSaved.slug)}>{c("templates.save.use")}</button>
           {onOpenLibrary && <button type="button" onClick={onOpenLibrary}>{c("templates.save.openLibrary")}</button>}
@@ -2129,6 +2318,7 @@ function HistoryPanel({
   onLibrary,
   savedSlugs,
   onUseSaved,
+  onOpenSaved,
   onTemplateCreated,
 }: {
   mode: Mode;
@@ -2142,6 +2332,8 @@ function HistoryPanel({
   savedSlugs: Set<string>;
   /** Puts a saved template on the left panel, ready to use. */
   onUseSaved: (slug: string) => void;
+  /** Opens the community's list, where a clip just saved as a template is. */
+  onOpenSaved: () => void;
   /** Called after a finished video was saved as a template, so the library can reload. */
   onTemplateCreated: (saved: { slug: string; title: string }) => void;
 }) {
@@ -2152,7 +2344,7 @@ function HistoryPanel({
   if (recent.length)
     return (
       <>
-        <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={onLibrary} />
+        <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={mode === "edit" ? undefined : onOpenSaved} />
         <section>
           <div className={s.libraryTitle}>
             <h2>{c("templates.history.recent")}</h2>
@@ -2167,7 +2359,7 @@ function HistoryPanel({
     );
   return (
     <>
-    <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={onLibrary} />
+    <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={mode === "edit" ? undefined : onOpenSaved} />
     <section className={s.invite}>
       <div className={s.inviteBanner}>
         <small>{c(hero.tag)}</small>
@@ -2443,6 +2635,16 @@ function rememberTemplate(t: Template): Template[] {
   return next;
 }
 const skeletonHeights = [210, 150, 260, 180, 230, 140, 200, 170, 250, 160];
+/** One input image of a template in its details; one that no longer loads (an expired link) is left out. */
+function AssetThumb({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <span className={s.clipAsset}>
+      <Image src={src} alt="" fill unoptimized sizes="64px" onError={() => setFailed(true)} />
+    </span>
+  );
+}
 function Preview({ t, close }: { t: Template; close: () => void }) {
   const { c, locale } = useStudioCopy();
   const ref = useRef<HTMLDialogElement>(null);
@@ -2458,6 +2660,7 @@ function Preview({ t, close }: { t: Template; close: () => void }) {
     };
   }, []);
   const settings = t.settings ?? {};
+  const inputAssets = inputImagesOf(t);
   const videoSrc = t.kind === "video"
     ? (valid(t.previewUrl) ? t.previewUrl : t.slug === "training-video" ? "/generated-videos/cinematic-trailer.webm" : "/generated-videos/ai-presenter.webm")
     : undefined;
@@ -2501,10 +2704,19 @@ function Preview({ t, close }: { t: Template; close: () => void }) {
             <>
               <div className={s.clipDetailsHeading}><Info size={14} />{c("templates.preview.clipDetails")}</div>
               <dl className={s.clipDetails}>
-                <div><dt>{c("templates.preview.clipSource")}</dt><dd>{c("templates.preview.clipTemplate")}</dd></div>
+                <div><dt>{c("templates.preview.clipSource")}</dt><dd>{t.source === "community" ? c("templates.source.community") : c("templates.preview.clipTemplate")}</dd></div>
+                {t.authorName && <div><dt>{c("templates.preview.clipAuthor")}</dt><dd>{t.authorName}</dd></div>}
                 <div><dt>{c("templates.preview.clipType")}</dt><dd>{c(kindKeys.video)}</dd></div>
                 <div><dt>{c("templates.preview.clipFormat")}</dt><dd>{videoFormat}</dd></div>
               </dl>
+              {inputAssets.length > 0 && (
+                <>
+                  <div className={s.clipDetailsHeading}><ImagePlus size={14} />{c("templates.preview.inputAssets")}</div>
+                  <div className={s.clipAssets}>
+                    {inputAssets.map((address) => <AssetThumb key={address} src={address} />)}
+                  </div>
+                </>
+              )}
               <div className={s.clipActions}>
                 {valid(t.targetPath) && t.targetPath.startsWith("/") && (
                   <Link href={templateHref(t)} className={s.clipEdit}><Pencil size={15} />{c("templates.preview.clipEdit")}</Link>
@@ -2595,7 +2807,7 @@ export function TemplatesPageClient() {
   const [q, setQ] = useState(""),
     [mode, setMode] = useState<Mode>(DEFAULT_MODE),
     [category, setCategory] = useState("all"),
-    [sort, setSort] = useState<SortId>("recommended"),
+    [lane, setLane] = useState<Lane>("eos"),
     [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<TemplatePagination>({ page: 1, limit: 24, total: 0, totalPages: 1 }),
     [loading, setLoading] = useState(true),
@@ -2605,7 +2817,8 @@ export function TemplatesPageClient() {
     [selectedId, setSelectedId] = useState<string | null>(null),
     [panel, setPanel] = useState<"history" | "library" | "styles" | "how">("history"),
     [style, setStyle] = useState<StyleChoice | null>(null),
-    [recent, setRecent] = useState<Template[]>([]);
+    [recent, setRecent] = useState<Template[]>([]),
+    [community, setCommunity] = useState<Template[]>([]);
   // What was opened lately is read once the page is in the browser.
   useEffect(() => {
     const timer = window.setTimeout(() => setRecent(readRecent()), 0);
@@ -2617,7 +2830,7 @@ export function TemplatesPageClient() {
       () => {
         setLoading(true);
         setError(false);
-        listTemplates({ search: q, category, sort, page, limit: 24, signal: c.signal })
+        listTemplates({ search: q, category, ...laneQuery[lane], page, limit: 24, signal: c.signal })
           .then((r) => {
             if (c.signal.aborted) return;
             setItems(r.templates);
@@ -2636,7 +2849,15 @@ export function TemplatesPageClient() {
       c.abort();
       clearTimeout(timer);
     };
-  }, [q, category, sort, page, retry]);
+  }, [q, category, lane, page, retry]);
+  // The community's templates, so a clip that already became one is recognised whichever list is open.
+  useEffect(() => {
+    const controller = new AbortController();
+    listTemplates({ source: "community", sort: "newest", limit: 50, signal: controller.signal })
+      .then((r) => setCommunity(r.templates))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [retry]);
   // The first work on the page is the chosen one until a tile is clicked.
   const ofMode = items.filter((t) => {
     if (mode === "create") return t.kind === "video" && modeOf(t) === "create";
@@ -2673,7 +2894,7 @@ export function TemplatesPageClient() {
   const reset = () => {
     setQ("");
     setCategory("all");
-    setSort("recommended");
+    setLane("eos");
     setRetry((n) => n + 1);
     change();
   };
@@ -2698,6 +2919,28 @@ export function TemplatesPageClient() {
         ? [tabHistory, tabHow]
         : [tabHistory, tabLibrary, tabStyles, tabHow];
   const activePanel = panelTabs.some(([id]) => id === panel) ? panel : mode === "motion" ? "how" : "history";
+  // The three lists of the library; the motion gallery has them too.
+  const laneToolbar = (
+      <section className={s.toolbar} aria-label={c("templates.filtersAria")}>
+        <div className={s.tabs}>
+          {laneOptions.map(([id, key, LaneIcon]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={lane === id}
+              onClick={() => {
+                if (lane === id) return;
+                setLane(id);
+                change();
+              }}
+            >
+              <LaneIcon size={14} aria-hidden="true" />
+              {c(key)}
+            </button>
+          ))}
+        </div>
+      </section>
+  );
   const libraryBody = loading ? (
     <div role="status" aria-label={c("templates.loading")} className={s.masonry}>
       {skeletonHeights.map((h, i) => (
@@ -2766,7 +3009,10 @@ export function TemplatesPageClient() {
             </div>
           </div>
           {activePanel === "how" ? (
-            <HowItWorks key={mode} mode={mode} items={visible} onSelect={(item) => setSelectedId(item.id)} />
+            <>
+              {mode === "motion" && laneToolbar}
+              <HowItWorks key={mode} mode={mode} items={visible} onSelect={(item) => setSelectedId(item.id)} />
+            </>
           ) : activePanel === "history" ? (
             <HistoryPanel
               mode={mode}
@@ -2775,10 +3021,18 @@ export function TemplatesPageClient() {
               onSelect={(t) => setSelectedId(t.id)}
               onExpand={setPreview}
               onLibrary={mode === "edit" ? undefined : () => setPanel("library")}
-              savedSlugs={new Set(items.map((item) => item.slug))}
+              savedSlugs={new Set([...items, ...community].map((item) => item.slug))}
               onUseSaved={(slug) => {
-                const found = items.find((item) => item.slug === slug);
-                if (found) setSelectedId(found.id);
+                const found = [...items, ...community].find((item) => item.slug === slug);
+                if (found) {
+                  setRecent(rememberTemplate(found));
+                  setSelectedId(found.id);
+                }
+              }}
+              onOpenSaved={() => {
+                setLane("communityNew");
+                setPage(1);
+                setPanel("library");
               }}
               onTemplateCreated={() => setRetry((n) => n + 1)}
             />
@@ -2787,28 +3041,7 @@ export function TemplatesPageClient() {
           ) : (
             <>
               <LibraryHero mode={mode} items={visible} />
-              <section className={s.toolbar} aria-label={c("templates.filtersAria")}>
-                <div className={s.tabs}>
-                  {sortOptions.map(([id, key]) => (
-                    <button
-                      key={id}
-                      type="button"
-                      aria-pressed={sort === id}
-                      onClick={() => {
-                        if (sort === id) return;
-                        setSort(id);
-                        change();
-                      }}
-                    >
-                      {(() => {
-                        const SortIcon = sortIcons[id];
-                        return <SortIcon size={14} aria-hidden="true" />;
-                      })()}
-                      {c(key)}
-                    </button>
-                  ))}
-                </div>
-              </section>
+              {laneToolbar}
               {libraryBody}
               {!loading && !error && pagination.totalPages > 1 && (
                 <nav className={s.pagination} aria-label={c("templates.paginationAria")}>

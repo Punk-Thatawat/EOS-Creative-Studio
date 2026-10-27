@@ -1,6 +1,7 @@
 import { getApiAccessToken } from "@/lib/auth/access-token";
 
 export type TemplateKind = "image" | "video" | "audio" | "document";
+export type TemplateSource = "official" | "community";
 
 export type CreativeTemplate = {
   settings?: Record<string, unknown>;
@@ -21,6 +22,10 @@ export type CreativeTemplate = {
   promptTh?: string;
   /** How many people liked it. */
   likeCount?: number;
+  /** Made by EOS, or saved from a member's own clip. */
+  source?: TemplateSource;
+  /** Who made it; empty when not known. */
+  authorName?: string;
   tags: string[];
   featured: boolean;
   createdAt: string;
@@ -40,11 +45,12 @@ async function getErrorMessage(response: Response): Promise<string> {
   return payload?.message ?? "Template request failed";
 }
 
-export async function listTemplates(options: { search?: string; category?: string; kind?: TemplateKind | "all"; limit?: number; page?: number; sort?: "recommended" | "popular" | "newest"; signal?: AbortSignal } = {}): Promise<{ templates: CreativeTemplate[]; categories: string[]; pagination?: TemplatePagination }> {
+export async function listTemplates(options: { search?: string; category?: string; kind?: TemplateKind | "all"; source?: TemplateSource; limit?: number; page?: number; sort?: "recommended" | "popular" | "newest"; signal?: AbortSignal } = {}): Promise<{ templates: CreativeTemplate[]; categories: string[]; pagination?: TemplatePagination }> {
   const params = new URLSearchParams();
   if (options.search?.trim()) params.set("q", options.search.trim());
   if (options.category && options.category !== "all") params.set("category", options.category);
   if (options.kind && options.kind !== "all") params.set("kind", options.kind);
+  if (options.source) params.set("source", options.source);
   if (options.limit) params.set("limit", String(options.limit));
   if (options.page) params.set("page", String(options.page));
   if (options.sort) params.set("sort", options.sort);
@@ -85,6 +91,7 @@ export type TemplateAdminInput = {
   descriptionTh?: string;
   category: string;
   kind: TemplateKind;
+  source?: TemplateSource;
   format: string;
   thumbnailUrl: string;
   targetPath: string;
@@ -111,6 +118,13 @@ export async function createAdminTemplate(input: TemplateAdminInput): Promise<Ad
 export async function createTemplateCoverFromPreview(id: string): Promise<AdminCreativeTemplate> {
   const payload = await adminRequest(`/admin/templates/${encodeURIComponent(id)}/cover-from-preview`, { method: "POST" }) as AdminCreativeTemplate | undefined;
   if (!payload) throw new Error("The cover could not be made");
+  return payload;
+}
+
+/** The server copies the images and clip the template starts from into its own storage (provider links expire in 7 days). */
+export async function keepTemplateAssets(id: string): Promise<AdminCreativeTemplate> {
+  const payload = await adminRequest(`/admin/templates/${encodeURIComponent(id)}/keep-assets`, { method: "POST" }) as AdminCreativeTemplate | undefined;
+  if (!payload) throw new Error("The files could not be kept");
   return payload;
 }
 

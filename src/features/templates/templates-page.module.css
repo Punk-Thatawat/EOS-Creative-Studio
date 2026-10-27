@@ -2748,3 +2748,29 @@
     height: calc(100dvh - 80px);
   }
 }
+
+/* Who made a community template, on its tile. */
+.tileAuthor {
+  position: absolute;
+  top: 42px;
+  left: 12px;
+  z-index: 1;
+  max-width: calc(100% - 64px);
+  overflow: hidden;
+  background: #171719c9;
+  padding: 3px 8px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* An image the template brought, as opposed to one the visitor picked. */
+.slotFromTemplate { outline: 2px solid #f26b38; outline-offset: -2px; }
+.motionThumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 2px; }
+.motionThumbs small { flex-basis: 100%; font-size: 11px; line-height: 1.5; color: #ffffff80; }
+.motionThumbs small:empty { display: none; }
+.motionThumbs small.sendError { color: #ff8a80; }
+/* The images a template starts from, in its details. */
+.clipAssets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; background: #26282a; }
+.clipAsset img { width: 100%; height: 100%; object-fit: cover; }
