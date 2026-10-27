@@ -643,12 +643,19 @@
 }
 .styleName {
   display: flex;
+  flex: 1;
   min-width: 0;
   flex-direction: column;
   align-items: flex-start;
   gap: 1px;
   font-size: 15px;
   font-weight: 700;
+}
+.styleName strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .styleName small {
   font-size: 12px;
@@ -2568,12 +2575,14 @@
 .videoPreviewDialog::backdrop { background: #000b; }
 .videoPreviewDialog .previewLayout { grid-template-columns: minmax(0, 1fr) 368px; gap: 0; height: 100%; min-height: 0; padding: 0; }
 .videoPreviewDialog .artworkPane { background: #050607; }
-.videoPreviewInfo { min-height: 0; margin: 8px; border-radius: 0; background: #191b1d; padding: 56px 16px 16px; color: #f5f5f6; }
+.videoPreviewInfo { min-height: 0; margin: 8px; overflow: hidden; border-radius: 0; background: #191b1d; padding: 56px 16px 16px; color: #f5f5f6; }
+/* The details scroll when the window is short; the buttons stay at the bottom, always in view. */
+.clipScroll { min-height: 0; flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px 12px; }
 .videoPreviewDialog .previewClose { border-color: #ffffff12; background: #292b2d; color: #fff; }
 .clipPlayer { display: flex; width: 100%; height: 100%; min-width: 0; min-height: 0; flex-direction: column; background: #050607; }
 .clipVideoStage { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; overflow: hidden; }
 .clipVideo { display: block; width: 100%; height: 100%; object-fit: contain; background: #050607; }
-.clipSeek { --clip-progress: 0%; appearance: none; width: calc(100% - 24px); height: 6px; flex: none; margin: 8px 12px 0; border-radius: 999px; background: linear-gradient(to right, #d5ff00 var(--clip-progress), #55585a var(--clip-progress)); cursor: pointer; }
+.clipSeek { --clip-progress: 0%; appearance: none; width: calc(100% - 24px); height: 6px; flex: none; margin: 8px 12px 0; border-radius: 999px; background: linear-gradient(to right, #f26b38 var(--clip-progress), #55585a var(--clip-progress)); cursor: pointer; }
 .clipSeek::-webkit-slider-thumb { appearance: none; width: 5px; height: 12px; border: 0; border-radius: 0; background: #fff; }
 .clipSeek::-moz-range-thumb { width: 5px; height: 12px; border: 0; border-radius: 0; background: #fff; }
 .clipControls { display: grid; min-height: 52px; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 12px; color: #f5f5f6; }
@@ -2587,12 +2596,16 @@
 .clipDetails > div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
 .clipDetails dt { color: #ffffff80; }
 .clipDetails dd { margin: 0; color: #fff; font-weight: 650; text-align: right; overflow-wrap: anywhere; }
-.clipActions { margin-top: auto; padding-top: 18px; }
-.clipEdit, .clipActionGrid > button, .clipActionGrid > a { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 0; background: #26282a; color: #f5f5f6; font-size: 12px; font-weight: 650; text-decoration: none; }
-.clipEdit { min-height: 46px; margin-bottom: 8px; border: 0; background: #f26b38; color: #fff; }
-.clipActionGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.clipActions { flex: none; margin-top: auto; padding-top: 12px; }
+.clipEdit, .clipActionGrid > button, .clipActionGrid > a { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 0; background: #1f2022; box-shadow: inset 0 0 0 1px #34363a; color: #fff; font-size: 12px; font-weight: 650; text-decoration: none; }
+.clipEdit { width: 100%; min-height: 46px; margin-bottom: 10px; border: 0; background: #f26b38; box-shadow: 0 3px 0 #a9440f; color: #fff; cursor: pointer; font-family: inherit; }
+.clipEdit:hover { background: #ff7a45; }
+.clipActionGrid { display: grid; grid-template-columns: minmax(0, 1fr) 46px 46px; gap: 7px; }
+.clipActionGrid:has(> :nth-child(2):last-child) { grid-template-columns: minmax(0, 1fr) 46px; }
+.clipActionGrid > button { cursor: pointer; }
+.clipActionGrid > button[aria-pressed="true"] { color: #f26b38; }
 .clipActionGrid > button:disabled { cursor: default; opacity: .58; }
-.clipActionGrid > a:hover, .clipActionGrid > button:not(:disabled):hover { background: #343638; }
+.clipActionGrid > a:hover, .clipActionGrid > button:not(:disabled):hover { background: #2a2c2f; }
 .previewEyebrow {
   color: #cf490b;
   font-size: 11px;
@@ -2687,7 +2700,8 @@
   .dialog.videoPreviewDialog { width: 100vw; height: 100dvh; border-radius: 0; overflow: auto; }
   .videoPreviewDialog .previewLayout { height: auto; min-height: 100%; grid-template-columns: 1fr; gap: 8px; padding: 0; }
   .clipPlayer { min-height: 58dvh; }
-  .videoPreviewInfo { min-height: 310px; border-radius: 0; }
+  .videoPreviewInfo { min-height: 310px; overflow: visible; border-radius: 0; }
+  .clipScroll { overflow: visible; }
   .artworkPane {
     height: 43dvh;
     min-height: 220px;
@@ -2774,3 +2788,4 @@
 .clipAssets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
 .clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; background: #26282a; }
 .clipAsset img { width: 100%; height: 100%; object-fit: cover; }
+.clipShared { margin: 8px 0 0; font-size: 12px; color: #ffb08f; }

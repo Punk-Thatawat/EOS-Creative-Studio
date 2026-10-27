@@ -38,6 +38,7 @@ import {
   Plus,
   ScanLine,
   Search,
+  Share2,
   SlidersHorizontal,
   Square,
   Sparkles,
@@ -1734,7 +1735,7 @@ function Composer({
       />
       <span className={s.styleName}>
         <small>{c("templates.composer.style")}</small>
-        <strong>{style ? style.name : c("templates.composer.styleNone")}</strong>
+        <strong title={style?.name}>{style ? style.name : c("templates.composer.styleNone")}</strong>
       </span>
       <button type="button" className={s.styleChange} onClick={onChangeStyle}>
         {c("templates.composer.styleChange")}
@@ -2089,6 +2090,38 @@ const modeCover: Record<Mode, string> = {
  * admin role, so anyone else gets the server's refusal as the message.
  */
 /** The address of the template made from a clip, so a clip that already became a template can be recognised. */
+const favoriteWorksKey = "eos.templates.favorite-works";
+function readFavoriteWorks(): Set<string> {
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(favoriteWorksKey) ?? "[]");
+    return new Set(Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+/** A clip of the member's own, shaped like a template so the details panel can show it. Its id says it is not a library template. */
+const WORK_ID = "mine:";
+function templateOfWork(item: HistoryItem): Template {
+  const settings = item.settings ?? {};
+  return {
+    id: `${WORK_ID}${item.id}`,
+    slug: workSlug(item.id),
+    title: item.title,
+    description: item.prompt ?? "",
+    category: "Video",
+    kind: "video",
+    format: "Video",
+    thumbnailUrl: "",
+    previewUrl: item.outputUrl,
+    targetPath: "",
+    prompt: item.prompt ?? "",
+    tags: [],
+    featured: false,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    settings: { ...settings, ...(item.model && !settings.model ? { model: item.model } : {}), ...(item.durationSeconds && !settings.duration ? { duration: item.durationSeconds } : {}) },
+  };
+}
 const workSlug = (id: string) => `work-${id.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`.slice(0, 80);
 /** What the page needs to know about a template just saved from a clip. */
 type SavedTemplate = { slug: string; title: string; coverFailed?: boolean; assetsFailed?: boolean };
@@ -2185,6 +2218,7 @@ function MyVideos({
   onTemplateCreated,
   onUseSaved,
   onOpenLibrary,
+  onDetails,
 }: {
   mode: Mode;
   /** The addresses of every template in the library, to tell which clips already became one. */
@@ -2192,6 +2226,8 @@ function MyVideos({
   onTemplateCreated: (saved: SavedTemplate) => void;
   onUseSaved: (slug: string) => void;
   onOpenLibrary?: () => void;
+  /** Opens the details of one of the member's own clips. */
+  onDetails: (t: Template) => void;
 }) {
   const { c } = useStudioCopy();
   const [justSaved, setJustSaved] = useState<SavedTemplate | null>(null);
@@ -2230,6 +2266,19 @@ function MyVideos({
       window.removeEventListener(workflowEvent, load);
     };
   }, [mode]);
+  // The player's full-screen button opens the clip's details instead, as the zoom button on the library cards does.
+  useEffect(() => {
+    const opened = () => {
+      const element = document.fullscreenElement;
+      const id = element instanceof HTMLVideoElement ? element.dataset.workId : undefined;
+      const item = id ? videos.find((video) => video.id === id) : undefined;
+      if (!item) return;
+      void document.exitFullscreen().catch(() => undefined);
+      onDetails(templateOfWork(item));
+    };
+    document.addEventListener("fullscreenchange", opened);
+    return () => document.removeEventListener("fullscreenchange", opened);
+  }, [videos, onDetails]);
   // Failed runs are listed only until a newer one exists, so an old failure does not stay forever.
   const shownRuns = runs.filter((run, index) => (run.status !== "failed" && run.status !== "cancelled") || index < 2);
   if (!videos.length && !pending.length && !shownRuns.length) return null;
@@ -2297,7 +2346,7 @@ function MyVideos({
         ))}
         {videos.map((item) => (
           <li key={item.id}>
-            <video src={item.outputUrl} controls playsInline preload="metadata" aria-label={item.title} />
+            <video src={item.outputUrl} controls playsInline preload="metadata" aria-label={item.title} data-work-id={item.id} />
             <span>{item.prompt?.trim() || item.title}</span>
             {savedSlugs.has(workSlug(item.id)) ? (
               <div className={s.savedRow}>
@@ -2367,7 +2416,7 @@ function HistoryPanel({
   if (recent.length)
     return (
       <>
-        <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={mode === "edit" ? undefined : onOpenSaved} />
+        <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={mode === "edit" ? undefined : onOpenSaved} onDetails={onExpand} />
         <section>
           <div className={s.libraryTitle}>
             <h2>{c("templates.history.recent")}</h2>
@@ -2382,7 +2431,7 @@ function HistoryPanel({
     );
   return (
     <>
-    <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={mode === "edit" ? undefined : onOpenSaved} />
+    <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={mode === "edit" ? undefined : onOpenSaved} onDetails={onExpand} />
     <section className={s.invite}>
       <div className={s.inviteBanner}>
         <small>{c(hero.tag)}</small>
@@ -2430,6 +2479,15 @@ function HistoryPanel({
 
 // The look a video is given: EOS's own presets, or an image the visitor uploads. Custom ones are kept in this browser for now.
 type StyleChoice = { id: string; name: string; imageUrl: string };
+/**
+ * A name a person can read for a style made from an uploaded image. A file saved from the web is often named by a random id
+ * (a long run of letters and digits, or a UUID), which says nothing, so those become the plain default.
+ */
+function styleNameFromFile(fileName: string, untitled: string): string {
+  const base = fileName.replace(/\.[^.]+$/, "").trim();
+  const looksGenerated = !/\s/.test(base) && (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(base) || (base.length >= 20 && /^[A-Za-z0-9_-]+$/.test(base) && /\d/.test(base) && /[A-Za-z]/.test(base)));
+  return !base || looksGenerated ? untitled : base.slice(0, 40);
+}
 const customStylesKey = "eos.templates.custom-styles";
 function readCustomStyles(): StyleChoice[] {
   try {
@@ -2474,7 +2532,7 @@ function StylesPanel({ chosen, onPick }: { chosen: StyleChoice | null; onPick: (
     setState({ busy: true });
     try {
       const imageUrl = await uploadImageAsset(file, { purpose: "style-reference", feature: "text-to-video" });
-      const style: StyleChoice = { id: crypto.randomUUID(), name: file.name.replace(/\.[^.]+$/, "").slice(0, 40) || c("templates.styles.untitled"), imageUrl };
+      const style: StyleChoice = { id: crypto.randomUUID(), name: styleNameFromFile(file.name, c("templates.styles.untitled")), imageUrl };
       const next = [style, ...custom];
       setCustom(next);
       saveCustomStyles(next);
@@ -2668,8 +2726,25 @@ function AssetThumb({ src }: { src: string }) {
     </span>
   );
 }
-function Preview({ t, close }: { t: Template; close: () => void }) {
+/** onEdit opens the template in this page's own panel; without it (or for templates that edit a clip) the editing page is linked instead. */
+function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?: (t: Template) => void }) {
   const { c, locale } = useStudioCopy();
+  const likes = useContext(LikesContext);
+  const [shared, setShared] = useState(false);
+  const mine = t.id.startsWith(WORK_ID);
+  const [favorite, setFavorite] = useState(() => (mine && typeof window !== "undefined" ? readFavoriteWorks().has(t.id) : false));
+  const toggleFavorite = () => {
+    const next = !favorite;
+    setFavorite(next);
+    try {
+      const all = readFavoriteWorks();
+      if (next) all.add(t.id);
+      else all.delete(t.id);
+      window.localStorage.setItem(favoriteWorksKey, JSON.stringify([...all].slice(-200)));
+    } catch {
+      // The mark only lasts for this window when the browser keeps nothing.
+    }
+  };
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const el = ref.current,
@@ -2684,6 +2759,11 @@ function Preview({ t, close }: { t: Template; close: () => void }) {
   }, []);
   const settings = t.settings ?? {};
   const inputAssets = inputImagesOf(t);
+  // "bytedance/seedance-2.5/text-to-video" reads as "Seedance 2.5 Text To Video".
+  const modelId = typeof settings.model === "string" ? settings.model : typeof settings.modelId === "string" ? settings.modelId : "";
+  const modelLabel = modelId
+    ? modelId.split("/").slice(1).join(" ").replace(/[-_]+/g, " ").replace(/(^| )([a-z])/g, (_, space: string, letter: string) => space + letter.toUpperCase())
+    : "";
   const videoSrc = t.kind === "video"
     ? (valid(t.previewUrl) ? t.previewUrl : t.slug === "training-video" ? "/generated-videos/cinematic-trailer.webm" : "/generated-videos/ai-presenter.webm")
     : undefined;
@@ -2725,31 +2805,57 @@ function Preview({ t, close }: { t: Template; close: () => void }) {
         <section className={`${s.previewInfo} ${t.kind === "video" ? s.videoPreviewInfo : ""}`}>
           {t.kind === "video" ? (
             <>
-              <div className={s.clipDetailsHeading}><Info size={14} />{c("templates.preview.clipDetails")}</div>
-              <dl className={s.clipDetails}>
-                <div><dt>{c("templates.preview.clipSource")}</dt><dd>{t.source === "community" ? c("templates.source.community") : c("templates.preview.clipTemplate")}</dd></div>
-                {t.authorName && <div><dt>{c("templates.preview.clipAuthor")}</dt><dd>{t.authorName}</dd></div>}
-                <div><dt>{c("templates.preview.clipType")}</dt><dd>{c(kindKeys.video)}</dd></div>
-                <div><dt>{c("templates.preview.clipFormat")}</dt><dd>{videoFormat}</dd></div>
-              </dl>
-              {inputAssets.length > 0 && (
-                <>
-                  <div className={s.clipDetailsHeading}><ImagePlus size={14} />{c("templates.preview.inputAssets")}</div>
-                  <div className={s.clipAssets}>
-                    {inputAssets.map((address) => <AssetThumb key={address} src={address} />)}
-                  </div>
-                </>
-              )}
+              <div className={s.clipScroll}>
+                {inputAssets.length > 0 && (
+                  <>
+                    <div className={s.clipDetailsHeading}><ImagePlus size={14} />{c("templates.preview.inputAssets")}</div>
+                    <div className={s.clipAssets}>
+                      {inputAssets.map((address) => <AssetThumb key={address} src={address} />)}
+                    </div>
+                  </>
+                )}
+                <div className={s.clipDetailsHeading}><Info size={14} />{c("templates.preview.clipDetails")}</div>
+                <dl className={s.clipDetails}>
+                  <div><dt>{c("templates.preview.clipSource")}</dt><dd>{mine ? c("templates.history.mine") : t.source === "community" ? c("templates.source.community") : c("templates.preview.clipTemplate")}</dd></div>
+                  {t.authorName && <div><dt>{c("templates.preview.clipAuthor")}</dt><dd>{t.authorName}</dd></div>}
+                  <div><dt>{c("templates.preview.clipType")}</dt><dd>{c(kindKeys.video)}</dd></div>
+                  {modelLabel && <div><dt>{c("templates.preview.factModel")}</dt><dd>{modelLabel}</dd></div>}
+                  {typeof settings.resolution === "string" && <div><dt>{c("templates.preview.clipQuality")}</dt><dd>{settings.resolution}</dd></div>}
+                  {typeof settings.duration === "number" && <div><dt>{c("templates.preview.factDuration")}</dt><dd>{c("templates.preview.seconds", { value: settings.duration })}</dd></div>}
+                  <div><dt>{c("templates.preview.clipFormat")}</dt><dd>{videoFormat}</dd></div>
+                </dl>
+              </div>
               <div className={s.clipActions}>
-                {valid(t.targetPath) && t.targetPath.startsWith("/") && (
+                {onEdit && modeOf(t) !== "edit" ? (
+                  <button type="button" className={s.clipEdit} onClick={() => onEdit(t)}><Pencil size={15} />{c("templates.preview.clipEdit")}</button>
+                ) : valid(t.targetPath) && t.targetPath.startsWith("/") && (
                   <Link href={templateHref(t)} className={s.clipEdit}><Pencil size={15} />{c("templates.preview.clipEdit")}</Link>
                 )}
                 <div className={s.clipActionGrid}>
-                  <button type="button" disabled><ScanLine size={15} />{c("templates.preview.clipStartFrame")}</button>
-                  <button type="button" disabled><ScanLine size={15} />{c("templates.preview.clipEndFrame")}</button>
-                  <button type="button" disabled><Expand size={15} />{c("templates.preview.clipUpscale")}</button>
                   {videoSrc && <a href={videoSrc} download><Download size={15} />{c("templates.preview.clipDownload")}</a>}
+                  <button type="button" aria-pressed={mine ? favorite : likes.liked.has(t.slug)} aria-label={c("templates.card.like")} onClick={() => (mine ? toggleFavorite() : likes.toggle(t))}>
+                    <Heart size={17} fill={(mine ? favorite : likes.liked.has(t.slug)) ? "currentColor" : "none"} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={c("templates.preview.clipShare")}
+                    disabled={!videoSrc}
+                    onClick={() => {
+                      if (!videoSrc) return;
+                      const link = new URL(videoSrc, window.location.origin).toString();
+                      const done = () => {
+                        setShared(true);
+                        window.setTimeout(() => setShared(false), 2500);
+                      };
+                      // The phone's share sheet when there is one, else the link goes to the clipboard.
+                      if (navigator.share) void navigator.share({ title: name(t, locale), url: link }).catch(() => undefined);
+                      else void navigator.clipboard.writeText(link).then(done, () => undefined);
+                    }}
+                  >
+                    <Share2 size={17} aria-hidden="true" />
+                  </button>
                 </div>
+                {shared && <p className={s.clipShared} role="status">{c("templates.preview.clipShared")}</p>}
               </div>
             </>
           ) : (
@@ -2841,7 +2947,8 @@ export function TemplatesPageClient() {
     [panel, setPanel] = useState<"history" | "library" | "styles" | "how">("history"),
     [style, setStyle] = useState<StyleChoice | null>(null),
     [recent, setRecent] = useState<Template[]>([]),
-    [community, setCommunity] = useState<Template[]>([]);
+    [community, setCommunity] = useState<Template[]>([]),
+    [draft, setDraft] = useState<Template | null>(null);
   // What was opened lately is read once the page is in the browser.
   useEffect(() => {
     const timer = window.setTimeout(() => setRecent(readRecent()), 0);
@@ -2894,7 +3001,7 @@ export function TemplatesPageClient() {
   const selected =
     selectedId === ""
       ? undefined
-      : (visible.find((t) => t.id === selectedId) ?? recentForMode.find((t) => t.id === selectedId) ?? visible[0]);
+      : (draft && draft.id === selectedId ? draft : (visible.find((t) => t.id === selectedId) ?? recentForMode.find((t) => t.id === selectedId) ?? visible[0]));
   useEffect(() => {
     const showResult = () => setPanel("history");
     window.addEventListener(GENERATION_COMPLETED_EVENT, showResult);
@@ -3110,7 +3217,22 @@ export function TemplatesPageClient() {
           )}
         </section>
       </div>
-      {preview && <Preview t={preview} close={() => setPreview(null)} />}
+      {preview && (
+        <Preview
+          t={preview}
+          close={() => setPreview(null)}
+          onEdit={(t) => {
+            // Editing a clip happens here: its template opens in the create panel beside the library.
+            // A member's own clip is not in the library: its prompt, model and images open in the panel as they were.
+            if (t.id.startsWith(WORK_ID)) setDraft(t);
+            else setRecent(rememberTemplate(t));
+            setMode(modeOf(t));
+            setPanel("history");
+            setSelectedId(t.id);
+            setPreview(null);
+          }}
+        />
+      )}
     </div>
     </LikesContext.Provider>
   );
