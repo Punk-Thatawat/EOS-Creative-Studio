@@ -20,7 +20,7 @@ export type TemplateWorkflowStep = {
 export type TemplateWorkflowRun = {
   id: string;
   templateSlug: string;
-  status: "running" | "completed" | "failed";
+  status: "running" | "completed" | "failed" | "cancelled";
   prompt: string;
   /** The step being worked on, counted from 1. */
   currentStep: number;
@@ -58,6 +58,11 @@ async function request(path: string, init: RequestInit = {}): Promise<unknown> {
 
 export async function startTemplateWorkflow(input: StartTemplateWorkflowInput, signal?: AbortSignal): Promise<TemplateWorkflowRun> {
   return (await request("/template-workflows", { method: "POST", body: JSON.stringify(input), signal })) as TemplateWorkflowRun;
+}
+
+/** Stops a run: the step in progress is cancelled and the next steps never start. */
+export async function cancelTemplateWorkflow(id: string): Promise<TemplateWorkflowRun> {
+  return (await request(`/template-workflows/${encodeURIComponent(id)}/cancel`, { method: "POST" })) as TemplateWorkflowRun;
 }
 
 export async function listTemplateWorkflows(limit = 12, signal?: AbortSignal): Promise<TemplateWorkflowRun[]> {

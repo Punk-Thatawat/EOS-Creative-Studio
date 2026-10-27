@@ -7,7 +7,10 @@ export type CreativeTemplate = {
   id: string;
   slug: string;
   title: string;
+  /** Thai text, shown when the page is in Thai; empty when there is none. */
+  titleTh?: string;
   description: string;
+  descriptionTh?: string;
   category: string;
   kind: TemplateKind;
   format: string;
@@ -15,6 +18,9 @@ export type CreativeTemplate = {
   previewUrl?: string;
   targetPath: string;
   prompt: string;
+  promptTh?: string;
+  /** How many people liked it. */
+  likeCount?: number;
   tags: string[];
   featured: boolean;
   createdAt: string;
@@ -34,7 +40,7 @@ async function getErrorMessage(response: Response): Promise<string> {
   return payload?.message ?? "Template request failed";
 }
 
-export async function listTemplates(options: { search?: string; category?: string; kind?: TemplateKind | "all"; limit?: number; page?: number; sort?: "recommended" | "newest"; signal?: AbortSignal } = {}): Promise<{ templates: CreativeTemplate[]; categories: string[]; pagination?: TemplatePagination }> {
+export async function listTemplates(options: { search?: string; category?: string; kind?: TemplateKind | "all"; limit?: number; page?: number; sort?: "recommended" | "popular" | "newest"; signal?: AbortSignal } = {}): Promise<{ templates: CreativeTemplate[]; categories: string[]; pagination?: TemplatePagination }> {
   const params = new URLSearchParams();
   if (options.search?.trim()) params.set("q", options.search.trim());
   if (options.category && options.category !== "all") params.set("category", options.category);
@@ -74,13 +80,16 @@ export type TemplateAdminInput = {
   previewUrl?: string;
   slug: string;
   title: string;
+  titleTh?: string;
   description: string;
+  descriptionTh?: string;
   category: string;
   kind: TemplateKind;
   format: string;
   thumbnailUrl: string;
   targetPath: string;
   prompt: string;
+  promptTh?: string;
   tags: string[];
   featured: boolean;
   enabled: boolean;

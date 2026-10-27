@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ArrowRight,
@@ -72,7 +72,9 @@ import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
 import { createAdminTemplate } from "@/lib/api/templates";
 import { listStylePresets } from "@/lib/api/style-presets";
-import { listTemplateWorkflows, startTemplateWorkflow, workflowFeature, type TemplateWorkflowRun } from "@/lib/api/template-workflows";
+import { cancelTemplateWorkflow, listTemplateWorkflows, startTemplateWorkflow, workflowFeature, type TemplateWorkflowRun } from "@/lib/api/template-workflows";
+import { listMyTemplateLikes, setTemplateLike } from "@/lib/api/template-likes";
+import { quoteImageGeneration, type ImageCreditQuoteInput } from "@/lib/api/generations";
 import { emitGenerationRequestFailed, emitGenerationStarted, emitGenerationSubmitting, GENERATION_COMPLETED_EVENT, GENERATION_STARTED_EVENT } from "@/lib/generation-progress-events";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
 const kindKeys: Record<TemplateKind | "all", StudioCopyKey> = {
@@ -171,21 +173,28 @@ const prompts: Record<string, string> = {
   "Show my product in the source video, keeping the same camera motion, lighting direction and pacing.":
     "แสดงสินค้าของฉันในวิดีโอต้นฉบับ โดยคงการเคลื่อนกล้อง ทิศทางแสง และจังหวะเดิมไว้",
 };
+// In Thai the template's own Thai text (set in the admin) comes first; the maps above only cover older templates that have none.
 const promptOf = (t: Template, locale: CopyLocale) => {
   const text = t.prompt?.trim() ?? "";
-  return (locale === "th" ? prompts[text] : undefined) ?? text;
+  if (locale !== "th") return text;
+  return t.promptTh?.trim() || prompts[text] || text;
 };
-const copy = (t: Template, locale: CopyLocale) =>
-  templateCopy(
+const copy = (t: Template, locale: CopyLocale) => {
+  const base = templateCopy(
     t.title,
     t.description,
     typeof t.settings?.feature === "string" ? t.settings.feature : undefined,
     t.kind,
     locale,
   );
-// The Thai names for the seeded English templates only make sense in Thai; other titles come from the data.
+  return locale === "th" && t.descriptionTh?.trim() ? { ...base, description: t.descriptionTh.trim() } : base;
+};
 const name = (t: Template, locale: CopyLocale) =>
-  (locale === "th" ? titles[t.title] : undefined) ?? copy(t, locale).title;
+  (locale === "th" ? t.titleTh?.trim() || titles[t.title] : undefined) ?? copy(t, locale).title;
+
+// Who liked what: the slugs this visitor liked, and the counts that changed after the page loaded.
+type LikesState = { liked: Set<string>; counts: Record<string, number>; toggle: (t: Template) => void };
+const LikesContext = createContext<LikesState>({ liked: new Set(), counts: {}, toggle: () => {} });
 function templateHref(t: Template) {
   const url = new URL(t.targetPath, "http://template.local");
   url.searchParams.set("template", t.slug);
@@ -404,8 +413,9 @@ function Tile({
   onExpand: (t: Template) => void;
 }) {
   const { c, locale } = useStudioCopy();
-  // The heart only toggles here for now; its count and saving come with the real data.
-  const [liked, setLiked] = useState(false);
+  const likes = useContext(LikesContext);
+  const liked = likes.liked.has(t.slug);
+  const likeCount = likes.counts[t.slug] ?? t.likeCount ?? 0;
   return (
     <article className={`${s.tile} ${selected ? s.tileSelected : ""}`} style={{ aspectRatio: String(ratioOf(t)) }}>
       <Media t={t} tile key={t.id + t.previewUrl} />
@@ -420,8 +430,9 @@ function Tile({
         <Expand size={15} />
       </button>
       <div className={s.tileActions}>
-        <button type="button" className={s.tileLike} aria-pressed={liked} aria-label={c("templates.card.like")} onClick={() => setLiked((v) => !v)}>
+        <button type="button" className={s.tileLike} aria-pressed={liked} aria-label={c("templates.card.like")} onClick={() => likes.toggle(t)}>
           <Heart size={16} fill={liked ? "currentColor" : "none"} aria-hidden="true" />
+          {likeCount > 0 ? likeCount : null}
         </button>
         <button type="button" className={s.tileRecreate} onClick={() => onSelect(t)}>
           <Copy size={14} aria-hidden="true" />
@@ -960,6 +971,39 @@ function useModelPicker(feature: string, enabled = true) {
 }
 
 /**
+ * What a workflow costs in all: the image step plus the video step, each quoted by the creator's own endpoints. Null until
+ * both models and qualities are picked, or when either quote cannot be given.
+ */
+function useWorkflowQuote(
+  input: { imageModel: string; imageKey: "resolution" | "quality"; imageQuality: string; imageRatio: string; videoModel: string; videoQuality: string; duration: number; aspectRatio: string } | null,
+): number | null {
+  const key = JSON.stringify(input);
+  const [quote, setQuote] = useState<{ key: string; credits: number } | null>(null);
+  useEffect(() => {
+    if (!input) return;
+    let alive = true;
+    const timer = window.setTimeout(() => {
+      const imageQuote: ImageCreditQuoteInput = { feature: "text-to-image", model: input.imageModel, ratio: input.imageRatio as ImageCreditQuoteInput["ratio"], count: "1" as ImageCreditQuoteInput["count"], [input.imageKey]: input.imageQuality };
+      Promise.all([
+        quoteImageGeneration(imageQuote),
+        quoteDirectVideoGeneration({ feature: "image-to-video", model: input.videoModel, resolution: input.videoQuality, duration: input.duration, aspectRatio: input.aspectRatio }),
+      ])
+        .then(([image, video]) => {
+          if (alive && typeof image.creditCost === "number" && typeof video.creditCost === "number") setQuote({ key, credits: image.creditCost + video.creditCost });
+        })
+        .catch(() => {});
+    }, 350);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+    // The key stands for the whole input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  return quote?.key === key ? quote.credits : null;
+}
+
+/**
  * What the creator would charge for the chosen model and quality, from its own quote endpoint. Null until a model is picked or
  * while the answer is on its way (or when the quote cannot be given), so the button then shows no price rather than a guess.
  */
@@ -1310,6 +1354,14 @@ function Composer({
   const modelRatios = picker.ratiosOf(quoteModel);
   const aspectRatio = modelRatios.length && !modelRatios.includes(wantedRatio) ? (modelRatios.includes("16:9") ? "16:9" : modelRatios[0]) : wantedRatio;
   const credits = useCreditQuote({ feature: "text-to-video", model: mode === "create" ? quoteModel : "", resolution: quoteQuality, duration, aspectRatio });
+  const imageRatio = ["1:1", "16:9", "4:3", "3:4", "9:16"].includes(wantedRatio) ? wantedRatio : "16:9";
+  const flowVideoRatios = videoPicker.ratiosOf(flowVideoModel);
+  const videoRatio = flowVideoRatios.length && !flowVideoRatios.includes(imageRatio) ? (flowVideoRatios.includes("16:9") ? "16:9" : (flowVideoRatios[0] ?? imageRatio)) : imageRatio;
+  const workflowCredits = useWorkflowQuote(
+    isWorkflow && flowImageModel && flow.imageQuality && flowVideoModel && flow.videoQuality
+      ? { imageModel: flowImageModel, imageKey: imagePicker.qualityKeyOf(flowImageModel), imageQuality: flow.imageQuality, imageRatio, videoModel: flowVideoModel, videoQuality: flow.videoQuality, duration: videoPicker.durationFor(flowVideoModel, wantedDuration), aspectRatio: videoRatio }
+      : null,
+  );
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
   // Generates right here: the same request the creator page sends, then the app's progress panel follows it to the result.
@@ -1351,9 +1403,6 @@ function Composer({
     if (!flowVideoModel || !flow.videoQuality) return setSending({ state: "error", message: c("templates.workflow.pickVideo") });
     setSending({ state: "busy" });
     try {
-      const imageRatio = ["1:1", "16:9", "4:3", "3:4", "9:16"].includes(wantedRatio) ? wantedRatio : "16:9";
-      const videoRatios = videoPicker.ratiosOf(flowVideoModel);
-      const videoRatio = videoRatios.length && !videoRatios.includes(imageRatio) ? (videoRatios.includes("16:9") ? "16:9" : videoRatios[0]) : imageRatio;
       await startTemplateWorkflow({
         templateSlug: template.slug,
         prompt,
@@ -1759,7 +1808,7 @@ function Composer({
         </div>
         <button type="button" className={s.use} disabled={sending.state === "busy"} onClick={() => void (isWorkflow ? generateWorkflow(t) : generate(t, shownModel, shownQuality))}>
           {sending.state === "busy" ? c("templates.composer.sending") : c("templates.edit.generate")} <Sparkles size={17} />
-          {isWorkflow ? "" : creditText(credits)}
+          {creditText(isWorkflow ? workflowCredits : credits)}
         </button>
         {sending.message && (
           <p role={sending.state === "error" ? "alert" : "status"} className={sending.state === "error" ? s.sendError : undefined}>
@@ -1944,7 +1993,7 @@ function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: 
     };
   }, [mode]);
   // Failed runs are listed only until a newer one exists, so an old failure does not stay forever.
-  const shownRuns = runs.filter((run, index) => run.status !== "failed" || index < 2);
+  const shownRuns = runs.filter((run, index) => (run.status !== "failed" && run.status !== "cancelled") || index < 2);
   if (!videos.length && !pending.length && !shownRuns.length) return null;
   return (
     <section className={s.myVideos} aria-label={c("templates.history.mine")}>
@@ -1967,10 +2016,25 @@ function MyVideos({ mode, onTemplateCreated }: { mode: Mode; onTemplateCreated: 
                   {run.status === "running" ? <Loader2 size={22} aria-hidden="true" /> : null}
                   {run.status === "running"
                     ? c(run.currentStep >= 2 ? "templates.workflow.makingVideo" : "templates.workflow.makingImage")
-                    : `${c("templates.workflow.failed")}${run.errorMessage ? `: ${run.errorMessage}` : ""}`}
+                    : run.status === "cancelled"
+                      ? c("templates.workflow.cancelled")
+                      : `${c("templates.workflow.failed")}${run.errorMessage ? `: ${run.errorMessage}` : ""}`}
                 </div>
               )}
               <span>{run.prompt}</span>
+              {run.status === "running" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    cancelTemplateWorkflow(run.id)
+                      .catch(() => {})
+                      .finally(() => window.dispatchEvent(new Event(workflowEvent)));
+                  }}
+                >
+                  <X size={14} aria-hidden="true" />
+                  {c("templates.workflow.cancel")}
+                </button>
+              )}
             </li>
           );
         })}
@@ -2432,6 +2496,40 @@ function Preview({ t, close }: { t: Template; close: () => void }) {
 export function TemplatesPageClient() {
   const { c } = useStudioCopy();
   const [items, setItems] = useState<Template[]>([]);
+  const [likedSlugs, setLikedSlugs] = useState<Set<string>>(new Set());
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let alive = true;
+    listMyTemplateLikes()
+      .then((slugs) => {
+        if (alive) setLikedSlugs(new Set(slugs));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  // Optimistic: the heart and count change at once, then follow what the server says (or go back if it refuses).
+  const toggleLike = (t: Template) => {
+    const wasLiked = likedSlugs.has(t.slug);
+    const before = likeCounts[t.slug] ?? t.likeCount ?? 0;
+    const next = new Set(likedSlugs);
+    if (wasLiked) next.delete(t.slug);
+    else next.add(t.slug);
+    setLikedSlugs(next);
+    setLikeCounts({ ...likeCounts, [t.slug]: Math.max(before + (wasLiked ? -1 : 1), 0) });
+    setTemplateLike(t.slug, !wasLiked)
+      .then((result) => setLikeCounts((current) => ({ ...current, [t.slug]: result.likeCount })))
+      .catch(() => {
+        setLikedSlugs((current) => {
+          const back = new Set(current);
+          if (wasLiked) back.add(t.slug);
+          else back.delete(t.slug);
+          return back;
+        });
+        setLikeCounts((current) => ({ ...current, [t.slug]: before }));
+      });
+  };
   const [q, setQ] = useState(""),
     [mode, setMode] = useState<Mode>(DEFAULT_MODE),
     [category, setCategory] = useState("all"),
@@ -2457,8 +2555,7 @@ export function TemplatesPageClient() {
       () => {
         setLoading(true);
         setError(false);
-        // The server orders by "recommended" or "newest" only; "popular" uses the recommended order until it has usage counts.
-        listTemplates({ search: q, category, sort: sort === "newest" ? "newest" : "recommended", page, limit: 24, signal: c.signal })
+        listTemplates({ search: q, category, sort, page, limit: 24, signal: c.signal })
           .then((r) => {
             if (c.signal.aborted) return;
             setItems(r.templates);
@@ -2575,6 +2672,7 @@ export function TemplatesPageClient() {
     </section>
   );
   return (
+    <LikesContext.Provider value={{ liked: likedSlugs, counts: likeCounts, toggle: toggleLike }}>
     <div className={s.page} data-page="templates" data-no-translate>
       <div className={s.workspace}>
         <Composer
@@ -2691,5 +2789,6 @@ export function TemplatesPageClient() {
       </div>
       {preview && <Preview t={preview} close={() => setPreview(null)} />}
     </div>
+    </LikesContext.Provider>
   );
 }
