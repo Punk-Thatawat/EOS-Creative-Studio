@@ -485,7 +485,7 @@ export function AiPresenterPage() {
   const sceneReferenceAudioTooLong = overlongSceneAudioIndex >= 0 || sceneTimeline.some(({ start, end }) => end - start > maxSceneDurationSeconds);
   const otherSceneTextLength = scenes.reduce((length, scene) => scene.id === activeScene?.id ? length : length + scene.script.length, 0) + Math.max(0, scenes.length - 1) * 2;
   const activeSceneMaxLength = Math.max(activeScene?.script.length ?? 0, 5000 - otherSceneTextLength);
-  const canAddScene = scenes.length < 6 && script.length + 2 <= 5000;
+  const canAddScene = script.length + 2 <= 5000;
 
   useEffect(() => {
     let cancelled = false;
@@ -497,7 +497,7 @@ export function AiPresenterPage() {
         if (draft.version !== 1 || !Array.isArray(draft.scenes) || draft.scenes.length === 0) return;
         const savedScenes = draft.scenes.filter((scene): scene is SavedAiPresenterScene =>
           Boolean(scene && typeof scene.id === "string" && typeof scene.title === "string" && typeof scene.script === "string"),
-        ).slice(0, 6);
+        );
         if (!savedScenes.length) return;
 
         const restoredScenes = await Promise.all(savedScenes.map(async (scene) => {
@@ -1493,7 +1493,7 @@ export function AiPresenterPage() {
                   }
                   const pace = voicePaceForSample(voiceSampleDurations[JSON.stringify([selectedAudioModel, selectedVoice])], selectedVoice, language);
                   const parts = result.scenes.flatMap((part) => splitScriptIntoScenes(part, language, pace));
-                  if (!parts.length || parts.length > 6 || parts.join("\n\n").length > 5000 || parts.some((part) => estimatedDuration(part, language, pace) > 15)) {
+                  if (!parts.length || parts.join("\n\n").length > 5000 || parts.some((part) => estimatedDuration(part, language, pace) > 15)) {
                     setSplitError(isThai ? "บทนี้เกินขีดจำกัดของงาน หรือมีข้อความที่ยาวเกินไป กรุณาย่อบทหรือแบ่งงานเป็นหลายวิดีโอ" : "This script exceeds the project limit or contains a segment that is too long. Shorten it or split it into multiple videos.");
                     return;
                   }
@@ -1639,7 +1639,7 @@ export function AiPresenterPage() {
             <div className={styles.timelineHeader}>
               <div className={styles.sectionHeading}>
                 <h3>{isThai ? "ไทม์ไลน์ฉาก" : "Scene Timeline"}</h3>
-                <span className={styles.sceneCount}>{scenes.length} / 6 · ~{sceneTimelineDuration}s</span>
+                <span className={styles.sceneCount}>{scenes.length} {isThai ? "ซีน" : "scenes"} · ~{sceneTimelineDuration}s</span>
               </div>
               <button type="button" className={styles.textButton} onClick={() => setIsReorderingScenes((current) => !current)} disabled={isLocked || scenes.length < 2} aria-pressed={isReorderingScenes}>
                 {isReorderingScenes ? (isThai ? "เสร็จสิ้น" : "Done") : (isThai ? "เรียงฉากใหม่" : "Reorder Scenes")}
@@ -1758,7 +1758,7 @@ export function AiPresenterPage() {
             <form onSubmit={createScene}>
               <header className={styles.sceneModalHeader}>
                 <div>
-                  <span className={styles.sceneModalEyebrow}>{isThai ? `ซีน ${editingSceneId ? scenes.findIndex((scene) => scene.id === editingSceneId) + 1 : scenes.length + 1} / 6` : `SCENE ${editingSceneId ? scenes.findIndex((scene) => scene.id === editingSceneId) + 1 : scenes.length + 1} OF 6`}</span>
+                  <span className={styles.sceneModalEyebrow}>{isThai ? `ซีน ${editingSceneId ? scenes.findIndex((scene) => scene.id === editingSceneId) + 1 : scenes.length + 1}` : `SCENE ${editingSceneId ? scenes.findIndex((scene) => scene.id === editingSceneId) + 1 : scenes.length + 1}`}</span>
                   <h2 id="add-scene-dialog-title">{editingSceneId ? (isThai ? "แก้ไขซีน" : "Edit scene") : (isThai ? "เพิ่มฉากใหม่" : "Add a new scene")}</h2>
                   <p id="add-scene-dialog-description">{isThai ? "ตั้งค่าภาพและเสียง ใส่บทพูดก่อนเพิ่มลงในไทม์ไลน์" : "Set the visuals and voice, then add spoken lines to the timeline."}</p>
                 </div>
