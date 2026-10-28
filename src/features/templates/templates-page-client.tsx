@@ -88,7 +88,8 @@ const kindKeys: Record<TemplateKind | "all", StudioCopyKey> = {
 type CopyLocale = "th" | "en";
 /** The three modes of the control column, named like the creation page's own tools. */
 type Mode = "create" | "edit" | "motion";
-const modes: Mode[] = ["create", "edit", "motion"];
+// The Edit video tab is hidden until the team decides what it should do (its layout and tools are kept in the code).
+const modes: Mode[] = ["create", "motion"];
 const DEFAULT_MODE: Mode = "create";
 const modeKeys: Record<Mode, StudioCopyKey> = {
   create: "templates.mode.create",
@@ -1166,8 +1167,10 @@ function MotionWorkspace({ t }: { t?: Template }) {
   const swapping = variant === "swap";
   const { images, attach, detach, error: attachError } = useTemplateImages(t, swapping ? 4 : 1, true);
   const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
+  // Where the background comes from (scene control), and which source the character's orientation follows.
   const [sceneControl, setSceneControl] = useState(true);
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
+  const [orientation, setOrientation] = useState<"video" | "image">("video");
   // What was picked in each tool; until something is picked, the model, quality and swap target of the template stand.
   const [picked, setPicked] = useState<Record<"motion" | "swap", { model: string; quality: string; swapMode: string }>>({
     motion: { model: "", quality: "", swapMode: "" },
@@ -1229,7 +1232,11 @@ function MotionWorkspace({ t }: { t?: Template }) {
             model,
             quality,
             templateSlug: t.slug,
-            ...(sceneControl ? { characterOrientation: sceneSource } : {}),
+            // The model needs to know whether the character's pose follows the video or the image, so it is always sent.
+            characterOrientation: orientation,
+            // The background comes from the video (the character is put into its scene) or from the image (it is animated), for models that offer it.
+            ...(sceneControl && motionPicker.modesOf(model).includes(sceneSource === "video" ? "replace" : "animate") ? { mode: sceneSource === "video" ? "replace" : "animate" } : {}),
+            ...(instruction ? { prompt: instruction } : {}),
           });
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const generationId = created.generationId ?? created.id;
@@ -1346,12 +1353,24 @@ function MotionWorkspace({ t }: { t?: Template }) {
               <p>{c("templates.motion.sceneHint")}</p>
             </> : <p>{c("templates.motion.sceneDisabledHint")}</p>}
           </section>
-          <details className={s.composerAdvanced}>
+          <details className={`${s.composerAdvanced} ${s.motionAdvanced}`} open>
             <summary>{c("templates.composer.advanced")}<ChevronDown size={15} aria-hidden="true" /></summary>
-            <dl className={s.composerFacts}>
-              <div><dt>{c("templates.motion.setting.motionStrength")}</dt><dd>100%</dd></div>
-              <div><dt>{c("templates.motion.setting.camera")}</dt><dd>{c("templates.motion.setting.followReference")}</dd></div>
-            </dl>
+            <label className={s.motionAdvancedLabel}>
+              {c("templates.composer.prompt")}
+              <textarea
+                key={`${t?.id}-${locale}-motion`}
+                ref={promptRef}
+                className={s.composerPrompt}
+                placeholder={c("templates.motion.promptPlaceholder")}
+              />
+            </label>
+            <div className={s.motionAdvancedLabel}>
+              {c("templates.motion.orientation")}
+              <div className={s.motionSourceTabs} role="group" aria-label={c("templates.motion.orientation")}>
+                {(["video", "image"] as const).map((source) => <button key={source} type="button" aria-pressed={orientation === source} onClick={() => setOrientation(source)}>{source === "video" ? <Video size={13} /> : <ImagePlus size={13} />}{c(source === "video" ? "templates.motion.sourceVideo" : "templates.motion.sourceImage")}</button>)}
+              </div>
+              <p>{c("templates.motion.orientationHint")}</p>
+            </div>
           </details>
         </>
       )}
@@ -1652,6 +1671,22 @@ function Composer({
         className={`${s.composerHero}${mode === "edit" ? ` ${s.editComposerHero}` : ""}`}
         style={t && valid(t.thumbnailUrl) ? { backgroundImage: `url("${t.thumbnailUrl}")` } : undefined}
       >
+        {/* The banner moves with the template's own preview clip (set in the back office); without one it shows the cover. */}
+        {mode !== "edit" && t?.kind === "video" && valid(t.previewUrl) && (
+          <video
+            key={t.previewUrl}
+            className={s.composerHeroVideo}
+            src={t.previewUrl}
+            poster={valid(t.thumbnailUrl) ? t.thumbnailUrl : undefined}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+        )}
         <strong>{c(mode === "edit" ? editToolId ? activeEditTool.title : "templates.edit.list.title" : modeKeys[mode])}</strong>
         <small>{c(mode === "edit" ? editToolId ? activeEditTool.desc : "templates.edit.list.desc" : heroKeys[mode].tag)}</small>
       </div>
@@ -1985,7 +2020,7 @@ function Composer({
         </>
       )}
       {advanced.length > 0 && (
-        <details className={s.composerAdvanced}>
+        <details className={s.composerAdvanced} onToggle={(event) => { if (event.currentTarget.open) event.currentTarget.scrollIntoView({ block: "nearest", behavior: "smooth" }); }}>
           <summary>
             {c("templates.composer.advanced")}
             <ChevronDown size={15} aria-hidden="true" />
@@ -2387,7 +2422,6 @@ function HistoryPanel({
   items,
   onSelect,
   onExpand,
-  onLibrary,
   savedSlugs,
   onUseSaved,
   onOpenSaved,
@@ -2399,7 +2433,6 @@ function HistoryPanel({
   onSelect: (t: Template) => void;
   onExpand: (t: Template) => void;
   /** Absent when this mode has no library to open. */
-  onLibrary?: () => void;
   /** The addresses of the templates in the library. */
   savedSlugs: Set<string>;
   /** Puts a saved template on the left panel, ready to use. */
@@ -2412,7 +2445,6 @@ function HistoryPanel({
   const { c } = useStudioCopy();
   const covers = items.filter((t) => valid(t.thumbnailUrl));
   const steps = stepsByMode[mode];
-  const hero = heroKeys[mode];
   if (recent.length)
     return (
       <>
@@ -2433,15 +2465,6 @@ function HistoryPanel({
     <>
     <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={mode === "edit" ? undefined : onOpenSaved} onDetails={onExpand} />
     <section className={s.invite}>
-      <div className={s.inviteBanner}>
-        <small>{c(hero.tag)}</small>
-        <strong>{c("templates.history.bannerTitle")}</strong>
-        {onLibrary && (
-          <button type="button" onClick={onLibrary}>
-            {c("templates.history.bannerButton")}
-          </button>
-        )}
-      </div>
       <h2>{c("templates.history.heading")}</h2>
       <p>{c("templates.history.body")}</p>
       <ol className={s.inviteSteps}>
@@ -3150,7 +3173,6 @@ export function TemplatesPageClient() {
               items={visible}
               onSelect={(t) => setSelectedId(t.id)}
               onExpand={setPreview}
-              onLibrary={mode === "edit" ? undefined : () => setPanel("library")}
               savedSlugs={new Set([...items, ...community].map((item) => item.slug))}
               onUseSaved={(slug) => {
                 const found = [...items, ...community].find((item) => item.slug === slug);

@@ -103,6 +103,8 @@
   position: relative;
 }
 .composerHero {
+  position: relative;
+  overflow: hidden;
   display: flex;
   min-height: 92px;
   flex-direction: column;
@@ -114,6 +116,32 @@
   color: #fff;
   text-shadow: 0 1px 8px #000a;
   box-shadow: inset 0 0 0 100px #00000052;
+}
+/* The clip fills the banner behind the text, dimmed like the cover is. */
+.composerHeroVideo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.composerHeroVideo ~ strong,
+.composerHeroVideo ~ small {
+  position: relative;
+  z-index: 1;
+}
+.composerHero:has(.composerHeroVideo)::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: #00000052;
+  content: "";
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .composerHeroVideo { display: none; }
 }
 .composerHero strong {
   font-size: 22px;
@@ -1105,6 +1133,8 @@
 }
 .composerAdvanced {
   border-top: 1px solid #ffffff14;
+  /* Opened, it scrolls into view above the generate button that stays at the bottom. */
+  scroll-margin-bottom: 120px;
 }
 .composerAdvanced summary {
   display: flex;
@@ -2789,3 +2819,8 @@
 .clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; background: #26282a; }
 .clipAsset img { width: 100%; height: 100%; object-fit: cover; }
 .clipShared { margin: 8px 0 0; font-size: 12px; color: #ffb08f; }
+/* Motion Control's advanced settings: the prompt for the scene and which source the character's orientation follows. */
+.motionAdvanced { padding-bottom: 10px; }
+.motionAdvancedLabel { display: grid; gap: 8px; margin: 4px 0 14px; font-size: 13px; font-weight: 700; color: #ffffffd0; }
+.motionAdvancedLabel textarea { min-height: 96px; }
+.motionAdvancedLabel p { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.55; color: #ffffff80; }

@@ -761,6 +761,8 @@ export function GenerationProgressFloating() {
 
     const handleCardClick = () => {
       setIsCenterOpen(false);
+      // On the Templates page a clip made there stays there: its result shows in "Your videos", so there is nothing to open.
+      if (pathname?.startsWith("/templates")) return;
       if (kind === "audio") {
         try {
           window.localStorage.setItem("eos.audio.active-tab", tab);
