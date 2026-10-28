@@ -136,7 +136,7 @@ function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; 
   const selectedFeature = requestedFeature === "video" ? "image-to-video" : (requestedFeature ?? "text-to-image");
   const isImageFeature = adminImageFeatures.some((item) => item.id === selectedFeature);
   const isVideoFeature = adminVideoFeatures.some((item) => item.id === selectedFeature);
-  const isAiPresenterFeature = selectedFeature === "ai-presenter";
+  const isAiPresenterFeature = selectedFeature === "ai-presenter" || selectedFeature === "ai-presenter-script";
   const isAudioFeature = selectedFeature === "audio" || adminAudioFeatures.some((item) => item.id === selectedFeature);
   const isDocumentFeature = adminDocumentFeatures.some((item) => item.id === selectedFeature);
 
@@ -213,10 +213,13 @@ function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; 
             <div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">
               <Link
                 href="/admin/model-routes?feature=ai-presenter"
-                aria-current={pathname === "/admin/model-routes" && isAiPresenterFeature ? "page" : undefined}
-                className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${pathname === "/admin/model-routes" && isAiPresenterFeature ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+                aria-current={pathname === "/admin/model-routes" && selectedFeature === "ai-presenter" ? "page" : undefined}
+                className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${pathname === "/admin/model-routes" && selectedFeature === "ai-presenter" ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
               >
                 Presenter Video
+              </Link>
+              <Link href="/admin/model-routes?feature=ai-presenter-script" aria-current={pathname === "/admin/model-routes" && selectedFeature === "ai-presenter-script" ? "page" : undefined} className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${pathname === "/admin/model-routes" && selectedFeature === "ai-presenter-script" ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}>
+                Script Splitter
               </Link>
             </div>
           </details>

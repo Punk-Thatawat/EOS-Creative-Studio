@@ -13,7 +13,7 @@ import { getAccountScopedStorageKey } from "@/lib/generation-progress-storage";
 import { createTextToSpeech, getAudioCreditBalance, listAudioModels, listAudioVoices, quoteTextToSpeechScenes, type AudioCreditQuote, type AudioModel, type AudioVoice } from "@/lib/api/audio";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
-import { composePresenterVideo, createVideoStoryboard, getVideoStoryboardStatus, quoteVideoStoryboard, type VideoStoryboardResponse, type VideoStoryboardStatus } from "@/lib/api/video-generations";
+import { composePresenterVideo, createVideoStoryboard, getVideoStoryboardStatus, quoteVideoStoryboard, splitPresenterScript, type VideoStoryboardResponse, type VideoStoryboardStatus } from "@/lib/api/video-generations";
 import { emitGenerationCompleted, emitGenerationRequestFailed, emitGenerationRequestFinished, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
@@ -140,8 +140,9 @@ async function deleteAiPresenterDraftFile(mediaId: string): Promise<void> {
 function baselineDuration(script: string, language: string): number {
   const text = script.trim();
   if (!text) return 3;
-  const spokenUnits = language === "th" ? text.replace(/\s/g, "").length / 12 : language === "ja" ? text.replace(/\s/g, "").length / 6 * 2.45 : text.split(/\s+/).length;
-  return Math.max(3, Math.min(60, Math.ceil(spokenUnits / (language === "th" ? 1 : 2.45))));
+  const effectiveLanguage = /[\u0e00-\u0e7f]/.test(text) ? "th" : language;
+  const spokenUnits = effectiveLanguage === "th" ? text.replace(/\s/g, "").length / 12 : effectiveLanguage === "ja" ? text.replace(/\s/g, "").length / 6 * 2.45 : text.split(/\s+/).length;
+  return Math.max(3, Math.min(60, Math.ceil(spokenUnits / (effectiveLanguage === "th" ? 1 : 2.45))));
 }
 
 function estimatedDuration(script: string, language: string, voicePace = 1): number {
@@ -151,8 +152,9 @@ function estimatedDuration(script: string, language: string, voicePace = 1): num
 function splitScriptIntoScenes(text: string, language: string, pace: number): string[] {
   const input = text.trim();
   if (!input) return [];
-  const sentenceSegmenter = new Intl.Segmenter(language, { granularity: "sentence" });
-  const wordSegmenter = new Intl.Segmenter(language, { granularity: "word" });
+  const effectiveLanguage = /[\u0e00-\u0e7f]/.test(input) ? "th" : language;
+  const sentenceSegmenter = new Intl.Segmenter(effectiveLanguage, { granularity: "sentence" });
+  const wordSegmenter = new Intl.Segmenter(effectiveLanguage, { granularity: "word" });
   const units = Array.from(sentenceSegmenter.segment(input)).flatMap(({ segment }) =>
     estimatedDuration(segment, language, pace) <= 12 ? [segment] : Array.from(wordSegmenter.segment(segment), (item) => item.segment));
   const parts: string[] = [];
@@ -390,9 +392,13 @@ export function AiPresenterPage() {
   const generationControllerRef = useRef<AbortController | null>(null);
   const [draftRestoreComplete, setDraftRestoreComplete] = useState(false);
   const [scenes, setScenes] = useState<PresenterScene[]>([{ id: "scene-1", title: "Intro", script: sampleScript, direction: "" }]);
+  const scenesRef = useRef(scenes);
+  useEffect(() => { scenesRef.current = scenes; }, [scenes]);
   const [fullScript, setFullScript] = useState("");
   const [fullScriptPending, setFullScriptPending] = useState(false);
-  const [splitProposal, setSplitProposal] = useState<string[] | null>(null);
+  const [isSplittingScript, setIsSplittingScript] = useState(false);
+  const [splitError, setSplitError] = useState("");
+  const splitRequestVersion = useRef(0);
   const [activeSceneId, setActiveSceneId] = useState("scene-1");
   const [isAddSceneOpen, setIsAddSceneOpen] = useState(false);
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
@@ -1471,18 +1477,35 @@ export function AiPresenterPage() {
             </div>
             <div className={styles.fullScriptPanel}>
               <label htmlFor="presenter-full-script" className={styles.formLabel}>{isThai ? "บทพูดทั้งหมด" : "Full script"}</label>
-              <textarea id="presenter-full-script" className={styles.fullScriptInput} value={fullScript} onChange={(event) => { setFullScript(event.target.value); setFullScriptPending(Boolean(event.target.value.trim())); setSplitProposal(null); }} maxLength={5000} disabled={isLocked} placeholder={isThai ? "วางบทพูดทั้งหมดที่นี่" : "Paste the full spoken script here"} />
+              <textarea id="presenter-full-script" className={styles.fullScriptInput} value={fullScript} onChange={(event) => { splitRequestVersion.current += 1; setIsSplittingScript(false); setSplitError(""); setFullScript(event.target.value); setFullScriptPending(Boolean(event.target.value.trim())); }} maxLength={5000} disabled={isLocked} placeholder={isThai ? "วางบทพูดทั้งหมดที่นี่" : "Paste the full spoken script here"} />
               <div className={styles.fullScriptMeta}><span>{isThai ? "แบ่งตามเวลาประเมินของเสียงเริ่มต้น" : "Split using the default voice estimate"}</span><span>{fullScript.length.toLocaleString()} / 5,000</span></div>
-              <button type="button" className={styles.splitButton} disabled={!fullScript.trim() || isLocked} onClick={() => setSplitProposal(splitScriptIntoScenes(fullScript, language, voicePaceForSample(voiceSampleDurations[JSON.stringify([selectedAudioModel, selectedVoice])], selectedVoice, language)))}>{isThai ? "แบ่งซีนอัตโนมัติ" : "Split into scenes"}</button>
-              {splitProposal && (splitProposal.length > 6 || splitProposal.join("\n\n").length > 5000 || splitProposal.some((part) => estimatedDuration(part, language, voicePaceForSample(voiceSampleDurations[JSON.stringify([selectedAudioModel, selectedVoice])], selectedVoice, language)) > 15)) ? <p className={styles.splitWarning} role="alert">{isThai ? "บทนี้เกินขีดจำกัดของงาน หรือมีข้อความที่ยาวเกินไป กรุณาย่อบทหรือแบ่งงานเป็นหลายวิดีโอ" : "This script exceeds the project limit or contains a segment that is too long. Shorten it or split it into multiple videos."}</p> : splitProposal ? <div className={styles.splitConfirm} role="status">
-                <p>{isThai ? `แบ่งได้ ${splitProposal.length} ซีน · เวลาเป็นค่าประเมิน ตรวจเสียงจริงอีกครั้งหลังสร้าง` : `${splitProposal.length} scenes · durations are estimates until audio is generated`}</p>
-                <ol>{splitProposal.map((part, index) => <li key={index}>{part}</li>)}</ol>
-                <p>{isThai ? "การนำไปใช้จะแทนบทในซีนเดิม และซีนที่เกินจำนวนใหม่จะถูกลบพร้อมสื่อของซีน" : "Applying replaces existing scene scripts and removes any extra scenes and their media."}</p>
-                <div><button type="button" onClick={() => {
-                  const next = splitProposal.map((part, index) => ({ ...(scenes[index] ?? { id: crypto.randomUUID(), title: index === 0 ? "Intro" : `${isThai ? "ซีน" : "Scene"} ${index + 1}`, direction: "", voiceId: activeSceneVoiceId === selectedVoice ? undefined : activeSceneVoiceId }), script: part, durationSeconds: undefined }));
-                  setScenes(next); setActiveSceneId(next[0]!.id); setFullScriptPending(false); setSplitProposal(null);
-                }} disabled={isLocked}>{isThai ? "ใช้บทที่แบ่งแล้ว" : "Apply split"}</button><button type="button" onClick={() => setSplitProposal(null)}>{isThai ? "ยกเลิก" : "Cancel"}</button></div>
-              </div> : null}
+              <button type="button" className={styles.splitButton} disabled={!fullScript.trim() || isLocked || isSplittingScript} onClick={async () => {
+                const requestVersion = ++splitRequestVersion.current;
+                const hasExistingWork = scenes.length > 1 || scenes.some((scene) => (scene.script.trim() && scene.script !== sampleScript) || scene.direction.trim() || scene.media);
+                if (hasExistingWork && !window.confirm(isThai ? "การแบ่งบทใหม่จะแทนบทในซีนเดิม และอาจลบซีนส่วนเกินพร้อมสื่อ ต้องการดำเนินการต่อไหม?" : "Splitting will replace existing scripts and may remove extra scenes and their media. Continue?")) return;
+                setIsSplittingScript(true); setSplitError("");
+                try {
+                  const result = await splitPresenterScript(fullScript);
+                  if (requestVersion !== splitRequestVersion.current) return;
+                  if (scenesRef.current !== scenes) {
+                    setSplitError(isThai ? "ซีนเปลี่ยนระหว่างแบ่งบท กรุณาลองแบ่งอีกครั้ง" : "Scenes changed while splitting. Please try again.");
+                    return;
+                  }
+                  const pace = voicePaceForSample(voiceSampleDurations[JSON.stringify([selectedAudioModel, selectedVoice])], selectedVoice, language);
+                  const parts = result.scenes.flatMap((part) => splitScriptIntoScenes(part, language, pace));
+                  if (!parts.length || parts.length > 6 || parts.join("\n\n").length > 5000 || parts.some((part) => estimatedDuration(part, language, pace) > 15)) {
+                    setSplitError(isThai ? "บทนี้เกินขีดจำกัดของงาน หรือมีข้อความที่ยาวเกินไป กรุณาย่อบทหรือแบ่งงานเป็นหลายวิดีโอ" : "This script exceeds the project limit or contains a segment that is too long. Shorten it or split it into multiple videos.");
+                    return;
+                  }
+                  const next = parts.map((part, index) => ({ ...(scenes[index] ?? { id: crypto.randomUUID(), title: index === 0 ? "Intro" : `${isThai ? "ซีน" : "Scene"} ${index + 1}`, direction: "", voiceId: activeSceneVoiceId === selectedVoice ? undefined : activeSceneVoiceId }), script: part, durationSeconds: undefined }));
+                  setScenes(next); setActiveSceneId(next[0]!.id); setFullScriptPending(false);
+                } catch {
+                  if (requestVersion === splitRequestVersion.current) setSplitError(isThai ? "แบ่งบทด้วย AI ไม่สำเร็จ กรุณาลองอีกครั้ง" : "AI could not split the script. Please try again.");
+                } finally {
+                  if (requestVersion === splitRequestVersion.current) setIsSplittingScript(false);
+                }
+              }}>{isSplittingScript ? (isThai ? "กำลังแบ่งบท..." : "Splitting...") : (isThai ? "ให้ AI ช่วยแบ่งซีน" : "Split scenes with AI")}</button>
+              {splitError ? <p className={styles.splitWarning} role="alert">{splitError}</p> : null}
             </div>
             <div className={styles.formGroup}>
               <div className={styles.formLabel}><span>{isThai ? "โทนเสียง" : "Speech tone"}</span></div>

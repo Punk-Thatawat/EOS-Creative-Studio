@@ -223,6 +223,12 @@ async function authenticatedRequest(path: string, init: RequestInit = {}) {
   return payload?.data ?? payload;
 }
 
+export async function splitPresenterScript(script: string): Promise<{ scenes: string[] }> {
+  return await authenticatedRequest("/generations/presenter/split-script", {
+    method: "POST", body: JSON.stringify({ script }),
+  }) as { scenes: string[] };
+}
+
 export async function createVideoStoryboard(input: VideoGenerationInput, signal?: AbortSignal): Promise<VideoStoryboardResponse> {
   return await authenticatedRequest("/generations/video/image-to-video", {
     method: "POST",

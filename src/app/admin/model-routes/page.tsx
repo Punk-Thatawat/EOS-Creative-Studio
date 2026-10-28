@@ -68,6 +68,7 @@ const videoFunctions = [
 
 const aiPresenterFunctions = [
   { id: "ai-presenter", label: "Presenter Video", description: "Create presenter videos from a presenter reference and script" },
+  { id: "ai-presenter-script", label: "Script Splitter", description: "Split presenter scripts into scenes" },
 ] as const;
 
 const documentFunctions = [
@@ -429,6 +430,7 @@ function OcrEnginePanel() {
 }
 
 function modelKindForFeature(feature: FeatureId): string {
+  if (feature === "ai-presenter-script") return "document";
   if (feature === "video-to-sfx" || feature === "video-to-music") return "audio";
   if (feature === "ai-presenter" || videoFunctions.some((item) => item.id === feature)) return "video";
   if (feature === "audio") return "audio";
@@ -438,7 +440,7 @@ function modelKindForFeature(feature: FeatureId): string {
 
 function isFeatureCompatible(item: GenerationModelOption, feature: FeatureId): boolean {
   const capabilities = item.capabilities;
-  const isDocumentFeature = feature === "document" || documentFunctions.some((documentFeature) => documentFeature.id === feature);
+  const isDocumentFeature = feature === "ai-presenter-script" || feature === "document" || documentFunctions.some((documentFeature) => documentFeature.id === feature);
   const isLlm = capabilities.providerType?.trim().toLowerCase() === "llm";
   if (isDocumentFeature) return item.kind === "document" && isLlm;
   if (item.kind !== modelKindForFeature(feature)) return false;
