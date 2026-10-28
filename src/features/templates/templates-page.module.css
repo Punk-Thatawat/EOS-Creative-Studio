@@ -1325,11 +1325,12 @@
 .motionMontage3 { z-index: 1; transform: rotate(7deg) translateX(-18%); }
 .motionLibrary { min-height: 320px; overflow: hidden; border: 0; border-radius: 0; background: #111314; padding: 18px 20px; }
 .motionLibrary h2 { margin: 0 0 16px; color: #fff; font-size: 16px; font-weight: 750; }
-.motionGallery { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 9px; overflow-x: auto; padding: 2px 2px 12px; }
-.motionGallery button { position: relative; min-width: 0; aspect-ratio: .66; overflow: hidden; border: 0; border-radius: 0; background: #202225 center / cover; color: #fff; text-align: left; }
-.motionGallery button:hover { border-color: #f26b38; }
-.motionGallery button::after { position: absolute; inset: 45% 0 0; background: linear-gradient(transparent, #000b); content: ""; }
-.motionGallery button > span { position: absolute; z-index: 1; inset: auto 9px 10px; overflow: hidden; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.motionGallery { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 14px; overflow-x: auto; padding: 2px 2px 14px; }
+/* Tall rounded tiles that play their motion, as in a motion library of phone clips. */
+.motionGallery button { position: relative; min-width: 0; aspect-ratio: 9 / 16; overflow: hidden; border: 0; border-radius: 16px; background: #202225 center / cover; color: #fff; text-align: left; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.motionGallery button:hover, .motionGallery button:focus-visible { transform: translateY(-2px); outline: none; }
+.motionGallery button > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.motionGallery button > .motionMute, .workOpen > .motionMute { position: absolute; right: 10px; bottom: 10px; z-index: 1; display: grid; width: 34px; height: 34px; place-items: center; border-radius: 999px; background: #17171999; color: #ffffffd9; backdrop-filter: blur(4px); }
 .motionLibraryEmpty { color: #ffffff70; font-size: 13px; }
 
 /* The list the "change" chip opens. */
@@ -1558,6 +1559,23 @@
   background: #000;
   object-fit: contain;
 }
+/* Motion Control: tall rounded tiles in a grid, the same shape as the clips of its motion library. */
+.myVideos ul.workGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 14px;
+  overflow-x: auto;
+}
+.myVideos ul.workGrid > li {
+  position: relative;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #202225;
+}
+/* A clip still being made, or a run's result, fills a tall tile too; its prompt is in the tile's tooltip. */
+.myVideos ul.workGrid > li > .pendingClip, .myVideos ul.workGrid > li > video { width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; }
+.myVideos ul.workGrid > li > span { display: none; }
 .myVideos span {
   display: -webkit-box;
   overflow: hidden;
@@ -2605,7 +2623,7 @@
 .videoPreviewDialog::backdrop { background: #000b; }
 .videoPreviewDialog .previewLayout { grid-template-columns: minmax(0, 1fr) 368px; gap: 0; height: 100%; min-height: 0; padding: 0; }
 .videoPreviewDialog .artworkPane { background: #050607; }
-.videoPreviewInfo { min-height: 0; margin: 8px; overflow: hidden; border-radius: 0; background: #191b1d; padding: 56px 16px 16px; color: #f5f5f6; }
+.videoPreviewInfo { min-height: 0; margin: 8px; overflow: hidden; border-radius: 16px; background: #191b1d; padding: 56px 16px 16px; color: #f5f5f6; }
 /* The details scroll when the window is short; the buttons stay at the bottom, always in view. */
 .clipScroll { min-height: 0; flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px 12px; }
 .videoPreviewDialog .previewClose { border-color: #ffffff12; background: #292b2d; color: #fff; }
@@ -2622,14 +2640,28 @@
 .clipTime { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; }
 .clipFullscreen { justify-self: end; }
 .clipDetailsHeading { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; color: #ffffff80; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.clipDetails { display: grid; gap: 8px; margin: 0; border-radius: 0; background: #26282a; padding: 12px; }
+.clipCard { margin-bottom: 10px; border-radius: 14px; background: #232527; overflow: hidden; }
+.clipCardHead { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; background: none; padding: 12px 12px 8px; color: #ffffff80; font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.clipCardHead > span { display: inline-flex; align-items: center; gap: 7px; }
+.clipCardToggle { cursor: pointer; }
+.clipChevronOpen { transform: rotate(180deg); }
+.clipCardBody { margin: 0 8px 8px; border-radius: 10px; background: #2b2d30; padding: 10px; }
+.clipCopy { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; background: #34363a; padding: 5px 9px; color: #fff; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 650; letter-spacing: 0; text-transform: none; }
+.clipCopy:hover { background: #3f4247; }
+.clipPrompt { margin: 0; color: #f5f5f6; font-size: 12.5px; font-weight: 600; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.clipPromptClamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
+.clipSeeAll { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; border: 0; background: none; padding: 0; color: #ffffff80; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; }
+.clipSeeAll:hover { color: #fff; }
+.clipDetails { display: grid; gap: 8px; }
 .clipDetails > div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
 .clipDetails dt { color: #ffffff80; }
 .clipDetails dd { margin: 0; color: #fff; font-weight: 650; text-align: right; overflow-wrap: anywhere; }
 .clipActions { flex: none; margin-top: auto; padding-top: 12px; }
-.clipEdit, .clipActionGrid > button, .clipActionGrid > a { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 0; background: #1f2022; box-shadow: inset 0 0 0 1px #34363a; color: #fff; font-size: 12px; font-weight: 650; text-decoration: none; }
-.clipEdit { width: 100%; min-height: 46px; margin-bottom: 10px; border: 0; background: #f26b38; box-shadow: 0 3px 0 #a9440f; color: #fff; cursor: pointer; font-family: inherit; }
+.clipEdit, .clipActionGrid > button, .clipActionGrid > a { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 12px; background: #1f2022; box-shadow: inset 0 0 0 1px #34363a; color: #fff; font-size: 12px; font-weight: 650; text-decoration: none; }
+.clipEdit { width: 100%; min-height: 46px; margin-bottom: 10px; border: 0; border-radius: 12px; background: #f26b38; box-shadow: 0 3px 0 #a9440f; font-size: 14px; color: #fff; cursor: pointer; font-family: inherit; }
 .clipEdit:hover { background: #ff7a45; }
+.clipSave { display: flex; width: 100%; min-height: 40px; align-items: center; justify-content: center; gap: 7px; margin-bottom: 7px; border: 0; border-radius: 12px; background: #1f2022; box-shadow: inset 0 0 0 1px #34363a; color: #fff; font-family: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.clipSave:hover { background: #2a2c2f; }
 .clipActionGrid { display: grid; grid-template-columns: minmax(0, 1fr) 46px 46px; gap: 7px; }
 .clipActionGrid:has(> :nth-child(2):last-child) { grid-template-columns: minmax(0, 1fr) 46px; }
 .clipActionGrid > button { cursor: pointer; }
@@ -2815,8 +2847,8 @@
 .motionThumbs small:empty { display: none; }
 .motionThumbs small.sendError { color: #ff8a80; }
 /* The images a template starts from, in its details. */
-.clipAssets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
-.clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; background: #26282a; }
+.clipAssets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; border-radius: 10px; background: #26282a; }
 .clipAsset img { width: 100%; height: 100%; object-fit: cover; }
 .clipShared { margin: 8px 0 0; font-size: 12px; color: #ffb08f; }
 /* Motion Control's advanced settings: the prompt for the scene and which source the character's orientation follows. */
@@ -2824,3 +2856,62 @@
 .motionAdvancedLabel { display: grid; gap: 8px; margin: 4px 0 14px; font-size: 13px; font-weight: 700; color: #ffffffd0; }
 .motionAdvancedLabel textarea { min-height: 96px; }
 .motionAdvancedLabel p { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.55; color: #ffffff80; }
+/* A clip of "Your videos": the video fills the tile and its buttons appear when the pointer is on it. */
+.myVideos li .workOpen { position: absolute; inset: 0; display: block; width: 100%; height: 100%; padding: 0; border-radius: 0; background: none; cursor: pointer; align-self: stretch; }
+.myVideos li .workOpen video { width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; pointer-events: none; }
+/* Motion Control, as in a motion library: two boxes, one over the other, for the motion to copy and for the character. */
+.motionStack { display: grid; gap: 10px; }
+.motionBoxWrap { position: relative; }
+.motionBox { position: relative; display: flex; width: 100%; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 1.5px dashed #ffffff2e; border-radius: 16px; background: #ffffff08; padding: 14px; color: #fff; text-align: center; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.motionBox:hover { border-color: #f26b38; background: #ffffff0d; }
+.motionBox strong { font-size: 14px; font-weight: 750; }
+.motionBox small { font-size: 12px; line-height: 1.45; color: #ffffff73; }
+.motionBoxIcon { display: grid; width: 38px; height: 38px; place-items: center; margin-bottom: 4px; border-radius: 999px; background: #ffffff14; color: #ffffffd0; }
+.motionBoxFilled { border-style: solid; border-color: #ffffff14; background: #17181a; padding: 0; }
+/* The chosen motion, held like a card that is slightly turned. */
+.motionTilt { position: relative; display: block; height: 134px; transform: rotate(-4deg); overflow: hidden; border-radius: 12px; box-shadow: 0 10px 26px #000a; }
+.motionTilt > video { display: block; width: auto; height: 100%; max-width: 100%; object-fit: cover; }
+.motionTilt > i { position: absolute; right: 7px; bottom: 7px; display: grid; width: 22px; height: 22px; place-items: center; border-radius: 7px; background: #17171999; color: #fff; }
+.motionBoxImage { object-fit: cover; }
+.motionBoxClear { position: absolute; top: 8px; right: 8px; z-index: 2; display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 999px; background: #111b; color: #fff; cursor: pointer; }
+/* Below 1280px the app's bottom menu (66px) floats over the page, so the workspace ends above it and the generate button stays flush with the panel. */
+@media (max-width: 1023.98px) {
+  .workspace { height: calc(100dvh - 120px - 66px); }
+}
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .workspace { height: calc(100dvh - 80px - 66px); }
+}
+/* Create video, as in the reference: rounded cards, one attach box, playing tiles for "Your videos". */
+.composerHero, .composerCard, .styleRow, .composerBlock, .composerOption { border-radius: 14px; }
+.composerCard { border-radius: 14px; }
+.styleThumb, .styleChange { border-radius: 8px; }
+.composerHeroChange { border-radius: 8px; }
+.composerSlots { display: block; min-height: 0; border-radius: 14px; padding: 0; background: none; }
+.composerSlots > .slotOptional { z-index: 1; border-radius: 8px; background: #ffffff1f; }
+.attachBox { display: flex; width: 100%; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed #ffffff2e; border-radius: 14px; background: #ffffff08; padding: 16px; color: #fff; text-align: center; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.attachBox:hover { border-color: #f26b38; background: #ffffff0d; }
+.attachBox strong { max-width: 240px; font-size: 14px; font-weight: 750; line-height: 1.4; }
+.attachBox small { font-size: 12px; color: #ffffff73; }
+.attachIcons { display: flex; margin-bottom: 6px; }
+.attachIcons i { display: grid; width: 34px; height: 34px; margin-left: -6px; place-items: center; border: 2px solid #17181a; border-radius: 999px; background: #ffffff1f; color: #ffffffd0; }
+.attachIcons i:first-child { margin-left: 0; }
+.attachFiles { display: flex; flex-wrap: wrap; gap: 8px; border: 1.5px dashed #ffffff2e; border-radius: 14px; background: #ffffff08; padding: 40px 14px 14px; }
+.attachFiles .slotFile, .attachFiles .slotAdd { width: 64px; height: 64px; border-radius: 10px; }
+.composerSlots > small { display: block; margin-top: 6px; }
+.myVideos ul.workGridWide { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.myVideos ul.workGridWide > li { aspect-ratio: 16 / 9; }
+/* The template, held in a box like the reference video box; the prompt is a row that opens; library tiles are rounded. */
+.composerStage { min-height: 170px; border: 1.5px dashed #ffffff2e; border-radius: 14px; background: #ffffff08; padding: 16px; }
+.composerStage .cardClose { border-radius: 999px; }
+.composerCard { width: 62%; border-width: 0; border-radius: 12px; box-shadow: 0 10px 26px #000a; }
+.composerBlock { background: #ffffff0a; }
+.tile, .skeleton { overflow: hidden; border-radius: 12px; }
+.masonry { column-gap: 14px; }
+.masonry > .tile { margin-bottom: 14px; }
+/* Rounded rows, switches and generate buttons in the create panels. */
+.composerRow, .motionSceneControl, .motionSourceTabs, .composerPrompt, .motionAssets, .switch, .composerTabs { border-radius: 14px; }
+.motionSourceTabs > button, .switch > button { border-radius: 10px; }
+.composerBar .use, .motionGenerateDock button { border-radius: 14px; }
+.composerBar .use { box-shadow: 0 3px 0 #b84a1c; }
+.composerOption { border-radius: 0; background: none; }
+.composerBar, .motionGenerateDock { border-radius: 0; }

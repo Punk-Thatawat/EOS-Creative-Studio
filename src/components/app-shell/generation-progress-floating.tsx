@@ -869,7 +869,7 @@ export function GenerationProgressFloating() {
 
   return (
     <div
-      className={styles.wrapper}
+      className={`${styles.wrapper} ${pathname?.startsWith("/templates") ? styles.wrapperRight : ""}`}
       data-expanded={isCenterOpen}
       onKeyDown={(event) => {
         if (event.key === "Escape" && isCenterOpen) {
