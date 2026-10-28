@@ -6,6 +6,7 @@ const backendOrigin = configuredBackendUrl.replace(/\/api\/v1$/, "");
 const backendApiUrl = `${backendOrigin}/api/v1`;
 
 export type TextToSpeechInput = {
+  feature?: "textToSpeech" | "aiPresenter";
   text: string;
   voice: string;
   modelId?: string;
@@ -32,6 +33,7 @@ export type TextToSpeechInput = {
 
 export type TextToSpeechSceneInput = { title: string; text: string; voice: string };
 export type TextToSpeechScenesInput = {
+  feature?: "textToSpeech" | "aiPresenter";
   scenes: TextToSpeechSceneInput[];
   modelId?: string;
   outputFormat: "mp3" | "wav" | "ogg";
@@ -111,7 +113,7 @@ export type AudioBackgroundMusic = {
   description: string;
   previewUrl?: string | null;
 };
-export type AudioFeatureKey = "textToSpeech" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
+export type AudioFeatureKey = "textToSpeech" | "aiPresenter" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
 
 export type DialogueSpeakerInput = { name: string; voice: string };
 export type DialogueEmotionTag = "happy" | "excited" | "calm" | "sad" | "serious" | "whispering" | "angry";
@@ -216,7 +218,7 @@ export type AdminAudioBackgroundMusicPreset = {
 };
 
 export type AdminAudioProvider = "wavespeed" | "elevenlabs" | "internal";
-export type AdminAudioFeature = "textToSpeech" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
+export type AdminAudioFeature = AudioFeatureKey;
 export type AdminAudioRouting = Record<AdminAudioFeature, AdminAudioProvider>;
 export type AdminAudioProviderSettings = {
   wavespeed: { defaultFormat: "mp3" | "wav" | "ogg"; timeoutMs: number };
@@ -774,7 +776,7 @@ function legacyAdminVoicesFromProfiles(profiles: AdminAudioVoiceProfile[], fallb
   return voices;
 }
 
-const adminFeatureKeys: AudioFeatureKey[] = ["textToSpeech", "podcastDialogue", "voiceClone", "soundEffects", "audioCleanup"];
+const adminFeatureKeys: AudioFeatureKey[] = ["textToSpeech", "aiPresenter", "podcastDialogue", "voiceClone", "soundEffects", "audioCleanup"];
 
 function normalizeAdminModelProfileMap(
   value: unknown,
@@ -801,6 +803,7 @@ function normalizeAdminFeatureProfiles(value: unknown, modelProfiles: Record<str
   const activeVoices = modelProfiles[modelId]?.voices ?? fallbackVoices;
   const defaults: Record<AudioFeatureKey, AdminAudioFeatureProfile> = {
     textToSpeech: { modelId, voices: activeVoices, models: { [modelId]: { voices: activeVoices } } },
+    aiPresenter: { modelId: "eleven_v4", voices: [], models: { eleven_v4: { voices: [] } } },
     podcastDialogue: { modelId: "eleven_v4", voices: activeVoices, models: { eleven_v4: { voices: activeVoices } }, settings: { stability: 0.5, similarity: 0.75 } },
     voiceClone: { modelId: "minimax/speech-2.6-hd", voices: activeVoices, models: { "minimax/speech-2.6-hd": { voices: activeVoices } } },
     soundEffects: { modelId: "mirelo-ai/sfx-1.6/text-to-audio", voices: [], models: { "mirelo-ai/sfx-1.6/text-to-audio": { voices: [] } } },
@@ -868,6 +871,13 @@ export async function getAdminAudioSettings(): Promise<AdminAudioSettings> {
   const payload = await adminRequest("/api/v1/admin/audio-settings") as { data?: AdminAudioSettings };
   if (!payload.data) throw new Error("Unable to load audio settings");
   return normalizeAdminAudioSettings(payload.data);
+}
+
+export async function listAdminElevenLabsVoices(pageToken?: string): Promise<{ voices: AdminAudioVoiceProfile[]; nextPageToken: string | null }> {
+  const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : "";
+  const payload = await adminRequest(`/api/v1/admin/audio-settings/providers/elevenlabs/voices${query}`) as { data?: { voices: Array<Omit<AdminAudioVoiceProfile, "imageUrl">>; nextPageToken: string | null } };
+  if (!payload.data || !Array.isArray(payload.data.voices)) throw new Error("Unable to load ElevenLabs voices");
+  return { voices: payload.data.voices.map((voice) => ({ ...voice, imageUrl: "" })), nextPageToken: payload.data.nextPageToken };
 }
 
 export async function updateAdminAudioSettings(input: AdminAudioSettingsPatch): Promise<AdminAudioSettings> {

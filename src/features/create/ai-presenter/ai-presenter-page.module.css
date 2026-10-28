@@ -1233,6 +1233,13 @@
 .sceneModalSubmit { display: inline-flex; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border-radius: 9px; padding: 0 15px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 750; }
 .sceneModalCancel { border: 1px solid #e8dfd9; background: #fff; color: #615951; }
 .sceneModalCancel:hover { background: #faf7f4; }
+.sceneModalDelete { margin-right: auto; border: 0; background: transparent; color: #b83f2f; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.sceneModalFooter { flex-wrap: wrap; }
+.sceneDurationWarning { display: grid; flex-basis: 100%; gap: 3px; padding: 10px 12px; border: 1px solid #f4c896; border-radius: 9px; background: #fff7eb; color: #82500e; font-size: 12px; line-height: 1.45; }
+.sceneDeleteConfirm { display: flex; width: 100%; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; color: #943d30; font-size: 12px; }
+.sceneDeleteConfirm span { margin-right: auto; }
+.sceneDeleteConfirm button { min-height: 36px; border: 1px solid #e1c3bb; border-radius: 8px; padding: 0 12px; background: #fff; color: #943d30; font: inherit; cursor: pointer; }
+.sceneDeleteConfirm button:last-child { border-color: #b83f2f; background: #b83f2f; color: white; }
 .sceneModalSubmit { border: 1px solid #ed5c25; background: #ff642d; color: #fff; box-shadow: 0 4px 12px rgb(237 92 37 / 18%); }
 .sceneModalSubmit:hover:not(:disabled) { background: #e95520; }
 .sceneModalSubmit:disabled { cursor: not-allowed; opacity: .5; box-shadow: none; }
@@ -2036,22 +2043,6 @@ button.settingRow {
 .previewReady { background: #e8f7ef; color: #16774d; }
 .previewReady > span { background: #18a86b; }
 
-.speechPreview {
-  display: grid;
-  gap: 7px;
-  margin-top: 9px;
-  border: 1px solid #eee7e2;
-  border-radius: 9px;
-  background: #fffdfb;
-  padding: 8px 10px;
-}
-
-.speechPreview > div { display: flex; align-items: center; gap: 6px; color: #6b625b; }
-.speechPreview > div svg { color: #e45c24; }
-.speechPreview strong { font-size: 8px; }
-.speechPreview span { margin-left: auto; color: #817970; font-size: 7px; }
-.speechPreview audio { width: 100%; height: 30px; }
-
 .errorCard,
 .formError {
   border: 1px solid #f1c8bf;
@@ -2064,7 +2055,6 @@ button.settingRow {
 }
 
 .formError { margin: 0; }
-.statusNote { margin: 8px 0 0; color: #6c625b; font-size: 8px; }
 .settingsSparkle { color: #e75a22; }
 
 .estimateBlock { margin-top: 8px; padding-top: 13px; border-top: 1px dashed #d9d9d9; }
@@ -2168,8 +2158,7 @@ button.settingRow {
 .workspace .generateHint { font-size: 13px; }
 .workspace .generateButton { min-height: 52px; font-size: 16px; }
 .workspace .formError,
-.workspace .errorCard,
-.workspace .statusNote { font-size: 11px; line-height: 1.5; }
+.workspace .errorCard { font-size: 11px; line-height: 1.5; }
 
 .voicePickerRoot { position: relative; min-width: 0; }
 .voicePickerRoot[data-open="true"] { z-index: 20; }
@@ -2214,19 +2203,13 @@ button.settingRow {
   padding: 9px;
   box-shadow: 0 14px 32px rgb(33 29 25 / 16%);
 }
-.voicePickerSearch {
-  display: flex;
-  min-height: 38px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid #ebe5e0;
-  border-radius: 8px;
-  background: #fffdfb;
-  padding: 0 10px;
-  color: #817970;
+.sceneModalField .voicePickerSearch input:not([type="file"], [type="hidden"]) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
 }
-.voicePickerSearch:focus-within { border-color: #f3a17e; box-shadow: 0 0 0 3px rgb(255 91 34 / 8%); }
-.voicePickerSearch input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #37322f; font: inherit; font-size: 11px; }
 .voicePickerList { display: grid; min-height: 0; align-content: start; gap: 4px; overflow-y: auto; overscroll-behavior: contain; }
 .voicePickerOption { display: flex; min-width: 0; align-items: center; gap: 7px; border: 1px solid transparent; border-radius: 9px; padding: 3px; }
 .voicePickerOption:hover { background: #fff8f4; }
@@ -2234,8 +2217,12 @@ button.settingRow {
 .voicePickerChoose { display: flex; min-width: 0; min-height: 42px; flex: 1; align-items: center; justify-content: space-between; gap: 8px; border: 0; border-radius: 6px; background: transparent; padding: 5px 7px; color: #37322f; cursor: pointer; text-align: left; }
 .voicePickerChoose > svg { flex: none; color: #e45c24; }
 .voicePickerOptionCopy { display: grid; min-width: 0; gap: 3px; }
+.voicePickerChoose .voicePickerOptionCopy { flex: 1; }
+.voiceAvatar, .voiceAvatarFallback { position: relative; display: grid; width: 36px; height: 36px; flex: none; overflow: hidden; place-items: center; border-radius: 9px; background: #fff1e9; color: #e65d28; }
+.voiceAvatar img { object-fit: cover; }
 .voicePickerOptionCopy strong { overflow: hidden; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .voicePickerOptionCopy small { display: -webkit-box; overflow: hidden; color: #817970; font-size: 9px; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.voicePickerOptionCopy .voicePreviewUnavailable { color: #ad4b20; }
 .voicePickerPreview { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border: 1px solid #f3d0c0; border-radius: 50%; background: #fff; color: #d9501e; cursor: pointer; }
 .voicePickerPreview:hover:not(:disabled),
 .voicePickerPreviewPlaying { border-color: #ff6b36; background: #fff0e8; color: #d9501e; }
@@ -2270,7 +2257,7 @@ button.settingRow {
 .sceneSpeakerSettings .voicePickerValue { overflow: hidden; gap: 2px; }
 .sceneSpeakerSettings .voicePickerValue strong { line-height: 1.25; }
 .sceneSpeakerSettings .voicePickerValue small { line-height: 1.25; }
-.scenePresenterMenu { max-height: min(320px, 48vh); border-radius: 11px; padding: 6px; }
+.scenePresenterMenu { z-index: 10001; max-height: min(320px, 48vh); border-radius: 11px; padding: 6px; }
 .scenePresenterOption { min-height: 49px; gap: 8px; border-radius: 8px; padding: 5px; font-size: 11px; }
 .scenePresenterChoice { display: flex; width: 100%; min-width: 0; align-items: center; gap: 9px; text-align: left; }
 .scenePresenterThumb {
@@ -2293,3 +2280,154 @@ button.settingRow {
 .workspace .presenterUploadCard { border: 1px dashed #decfc4; }
 .workspace .presenterUploadCard.presenterCardActive { border-style: solid; }
 .workspace .presenterUploadPlaceholder { width: 56px; height: 56px; }
+.fullScriptPanel {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  margin-bottom: 20px;
+  border: 1px solid #f1dfd4;
+  border-radius: 12px;
+  background: #fffaf7;
+}
+.fullScriptInput {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid #e8ddd6;
+  border-radius: 10px;
+  background: white;
+  color: #24201e;
+  font: inherit;
+}
+.fullScriptMeta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; color: #756a64; font-size: 12px; }
+.splitButton, .splitConfirm button { border: 1px solid #ff5d21; border-radius: 9px; padding: 9px 12px; background: #fff; color: #c8420c; font: inherit; font-weight: 600; cursor: pointer; }
+.splitButton:disabled { opacity: .5; cursor: not-allowed; }
+.splitConfirm { padding: 10px; border-radius: 8px; background: #fff1e8; color: #6d402a; font-size: 12px; }
+.splitConfirm p { margin: 0 0 8px; }
+.splitConfirm div { display: flex; gap: 8px; flex-wrap: wrap; }
+.splitWarning { color: #a2301c; font-size: 12px; margin: 0; }
+.sceneEditorHeading { display: grid; gap: 3px; margin-bottom: 14px; }
+.sceneEditorHeading span { color: #756a64; font-size: 12px; }
+.sceneScriptExcerpt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; }
+.advancedSettings { margin-bottom: 16px; }
+.advancedSettings summary { cursor: pointer; color: #594b44; font-weight: 600; padding: 10px 0; }
+
+.workspace .sceneCard {
+  width: 234px;
+  min-width: 234px;
+  height: 112px;
+  min-height: 112px;
+  grid-template-columns: minmax(0, 1fr) 26px;
+  gap: 6px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #e9e2dd;
+  box-shadow: none;
+}
+.workspace .sceneCardActive {
+  border-color: #fb6a38;
+  background: #fffaf7;
+  box-shadow: 0 3px 10px rgb(119 68 38 / 8%);
+}
+.workspace .sceneSelect {
+  grid-column: 1;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 10px;
+  height: 100%;
+}
+.workspace .sceneImage { width: 58px; height: 82px; border-radius: 9px; }
+.workspace .sceneCopy { gap: 4px; overflow: hidden; }
+.workspace .sceneTitleRow { display: flex; min-width: 0; align-items: center; gap: 5px; }
+.workspace .sceneTitleRow strong { min-width: 0; font-size: 13px; font-weight: 650; }
+.workspace .sceneTitleRow svg { flex: none; color: #a58f83; }
+.workspace .sceneCopy small { font-size: 11px; line-height: 1.35; }
+.workspace .sceneCopy .sceneSpeechDuration { padding: 2px 7px; font-size: 10px; font-weight: 600; }
+.workspace .sceneCopy .sceneScriptExcerpt { display: block; overflow: hidden; color: #786d66; text-overflow: ellipsis; white-space: nowrap; }
+.workspace .sceneMore { width: 26px; height: 26px; align-self: start; }
+.workspace .addScene { height: 112px; min-height: 112px; }
+
+.workspace .sceneCard {
+  display: block;
+  width: 200px;
+  min-width: 200px;
+  height: 204px;
+  min-height: 204px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 13px;
+}
+.workspace .sceneSelect {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.workspace .sceneImage {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  flex: none;
+  border: 0;
+  border-radius: 0;
+  background: #f7f0eb;
+}
+.workspace .sceneImage img { border: 0; border-radius: 0; object-position: center; }
+.workspace .sceneCopy { flex: 1; padding: 9px 11px; gap: 4px; }
+.workspace .sceneTitleRow { padding-right: 27px; }
+.workspace .sceneTitleRow strong { font-size: 13px; }
+.workspace .sceneCopy small { font-size: 10px; }
+.workspace .sceneMore { position: absolute; top: 7px; right: 7px; z-index: 1; align-self: auto; box-shadow: 0 1px 4px rgb(0 0 0 / 10%); }
+.workspace .addScene { width: 140px; min-width: 140px; height: 204px; min-height: 204px; }
+
+.workspace .sceneCard { width: 160px; min-width: 160px; height: 160px; min-height: 160px; }
+.workspace .sceneCopy { padding: 7px 9px; gap: 3px; }
+.workspace .sceneTitleRow strong { font-size: 12px; }
+.workspace .sceneCopy .sceneSpeechDuration { padding: 1px 6px; }
+.workspace .addScene { width: 110px; min-width: 110px; height: 160px; min-height: 160px; }
+
+.workspace .sceneCard { height: 126px; min-height: 126px; }
+.workspace .sceneCopy { justify-content: center; padding: 6px 9px; }
+.workspace .sceneTitleRow { padding-right: 0; }
+.workspace .sceneTime {
+  position: absolute;
+  z-index: 1;
+  top: 7px;
+  left: 7px;
+  max-width: calc(100% - 45px);
+  padding: 3px 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: rgb(20 18 17 / 72%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.workspace .addScene { height: 126px; min-height: 126px; }
+
+.workspace .presenterList { gap: 10px; padding: 10px 2px 8px; }
+.workspace .presenterOption { width: 92px; min-width: 92px; flex-basis: 92px; }
+.workspace .presenterOption .presenterCard {
+  min-height: 126px;
+  gap: 5px;
+  padding: 7px 6px;
+  border: 1px solid #e9e1db;
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.workspace .presenterOption .presenterCardActive { border-color: #f56632; background: #fffaf7; box-shadow: 0 2px 8px rgb(180 80 37 / 10%); }
+.workspace .presenterCard:focus-visible, .workspace .presenterAddCard:focus-visible, .workspace .presenterRemoveButton:focus-visible { outline: 2px solid #e75b27; outline-offset: 2px; }
+.workspace .presenterImage, .workspace .presenterUploadPlaceholder { width: 76px; height: 76px; flex: none; border-radius: 8px; }
+.workspace .presenterCard strong { font-size: 10px; line-height: 1.3; }
+.workspace .presenterCard .presenterSelected { display: flex; align-items: center; gap: 3px; color: #c94b1b; font-size: 10px; font-weight: 600; line-height: 1; }
+.workspace .presenterRemoveButton { top: 3px; right: 3px; width: 22px; height: 22px; background: rgb(255 255 255 / 94%); box-shadow: 0 1px 4px rgb(0 0 0 / 12%); }
+.workspace .presenterAddCard { width: 92px; min-width: 92px; min-height: 126px; flex-basis: 92px; gap: 6px; border: 1px dashed #e8b8a3; border-radius: 12px; background: #fffaf7; padding: 8px 4px; }
+.workspace .presenterAddCard > span { width: 38px; height: 38px; border-radius: 12px; background: #ffede3; }
+.workspace .presenterAddCard strong { font-size: 11px; font-weight: 650; }
+.workspace .presenterAddCard small { color: #796d65; font-size: 9px; }
