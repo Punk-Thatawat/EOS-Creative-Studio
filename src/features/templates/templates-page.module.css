@@ -2850,6 +2850,9 @@
 .clipAssets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; border-radius: 10px; background: #26282a; }
 .clipAsset img { width: 100%; height: 100%; object-fit: cover; }
+.clipAssetAdd { display: grid; width: 64px; height: 64px; place-items: center; border: 1px dashed #ffffff40; border-radius: 10px; background: #34363a; color: #ffffffb0; cursor: pointer; }
+.clipAssetAdd:hover { background: #3f4247; color: #fff; }
+.clipAssetRemove { position: absolute; top: 3px; right: 3px; display: grid; width: 18px; height: 18px; place-items: center; border: 0; border-radius: 50%; background: #000a; color: #fff; cursor: pointer; }
 .clipShared { margin: 8px 0 0; font-size: 12px; color: #ffb08f; }
 /* Motion Control's advanced settings: the prompt for the scene and which source the character's orientation follows. */
 .motionAdvanced { padding-bottom: 10px; }
@@ -2915,3 +2918,35 @@
 .composerBar .use { box-shadow: 0 3px 0 #b84a1c; }
 .composerOption { border-radius: 0; background: none; }
 .composerBar, .motionGenerateDock { border-radius: 0; }
+
+/* Recreate window of a product template */
+.recreateDialog { inset: 0; width: min(980px, calc(100vw - 32px)); max-width: none; height: min(660px, calc(100dvh - 32px)); max-height: none; margin: auto; overflow: hidden; padding: 0; border: 1px solid #ffffff14; border-radius: 20px; background: #121316; color: #f5f5f6; }
+.recreateDialog::backdrop { background: #000b; }
+.recreateDialog .previewClose { border-color: #ffffff12; background: #292b2d; color: #fff; }
+.recreateLayout { display: grid; height: 100%; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: center; padding: 28px; }
+.recreateArt { position: relative; height: 100%; min-height: 0; overflow: hidden; border-radius: 16px; background: #050607; }
+.recreateArt video, .recreateArt img { width: 100%; height: 100%; object-fit: cover; }
+.recreateForm { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding-right: 12px; }
+.recreateForm h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: #ffffffb0; }
+.recreateSlots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.recreateSlot { position: relative; display: flex; flex-direction: column; gap: 8px; }
+.recreateLabel { color: #ffffff90; font-size: 13px; font-weight: 600; }
+.recreateBox { position: relative; display: flex; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; overflow: hidden; border: 1px dashed #ffffff30; border-radius: 16px; background: #1a1c1f; color: #fff; cursor: pointer; font-family: inherit; font-size: 13px; text-align: center; }
+.recreateBox:hover { background: #202327; }
+.recreatePicked { object-fit: cover; }
+.recreateFlag { position: absolute; top: 8px; right: 8px; z-index: 1; border-radius: 8px; background: #2c2e32; padding: 2px 8px; color: #ffffff90; font-size: 11px; font-weight: 600; }
+.recreateIcon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: #34363a; }
+.recreateRemove { position: absolute; bottom: 8px; right: 8px; display: grid; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 50%; background: #000a; color: #fff; cursor: pointer; }
+.recreateEdit { min-height: 120px; resize: vertical; border: 1px solid #ffffff18; border-radius: 16px; background: #1a1c1f; padding: 14px; color: #fff; font-family: inherit; font-size: 14px; }
+.recreateEdit::placeholder { color: #ffffff55; }
+.recreateError { margin: 0; color: #ff8a80; font-size: 12px; }
+.recreateGo { display: flex; min-height: 50px; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 14px; background: #f26b38; box-shadow: 0 3px 0 #a9440f; color: #fff; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 800; }
+.recreateGo:hover:not(:disabled) { background: #ff7a45; }
+.recreateGo:disabled { cursor: progress; opacity: .7; }
+.recreateCost { display: inline-flex; align-items: center; gap: 4px; }
+.recreateSpin { animation: pendingSpin 1s linear infinite; }
+@media (max-width: 760px) {
+  .recreateDialog { height: calc(100dvh - 16px); width: calc(100vw - 16px); overflow-y: auto; }
+  .recreateLayout { grid-template-columns: 1fr; gap: 16px; padding: 56px 16px 16px; align-items: start; }
+  .recreateArt { height: 220px; }
+}
