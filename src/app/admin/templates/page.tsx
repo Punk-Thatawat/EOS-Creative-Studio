@@ -2,15 +2,16 @@
 import { GeneratedWorkPicker } from "@/features/templates/generated-work-picker";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, CheckCircle2, FileText, ImageIcon, LayoutTemplate, LoaderCircle, Plus, RefreshCw, Save, Star, Trash2, Video, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, FileText, ImageIcon, LayoutTemplate, LoaderCircle, Plus, RefreshCw, Save, Star, Trash2, Upload, Video, X } from "lucide-react";
 import { SidebarNavigation } from "@/components/app-shell/navigation";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { StudioHeader } from "@/components/app-shell/studio-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/ui/search-input";
-import { createAdminTemplate, deleteAdminTemplate, listAdminTemplates, updateAdminTemplate, type AdminCreativeTemplate, type TemplateAdminInput, type TemplateKind } from "@/lib/api/templates";
+import { createAdminTemplate, createTemplateCoverFromPreview, deleteAdminTemplate, keepTemplateAssets, listAdminTemplates, updateAdminTemplate, uploadTemplateFile, type AdminCreativeTemplate, type TemplateAdminInput, type TemplateKind } from "@/lib/api/templates";
 import { promptMaxLength } from "@/lib/prompt-limits";
+import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 
 const kindOptions: Array<{ value: TemplateKind; label: string; icon: typeof ImageIcon }> = [
   { value: "image", label: "Image", icon: ImageIcon },
@@ -44,20 +45,195 @@ function Toggle({ label, description, checked, onChange }: { label: string; desc
   return <button type="button" onClick={onChange} aria-pressed={checked} className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left transition-colors ${checked ? "border-[#bfe1cc] bg-[#f3fbf5]" : "border-border bg-white"}`}><span><b className={`block text-xs ${checked ? "text-[#347454]" : "text-foreground"}`}>{label}</b><small className="mt-1 block text-[10px] font-normal text-muted-foreground">{description}</small></span><span className={`flex h-5 w-5 items-center justify-center rounded-full border ${checked ? "border-[#4c9b72] bg-[#4c9b72] text-white" : "border-border bg-white"}`}>{checked ? <Check size={13} strokeWidth={3} /> : null}</span></button>;
 }
 
-function TemplateEditor({ draft, busy, onChange, onSave, onClose }: { draft: (TemplateAdminInput & { id?: string }); busy: boolean; onChange: (next: TemplateAdminInput & { id?: string }) => void; onSave: () => void; onClose: () => void }) {
+// How a video template behaves in the public library: which mode it belongs to, and which model it starts with.
+const behaviorModes = [
+  { id: "create", label: "Create Video", feature: "text-to-video", tab: "text-to-video" },
+  { id: "extend", label: "Edit Video · Extend", feature: "extend-video", tab: "extend-video" },
+  { id: "lipsync", label: "Edit Video · Lipsync", feature: "lipsync", tab: "people-video" },
+  { id: "motion", label: "Motion Control", feature: "motion-transfer", tab: "motion-transfer" },
+  { id: "swap", label: "Motion Control · Objects swap", feature: "video-swap", tab: "motion-transfer" },
+  { id: "workflow", label: "Workflow · image → video", feature: "workflow-image-to-video", tab: "image-to-video" },
+] as const;
+
+function useModels(feature: string | null) {
+  const [models, setModels] = useState<GenerationModelOption[]>([]);
+  useEffect(() => {
+    if (!feature) return;
+    let alive = true;
+    listGenerationModels(feature)
+      .then((list) => {
+        if (alive) setModels(list.filter((model) => model.enabled));
+      })
+      .catch(() => {
+        if (alive) setModels([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [feature]);
+  return models;
+}
+
+function TemplateBehavior({ draft, update }: { draft: TemplateAdminInput & { id?: string }; update: (patch: Partial<TemplateAdminInput>) => void }) {
+  const settings = draft.settings ?? {};
+  const isVideo = draft.kind === "video";
+  const mode = behaviorModes.find((item) => item.feature === settings.feature) ?? behaviorModes[0];
+  const videoModels = useModels(isVideo ? (mode.id === "workflow" ? "image-to-video" : mode.feature) : draft.kind === "image" ? "text-to-image" : null);
+  const imageModels = useModels(isVideo && mode.id === "workflow" ? "text-to-image" : null);
+  if (!isVideo && draft.kind !== "image") return null;
+  const model = typeof settings.model === "string" ? settings.model : "";
+  const resolutions = (() => {
+    const capabilities = videoModels.find((item) => item.model === model)?.capabilities;
+    return capabilities?.supportedResolutions?.length ? capabilities.supportedResolutions : [];
+  })();
+  const field = "mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary";
+  const changeMode = (id: string) => {
+    const next = behaviorModes.find((item) => item.id === id);
+    if (!next) return;
+    // The model and quality belong to one feature, so they start over; the template's link follows the mode's creator tab.
+    const { model: _model, resolution: _resolution, imageModel: _imageModel, ...rest } = settings as Record<string, unknown>;
+    void _model;
+    void _resolution;
+    void _imageModel;
+    update({
+      settings: { ...rest, feature: next.feature },
+      ...(draft.targetPath.startsWith("/create/video") ? { targetPath: `/create/video?tab=${next.tab}${draft.slug ? `&template=${draft.slug}` : ""}` } : {}),
+    });
+  };
+  const setSetting = (patch: Record<string, unknown>) => update({ settings: { ...settings, ...patch } });
+  return (
+    <section className="rounded-2xl border border-border bg-white p-4" data-no-translate>
+      <h3 className="text-sm font-bold">Behavior · โหมดและโมเดล</h3>
+      <p className="mt-1 text-[10px] text-muted-foreground">Decides which mode of the public Templates page lists this template, and which model it starts with.</p>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        {isVideo ? (
+          <label className="text-xs font-semibold">
+            Mode
+            <select value={mode.id} onChange={(event) => changeMode(event.target.value)} className={field}>
+              {behaviorModes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {mode.id === "workflow" && isVideo ? (
+          <label className="text-xs font-semibold">
+            Image model (step 1)
+            <select value={typeof settings.imageModel === "string" ? settings.imageModel : ""} onChange={(event) => setSetting({ imageModel: event.target.value })} className={field}>
+              <option value="">— none —</option>
+              {imageModels.map((item) => (
+                <option key={item.model} value={item.model}>
+                  {item.displayName || item.model}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label className="text-xs font-semibold">
+          {mode.id === "workflow" && isVideo ? "Video model (step 2)" : "Model"}
+          <select
+            value={model}
+            onChange={(event) => {
+              const { resolution: _resolution, ...rest } = settings as Record<string, unknown>;
+              void _resolution;
+              update({ settings: { ...rest, ...(event.target.value ? { model: event.target.value } : {}) } });
+            }}
+            className={field}
+          >
+            <option value="">— none —</option>
+            {model && !videoModels.some((item) => item.model === model) ? <option value={model}>{model}</option> : null}
+            {videoModels.map((item) => (
+              <option key={item.model} value={item.model}>
+                {item.displayName || item.model}
+              </option>
+            ))}
+          </select>
+        </label>
+        {resolutions.length > 0 ? (
+          <label className="text-xs font-semibold">
+            Quality
+            <select value={typeof settings.resolution === "string" ? settings.resolution : ""} onChange={(event) => setSetting({ resolution: event.target.value || undefined })} className={field}>
+              <option value="">— none —</option>
+              {resolutions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function TemplateEditor({ draft, busy, onChange, onSave, onClose, onCoverSaved }: { draft: (TemplateAdminInput & { id?: string }); busy: boolean; onChange: (next: TemplateAdminInput & { id?: string }) => void; onSave: () => void; onClose: () => void; onCoverSaved: () => void }) {
   const update = (patch: Partial<TemplateAdminInput>) => onChange({ ...draft, ...patch });
+  const [cover, setCover] = useState<{ busy: boolean; message?: string; error?: boolean }>({ busy: false });
+  // The server cuts a frame from the preview video and keeps it: the fix for a clip saved as a template with a stand-in cover.
+  const makeCover = async () => {
+    if (!draft.id) return;
+    setCover({ busy: true });
+    try {
+      const saved = await createTemplateCoverFromPreview(draft.id);
+      update({ thumbnailUrl: saved.thumbnailUrl });
+      onCoverSaved();
+      setCover({ busy: false, message: "ตั้งภาพปกจากวิดีโอตัวอย่างแล้ว" });
+    } catch (reason) {
+      setCover({ busy: false, error: true, message: reason instanceof Error ? reason.message : "ตัดภาพปกไม่สำเร็จ" });
+    }
+  };
+  const [upload, setUpload] = useState<{ target?: "previewUrl" | "thumbnailUrl"; busy: boolean; message?: string; error?: boolean }>({ busy: false });
+  // A file from the admin's own computer: the server keeps it and the field gets the address the library serves it from.
+  const uploadFile = async (target: "previewUrl" | "thumbnailUrl", file: File | undefined) => {
+    if (!file) return;
+    setUpload({ target, busy: true });
+    try {
+      const saved = await uploadTemplateFile(file);
+      update({ [target]: saved.url });
+      setUpload({ target, busy: false, message: `อัปโหลดแล้ว (${(saved.sizeBytes / 1048576).toFixed(1)} MB) กดบันทึกเพื่อใช้กับเทมเพลต` });
+    } catch (reason) {
+      setUpload({ target, busy: false, error: true, message: reason instanceof Error ? reason.message : "อัปโหลดไม่สำเร็จ" });
+    }
+  };
+  const uploadButton = (target: "previewUrl" | "thumbnailUrl", accept: string, label: string) => <div className="mt-2" data-no-translate>
+    <label className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-border bg-white px-3 text-xs font-semibold hover:bg-[#fcfbfa] ${upload.busy ? "pointer-events-none opacity-60" : ""}`}>
+      {upload.busy && upload.target === target ? <LoaderCircle size={15} className="animate-spin" /> : <Upload size={15} />}{label}
+      <input type="file" accept={accept} className="sr-only" disabled={upload.busy || busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void uploadFile(target, file); }} />
+    </label>
+    {upload.target === target && upload.message ? <span className={`ml-2 text-[10px] ${upload.error ? "text-[#9f3b3b]" : "text-muted-foreground"}`} role={upload.error ? "alert" : undefined}>{upload.message}</span> : null}
+  </div>;
+  const [assets, setAssets] = useState<{ busy: boolean; message?: string; error?: boolean }>({ busy: false });
+  // The images and the clip a template starts from are provider links that expire in 7 days; the server keeps copies.
+  const keepAssets = async () => {
+    if (!draft.id) return;
+    setAssets({ busy: true });
+    try {
+      const saved = await keepTemplateAssets(draft.id);
+      update({ settings: saved.settings });
+      onCoverSaved();
+      setAssets({ busy: false, message: "เก็บไฟล์ต้นทางไว้ถาวรแล้ว" });
+    } catch (reason) {
+      setAssets({ busy: false, error: true, message: reason instanceof Error ? reason.message : "เก็บไฟล์ต้นทางไม่สำเร็จ" });
+    }
+  };
+  const settingsHaveRemoteFiles = JSON.stringify([draft.settings?.inputImages, draft.settings?.sourceImage, draft.settings?.sourceVideo]).includes("http");
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#201d1b]/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="template-editor-title">
     <div className="flex max-h-[min(850px,calc(100vh-32px))] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]">
       <header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4 sm:px-7 sm:py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Template control</p><h2 id="template-editor-title" className="mt-1 text-xl font-bold tracking-tight">{draft.id ? "Edit template" : "Add template"}</h2><p className="mt-1 text-xs text-muted-foreground">Configure what users see in the public Templates library and where the template starts.</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-muted-foreground hover:bg-surface-muted" aria-label="Close template editor"><X size={19} /></button></header>
       <form onSubmit={(event) => { event.preventDefault(); onSave(); }} className="min-h-0 flex-1 overflow-y-auto"><div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[1.05fr_.95fr]">
         <div className="space-y-5">
           <GeneratedWorkPicker onSelect={update} />
-          <section className="rounded-2xl border bg-white p-4" data-no-translate><h3 className="text-sm font-bold">ชุดค่าพร้อมใช้</h3><p className="text-xs my-2">มาจากงานต้นฉบับ รวมไฟล์อ้างอิงที่จะเผยแพร่กับเทมเพลต กรุณาตรวจสิทธิ์ก่อนเผยแพร่</p><pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(draft.settings ?? {},null,2)}</pre></section>
+          <section className="rounded-2xl border bg-white p-4" data-no-translate><h3 className="text-sm font-bold">ชุดค่าพร้อมใช้</h3><p className="text-xs my-2">มาจากงานต้นฉบับ รวมไฟล์อ้างอิงที่จะเผยแพร่กับเทมเพลต กรุณาตรวจสิทธิ์ก่อนเผยแพร่</p><pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(draft.settings ?? {},null,2)}</pre>{draft.id && settingsHaveRemoteFiles && <div className="mt-3"><button type="button" disabled={assets.busy} onClick={() => void keepAssets()} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60">{assets.busy ? "กำลังเก็บ…" : "เก็บรูปและคลิปต้นทางถาวร"}</button><span className="mt-2 block text-xs font-normal text-muted-foreground">ลิงก์ของผู้ให้บริการหมดอายุใน 7 วัน กดเพื่อคัดลอกไฟล์เข้าที่เก็บของระบบ</span>{assets.message && <span role={assets.error ? "alert" : "status"} className={`mt-1 block text-xs ${assets.error ? "text-red-600" : "text-[#347454]"}`}>{assets.message}</span>}</div>}</section>
           <label className="block rounded-2xl border border-border bg-white p-4 text-sm font-semibold" data-no-translate>Preview URL — ไฟล์ตัวอย่าง<input value={draft.previewUrl ?? ""} onChange={event => update({ previewUrl: event.target.value })} maxLength={2000} placeholder="https://…/preview.mp4 หรือ preview.mp3" className="mt-2 h-10 w-full rounded-xl border border-border px-3 text-xs" /><span className="mt-2 block text-xs font-normal text-muted-foreground">วิดีโอ: MP4/WebM · เสียง: MP3/WAV · เว้นว่างเพื่อแสดงเฉพาะภาพปก ไม่ควรใช้ลิงก์หน้า YouTube แทนไฟล์สื่อ</span></label>
-          <section className="rounded-2xl border border-border bg-white p-4"><div className="mb-4 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e9] text-primary"><LayoutTemplate size={16} /></span><div><h3 className="text-sm font-bold">Identity</h3><p className="text-[10px] text-muted-foreground">The title and route users will recognize.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Title<input value={draft.title} onChange={(event) => update({ title: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="Product ad" /></label><label className="text-xs font-semibold">Slug<input value={draft.slug} onChange={(event) => update({ slug: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 font-mono text-xs outline-none focus:border-primary" placeholder="product-ad" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Lowercase letters, numbers, and hyphens.</span></label></div><label className="mt-4 block text-xs font-semibold">Description<textarea value={draft.description} onChange={(event) => update({ description: event.target.value })} maxLength={240} required className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-5 outline-none focus:border-primary" placeholder="A short reason to choose this template." /></label></section>
-          <section className="rounded-2xl border border-border bg-white p-4"><div className="mb-4 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e9] text-primary"><Star size={16} /></span><div><h3 className="text-sm font-bold">Library placement</h3><p className="text-[10px] text-muted-foreground">Control type, category, visibility, and ordering.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Type<select value={draft.kind} onChange={(event) => update({ kind: event.target.value as TemplateKind })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary">{kindOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="text-xs font-semibold">Category<input value={draft.category} onChange={(event) => update({ category: event.target.value })} maxLength={40} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="Advertising" /></label><label className="text-xs font-semibold">Format<input value={draft.format} onChange={(event) => update({ format: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="16:9 · 9:16" /></label><label className="text-xs font-semibold">Sort order<input type="number" min={0} max={100000} value={draft.sortOrder} onChange={(event) => update({ sortOrder: Number(event.target.value) })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" /></label></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><Toggle label="Published" description="Show this template in the public library." checked={draft.enabled} onChange={() => update({ enabled: !draft.enabled })} /><Toggle label="Featured" description="Place this template in the curated section." checked={draft.featured} onChange={() => update({ featured: !draft.featured })} /></div></section>
+          <div className="-mt-3 rounded-b-2xl border border-t-0 border-border bg-white px-4 pb-4" data-no-translate>{uploadButton("previewUrl", "video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,.mp4,.webm,.mov,.mp3,.wav", "อัปโหลดไฟล์ตัวอย่างจากเครื่อง (สูงสุด 100 MB)")}</div>
+          <section className="rounded-2xl border border-border bg-white p-4"><div className="mb-4 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e9] text-primary"><LayoutTemplate size={16} /></span><div><h3 className="text-sm font-bold">Identity</h3><p className="text-[10px] text-muted-foreground">The title and route users will recognize.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Title<input value={draft.title} onChange={(event) => update({ title: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="Product ad" /></label><label className="text-xs font-semibold">Slug<input value={draft.slug} onChange={(event) => update({ slug: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 font-mono text-xs outline-none focus:border-primary" placeholder="product-ad" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Lowercase letters, numbers, and hyphens.</span></label></div><label className="mt-4 block text-xs font-semibold">Description<textarea value={draft.description} onChange={(event) => update({ description: event.target.value })} maxLength={240} required className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-5 outline-none focus:border-primary" placeholder="A short reason to choose this template." /></label><div className="mt-4 grid gap-4 border-t border-border pt-4" data-no-translate><label className="text-xs font-semibold">ชื่อภาษาไทย (ไม่บังคับ)<input value={draft.titleTh ?? ""} onChange={(event) => update({ titleTh: event.target.value })} maxLength={80} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="เว้นว่างเพื่อใช้ชื่อด้านบน" /></label><label className="text-xs font-semibold">คำอธิบายภาษาไทย (ไม่บังคับ)<textarea value={draft.descriptionTh ?? ""} onChange={(event) => update({ descriptionTh: event.target.value })} maxLength={240} className="mt-2 min-h-16 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-5 outline-none focus:border-primary" /></label></div></section>
+          <section className="rounded-2xl border border-border bg-white p-4"><div className="mb-4 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e9] text-primary"><Star size={16} /></span><div><h3 className="text-sm font-bold">Library placement</h3><p className="text-[10px] text-muted-foreground">Control type, category, visibility, and ordering.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Type<select value={draft.kind} onChange={(event) => update({ kind: event.target.value as TemplateKind })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary">{kindOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="text-xs font-semibold">Source<select value={draft.source ?? "official"} onChange={(event) => update({ source: event.target.value as "official" | "community" })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary"><option value="official">EOS (official)</option><option value="community">Community</option></select></label><label className="text-xs font-semibold">Category<input value={draft.category} onChange={(event) => update({ category: event.target.value })} maxLength={40} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="Advertising" /></label><label className="text-xs font-semibold">Format<input value={draft.format} onChange={(event) => update({ format: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="16:9 · 9:16" /></label><label className="text-xs font-semibold">Sort order<input type="number" min={0} max={100000} value={draft.sortOrder} onChange={(event) => update({ sortOrder: Number(event.target.value) })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" /></label></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><Toggle label="Published" description="Show this template in the public library." checked={draft.enabled} onChange={() => update({ enabled: !draft.enabled })} /><Toggle label="Featured" description="Place this template in the curated section." checked={draft.featured} onChange={() => update({ featured: !draft.featured })} /></div></section>
+          <TemplateBehavior draft={draft} update={update} />
         </div>
-        <div className="space-y-5"><section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Visual and destination</h3><label className="mt-4 block text-xs font-semibold">Thumbnail URL<input value={draft.thumbnailUrl} onChange={(event) => update({ thumbnailUrl: event.target.value })} maxLength={1000} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs outline-none focus:border-primary" placeholder="/generated-icons-v2/templates/product-ad.png" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Use a workspace asset path or a public image URL.</span></label><div className="mt-4 overflow-hidden rounded-2xl border border-border"><TemplateVisual template={draft} large /></div><label className="mt-4 block text-xs font-semibold">Target path<input value={draft.targetPath} onChange={(event) => update({ targetPath: event.target.value })} maxLength={500} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 font-mono text-xs outline-none focus:border-primary" placeholder="/create/image?template=product-ad" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Must start with / so Use template stays inside EOS.</span></label></section><section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Generation instruction</h3><label className="mt-3 block text-xs font-semibold">Prompt<textarea value={draft.prompt} onChange={(event) => update({ prompt: event.target.value })} maxLength={promptMaxLength} className="mt-2 min-h-36 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-6 outline-none focus:border-primary" placeholder="เว้นว่างได้สำหรับงานที่ไม่ต้องใช้ prompt เช่น Extend Image หรือ Upscale" /></label><div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Tags<input value={draft.tags.join(", ")} onChange={(event) => update({ tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs outline-none focus:border-primary" placeholder="product, advertising, campaign" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Separate tags with commas.</span></label><div className="rounded-xl bg-[#fff8f3] p-3 text-[10px] leading-5 text-[#765d50]"><b>Tip</b><br />Keep the prompt focused on visual direction. The user can personalize it after opening the creator.</div></div></section></div>
+        <div className="space-y-5"><section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Visual and destination</h3><label className="mt-4 block text-xs font-semibold">Thumbnail URL<input value={draft.thumbnailUrl} onChange={(event) => update({ thumbnailUrl: event.target.value })} maxLength={1000} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs outline-none focus:border-primary" placeholder="/generated-icons-v2/templates/product-ad.png" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Use a workspace asset path or a public image URL.</span></label>{uploadButton("thumbnailUrl", "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", "อัปโหลดภาพปกจากเครื่อง")}<div className="mt-4 overflow-hidden rounded-2xl border border-border"><TemplateVisual template={draft} large /></div>{draft.id && draft.previewUrl ? <div className="mt-3" data-no-translate><Button type="button" variant="outline" size="sm" onClick={() => void makeCover()} disabled={busy || cover.busy}>{cover.busy ? <LoaderCircle size={15} className="animate-spin" /> : <ImageIcon size={15} />}ตัดภาพปกจากวิดีโอตัวอย่าง</Button><span className={`mt-1 block text-[10px] ${cover.error ? "text-[#9f3b3b]" : "text-muted-foreground"}`} role={cover.error ? "alert" : undefined}>{cover.message ?? "ใช้เฟรมจากวิดีโอตัวอย่างเป็นภาพปก เก็บไว้ในระบบแบบถาวร (ซ่อมเทมเพลตที่ได้ภาพปกสำเร็จรูป)"}</span></div> : null}<label className="mt-4 block text-xs font-semibold">Target path<input value={draft.targetPath} onChange={(event) => update({ targetPath: event.target.value })} maxLength={500} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 font-mono text-xs outline-none focus:border-primary" placeholder="/create/image?template=product-ad" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Must start with / so Use template stays inside EOS.</span></label></section><section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Generation instruction</h3><label className="mt-3 block text-xs font-semibold">Prompt<textarea value={draft.prompt} onChange={(event) => update({ prompt: event.target.value })} maxLength={promptMaxLength} className="mt-2 min-h-36 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-6 outline-none focus:border-primary" placeholder="เว้นว่างได้สำหรับงานที่ไม่ต้องใช้ prompt เช่น Extend Image หรือ Upscale" /></label><label className="mt-4 block text-xs font-semibold" data-no-translate>พรอมต์ภาษาไทย (ไม่บังคับ)<textarea value={draft.promptTh ?? ""} onChange={(event) => update({ promptTh: event.target.value })} maxLength={promptMaxLength} className="mt-2 min-h-24 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-6 outline-none focus:border-primary" placeholder="แสดงให้ผู้ใช้ภาษาไทยเห็น ส่วนพรอมต์ด้านบนยังใช้สร้างงาน" /></label><div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Tags<input value={draft.tags.join(", ")} onChange={(event) => update({ tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs outline-none focus:border-primary" placeholder="product, advertising, campaign" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Separate tags with commas.</span></label><div className="rounded-xl bg-[#fff8f3] p-3 text-[10px] leading-5 text-[#765d50]"><b>Tip</b><br />Keep the prompt focused on visual direction. The user can personalize it after opening the creator.</div></div></section></div>
       </div><footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4 sm:px-7"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="sm" disabled={busy || !draft.title.trim() || !draft.slug.trim() || !draft.thumbnailUrl.trim() || !draft.targetPath.trim()}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}{busy ? "Saving..." : "Save template"}</Button></footer></form>
     </div>
   </div>;
@@ -77,7 +253,7 @@ function AdminTemplatesContent() {
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
   const visibleTemplates = useMemo(() => templates.filter((template) => (kindFilter === "all" || template.kind === kindFilter) && (!query.trim() || [template.title, template.slug, template.category, ...template.tags].join(" ").toLowerCase().includes(query.trim().toLowerCase()))), [kindFilter, query, templates]);
   const openCreate = () => { setError(""); setMessage(""); setDraft({ ...emptyDraft, sortOrder: templates.length ? Math.max(...templates.map((template) => template.sortOrder)) + 10 : 10 }); };
-  const openEdit = (template: AdminCreativeTemplate) => { setError(""); setMessage(""); setDraft({ id: template.id, settings: template.settings ?? {}, slug: template.slug, title: template.title, description: template.description, category: template.category, kind: template.kind, format: template.format, thumbnailUrl: template.thumbnailUrl, previewUrl: template.previewUrl ?? "", targetPath: template.targetPath, prompt: template.prompt, tags: template.tags, featured: template.featured, enabled: template.enabled, sortOrder: template.sortOrder }); };
+  const openEdit = (template: AdminCreativeTemplate) => { setError(""); setMessage(""); setDraft({ id: template.id, settings: template.settings ?? {}, slug: template.slug, title: template.title, titleTh: template.titleTh ?? "", description: template.description, descriptionTh: template.descriptionTh ?? "", category: template.category, kind: template.kind, format: template.format, thumbnailUrl: template.thumbnailUrl, previewUrl: template.previewUrl ?? "", targetPath: template.targetPath, prompt: template.prompt, promptTh: template.promptTh ?? "", tags: template.tags, featured: template.featured, enabled: template.enabled, sortOrder: template.sortOrder }); };
   const save = async () => { if (!draft) return; setBusy(true); setError(""); setMessage(""); try { const saved = draft.id ? await updateAdminTemplate(draft.id, draft) : await createAdminTemplate(draft); setTemplates((current) => (draft.id ? current.map((template) => template.id === saved.id ? saved : template) : [...current, saved]).sort((a, b) => a.sortOrder - b.sortOrder)); setDraft(null); setMessage(`${saved.title} saved.`); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save template"); } finally { setBusy(false); } };
   const remove = async (template: AdminCreativeTemplate) => { if (!window.confirm(`Delete ${template.title}? It will disappear from the public library.`)) return; setBusy(true); setError(""); setMessage(""); try { await deleteAdminTemplate(template.id); setTemplates((current) => current.filter((item) => item.id !== template.id)); setMessage(`${template.title} deleted.`); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to delete template"); } finally { setBusy(false); } };
 
@@ -87,7 +263,7 @@ function AdminTemplatesContent() {
     {error ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc2c2] bg-[#fff6f6] p-4 text-sm text-[#9f3b3b]" role="alert"><AlertCircle size={18} className="mt-0.5 shrink-0" /><p>{error}</p></div> : null}{message ? <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#bfe1cc] bg-[#f3fbf5] p-4 text-sm text-[#347454]" role="status"><CheckCircle2 size={18} /><p className="font-semibold">{message}</p></div> : null}
     <section aria-label="Template filters" className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#eaded6] bg-white p-3 sm:flex-row"><SearchInput size="compact" className="min-w-0 flex-1" value={query} onValueChange={setQuery} placeholder="Search title, category, or tag" aria-label="Search templates" /><select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as TemplateKind | "all")} aria-label="Filter templates by type" className="h-10 rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs font-semibold outline-none focus:border-primary"><option value="all">All types</option>{kindOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><span className="flex items-center px-2 text-xs font-semibold text-muted-foreground">{visibleTemplates.length} shown</span></section>
     {loading ? <div className="grid gap-4 md:grid-cols-2"><div className="h-80 animate-pulse rounded-2xl border border-border bg-white" /><div className="h-80 animate-pulse rounded-2xl border border-border bg-white" /></div> : visibleTemplates.length === 0 ? <div className="rounded-2xl border border-dashed border-[#d8d0ca] bg-white p-12 text-center"><LayoutTemplate className="mx-auto text-primary" size={30} /><p className="mt-3 text-sm font-bold">{templates.length ? "No matching templates" : "No templates configured"}</p><p className="mt-1 text-xs text-muted-foreground">{templates.length ? "Try another search or type filter." : "Add the first creative starting point for your team."}</p></div> : <div className="grid gap-4 md:grid-cols-2">{visibleTemplates.map((template) => <article key={template.id} className={`overflow-hidden rounded-2xl border bg-white shadow-[0_8px_24px_rgba(68,49,36,0.04)] ${template.enabled ? "border-[#eaded6]" : "border-dashed border-[#d8d0ca] opacity-75"}`}><TemplateVisual template={template} /><div className="p-5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-2 flex flex-wrap items-center gap-1.5"><Badge tone={template.enabled ? "success" : "neutral"}>{template.enabled ? "Published" : "Hidden"}</Badge>{template.featured ? <Badge tone="orange"><Star size={11} className="mr-1 fill-primary text-primary" /> Featured</Badge> : null}</div><h2 className="truncate text-base font-bold">{template.title}</h2><p className="mt-1 truncate font-mono text-[10px] text-muted-foreground">{template.slug}</p></div><span className="shrink-0 rounded-md bg-[#fff0e9] px-2 py-1 text-[10px] font-semibold text-primary">Order {template.sortOrder}</span></div><p className="mt-3 line-clamp-2 text-xs leading-5 text-muted-foreground">{template.description}</p><div className="mt-3 flex flex-wrap gap-1.5 text-[10px] font-semibold text-muted-foreground"><span>{template.category}</span><span>·</span><span>{template.format}</span><span>·</span><span>{template.tags.slice(0, 3).join(", ")}</span></div><p className="mt-4 line-clamp-2 rounded-xl bg-[#fcfbfa] p-3 text-[11px] leading-5 text-[#665d57]">{template.prompt}</p><div className="mt-4 flex items-center justify-between border-t border-border pt-3"><span className="text-[10px] text-muted-foreground">{template.targetPath}</span><div className="flex gap-1"><Button variant="ghost" size="sm" onClick={() => openEdit(template)} disabled={busy}>Edit</Button><Button variant="ghost" size="sm" onClick={() => void remove(template)} disabled={busy}><Trash2 size={14} /> Delete</Button></div></div></div></article>)}</div>}
-    </div></div></main></div></div>{draft ? <TemplateEditor draft={draft} busy={busy} onChange={setDraft} onSave={() => void save()} onClose={() => setDraft(null)} /> : null}</SidebarProvider>;
+    </div></div></main></div></div>{draft ? <TemplateEditor draft={draft} busy={busy} onChange={setDraft} onSave={() => void save()} onClose={() => setDraft(null)} onCoverSaved={() => void load()} /> : null}</SidebarProvider>;
 }
 
 export default function AdminTemplatesPage() {

@@ -60,6 +60,7 @@ const videoFunctions = [
   { id: "text-to-video", label: "Text to Video", description: "Create videos from a prompt" },
   { id: "people-video", label: "People Video", description: "Create videos with people" },
   { id: "motion-transfer", label: "Motion Transfer", description: "Transfer motion to a subject" },
+  { id: "video-swap", label: "Objects Swap", description: "Swap a person, object or background in a video" },
   { id: "lipsync", label: "Lipsync", description: "Synchronize speech and mouth movement" },
   { id: "extend-video", label: "Extend Video", description: "Continue an existing video" },
   { id: "video-to-sfx", label: "Video to SFX", description: "Generate sound effects from a video" },

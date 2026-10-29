@@ -21,6 +21,18 @@ export type MotionTransferGenerationInput = {
   [key: string]: unknown;
 };
 
+/** Swaps a person, an object or the background of a video for what the images show. */
+export type VideoSwapGenerationInput = {
+  sourceVideo: string;
+  sourceImages: string[];
+  model: string;
+  prompt?: string;
+  swapMode?: "person" | "object" | "background";
+  resolution?: string;
+  modelParams?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 export type MotionTransferOutput = {
   url?: string;
   mimeType?: string;
@@ -90,6 +102,14 @@ async function authenticatedRequest(path: string, init: RequestInit = {}): Promi
 
 export async function createMotionTransferGeneration(input: MotionTransferGenerationInput, signal?: AbortSignal): Promise<MotionTransferGenerationResponse> {
   return await authenticatedRequest("/generations/motion-transfer", {
+    method: "POST",
+    body: JSON.stringify(input),
+    signal,
+  }) as MotionTransferGenerationResponse;
+}
+
+export async function createVideoSwapGeneration(input: VideoSwapGenerationInput, signal?: AbortSignal): Promise<MotionTransferGenerationResponse> {
+  return await authenticatedRequest("/generations/video-swap", {
     method: "POST",
     body: JSON.stringify(input),
     signal,

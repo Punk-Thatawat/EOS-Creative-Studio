@@ -761,6 +761,8 @@ export function GenerationProgressFloating() {
 
     const handleCardClick = () => {
       setIsCenterOpen(false);
+      // On the Templates page a clip made there stays there: its result shows in "Your videos", so there is nothing to open.
+      if (pathname?.startsWith("/templates")) return;
       if (kind === "audio") {
         try {
           window.localStorage.setItem("eos.audio.active-tab", tab);
@@ -867,7 +869,7 @@ export function GenerationProgressFloating() {
 
   return (
     <div
-      className={styles.wrapper}
+      className={`${styles.wrapper} ${pathname?.startsWith("/templates") ? styles.wrapperRight : ""}`}
       data-expanded={isCenterOpen}
       onKeyDown={(event) => {
         if (event.key === "Escape" && isCenterOpen) {
