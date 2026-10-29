@@ -2975,12 +2975,10 @@
 .kind, .tileAuthor, .tileInfo, .tileExpand, .tileActions, .tileLike, .noPreview, .audioMark, .composerCard, .composerChange, .composerHeroChange, .pendingClip, .motionTilt, .motionMute, .clipPlayer, .artworkPane, .categoryCard, .howStage, .heroCoverMain, .heroCoverSide, .libraryHeroCover { color: #fff; }
 .panelTabs em { color: #d9541c; }
 
-/* No grey lines: the panels sit on white, with no divider under the tabs and no scrollbar track. */
+/* No grey lines: the panels sit on white, with no divider under the tabs, and a thin scrollbar. */
 .workspace, .composer, .libraryPanel, .composerTabs, .composerBar, .motionGenerateDock { background: #fff; }
 .composerTabs { border-bottom: 0; }
 .composerBar, .motionGenerateDock { border-top: 0; }
-.composer, .libraryPanel { scrollbar-width: none; }
-.composer::-webkit-scrollbar, .libraryPanel::-webkit-scrollbar { display: none; }
 
 /* The chosen menu is orange: the create tabs, the library tabs and the source tabs. */
 .composerTabs button[aria-selected="true"] { border-bottom-color: #f26b38; color: #f26b38; }
@@ -3070,3 +3068,43 @@
 .tabs button[aria-pressed="true"] { border-color: #f26b38; background: #fff; color: #f26b38; box-shadow: 0 1px 3px #0000001a; }
 .panelTabs button { border-radius: 999px; padding-left: 14px; padding-right: 14px; }
 .composerTabs button { border-radius: 999px; }
+
+/* Pop-up lists: a thin grey border instead of a heavy shadow. */
+.picker, .flyout, .editPopover, .drawModelMenu, .fpsChoiceMenu, .editChoiceMenu { border: 1px solid #e5e5e5; box-shadow: none; }
+
+/* Pop-up lists are rounded like the cards around them. */
+.picker, .flyout, .editPopover, .drawModelMenu, .fpsChoiceMenu, .editChoiceMenu { overflow: hidden; border-radius: 16px; }
+.picker ul, .flyout ul { padding: 6px; }
+.picker li button, .flyout li button, .editPopover > button, .drawModelMenu button, .editChoiceMenu > button { border-radius: 10px; }
+.pickerThumb { border-radius: 8px; }
+.pickerSearch input { border-radius: 10px; }
+
+/* Pop-up lists are white; the hovered or chosen row is a soft grey. */
+.picker, .flyout, .editPopover, .drawModelMenu, .fpsChoiceMenu, .editChoiceMenu, .pickerSearch, .pickerSearch input { background: #fff; }
+.picker li button:hover, .picker li button[aria-current="true"], .flyout li button:hover, .flyout li button[aria-current="true"], .editPopover > button:hover, .editPopover > button[aria-selected="true"] { background: #f4f5f7; }
+
+/* The tick on the chosen row of a pop-up list is orange. */
+.picker li button > svg, .flyout li button > svg, .editPopover > button > svg, .drawModelMenu button > svg, .fpsChoiceMenu button > svg, .editChoiceMenu > button > svg { color: #f26b38; }
+
+/* As on the Images page: cards are white with a 1px grey line, not grey fills. */
+.styleRow, .composerRow, .composerBlock, .composerPrompt, .motionSceneControl, .motionAssets, .motionReference, .motionCharacter { background: #fff; border: 1px solid #e2e2e2; }
+.composerStage, .attachBox, .attachFiles, .motionBox { background: #fff; border-color: #dcdfe3; }
+.attachBox:hover, .motionBox:hover { background: #fffaf7; border-color: #f26b38; }
+.switch { background: #fff; border: 1px solid #e2e2e2; }
+
+/* No empty strip around the panels: they run to the edge of the page, so the scrollbar sits flush on the right like on the other pages. */
+@media (min-width: 768px) {
+  .workspace { padding: 0; }
+}
+
+/* A soft shadow appears under the stuck bars as the panel scrolls down. */
+@keyframes barShadow {
+  from { box-shadow: 0 0 0 0 #00000000; }
+  to { box-shadow: 0 8px 14px -8px #00000030; }
+}
+@media (min-width: 768px) {
+  .composerTabs, .toolbar { box-shadow: 0 8px 14px -8px #00000030; }
+  @supports (animation-timeline: scroll()) {
+    .composerTabs, .toolbar { box-shadow: none; animation: barShadow linear both; animation-timeline: scroll(nearest block); animation-range: 0 48px; }
+  }
+}
