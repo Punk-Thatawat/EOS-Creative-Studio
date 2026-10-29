@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -29,13 +30,10 @@ import {
   Loader2,
   Orbit,
   Package,
-  Pause,
   PenLine,
   Pencil,
-  Play,
   MousePointer2,
   PanelsTopLeft,
-  Maximize2,
   Plus,
   Repeat2,
   ScanLine,
@@ -50,7 +48,6 @@ import {
   TrendingUp,
   Type,
   Video,
-  Volume2,
   VolumeX,
   Zap,
   Upload,
@@ -331,73 +328,11 @@ function Media({ t, expanded = false, tile = false }: { t: Template; expanded?: 
     </div>
   );
 }
-function ClipPreviewPlayer({ src, poster, label }: { src: string; poster: string; label: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [playing, setPlaying] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const formatTime = (value: number) => `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, "0")}`;
-  const togglePlayback = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) void video.play().catch(() => {});
-    else video.pause();
-  };
+function ClipPreviewPlayer({ src, label }: { src: string; label: string }) {
+  const [ratio, setRatio] = useState("16 / 9");
   return (
-    <div className={s.clipPlayer}>
-      <div className={s.clipVideoStage}>
-        <video
-          ref={videoRef}
-          src={src}
-          poster={poster}
-          className={s.clipVideo}
-          preload="metadata"
-          playsInline
-          muted={muted}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
-          onDurationChange={(event) => setDuration(event.currentTarget.duration || 0)}
-          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-          aria-label={label}
-        />
-      </div>
-      <input
-        className={s.clipSeek}
-        type="range"
-        min={0}
-        max={duration || 1}
-        step={0.01}
-        value={Math.min(currentTime, duration || 1)}
-        aria-label={label}
-        onChange={(event) => {
-          const time = Number(event.currentTarget.value);
-          if (videoRef.current) videoRef.current.currentTime = time;
-          setCurrentTime(time);
-        }}
-        style={{ "--clip-progress": `${duration ? (currentTime / duration) * 100 : 0}%` } as React.CSSProperties}
-      />
-      <div className={s.clipControls}>
-        <div className={s.clipControlGroup}>
-          <button type="button" onClick={togglePlayback} aria-label={playing ? "Pause video" : "Play video"}>
-            {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-          </button>
-          <span className={s.clipSpeed}>1×</span>
-          <button type="button" onClick={() => setMuted((value) => !value)} aria-label={muted ? "Unmute video" : "Mute video"}>
-            {muted ? <VolumeX size={17} /> : <Volume2 size={17} />}
-          </button>
-        </div>
-        <span className={s.clipTime}>{formatTime(currentTime)} / {formatTime(duration)} <ChevronDown size={13} /></span>
-        <button
-          type="button"
-          className={s.clipFullscreen}
-          onClick={() => void videoRef.current?.requestFullscreen?.()}
-          aria-label="Full screen video"
-        >
-          <Maximize2 size={16} />
-        </button>
-      </div>
+    <div className={s.clipPlayer} style={{ "--clip-ratio": ratio } as React.CSSProperties}>
+      <EosVideoPlayer src={src} muted={false} className={s.clipEos} onAspectRatioChange={setRatio} ariaLabel={label} />
     </div>
   );
 }
@@ -3183,7 +3118,7 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
       <div className={s.previewLayout}>
         <div className={s.artworkPane}>
           {videoSrc ? (
-            <ClipPreviewPlayer src={videoSrc} poster={t.thumbnailUrl} label={c("templates.media.videoAria", { name: name(t, locale) })} />
+            <ClipPreviewPlayer src={videoSrc} label={c("templates.media.videoAria", { name: name(t, locale) })} />
           ) : <Media t={t} expanded />}
           {t.kind !== "video" && <span className={s.artworkLabel}>EOS / CREATIVE STUDIO</span>}
         </div>

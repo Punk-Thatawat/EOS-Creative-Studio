@@ -1,6 +1,6 @@
 .page {
   font-family: var(--font-noto-sans-thai), sans-serif;
-  color: #171719;
+  color: #ffffff;
   padding: 12px 0 40px;
   min-width: 0;
 }
@@ -32,9 +32,9 @@
   height: calc(100dvh - 120px);
   min-height: 520px;
   border-radius: 0;
-  background: #0f1113;
+  background: #eef0f3;
   padding: 8px;
-  color: #f7f7f8;
+  color: #171719;
 }
 .composer,
 .libraryPanel {
@@ -43,10 +43,10 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: #ffffff33 transparent;
+  scrollbar-color: #17171933 transparent;
   border: 0;
   border-radius: 0;
-  background: #131517;
+  background: #ffffff;
 }
 .composer {
   display: flex;
@@ -68,8 +68,8 @@
   justify-content: center;
   gap: 2px;
   margin: 0 -2px;
-  border-bottom: 1px solid #ffffff14;
-  background: #131517;
+  border-bottom: 1px solid #17171914;
+  background: #ffffff;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -84,20 +84,20 @@
   padding: 8px 8px 9px;
   font-size: 14px;
   font-weight: 600;
-  color: #ffffff99;
+  color: #17171999;
 }
 .composerTabs button:hover {
-  color: #fff;
+  color: #171719;
 }
 .composerTabs button[aria-selected="true"] {
-  border-bottom-color: #fff;
-  color: #fff;
+  border-bottom-color: #171719;
+  color: #171719;
 }
 .composerEmpty {
   margin: 36px 0;
   text-align: center;
   font-size: 13px;
-  color: #ffffff80;
+  color: #17171980;
 }
 .composerHeroWrap {
   position: relative;
@@ -146,11 +146,11 @@
 .composerHero strong {
   font-size: 22px;
   font-weight: 800;
-  color: #ff9a6b;
+  color: #f26b38;
 }
 .composerHero small {
   font-size: 12px;
-  color: #f2ece6;
+  color: #ffffffe6;
 }
 .composerHeroChange {
   position: absolute;
@@ -174,14 +174,14 @@
   flex: none;
   place-items: center;
   border-radius: 0;
-  background: #ffffff0c;
-  color: #ffffffa8;
+  background: #1717190c;
+  color: #171719a8;
 }
 .editPromptTabs {
   display: flex;
   gap: 3px;
   border-radius: 0;
-  background: #ffffff0b;
+  background: #1717190b;
   padding: 4px;
 }
 .editPromptTabs button {
@@ -194,11 +194,11 @@
   border-radius: 0;
   background: transparent;
   padding: 9px 6px;
-  color: #ffffff73;
+  color: #17171973;
   font-size: 12px;
   font-weight: 700;
 }
-.editPromptTabs button[aria-selected="true"] { background: #ffffff16; color: #fff; }
+.editPromptTabs button[aria-selected="true"] { background: #17171916; color: #171719; }
 .editUpload,
 .editReferences {
   display: flex;
@@ -210,8 +210,8 @@
   gap: 6px;
   border: 0;
   border-radius: 0;
-  background: #ffffff09;
-  color: #f4f4f5;
+  background: #17171909;
+  color: #171719;
   text-align: center;
 }
 .editUpload { min-height: 148px; }
@@ -222,13 +222,13 @@
   height: 38px;
   place-items: center;
   border-radius: 0;
-  background: #ffffff12;
-  color: #ffffff80;
+  background: #17171912;
+  color: #17171980;
 }
 .editUpload strong,
 .editReferences strong { font-size: 14px; }
 .editUpload small,
-.editReferences small { color: #ffffff70; font-size: 12px; }
+.editReferences small { color: #17171970; font-size: 12px; }
 .editReferences { min-height: 108px; }
 .editReferences > span { display: flex; align-items: center; justify-content: center; }
 .editReferences > span svg + svg { margin-left: -5px; }
@@ -238,10 +238,10 @@
   flex-direction: column;
   gap: 8px;
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   padding: 12px;
 }
-.editPromptBlock label { color: #fff; font-size: 14px; font-weight: 700; }
+.editPromptBlock label { color: #171719; font-size: 14px; font-weight: 700; }
 .editPromptBlock textarea {
   width: 100%;
   min-height: 90px;
@@ -249,68 +249,68 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #fff;
+  color: #171719;
   font: inherit;
   font-size: 13px;
   line-height: 1.55;
 }
-.editPromptBlock textarea::placeholder { color: #ffffff66; }
+.editPromptBlock textarea::placeholder { color: #17171966; }
 .editPromptChips { display: flex; gap: 6px; }
 .editPromptChips span {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   border-radius: 0;
-  background: #ffffff12;
+  background: #17171912;
   padding: 5px 8px;
-  color: #fff;
+  color: #171719;
   font-size: 11px;
   font-weight: 600;
 }
-.editOptionPanel { border: 0; border-radius: 0; background: #ffffff08; padding: 12px; }
-.editOptionPanel h3 { margin: 0 0 10px; color: #fff; font-size: 13px; font-weight: 700; }
+.editOptionPanel { border: 0; border-radius: 0; background: #17171908; padding: 12px; }
+.editOptionPanel h3 { margin: 0 0 10px; color: #171719; font-size: 13px; font-weight: 700; }
 .removeFormatOptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.removeFormatOptions button { display: flex; min-width: 0; flex-direction: column; gap: 6px; border: 2px solid transparent; border-radius: 0; background: #090a0b; padding: 4px; color: #fff; }
+.removeFormatOptions button { display: flex; min-width: 0; flex-direction: column; gap: 6px; border: 2px solid transparent; border-radius: 0; background: #ffffff; padding: 4px; color: #171719; }
 .removeFormatOptions button[aria-pressed="true"] { border-color: #f26b38; }
 .removeFormatOptions button > strong { font-size: 11px; }
 .cutoutSample,
 .alphaSample { position: relative; display: block; width: 100%; aspect-ratio: 1.65 / 1; overflow: hidden; border-radius: 0; background: #25282b center / cover; }
-.alphaSample { display: grid; place-items: center; background: #050505; }
-.alphaSample i { position: relative; display: block; width: 28px; height: 39px; border-radius: 50% 50% 38% 38%; background: #fff; }
-.alphaSample i::before { position: absolute; top: -15px; left: 7px; width: 15px; height: 15px; border-radius: 50%; background: #fff; content: ""; }
+.alphaSample { display: grid; place-items: center; background: #ffffff; }
+.alphaSample i { position: relative; display: block; width: 28px; height: 39px; border-radius: 50% 50% 38% 38%; background: #171719; }
+.alphaSample i::before { position: absolute; top: -15px; left: 7px; width: 15px; height: 15px; border-radius: 50%; background: #171719; content: ""; }
 .editInlineSelect { position: relative; min-width: 0; }
 .editSettingActive { outline: 1px solid #f26b38; }
 .editChoiceMenu,
-.fpsChoiceMenu { position: static; display: flex; width: 100%; max-width: 100%; max-height: min(320px, 45vh); box-sizing: border-box; flex-direction: column; gap: 4px; overflow-y: auto; margin-top: 8px; border: 0; border-radius: 0; background: #1d1f22; padding: 9px; box-shadow: 0 10px 24px #0005; }
+.fpsChoiceMenu { position: static; display: flex; width: 100%; max-width: 100%; max-height: min(320px, 45vh); box-sizing: border-box; flex-direction: column; gap: 4px; overflow-y: auto; margin-top: 8px; border: 0; border-radius: 0; background: #f4f5f7; padding: 9px; box-shadow: 0 10px 24px #0005; }
 .editChoiceMenu > small,
-.fpsChoiceMenu > small { padding: 5px 8px; color: #ffffff70; font-size: 12px; }
-.editChoiceMenu > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-radius: 0; background: transparent; padding: 9px; color: #fff; text-align: left; }
+.fpsChoiceMenu > small { padding: 5px 8px; color: #17171970; font-size: 12px; }
+.editChoiceMenu > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-radius: 0; background: transparent; padding: 9px; color: #171719; text-align: left; }
 .editChoiceMenu > button:hover,
-.editChoiceMenu > button[aria-pressed="true"] { background: #ffffff0d; }
+.editChoiceMenu > button[aria-pressed="true"] { background: #1717190d; }
 .editChoiceMenu > button > span { display: flex; flex-direction: column; gap: 3px; }
 .editChoiceMenu > button strong { font-size: 12px; }
-.editChoiceMenu > button small { color: #ffffff70; font-size: 10px; line-height: 1.4; }
+.editChoiceMenu > button small { color: #17171970; font-size: 10px; line-height: 1.4; }
 .editChoiceMenu > button > svg { color: #f26b38; }
 .editPopoverBackdrop { position: fixed; inset: 0; z-index: 80; border: 0; background: transparent; }
-.editPopover { position: fixed; z-index: 81; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; border: 0; border-radius: 0; background: #1d1f22; padding: 9px; color: #fff; box-shadow: 0 18px 40px #0009; }
-.editPopover > small { padding: 5px 8px; color: #ffffff70; font-size: 12px; font-weight: 650; }
-.editPopover > button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-radius: 0; background: transparent; padding: 9px; color: #fff; text-align: left; }
+.editPopover { position: fixed; z-index: 81; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; border: 0; border-radius: 0; background: #f4f5f7; padding: 9px; color: #171719; box-shadow: 0 18px 40px #0009; }
+.editPopover > small { padding: 5px 8px; color: #17171970; font-size: 12px; font-weight: 650; }
+.editPopover > button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-radius: 0; background: transparent; padding: 9px; color: #171719; text-align: left; }
 .editPopover > button:hover,
-.editPopover > button[aria-selected="true"] { background: #ffffff0d; }
+.editPopover > button[aria-selected="true"] { background: #1717190d; }
 .editPopover > button > span { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .editPopover > button strong { font-size: 12px; }
-.editPopover > button small { color: #ffffff70; font-size: 10px; line-height: 1.4; }
+.editPopover > button small { color: #17171970; font-size: 10px; line-height: 1.4; }
 .editPopover > button > svg { flex: none; color: #f26b38; }
 .fpsChoiceMenu { width: 100%; }
-.fpsChoiceMenu > div { display: flex; gap: 4px; border-radius: 0; background: #101113; padding: 5px; }
-.fpsChoiceMenu > div button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 8px 4px; color: #fff; font-size: 12px; font-weight: 700; }
-.fpsChoiceMenu > div button[aria-pressed="true"] { background: #ffffff1b; }
+.fpsChoiceMenu > div { display: flex; gap: 4px; border-radius: 0; background: #ffffff; padding: 5px; }
+.fpsChoiceMenu > div button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 8px 4px; color: #171719; font-size: 12px; font-weight: 700; }
+.fpsChoiceMenu > div button[aria-pressed="true"] { background: #1717191b; }
 .colorMapOptions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.colorMapOptions button { display: flex; min-width: 0; flex-direction: column; gap: 4px; border: 2px solid transparent; border-radius: 0; background: transparent; padding: 3px; color: #fff; }
+.colorMapOptions button { display: flex; min-width: 0; flex-direction: column; gap: 4px; border: 2px solid transparent; border-radius: 0; background: transparent; padding: 3px; color: #171719; }
 .colorMapOptions button[aria-pressed="true"] { border-color: #f26b38; }
 .colorMapOptions strong { overflow: hidden; font-size: 10px; text-overflow: ellipsis; }
 .colorMapSample { display: block; width: 100%; aspect-ratio: 1.6 / 1; border-radius: 0; background: linear-gradient(135deg, #111, #fff); }
-.colorMap_grayscale { background: linear-gradient(135deg, #080808, #777, #fff); }
+.colorMap_grayscale { background: linear-gradient(135deg, #ffffff, #777, #171719); }
 .colorMap_turbo { background: linear-gradient(110deg, #1324ff, #16e2d0, #23d63b, #fff000, #ff2a00); }
 .colorMap_inferno { background: linear-gradient(110deg, #160033, #9b146a, #f04425, #ffe650); }
 .colorMap_magma { background: linear-gradient(110deg, #13052d, #7e1b70, #ef4c56, #ffd270); }
@@ -325,18 +325,18 @@
   gap: 8px;
   border: 0;
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   padding: 9px 11px;
-  color: #fff;
+  color: #171719;
   text-align: left;
 }
-.editSetting:hover { background: #ffffff16; }
+.editSetting:hover { background: #17171916; }
 .editSettingWide { grid-column: 1 / -1; }
 .editSetting > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
-.editSetting small { overflow: hidden; color: #ffffff75; font-size: 11px; text-overflow: ellipsis; }
+.editSetting small { overflow: hidden; color: #17171975; font-size: 11px; text-overflow: ellipsis; }
 .editSetting strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.editSetting > svg { flex: none; color: #ffffff66; }
-.editSettingHint { display: block; padding: 0 4px; color: #ffffff65; font-size: 10px; line-height: 1.4; }
+.editSetting > svg { flex: none; color: #17171966; }
+.editSettingHint { display: block; padding: 0 4px; color: #17171965; font-size: 10px; line-height: 1.4; }
 .editAudioToggle {
   display: flex;
   width: 100%;
@@ -344,9 +344,9 @@
   justify-content: space-between;
   border: 0;
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   padding: 10px 12px;
-  color: #fff;
+  color: #171719;
   font-size: 13px;
 }
 .editAudioToggle i {
@@ -364,17 +364,18 @@
   height: 14px;
   border-radius: 50%;
   background: #fff;
+  box-shadow: 0 1px 2px #00000040;
   content: "";
 }
-.editAudioToggle[aria-checked="false"] i { background: #ffffff38; }
+.editAudioToggle[aria-checked="false"] i { background: #17171938; }
 .editAudioToggle[aria-checked="false"] i::after { right: auto; left: 2px; }
 .editGenerateDock {
   position: sticky;
   bottom: -8px;
   z-index: 4;
   margin: auto -8px -8px;
-  border-top: 1px solid #ffffff12;
-  background: #131517;
+  border-top: 1px solid #17171912;
+  background: #ffffff;
   padding: 12px 8px;
 }
 .editGenerateDock button,
@@ -407,25 +408,25 @@
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  background-color: #222528;
-  background-image: radial-gradient(#ffffff10 .8px, transparent .8px);
+  background-color: #e9ebee;
+  background-image: radial-gradient(#17171910 .8px, transparent .8px);
   background-size: 18px 18px;
   padding: 28px;
-  color: #fff;
+  color: #171719;
   text-align: center;
 }
 .drawHeader { position: absolute; inset: 12px 14px auto; display: flex; justify-content: center; }
-.drawHeader > div { display: flex; gap: 4px; border-radius: 0; background: #ffffff0a; padding: 4px; }
-.drawHeader button { border: 0; border-radius: 0; background: transparent; padding: 9px 14px; color: #ffffff80; font-size: 12px; font-weight: 700; }
-.drawHeader button[aria-pressed="true"] { background: #ffffff18; color: #fff; }
-.drawHeader .drawClose { position: absolute; right: 0; top: 0; display: grid; width: 34px; height: 34px; place-items: center; padding: 0; background: #ffffff14; }
+.drawHeader > div { display: flex; gap: 4px; border-radius: 0; background: #1717190a; padding: 4px; }
+.drawHeader button { border: 0; border-radius: 0; background: transparent; padding: 9px 14px; color: #17171980; font-size: 12px; font-weight: 700; }
+.drawHeader button[aria-pressed="true"] { background: #17171918; color: #171719; }
+.drawHeader .drawClose { position: absolute; right: 0; top: 0; display: grid; width: 34px; height: 34px; place-items: center; padding: 0; background: #17171914; }
 .drawPreview { position: relative; width: min(52%, 420px); aspect-ratio: 16 / 9; margin: 50px 0 26px; overflow: hidden; border: 0; border-radius: 0; background: #181a1c center / cover; box-shadow: 0 0 0 28px #ffffff04; }
 .drawPreview img,
 .drawPreview video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .drawPreview canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
 .visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 .drawDialog h2 { margin: 8px 0; font-size: 28px; text-transform: uppercase; }
-.drawDialog p { margin: 0 0 26px; color: #ffffff80; }
+.drawDialog p { margin: 0 0 26px; color: #17171980; }
 .drawDialog .drawUpload { width: auto; min-width: 180px; padding: 0 24px; }
 .drawIntroActions { display: flex; justify-content: center; gap: 12px; }
 .drawIntroActions .drawUpload { width: auto; }
@@ -438,9 +439,9 @@
   gap: 8px;
   border: 0;
   border-radius: 0;
-  background: #373a3d;
+  background: #dfe2e6;
   padding: 0 22px;
-  color: #fff;
+  color: #171719;
   font-size: 14px;
   font-weight: 700;
 }
@@ -454,55 +455,55 @@
   text-align: left;
 }
 .drawEditor { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 12px; }
-.drawMediaStage { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 10px; border-radius: 0; background: #ffffff08; padding: 10px; }
-.drawPreviewLarge { position: relative; display: grid; min-height: 0; flex: 1; place-items: center; overflow: hidden; border: 0; border-radius: 0; background-color: #26292c; background-image: radial-gradient(#ffffff12 .8px, transparent .8px); background-size: 17px 17px; }
+.drawMediaStage { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 10px; border-radius: 0; background: #17171908; padding: 10px; }
+.drawPreviewLarge { position: relative; display: grid; min-height: 0; flex: 1; place-items: center; overflow: hidden; border: 0; border-radius: 0; background-color: #e9ebee; background-image: radial-gradient(#17171912 .8px, transparent .8px); background-size: 17px 17px; }
 .drawPreviewLarge img,
 .drawPreviewLarge video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .drawPreviewLarge canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
 .drawPreviewLarge .drawCanvasSelect { pointer-events: none; cursor: default; }
-.drawTimeline { display: flex; height: 26px; align-items: center; gap: 14px; color: #ffffffb0; font-size: 12px; }
-.drawTimeline > span { position: relative; height: 4px; flex: 1; border-radius: 99px; background: #ffffff32; }
+.drawTimeline { display: flex; height: 26px; align-items: center; gap: 14px; color: #171719b0; font-size: 12px; }
+.drawTimeline > span { position: relative; height: 4px; flex: 1; border-radius: 99px; background: #17171932; }
 .drawTimeline > span::before { position: absolute; inset: 0 auto 0 0; width: 12%; border-radius: 0; background: #f26b38; content: ""; }
 .drawEditorFooter { display: grid; grid-template-columns: minmax(130px, 190px) auto minmax(150px, 1fr) auto auto; align-items: center; gap: 10px; }
 .drawModelWrap { position: relative; }
 .drawModel,
-.drawAspect { display: flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 0; background: #202225; padding: 0 12px; color: #fff; font-size: 12px; font-weight: 700; }
+.drawAspect { display: flex; min-height: 42px; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 0; background: #e9ebee; padding: 0 12px; color: #171719; font-size: 12px; font-weight: 700; }
 .drawModel { width: 100%; }
-.drawModelMenu { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 5; display: grid; width: 210px; gap: 3px; border: 0; border-radius: 0; background: #1a1c1f; padding: 6px; box-shadow: 0 12px 30px #0009; }
-.drawModelMenu button { display: flex; align-items: center; justify-content: space-between; border: 0; border-radius: 0; background: transparent; padding: 9px; color: #ffffffc9; font-size: 12px; text-align: left; }
+.drawModelMenu { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 5; display: grid; width: 210px; gap: 3px; border: 0; border-radius: 0; background: #f4f5f7; padding: 6px; box-shadow: 0 12px 30px #0009; }
+.drawModelMenu button { display: flex; align-items: center; justify-content: space-between; border: 0; border-radius: 0; background: transparent; padding: 9px; color: #171719c9; font-size: 12px; text-align: left; }
 .drawModelMenu button:hover,
-.drawModelMenu button[aria-pressed="true"] { background: #ffffff14; color: #fff; }
-.drawTools { display: flex; align-items: center; gap: 2px; border: 0; border-radius: 0; background: #181a1c; padding: 4px; }
-.drawTools button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 0; background: transparent; color: #ffffffbf; }
+.drawModelMenu button[aria-pressed="true"] { background: #17171914; color: #171719; }
+.drawTools { display: flex; align-items: center; gap: 2px; border: 0; border-radius: 0; background: #ffffff; padding: 4px; }
+.drawTools button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: 0; background: transparent; color: #171719bf; }
 .drawTools button:hover,
-.drawTools button[aria-pressed="true"] { background: #ffffff22; color: #fff; }
-.drawPrompt input { width: 100%; min-height: 42px; border: 0; border-radius: 0; outline: 0; background: #202225; padding: 0 12px; color: #fff; font: inherit; font-size: 12px; }
-.drawPrompt input::placeholder { color: #ffffff68; }
+.drawTools button[aria-pressed="true"] { background: #17171922; color: #171719; }
+.drawPrompt input { width: 100%; min-height: 42px; border: 0; border-radius: 0; outline: 0; background: #e9ebee; padding: 0 12px; color: #171719; font: inherit; font-size: 12px; }
+.drawPrompt input::placeholder { color: #17171968; }
 .drawGenerate { border: 0; background: #f26b38; box-shadow: 0 3px 0 #b84a1c; color: #fff; white-space: nowrap; }
-.drawAssets { display: flex; width: min(100%, 960px); min-height: 65vh; flex-direction: column; align-self: center; overflow: hidden; border: 0; border-radius: 0; background: #25282b; text-align: left; }
+.drawAssets { display: flex; width: min(100%, 960px); min-height: 65vh; flex-direction: column; align-self: center; overflow: hidden; border: 0; border-radius: 0; background: #e9ebee; text-align: left; }
 .drawAssets header,
-.drawAssetsToolbar { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #ffffff10; padding: 8px 14px; }
+.drawAssetsToolbar { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #17171910; padding: 8px 14px; }
 .drawAssets header > div { display: flex; gap: 8px; }
 .drawAssets header button,
-.drawAssetsToolbar button { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 0; background: transparent; padding: 8px 12px; color: #ffffff9c; font-size: 12px; font-weight: 700; }
-.drawAssets header button[aria-pressed="true"] { background: #fff; color: #111; }
-.drawAssetsToolbar strong { color: #ffffff72; font-size: 12px; }
-.drawAssetsToolbar button { background: #ffffff0c; }
-.drawAssetsEmpty { display: grid; flex: 1; place-items: center; color: #ffffff66; font-size: 14px; }
-.drawAssetTile { position: relative; width: 150px; height: 150px; margin: 14px; overflow: hidden; border: 0; border-radius: 0; background: #202225; color: #fff; }
+.drawAssetsToolbar button { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 0; background: transparent; padding: 8px 12px; color: #1717199c; font-size: 12px; font-weight: 700; }
+.drawAssets header button[aria-pressed="true"] { background: #171719; color: #ffffff; }
+.drawAssetsToolbar strong { color: #17171972; font-size: 12px; }
+.drawAssetsToolbar button { background: #1717190c; }
+.drawAssetsEmpty { display: grid; flex: 1; place-items: center; color: #17171966; font-size: 14px; }
+.drawAssetTile { position: relative; width: 150px; height: 150px; margin: 14px; overflow: hidden; border: 0; border-radius: 0; background: #e9ebee; color: #171719; }
 .drawAssetTile span { position: absolute; inset: auto 0 0; overflow: hidden; background: #000a; padding: 7px; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .drawAssetTile > svg { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); }
-.drawAssetsUpload { display: flex; min-height: 42px; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid #ffffff12; background: #ffffff08; color: #fff; font-weight: 700; }
-.drawAgreement { position: relative; width: min(100%, 460px); align-self: center; border: 0; border-radius: 0; background: #151719; padding: 24px; text-align: left; box-shadow: 0 20px 60px #0008; }
+.drawAssetsUpload { display: flex; min-height: 42px; align-items: center; justify-content: center; gap: 6px; border: 0; border-top: 1px solid #17171912; background: #17171908; color: #171719; font-weight: 700; }
+.drawAgreement { position: relative; width: min(100%, 460px); align-self: center; border: 0; border-radius: 0; background: #ffffff; padding: 24px; text-align: left; box-shadow: 0 20px 60px #0008; }
 .drawAgreement h2 { margin: 0 32px 8px 0; font-size: 22px; text-transform: none; }
 .drawAgreement p { margin: 0 0 20px; font-size: 13px; line-height: 1.6; }
-.drawAgreement > label { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0; color: #ffffffd4; font-size: 13px; line-height: 1.5; }
+.drawAgreement > label { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0; color: #171719d4; font-size: 13px; line-height: 1.5; }
 .drawAgreement > label input { width: 17px; height: 17px; flex: none; accent-color: #f26b38; }
 .drawAgreement > div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-.drawAgreement > div button { min-height: 40px; border: 0; border-radius: 0; background: #ffffff12; padding: 0 14px; color: #fff; font-weight: 700; }
+.drawAgreement > div button { min-height: 40px; border: 0; border-radius: 0; background: #17171912; padding: 0 14px; color: #171719; font-weight: 700; }
 .drawAgreement > div button:last-child { background: #f26b38; color: #fff; }
 .drawAgreement > div button:disabled { cursor: not-allowed; opacity: .4; }
-.drawAgreementClose { position: absolute; top: 14px; right: 14px; display: grid; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 0; background: #ffffff10; color: #fff; }
+.drawAgreementClose { position: absolute; top: 14px; right: 14px; display: grid; width: 30px; height: 30px; place-items: center; border: 0; border-radius: 0; background: #17171910; color: #171719; }
 /* The floating lists of the model and quality rows, opened to the right of the panel. */
 .flyBackdrop {
   position: fixed;
@@ -522,17 +523,17 @@
   overflow: hidden;
   border: 0;
   border-radius: 0;
-  background: #1a1c1f;
-  color: #fff;
+  background: #f4f5f7;
+  color: #171719;
   box-shadow: 0 20px 48px #000000b3;
 }
 .flySearch {
   display: flex;
   align-items: center;
   gap: 10px;
-  border-bottom: 1px solid #ffffff14;
+  border-bottom: 1px solid #17171914;
   padding: 14px 16px;
-  color: #ffffff80;
+  color: #17171980;
 }
 .flySearch input {
   min-width: 0;
@@ -540,14 +541,14 @@
   border: 0;
   background: none;
   font-size: 16px;
-  color: #fff;
+  color: #171719;
   outline: none;
 }
 .flyHeading {
   padding: 14px 18px 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #ffffff80;
+  color: #17171980;
 }
 .flyout ul {
   margin: 0;
@@ -565,11 +566,11 @@
   background: none;
   padding: 12px 12px;
   text-align: left;
-  color: #fff;
+  color: #171719;
 }
 .flyout li button:hover,
 .flyout li button[aria-current="true"] {
-  background: #ffffff14;
+  background: #17171914;
 }
 .flyCopy {
   display: flex;
@@ -608,17 +609,17 @@
 }
 .flyCopy small i {
   border-radius: 0;
-  background: #ffffff14;
+  background: #17171914;
   padding: 2px 8px;
   font-size: 12px;
   font-style: normal;
-  color: #ffffffa6;
+  color: #171719a6;
 }
 .flyEmpty {
   padding: 18px 12px;
   text-align: center;
   font-size: 13px;
-  color: #ffffff80;
+  color: #17171980;
 }
 
 /* The two-way switch under the banner, and the category row below it. */
@@ -627,7 +628,7 @@
   gap: 2px;
   border: 0;
   border-radius: 0;
-  background: #ffffff0a;
+  background: #1717190a;
   padding: 3px;
 }
 .switch button {
@@ -639,11 +640,11 @@
   font-size: 12px;
   white-space: nowrap;
   font-weight: 600;
-  color: #ffffff80;
+  color: #17171980;
 }
 .switch button[aria-pressed="true"] {
-  background: #ffffff1a;
-  color: #fff;
+  background: #1717191a;
+  color: #171719;
 }
 .rowWrap {
   position: relative;
@@ -655,19 +656,19 @@
   gap: 10px;
   border: 0;
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   padding: 12px;
-  color: #fff;
+  color: #171719;
 }
 .styleRow:hover {
-  background: #ffffff14;
+  background: #17171914;
 }
 .styleThumb {
   flex: none;
   width: 38px;
   height: 32px;
   border-radius: 0;
-  background: #2a2d31 center / cover;
+  background: #e9ebee center / cover;
 }
 .styleName {
   display: flex;
@@ -688,7 +689,7 @@
 .styleName small {
   font-size: 12px;
   font-weight: 500;
-  color: #ffffff80;
+  color: #17171980;
 }
 .styleClear {
   display: grid;
@@ -699,10 +700,10 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #ffffff99;
+  color: #17171999;
 }
 .styleClear:hover {
-  color: #fff;
+  color: #171719;
 }
 /* The Styles tab: a grid of looks, and the card that uploads your own. */
 .styleGrid {
@@ -719,31 +720,31 @@
   gap: 6px;
   border: 0;
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   padding: 12px;
   text-align: center;
-  color: #fff;
+  color: #171719;
 }
 .styleUpload:hover {
-  background: #ffffff14;
+  background: #17171914;
 }
 .styleUpload strong {
   font-size: 15px;
 }
 .styleUpload small {
   font-size: 12px;
-  color: #ffffff80;
+  color: #17171980;
 }
 .styleUpload em {
   font-size: 12px;
   font-style: normal;
-  color: #ff8a80;
+  color: #d93025;
 }
 .styleCard {
   position: relative;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: #1b1d20;
+  background: #f4f5f7;
   outline: 2px solid transparent;
   outline-offset: -2px;
 }
@@ -757,7 +758,7 @@
   border-radius: 0;
   background: none;
   padding: 0;
-  color: #fff;
+  color: #171719;
 }
 .styleCard > button:first-child span {
   position: absolute;
@@ -795,11 +796,11 @@
   border: 0;
   border-radius: 0;
   cursor: pointer;
-  background: #ffffff1f;
+  background: #1717191f;
   padding: 7px 12px;
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  color: #171719;
 }
 .styleName em {
   border-radius: 0;
@@ -816,7 +817,7 @@
   gap: 4px;
   min-width: 0;
   font-size: 13px;
-  color: #ffffff80;
+  color: #17171980;
 }
 /* The second card: an add slot and a few other templates to switch to. */
 .composerSlots {
@@ -829,17 +830,17 @@
   flex-wrap: wrap;
   gap: 10px;
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   padding: 14px;
 }
 .slotOptional {
   position: absolute;
   top: 8px;
   right: 8px;
-  background: #ffffff14;
+  background: #17171914;
   padding: 2px 8px;
   font-size: 11px;
-  color: #ffffff99;
+  color: #17171999;
 }
 .slotFile {
   position: relative;
@@ -847,7 +848,7 @@
   width: 46px;
   height: 46px;
   overflow: hidden;
-  background: #2a2d31;
+  background: #e9ebee;
 }
 .slotFile img {
   width: 100%;
@@ -872,10 +873,10 @@
   flex-basis: 100%;
   font-size: 11px;
   line-height: 1.5;
-  color: #ffffff80;
+  color: #17171980;
 }
 .composerSlots small.sendError {
-  color: #ff8a80;
+  color: #d93025;
 }
 .slotAdd,
 .slotThumb {
@@ -889,15 +890,15 @@
 .slotAdd {
   display: grid;
   place-items: center;
-  background: #ffffff10;
-  color: #ffffff66;
+  background: #17171910;
+  color: #17171966;
 }
 .slotThumb {
-  background: #2a2d31 center / cover;
+  background: #e9ebee center / cover;
   outline: 2px solid transparent;
 }
 .slotThumb:hover {
-  outline-color: #ffffffb3;
+  outline-color: #171719b3;
 }
 /* Switches, as in the prompt header and the "open in a new tab" row. */
 .switchControl {
@@ -907,7 +908,7 @@
   height: 20px;
   border: 0;
   border-radius: 999px;
-  background: #ffffff33;
+  background: #17171933;
   padding: 0;
   transition: background 0.15s ease;
 }
@@ -919,6 +920,7 @@
   height: 16px;
   border-radius: 50%;
   background: #fff;
+  box-shadow: 0 1px 2px #00000040;
   transition: transform 0.15s ease;
 }
 .switchControl[aria-checked="true"] {
@@ -934,7 +936,7 @@
   padding: 0 4px 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: #171719;
 }
 .composerOption span {
   display: flex;
@@ -963,12 +965,12 @@
   place-items: center;
   border: 0;
   border-radius: 0;
-  background: #ffffff33;
-  color: #fff;
+  background: #17171933;
+  color: #171719;
   cursor: pointer;
 }
 .cardClose:hover {
-  background: #ffffff55;
+  background: #17171955;
 }
 .cardIcon {
   position: absolute;
@@ -989,7 +991,7 @@
   display: grid;
   place-items: center;
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   padding: 14px 18px;
 }
 .composerCard {
@@ -1042,18 +1044,18 @@
 }
 .composerBlock {
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   overflow: hidden;
 }
 .composerLabel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #ffffff14;
+  border-bottom: 1px solid #17171914;
   padding: 11px 14px;
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: #171719;
 }
 .composerPrompt {
   display: block;
@@ -1066,13 +1068,13 @@
   font: inherit;
   font-size: 14px;
   line-height: 1.6;
-  color: #f7f7f8;
+  color: #171719;
   resize: none;
   outline: none;
   overflow-wrap: anywhere;
 }
 .composerPrompt::placeholder {
-  color: #ffffff59;
+  color: #17171959;
 }
 .composerRow {
   display: flex;
@@ -1082,13 +1084,13 @@
   gap: 10px;
   border: 0;
   border-radius: 0;
-  background: #ffffff0d;
+  background: #1717190d;
   padding: 10px 12px;
   text-align: left;
-  color: #fff;
+  color: #171719;
 }
 .composerRow:hover {
-  background: #ffffff14;
+  background: #17171914;
 }
 .composerRow > span {
   display: flex;
@@ -1098,7 +1100,7 @@
 }
 .composerRow small {
   font-size: 12px;
-  color: #ffffff80;
+  color: #17171980;
 }
 .composerRow strong {
   display: flex;
@@ -1114,7 +1116,7 @@
   white-space: nowrap;
 }
 .rowPlaceholder {
-  color: #ffffff80;
+  color: #17171980;
   font-weight: 500;
 }
 .composerRow strong em {
@@ -1129,10 +1131,10 @@
 }
 .composerRow strong svg {
   flex: none;
-  color: #ff9a6b;
+  color: #d9541c;
 }
 .composerAdvanced {
-  border-top: 1px solid #ffffff14;
+  border-top: 1px solid #17171914;
   /* Opened, it scrolls into view above the generate button that stays at the bottom. */
   scroll-margin-bottom: 120px;
 }
@@ -1145,7 +1147,7 @@
   padding: 12px 6px;
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
+  color: #171719;
 }
 .composerAdvanced summary::-webkit-details-marker {
   display: none;
@@ -1161,12 +1163,12 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  border-top: 1px solid #ffffff14;
+  border-top: 1px solid #17171914;
   padding: 9px 6px;
   font-size: 12px;
 }
 .composerFacts dt {
-  color: #ffffff80;
+  color: #17171980;
 }
 .composerFacts dd {
   margin: 0;
@@ -1182,9 +1184,9 @@
   bottom: -8px;
   z-index: 4;
   margin: auto -8px -8px;
-  border-top: 1px solid #ffffff1a;
+  border-top: 1px solid #1717191a;
   border-radius: 0;
-  background: #131517;
+  background: #ffffff;
   padding: 12px 8px 12px;
 }
 .composerBar .use {
@@ -1203,13 +1205,13 @@
   opacity: 0.6;
 }
 .composerBar p.sendError {
-  color: #ff8a80;
+  color: #d93025;
 }
 .composerBar p {
   margin: 8px 0 0;
   text-align: center;
   font-size: 11px;
-  color: #ffffff80;
+  color: #17171980;
 }
 
 /* Edit Video: a list of tools, each with an icon, a name, one line and a chevron. */
@@ -1226,10 +1228,10 @@
   border-right: 0;
   border-bottom: 0;
   border-left: 0;
-  border-top: 1px solid #ffffff10;
+  border-top: 1px solid #17171910;
   background: transparent;
   padding: 12px 10px;
-  color: #fff;
+  color: #171719;
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -1238,11 +1240,11 @@
   border-top: 0;
 }
 .toolRow:hover {
-  background: #ffffff0a;
+  background: #1717190a;
 }
 .toolRow > svg:first-child {
   flex: none;
-  color: #ffffff99;
+  color: #17171999;
 }
 .toolRow > span {
   display: flex;
@@ -1270,68 +1272,68 @@
 }
 .toolRow small {
   font-size: 13px;
-  color: #ffffff80;
+  color: #17171980;
 }
 .toolRow > svg:last-child {
   flex: none;
-  color: #ffffff66;
+  color: #17171966;
 }
-.editBack { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; border: 0; background: transparent; padding: 2px 4px; color: #ffffff8c; font-size: 11px; font-weight: 650; }
-.editBack:hover { color: #fff; }
-.motionAssets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; border-radius: 0; background: #ffffff08; padding: 6px; }
+.editBack { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; border: 0; background: transparent; padding: 2px 4px; color: #1717198c; font-size: 11px; font-weight: 650; }
+.editBack:hover { color: #171719; }
+.motionAssets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; border-radius: 0; background: #17171908; padding: 6px; }
 .motionReference,
-.motionCharacter { position: relative; display: flex; min-width: 0; min-height: 164px; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 0; border-radius: 0; background: #1c1e20; color: #fff; }
+.motionCharacter { position: relative; display: flex; min-width: 0; min-height: 164px; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; border: 0; border-radius: 0; background: #f4f5f7; color: #171719; }
 .motionReference { border-style: solid; }
 .motionReference::after { position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, #000b); content: ""; pointer-events: none; }
 .motionReference > span { position: absolute; z-index: 1; inset: auto 8px 8px; overflow: hidden; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .motionReference > button { position: absolute; top: 6px; right: 6px; z-index: 2; display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 0; background: #1119; color: #fff; }
 .motionCharacter { gap: 6px; padding: 10px; text-align: center; }
 .motionCharacter strong { font-size: 12px; }
-.motionCharacter small { color: #ffffff73; font-size: 10px; line-height: 1.35; }
-.motionSceneControl { display: flex; height: 156px; flex: none; box-sizing: border-box; flex-direction: column; gap: 10px; border-radius: 0; background: #ffffff0c; padding: 10px; }
-.motionSceneControl > button { display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; padding: 1px; color: #fff; text-align: left; }
+.motionCharacter small { color: #17171973; font-size: 10px; line-height: 1.35; }
+.motionSceneControl { display: flex; height: 156px; flex: none; box-sizing: border-box; flex-direction: column; gap: 10px; border-radius: 0; background: #1717190c; padding: 10px; }
+.motionSceneControl > button { display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent; padding: 1px; color: #171719; text-align: left; }
 .motionSceneControl > button strong { font-size: 12px; }
 .motionSceneControl > button i { position: relative; width: 34px; height: 20px; border-radius: 99px; background: #f26b38; }
-.motionSceneControl > button i::after { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; content: ""; }
-.motionSceneControl > button[aria-checked="false"] i { background: #ffffff38; }
+.motionSceneControl > button i::after { position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px #00000040; content: ""; }
+.motionSceneControl > button[aria-checked="false"] i { background: #17171938; }
 .motionSceneControl > button[aria-checked="false"] i::after { right: auto; left: 2px; }
-.motionSourceTabs { display: flex; gap: 4px; border-radius: 0; background: #ffffff08; padding: 4px; }
-.motionSourceTabs button { display: flex; flex: 1; min-width: 0; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 0; background: transparent; padding: 8px 4px; color: #ffffff78; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.motionSourceTabs button[aria-pressed="true"] { background: #ffffff18; color: #fff; }
-.motionSceneControl p { margin: 0; color: #ffffff6e; font-size: 10px; line-height: 1.45; }
+.motionSourceTabs { display: flex; gap: 4px; border-radius: 0; background: #17171908; padding: 4px; }
+.motionSourceTabs button { display: flex; flex: 1; min-width: 0; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 0; background: transparent; padding: 8px 4px; color: #17171978; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.motionSourceTabs button[aria-pressed="true"] { background: #17171918; color: #171719; }
+.motionSceneControl p { margin: 0; color: #1717196e; font-size: 10px; line-height: 1.45; }
 .motionSceneControl[data-scene-enabled="false"] > p { display: flex; flex: 1; align-items: center; }
 .motionGenerateDock p {
   margin: 8px 0 0;
   text-align: center;
   font-size: 12px;
-  color: #ffffff99;
+  color: #17171999;
 }
 .motionGenerateDock p.sendError {
-  color: #ff8a80;
+  color: #d93025;
 }
 .motionGenerateDock button:disabled {
   opacity: 0.6;
 }
-.motionGenerateDock { position: sticky; bottom: -8px; z-index: 4; margin: auto -8px -8px; border-top: 1px solid #ffffff12; background: #131517; padding: 12px 8px; }
+.motionGenerateDock { position: sticky; bottom: -8px; z-index: 4; margin: auto -8px -8px; border-top: 1px solid #17171912; background: #ffffff; padding: 12px 8px; }
 .motionGenerateDock button { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 0; background: #f26b38; box-shadow: 0 3px 0 #b84a1c; color: #fff; font-size: 15px; font-weight: 800; }
 .motionHow { display: flex; min-height: calc(100% - 46px); flex-direction: column; gap: 12px; }
-.motionHowHero { display: grid; min-height: 270px; grid-template-columns: minmax(0, 1fr) minmax(250px, 34%); align-items: center; gap: 24px; overflow: hidden; border: 0; border-radius: 0; background: #111314; padding: 28px 32px; }
-.motionHowHero h1 { max-width: 650px; margin: 0 0 14px; color: #fff; font-size: clamp(28px, 3vw, 42px); font-weight: 850; line-height: 1.15; text-transform: uppercase; }
-.motionHowHero p { max-width: 440px; margin: 0; color: #ffffff9c; font-size: 15px; line-height: 1.55; }
+.motionHowHero { display: grid; min-height: 270px; grid-template-columns: minmax(0, 1fr) minmax(250px, 34%); align-items: center; gap: 24px; overflow: hidden; border: 0; border-radius: 0; background: #ffffff; padding: 28px 32px; }
+.motionHowHero h1 { max-width: 650px; margin: 0 0 14px; color: #171719; font-size: clamp(28px, 3vw, 42px); font-weight: 850; line-height: 1.15; text-transform: uppercase; }
+.motionHowHero p { max-width: 440px; margin: 0; color: #1717199c; font-size: 15px; line-height: 1.55; }
 .motionMontage { position: relative; display: flex; min-height: 180px; align-items: center; justify-content: center; }
 .motionMontage span { position: relative; width: 34%; aspect-ratio: .75; border: 2px solid #ffffff18; border-radius: 0; background: #26282a center / cover; box-shadow: 0 12px 32px #0008; }
 .motionMontage1 { z-index: 1; transform: rotate(-7deg) translateX(18%); }
 .motionMontage2 { z-index: 2; transform: translateY(-3px); }
 .motionMontage3 { z-index: 1; transform: rotate(7deg) translateX(-18%); }
-.motionLibrary { min-height: 320px; overflow: hidden; border: 0; border-radius: 0; background: #111314; padding: 18px 20px; }
-.motionLibrary h2 { margin: 0 0 16px; color: #fff; font-size: 16px; font-weight: 750; }
+.motionLibrary { min-height: 320px; overflow: hidden; border: 0; border-radius: 0; background: #ffffff; padding: 18px 20px; }
+.motionLibrary h2 { margin: 0 0 16px; color: #171719; font-size: 16px; font-weight: 750; }
 .motionGallery { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 14px; overflow-x: auto; padding: 2px 2px 14px; }
 /* Tall rounded tiles that play their motion, as in a motion library of phone clips. */
 .motionGallery button { position: relative; min-width: 0; aspect-ratio: 9 / 16; overflow: hidden; border: 0; border-radius: 16px; background: #202225 center / cover; color: #fff; text-align: left; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
 .motionGallery button:hover, .motionGallery button:focus-visible { transform: translateY(-2px); outline: none; }
 .motionGallery button > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .motionGallery button > .motionMute, .workOpen > .motionMute { position: absolute; right: 10px; bottom: 10px; z-index: 1; display: grid; width: 34px; height: 34px; place-items: center; border-radius: 999px; background: #17171999; color: #ffffffd9; backdrop-filter: blur(4px); }
-.motionLibraryEmpty { color: #ffffff70; font-size: 13px; }
+.motionLibraryEmpty { color: #17171970; font-size: 13px; }
 
 /* The list the "change" chip opens. */
 .pickerBackdrop {
@@ -1353,16 +1355,16 @@
   flex-direction: column;
   border: 0;
   border-radius: 0;
-  background: #1b1d20;
+  background: #f4f5f7;
   box-shadow: 0 16px 36px #000000a6;
 }
 .pickerSearch {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-bottom: 1px solid #ffffff14;
+  border-bottom: 1px solid #17171914;
   padding: 11px 14px;
-  color: #ffffff80;
+  color: #17171980;
 }
 .pickerSearch input {
   min-width: 0;
@@ -1370,14 +1372,14 @@
   border: 0;
   background: none;
   font-size: 14px;
-  color: #fff;
+  color: #171719;
   outline: none;
 }
 .pickerHeading {
   padding: 10px 14px 4px;
   font-size: 12px;
   font-weight: 700;
-  color: #ffffff80;
+  color: #17171980;
 }
 .picker ul {
   margin: 0;
@@ -1395,18 +1397,18 @@
   background: none;
   padding: 7px 8px;
   text-align: left;
-  color: #fff;
+  color: #171719;
 }
 .picker li button:hover,
 .picker li button[aria-current="true"] {
-  background: #ffffff14;
+  background: #17171914;
 }
 .pickerThumb {
   flex: none;
   width: 40px;
   height: 40px;
   border-radius: 0;
-  background: #2a2d31 center / cover;
+  background: #e9ebee center / cover;
 }
 .pickerCopy {
   display: flex;
@@ -1424,7 +1426,7 @@
 .pickerCopy small {
   overflow: hidden;
   font-size: 11px;
-  color: #ffffff80;
+  color: #17171980;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1451,15 +1453,15 @@
   padding: 7px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #ffffff80;
+  color: #17171980;
 }
 .panelTabs button:hover {
-  color: #fff;
+  color: #171719;
 }
 .panelTabs button[aria-selected="true"] {
-  background: #ffffff14;
-  box-shadow: inset 0 0 0 1px #ffffff1f;
-  color: #fff;
+  background: #17171914;
+  box-shadow: inset 0 0 0 1px #1717191f;
+  color: #171719;
 }
 .panelTabs button svg {
   flex: none;
@@ -1487,13 +1489,13 @@
   gap: 7px;
   border: 0;
   border-radius: 0;
-  background: #ffffff08;
+  background: #17171908;
   padding: 8px 12px;
-  color: #ffffffa8;
+  color: #171719a8;
   font-size: 12px;
   font-weight: 600;
 }
-.panelActions button:hover { background: #ffffff12; color: #fff; }
+.panelActions button:hover { background: #17171912; color: #171719; }
 .libraryHero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 470px);
@@ -1510,14 +1512,14 @@
   font-size: 32px;
   font-weight: 800;
   line-height: 1.2;
-  color: #fff;
+  color: #171719;
 }
 .libraryHeroCopy p {
   margin: 0;
   max-width: 460px;
   font-size: 14px;
   line-height: 1.7;
-  color: #ffffff8c;
+  color: #1717198c;
 }
 .libraryHeroCover {
   position: relative;
@@ -1571,7 +1573,7 @@
   aspect-ratio: 9 / 16;
   overflow: hidden;
   border-radius: 16px;
-  background: #202225;
+  background: #e9ebee;
 }
 /* A clip still being made, or a run's result, fills a tall tile too; its prompt is in the tile's tooltip. */
 .myVideos ul.workGrid > li > .pendingClip, .myVideos ul.workGrid > li > video { width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; }
@@ -1581,7 +1583,7 @@
   overflow: hidden;
   font-size: 12px;
   line-height: 1.5;
-  color: #ffffffa6;
+  color: #171719a6;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -1600,12 +1602,12 @@
   margin: 6px 0 0;
   font-size: 12px;
   font-weight: 800;
-  color: #ffffffb3;
+  color: #171719b3;
 }
 .failedClip {
   padding: 12px;
   text-align: center;
-  color: #ff8a80;
+  color: #d93025;
 }
 .pendingClip {
   background-size: cover;
@@ -1626,11 +1628,11 @@
   gap: 6px;
   border: 0;
   border-radius: 0;
-  background: #ffffff14;
+  background: #17171914;
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: #171719;
 }
 .savedNote {
   display: flex;
@@ -1650,11 +1652,11 @@
 .savedNote button {
   border: 0;
   border-radius: 0;
-  background: #ffffff1f;
+  background: #1717191f;
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 700;
-  color: #fff;
+  color: #171719;
 }
 .savedRow {
   display: flex;
@@ -1671,7 +1673,7 @@
   -webkit-line-clamp: unset;
 }
 .myVideos li button:hover {
-  background: #ffffff24;
+  background: #17171924;
 }
 /* The "create a template" dialog over the page. */
 .saveBackdrop {
@@ -1690,9 +1692,9 @@
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
-  background: #1a1c1f;
+  background: #f4f5f7;
   padding: 20px;
-  color: #fff;
+  color: #171719;
 }
 .saveDialog h2 {
   margin: 0;
@@ -1710,22 +1712,22 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #ffffffb3;
+  color: #171719b3;
 }
 .saveDialog input:not([type="file"]),
 .saveDialog textarea {
   border: 0;
   border-radius: 0;
-  background: #26292d;
+  background: #e9ebee;
   padding: 10px 12px;
   font: inherit;
   font-size: 14px;
-  color: #fff;
+  color: #171719;
 }
 .saveDialog p {
   margin: 0;
   font-size: 12px;
-  color: #ffffff99;
+  color: #17171999;
 }
 .saveDialog > div {
   display: flex;
@@ -1735,11 +1737,11 @@
 .saveDialog > div button {
   border: 0;
   border-radius: 0;
-  background: #ffffff14;
+  background: #17171914;
   padding: 10px 16px;
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
+  color: #171719;
 }
 .saveDialog > div button.saveConfirm {
   background: #f26b38;
@@ -1758,11 +1760,11 @@
   margin: 0;
   font-size: 16px;
   font-weight: 750;
-  color: #fff;
+  color: #171719;
 }
 .count {
   font-size: 12px;
-  color: #ffffff80;
+  color: #17171980;
 }
 .toolbar {
   position: sticky;
@@ -1775,7 +1777,7 @@
   margin: 0 -10px 6px;
   padding: 8px 10px 18px;
   /* The tiles slide away under the switch and fade out behind it. */
-  background: linear-gradient(#131517 62%, #13151700);
+  background: linear-gradient(#ffffff 62%, #13151700);
 }
 .tabs {
   display: flex;
@@ -1785,7 +1787,7 @@
   overflow-x: auto;
   border: 0;
   border-radius: 0;
-  background: #ffffff0a;
+  background: #1717190a;
   padding: 4px;
   scrollbar-width: none;
 }
@@ -1803,14 +1805,14 @@
   padding: 7px 15px;
   font-size: 13px;
   font-weight: 600;
-  color: #ffffff99;
+  color: #17171999;
 }
 .tabs button:hover {
-  color: #fff;
+  color: #171719;
 }
 .tabs button[aria-pressed="true"] {
-  background: #fff;
-  color: #111;
+  background: #171719;
+  color: #ffffff;
 }
 .tools {
   display: flex;
@@ -1823,23 +1825,23 @@
   height: 40px;
   border: 0;
   border-radius: 0;
-  background: #1b1d20;
+  background: #f4f5f7;
   padding: 0 10px;
   font-size: 13px;
-  color: #fff;
+  color: #171719;
 }
 .search {
   width: 240px;
   min-width: 0;
   flex: 1 1 200px;
   max-width: 340px;
-  border-color: #ffffff1f;
-  background: #1b1d20;
-  color: #ffffff80;
+  border-color: #1717191f;
+  background: #f4f5f7;
+  color: #17171980;
 }
 .search input {
   font-size: 13px;
-  color: #fff;
+  color: #171719;
 }
 .clearHidden {
   visibility: hidden;
@@ -1853,7 +1855,7 @@
   background: none;
   padding: 0 12px;
   font-size: 13px;
-  color: #fff;
+  color: #171719;
 }
 
 /* Masonry: columns fill top to bottom, each tile as tall as its own aspect ratio. */
@@ -1870,8 +1872,8 @@
 }
 .tile {
   position: relative;
-  background: #1b1d20;
-  color: #fff;
+  background: #f4f5f7;
+  color: #171719;
   outline: 2px solid transparent;
   outline-offset: -2px;
 }
@@ -1879,12 +1881,12 @@
   outline-color: #f26b38;
 }
 .skeleton {
-  background: #1b1d20;
+  background: #f4f5f7;
   animation: pulse 1.4s ease-in-out infinite;
 }
 @keyframes pulse {
   50% {
-    background: #25282c;
+    background: #e9ebee;
   }
 }
 .tile .still,
@@ -2000,8 +2002,8 @@
   position: absolute;
   inset: 0;
   padding: 16px;
-  background: linear-gradient(145deg, #2a2118, #1b2330);
-  color: #e8e4e0;
+  background: linear-gradient(145deg, #2a2118, #f4f5f7);
+  color: #4a4642;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.5;
@@ -2024,21 +2026,21 @@
 .empty {
   padding: 70px 15px;
   text-align: center;
-  color: #ffffff8c;
+  color: #1717198c;
 }
 .empty h2 {
   font-size: 20px;
-  color: #fff;
+  color: #171719;
 }
 .empty button,
 .pagination button {
   min-height: 40px;
   border: 0;
   border-radius: 0;
-  background: #1b1d20;
+  background: #f4f5f7;
   padding: 8px 12px;
   font-size: 12px;
-  color: #fff;
+  color: #171719;
 }
 .pagination {
   display: flex;
@@ -2046,7 +2048,7 @@
   justify-content: center;
   gap: 8px;
   margin-top: 22px;
-  color: #ffffff80;
+  color: #17171980;
 }
 .pagination button[aria-current] {
   border-color: #f26b38;
@@ -2090,12 +2092,12 @@
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #ffffff99;
+  color: #17171999;
 }
 .inviteBanner strong {
   font-size: 28px;
   font-weight: 800;
-  color: #ff9a6b;
+  color: #d9541c;
   text-transform: uppercase;
 }
 .inviteBanner button {
@@ -2112,13 +2114,13 @@
   margin: 94px 0 8px;
   font-size: clamp(26px, 2.3vw, 38px);
   font-weight: 800;
-  color: #fff;
+  color: #171719;
   text-transform: uppercase;
 }
 .invite > p {
   margin: 0;
   font-size: 14px;
-  color: #ffffff8c;
+  color: #1717198c;
 }
 .inviteSteps {
   display: grid;
@@ -2135,9 +2137,9 @@
   align-items: center;
   overflow: hidden;
   border-radius: 0;
-  background: #101112;
+  background: #ffffff;
   margin-bottom: 16px;
-  box-shadow: inset 0 0 0 1px #ffffff0b;
+  box-shadow: inset 0 0 0 1px #1717190b;
 }
 .uploadDemo {
   position: relative;
@@ -2150,11 +2152,11 @@
   gap: 12px;
   border: 0;
   border-radius: 0;
-  color: #fff;
+  color: #171719;
   text-align: center;
 }
 .uploadDemo strong { font-size: 18px; }
-.uploadDemo small { max-width: 75%; color: #ffffff70; font-size: 12px; }
+.uploadDemo small { max-width: 75%; color: #17171970; font-size: 12px; }
 .uploadDemo > span {
   position: absolute;
   right: -9%;
@@ -2201,13 +2203,13 @@
   margin: 0 0 4px;
   font-size: 16px;
   font-weight: 800;
-  color: #fff;
+  color: #171719;
 }
 .inviteSteps p {
   margin: 0;
   font-size: 13px;
   line-height: 1.6;
-  color: #ffffff8c;
+  color: #1717198c;
 }
 @media (max-width: 900px) {
   .panelTopbar { flex-wrap: wrap; }
@@ -2283,20 +2285,20 @@
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.14em;
-  color: #ff9a6b;
+  color: #d9541c;
 }
 .how h2 {
   margin: 6px 0 8px;
   font-size: 28px;
   font-weight: 800;
-  color: #fff;
+  color: #171719;
 }
 .how > p {
   margin: 0;
   max-width: 460px;
   font-size: 14px;
   line-height: 1.8;
-  color: #ffffff8c;
+  color: #1717198c;
 }
 .howControls {
   display: flex;
@@ -2311,15 +2313,15 @@
   place-items: center;
   border: 0;
   border-radius: 0;
-  background: #1b1d20;
-  color: #fff;
+  background: #f4f5f7;
+  color: #171719;
 }
 .howThumbs {
   display: flex;
   gap: 6px;
   border: 0;
   border-radius: 0;
-  background: #ffffff0a;
+  background: #1717190a;
   padding: 5px;
 }
 .howThumbs button {
@@ -2327,25 +2329,14 @@
   height: 30px;
   border: 2px solid transparent;
   border-radius: 0;
-  background: #2a2d31 center / cover;
+  background: #e9ebee center / cover;
   padding: 0;
 }
 .howThumbs button[aria-current="step"] {
-  border-color: #fff;
+  border-color: #171719;
 }
 
 @media (max-width: 1023.98px) {
-  .workspace {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-  .composer,
-  .libraryPanel {
-    overflow: visible;
-  }
-  .composerBar {
-    position: static;
-  }
   .libraryHero {
     grid-template-columns: 1fr;
   }
@@ -2428,7 +2419,7 @@
   gap: 16px;
   height: 100%;
   padding: 24px;
-  background: #171719;
+  background: #f4f5f7;
 }
 .audioCover {
   position: relative;
@@ -2481,7 +2472,7 @@
   width: min(920px, 94vw);
   max-height: 90vh;
   overflow: auto;
-  color: #171719;
+  color: #ffffff;
 }
 .dialog::backdrop {
   background: #111b;
@@ -2504,7 +2495,7 @@
 }
 .previewMedia {
   height: min(55vh, 520px);
-  background: #171719;
+  background: #f4f5f7;
   position: relative;
   border-radius: 0;
   overflow: hidden;
@@ -2541,7 +2532,7 @@
   width: min(1080px, 94vw);
   max-width: calc(100vw - 24px);
   max-height: 90dvh;
-  background: #fff;
+  background: #171719;
   box-shadow: 0 28px 90px #0004;
 }
 .previewLayout {
@@ -2606,8 +2597,8 @@
   font-size: 9px;
   font-weight: 700;
   letter-spacing: var(--eos-label-tracking, 0.18em);
-  background: #ffffffdd;
-  color: #333;
+  background: #171719dd;
+  color: #ffffff;
   padding: 6px 9px;
   border-radius: 0;
   pointer-events: none;
@@ -2619,55 +2610,46 @@
   min-width: 0;
   overflow-y: auto;
 }
-.dialog.videoPreviewDialog { inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; overflow: hidden; padding: 0; border: 0; border-radius: 0; background: #050607; color: #f5f5f6; box-shadow: none; }
+.dialog.videoPreviewDialog { inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; overflow: hidden; padding: 0; border: 0; border-radius: 0; background: #ffffff; color: #171719; box-shadow: none; }
 .videoPreviewDialog::backdrop { background: #000b; }
 .videoPreviewDialog .previewLayout { grid-template-columns: minmax(0, 1fr) 368px; gap: 0; height: 100%; min-height: 0; padding: 0; }
 .videoPreviewDialog .artworkPane { background: #050607; }
-.videoPreviewInfo { min-height: 0; margin: 8px; overflow: hidden; border-radius: 16px; background: #191b1d; padding: 56px 16px 16px; color: #f5f5f6; }
+.videoPreviewInfo { min-height: 0; margin: 8px; overflow: hidden; border-radius: 16px; background: #f4f5f7; padding: 56px 16px 16px; color: #171719; }
 /* The details scroll when the window is short; the buttons stay at the bottom, always in view. */
 .clipScroll { min-height: 0; flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px 12px; }
-.videoPreviewDialog .previewClose { border-color: #ffffff12; background: #292b2d; color: #fff; }
-.clipPlayer { display: flex; width: 100%; height: 100%; min-width: 0; min-height: 0; flex-direction: column; background: #050607; }
-.clipVideoStage { display: flex; flex: 1; min-height: 0; align-items: center; justify-content: center; overflow: hidden; }
-.clipVideo { display: block; width: 100%; height: 100%; object-fit: contain; background: #050607; }
-.clipSeek { --clip-progress: 0%; appearance: none; width: calc(100% - 24px); height: 6px; flex: none; margin: 8px 12px 0; border-radius: 999px; background: linear-gradient(to right, #f26b38 var(--clip-progress), #55585a var(--clip-progress)); cursor: pointer; }
-.clipSeek::-webkit-slider-thumb { appearance: none; width: 5px; height: 12px; border: 0; border-radius: 0; background: #fff; }
-.clipSeek::-moz-range-thumb { width: 5px; height: 12px; border: 0; border-radius: 0; background: #fff; }
-.clipControls { display: grid; min-height: 52px; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 12px; color: #f5f5f6; }
-.clipControlGroup { display: flex; align-items: center; gap: 14px; }
-.clipControls button { display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; padding: 4px; color: inherit; }
-.clipSpeed { font-size: 12px; font-weight: 700; }
-.clipTime { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 650; }
-.clipFullscreen { justify-self: end; }
-.clipDetailsHeading { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; color: #ffffff80; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.clipCard { margin-bottom: 10px; border-radius: 14px; background: #232527; overflow: hidden; }
-.clipCardHead { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; background: none; padding: 12px 12px 8px; color: #ffffff80; font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.videoPreviewDialog .previewClose { border-color: #17171912; background: #e9ebee; color: #171719; }
+.clipPlayer { display: flex; width: 100%; height: 100%; min-width: 0; min-height: 0; align-items: center; justify-content: center; background: #050607; }
+.clipEos { width: 100%; height: 100%; }
+.clipEos :global(.video-modal-player) { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; }
+.clipDetailsHeading { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; color: #17171980; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.clipCard { margin-bottom: 10px; border-radius: 14px; background: #f4f5f7; overflow: hidden; }
+.clipCardHead { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; background: none; padding: 12px 12px 8px; color: #17171980; font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .clipCardHead > span { display: inline-flex; align-items: center; gap: 7px; }
 .clipCardToggle { cursor: pointer; }
 .clipChevronOpen { transform: rotate(180deg); }
-.clipCardBody { margin: 0 8px 8px; border-radius: 10px; background: #2b2d30; padding: 10px; }
-.clipCopy { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; background: #34363a; padding: 5px 9px; color: #fff; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 650; letter-spacing: 0; text-transform: none; }
-.clipCopy:hover { background: #3f4247; }
-.clipPrompt { margin: 0; color: #f5f5f6; font-size: 12.5px; font-weight: 600; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.clipCardBody { margin: 0 8px 8px; border-radius: 10px; background: #e9ebee; padding: 10px; }
+.clipCopy { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 8px; background: #dfe2e6; padding: 5px 9px; color: #171719; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 650; letter-spacing: 0; text-transform: none; }
+.clipCopy:hover { background: #dfe2e6; }
+.clipPrompt { margin: 0; color: #171719; font-size: 12.5px; font-weight: 600; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .clipPromptClamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
-.clipSeeAll { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; border: 0; background: none; padding: 0; color: #ffffff80; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; }
-.clipSeeAll:hover { color: #fff; }
+.clipSeeAll { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; border: 0; background: none; padding: 0; color: #17171980; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; }
+.clipSeeAll:hover { color: #171719; }
 .clipDetails { display: grid; gap: 8px; }
 .clipDetails > div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
-.clipDetails dt { color: #ffffff80; }
-.clipDetails dd { margin: 0; color: #fff; font-weight: 650; text-align: right; overflow-wrap: anywhere; }
+.clipDetails dt { color: #17171980; }
+.clipDetails dd { margin: 0; color: #171719; font-weight: 650; text-align: right; overflow-wrap: anywhere; }
 .clipActions { flex: none; margin-top: auto; padding-top: 12px; }
-.clipEdit, .clipActionGrid > button, .clipActionGrid > a { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 12px; background: #1f2022; box-shadow: inset 0 0 0 1px #34363a; color: #fff; font-size: 12px; font-weight: 650; text-decoration: none; }
+.clipEdit, .clipActionGrid > button, .clipActionGrid > a { display: flex; min-width: 0; min-height: 40px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 12px; background: #e9ebee; box-shadow: inset 0 0 0 1px #dfe2e6; color: #171719; font-size: 12px; font-weight: 650; text-decoration: none; }
 .clipEdit { width: 100%; min-height: 46px; margin-bottom: 10px; border: 0; border-radius: 12px; background: #f26b38; box-shadow: 0 3px 0 #a9440f; font-size: 14px; color: #fff; cursor: pointer; font-family: inherit; }
 .clipEdit:hover { background: #ff7a45; }
-.clipSave { display: flex; width: 100%; min-height: 40px; align-items: center; justify-content: center; gap: 7px; margin-bottom: 7px; border: 0; border-radius: 12px; background: #1f2022; box-shadow: inset 0 0 0 1px #34363a; color: #fff; font-family: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
-.clipSave:hover { background: #2a2c2f; }
+.clipSave { display: flex; width: 100%; min-height: 40px; align-items: center; justify-content: center; gap: 7px; margin-bottom: 7px; border: 0; border-radius: 12px; background: #e9ebee; box-shadow: inset 0 0 0 1px #dfe2e6; color: #171719; font-family: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.clipSave:hover { background: #e9ebee; }
 .clipActionGrid { display: grid; grid-template-columns: minmax(0, 1fr) 46px 46px; gap: 7px; }
 .clipActionGrid:has(> :nth-child(2):last-child) { grid-template-columns: minmax(0, 1fr) 46px; }
 .clipActionGrid > button { cursor: pointer; }
 .clipActionGrid > button[aria-pressed="true"] { color: #f26b38; }
 .clipActionGrid > button:disabled { cursor: default; opacity: .58; }
-.clipActionGrid > a:hover, .clipActionGrid > button:not(:disabled):hover { background: #2a2c2f; }
+.clipActionGrid > a:hover, .clipActionGrid > button:not(:disabled):hover { background: #e9ebee; }
 .previewEyebrow {
   color: #cf490b;
   font-size: 11px;
@@ -2692,7 +2674,7 @@
 .presetHeading {
   font-size: 12px;
   font-weight: 700;
-  border-top: 1px solid #eee8e4;
+  border-top: 1px solid #4a4642;
   padding-top: 24px;
   margin-bottom: 14px;
 }
@@ -2746,10 +2728,10 @@
   height: 40px;
   border: 0;
   border-radius: 0;
-  background: #fffffff2;
+  background: #171719f2;
   display: grid;
   place-items: center;
-  color: #252525;
+  color: #ffffff;
   cursor: pointer;
 }
 @media (max-width: 767.98px) {
@@ -2761,7 +2743,7 @@
   .videoPreviewDialog .previewLayout { grid-template-columns: 1fr; }
   .dialog.videoPreviewDialog { width: 100vw; height: 100dvh; border-radius: 0; overflow: auto; }
   .videoPreviewDialog .previewLayout { height: auto; min-height: 100%; grid-template-columns: 1fr; gap: 8px; padding: 0; }
-  .clipPlayer { min-height: 58dvh; }
+  .clipPlayer { min-height: 0; }
   .videoPreviewInfo { min-height: 310px; overflow: visible; border-radius: 0; }
   .clipScroll { overflow: visible; }
   .artworkPane {
@@ -2843,34 +2825,34 @@
 /* An image the template brought, as opposed to one the visitor picked. */
 .slotFromTemplate { outline: 2px solid #f26b38; outline-offset: -2px; }
 .motionThumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 2px; }
-.motionThumbs small { flex-basis: 100%; font-size: 11px; line-height: 1.5; color: #ffffff80; }
+.motionThumbs small { flex-basis: 100%; font-size: 11px; line-height: 1.5; color: #17171980; }
 .motionThumbs small:empty { display: none; }
-.motionThumbs small.sendError { color: #ff8a80; }
+.motionThumbs small.sendError { color: #d93025; }
 /* The images a template starts from, in its details. */
 .clipAssets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-.clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; border-radius: 10px; background: #26282a; }
+.clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; border-radius: 10px; background: #e9ebee; }
 .clipAsset img { width: 100%; height: 100%; object-fit: cover; }
-.clipAssetAdd { display: grid; width: 64px; height: 64px; place-items: center; border: 1px dashed #ffffff40; border-radius: 10px; background: #34363a; color: #ffffffb0; cursor: pointer; }
-.clipAssetAdd:hover { background: #3f4247; color: #fff; }
+.clipAssetAdd { display: grid; width: 64px; height: 64px; place-items: center; border: 1px dashed #17171940; border-radius: 10px; background: #dfe2e6; color: #171719b0; cursor: pointer; }
+.clipAssetAdd:hover { background: #dfe2e6; color: #171719; }
 .clipAssetRemove { position: absolute; top: 3px; right: 3px; display: grid; width: 18px; height: 18px; place-items: center; border: 0; border-radius: 50%; background: #000a; color: #fff; cursor: pointer; }
-.clipShared { margin: 8px 0 0; font-size: 12px; color: #ffb08f; }
+.clipShared { margin: 8px 0 0; font-size: 12px; color: #d9541c; }
 /* Motion Control's advanced settings: the prompt for the scene and which source the character's orientation follows. */
 .motionAdvanced { padding-bottom: 10px; }
-.motionAdvancedLabel { display: grid; gap: 8px; margin: 4px 0 14px; font-size: 13px; font-weight: 700; color: #ffffffd0; }
+.motionAdvancedLabel { display: grid; gap: 8px; margin: 4px 0 14px; font-size: 13px; font-weight: 700; color: #171719d0; }
 .motionAdvancedLabel textarea { min-height: 96px; }
-.motionAdvancedLabel p { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.55; color: #ffffff80; }
+.motionAdvancedLabel p { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.55; color: #17171980; }
 /* A clip of "Your videos": the video fills the tile and its buttons appear when the pointer is on it. */
 .myVideos li .workOpen { position: absolute; inset: 0; display: block; width: 100%; height: 100%; padding: 0; border-radius: 0; background: none; cursor: pointer; align-self: stretch; }
 .myVideos li .workOpen video { width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; pointer-events: none; }
 /* Motion Control, as in a motion library: two boxes, one over the other, for the motion to copy and for the character. */
 .motionStack { display: grid; gap: 10px; }
 .motionBoxWrap { position: relative; }
-.motionBox { position: relative; display: flex; width: 100%; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 1.5px dashed #ffffff2e; border-radius: 16px; background: #ffffff08; padding: 14px; color: #fff; text-align: center; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
-.motionBox:hover { border-color: #f26b38; background: #ffffff0d; }
+.motionBox { position: relative; display: flex; width: 100%; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; overflow: hidden; border: 1.5px dashed #1717192e; border-radius: 16px; background: #17171908; padding: 14px; color: #171719; text-align: center; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.motionBox:hover { border-color: #f26b38; background: #1717190d; }
 .motionBox strong { font-size: 14px; font-weight: 750; }
-.motionBox small { font-size: 12px; line-height: 1.45; color: #ffffff73; }
-.motionBoxIcon { display: grid; width: 38px; height: 38px; place-items: center; margin-bottom: 4px; border-radius: 999px; background: #ffffff14; color: #ffffffd0; }
-.motionBoxFilled { border-style: solid; border-color: #ffffff14; background: #17181a; padding: 0; }
+.motionBox small { font-size: 12px; line-height: 1.45; color: #17171973; }
+.motionBoxIcon { display: grid; width: 38px; height: 38px; place-items: center; margin-bottom: 4px; border-radius: 999px; background: #17171914; color: #171719d0; }
+.motionBoxFilled { border-style: solid; border-color: #17171914; background: #f4f5f7; padding: 0; }
 /* The chosen motion, held like a card that is slightly turned. */
 .motionTilt { position: relative; display: block; height: 134px; transform: rotate(-4deg); overflow: hidden; border-radius: 12px; box-shadow: 0 10px 26px #000a; }
 .motionTilt > video { display: block; width: auto; height: 100%; max-width: 100%; object-fit: cover; }
@@ -2890,24 +2872,24 @@
 .styleThumb, .styleChange { border-radius: 8px; }
 .composerHeroChange { border-radius: 8px; }
 .composerSlots { display: block; min-height: 0; border-radius: 14px; padding: 0; background: none; }
-.composerSlots > .slotOptional { z-index: 1; border-radius: 8px; background: #ffffff1f; }
-.attachBox { display: flex; width: 100%; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed #ffffff2e; border-radius: 14px; background: #ffffff08; padding: 16px; color: #fff; text-align: center; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
-.attachBox:hover { border-color: #f26b38; background: #ffffff0d; }
+.composerSlots > .slotOptional { z-index: 1; border-radius: 8px; background: #1717191f; }
+.attachBox { display: flex; width: 100%; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed #1717192e; border-radius: 14px; background: #17171908; padding: 16px; color: #171719; text-align: center; cursor: pointer; transition: border-color .15s ease, background .15s ease; }
+.attachBox:hover { border-color: #f26b38; background: #1717190d; }
 .attachBox strong { max-width: 240px; font-size: 14px; font-weight: 750; line-height: 1.4; }
-.attachBox small { font-size: 12px; color: #ffffff73; }
+.attachBox small { font-size: 12px; color: #17171973; }
 .attachIcons { display: flex; margin-bottom: 6px; }
-.attachIcons i { display: grid; width: 34px; height: 34px; margin-left: -6px; place-items: center; border: 2px solid #17181a; border-radius: 999px; background: #ffffff1f; color: #ffffffd0; }
+.attachIcons i { display: grid; width: 34px; height: 34px; margin-left: -6px; place-items: center; border: 2px solid #f4f5f7; border-radius: 999px; background: #1717191f; color: #171719d0; }
 .attachIcons i:first-child { margin-left: 0; }
-.attachFiles { display: flex; flex-wrap: wrap; gap: 8px; border: 1.5px dashed #ffffff2e; border-radius: 14px; background: #ffffff08; padding: 40px 14px 14px; }
+.attachFiles { display: flex; flex-wrap: wrap; gap: 8px; border: 1.5px dashed #1717192e; border-radius: 14px; background: #17171908; padding: 40px 14px 14px; }
 .attachFiles .slotFile, .attachFiles .slotAdd { width: 64px; height: 64px; border-radius: 10px; }
 .composerSlots > small { display: block; margin-top: 6px; }
 .myVideos ul.workGridWide { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .myVideos ul.workGridWide > li { aspect-ratio: 16 / 9; }
 /* The template, held in a box like the reference video box; the prompt is a row that opens; library tiles are rounded. */
-.composerStage { min-height: 170px; border: 1.5px dashed #ffffff2e; border-radius: 14px; background: #ffffff08; padding: 16px; }
+.composerStage { min-height: 170px; border: 1.5px dashed #1717192e; border-radius: 14px; background: #17171908; padding: 16px; }
 .composerStage .cardClose { border-radius: 999px; }
 .composerCard { width: 62%; border-width: 0; border-radius: 12px; box-shadow: 0 10px 26px #000a; }
-.composerBlock { background: #ffffff0a; }
+.composerBlock { background: #1717190a; }
 .tile, .skeleton { overflow: hidden; border-radius: 12px; }
 .masonry { column-gap: 14px; }
 .masonry > .tile { margin-bottom: 14px; }
@@ -2920,26 +2902,26 @@
 .composerBar, .motionGenerateDock { border-radius: 0; }
 
 /* Recreate window of a product template */
-.recreateDialog { inset: 0; width: min(980px, calc(100vw - 32px)); max-width: none; height: min(660px, calc(100dvh - 32px)); max-height: none; margin: auto; overflow: hidden; padding: 0; border: 1px solid #ffffff14; border-radius: 20px; background: #121316; color: #f5f5f6; }
+.recreateDialog { inset: 0; width: min(980px, calc(100vw - 32px)); max-width: none; height: min(660px, calc(100dvh - 32px)); max-height: none; margin: auto; overflow: hidden; padding: 0; border: 1px solid #17171914; border-radius: 20px; background: #ffffff; color: #171719; }
 .recreateDialog::backdrop { background: #000b; }
-.recreateDialog .previewClose { border-color: #ffffff12; background: #292b2d; color: #fff; }
+.recreateDialog .previewClose { border-color: #17171912; background: #e9ebee; color: #171719; }
 .recreateLayout { display: grid; height: 100%; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: center; padding: 28px; }
-.recreateArt { position: relative; height: 100%; min-height: 0; overflow: hidden; border-radius: 16px; background: #050607; }
+.recreateArt { position: relative; height: 100%; min-height: 0; overflow: hidden; border-radius: 16px; background: #ffffff; }
 .recreateArt video, .recreateArt img { width: 100%; height: 100%; object-fit: cover; }
 .recreateForm { display: flex; min-width: 0; flex-direction: column; gap: 12px; padding-right: 12px; }
-.recreateForm h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: #ffffffb0; }
+.recreateForm h2 { margin: 0 0 8px; font-size: 22px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; color: #171719b0; }
 .recreateSlots { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .recreateSlot { position: relative; display: flex; flex-direction: column; gap: 8px; }
-.recreateLabel { color: #ffffff90; font-size: 13px; font-weight: 600; }
-.recreateBox { position: relative; display: flex; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; overflow: hidden; border: 1px dashed #ffffff30; border-radius: 16px; background: #1a1c1f; color: #fff; cursor: pointer; font-family: inherit; font-size: 13px; text-align: center; }
-.recreateBox:hover { background: #202327; }
+.recreateLabel { color: #17171990; font-size: 13px; font-weight: 600; }
+.recreateBox { position: relative; display: flex; min-height: 150px; flex-direction: column; align-items: center; justify-content: center; gap: 10px; overflow: hidden; border: 1px dashed #17171930; border-radius: 16px; background: #f4f5f7; color: #171719; cursor: pointer; font-family: inherit; font-size: 13px; text-align: center; }
+.recreateBox:hover { background: #e9ebee; }
 .recreatePicked { object-fit: cover; }
-.recreateFlag { position: absolute; top: 8px; right: 8px; z-index: 1; border-radius: 8px; background: #2c2e32; padding: 2px 8px; color: #ffffff90; font-size: 11px; font-weight: 600; }
-.recreateIcon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: #34363a; }
+.recreateFlag { position: absolute; top: 8px; right: 8px; z-index: 1; border-radius: 8px; background: #e9ebee; padding: 2px 8px; color: #17171990; font-size: 11px; font-weight: 600; }
+.recreateIcon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: #dfe2e6; }
 .recreateRemove { position: absolute; bottom: 8px; right: 8px; display: grid; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 50%; background: #000a; color: #fff; cursor: pointer; }
-.recreateEdit { min-height: 120px; resize: vertical; border: 1px solid #ffffff18; border-radius: 16px; background: #1a1c1f; padding: 14px; color: #fff; font-family: inherit; font-size: 14px; }
-.recreateEdit::placeholder { color: #ffffff55; }
-.recreateError { margin: 0; color: #ff8a80; font-size: 12px; }
+.recreateEdit { min-height: 120px; resize: vertical; border: 1px solid #17171918; border-radius: 16px; background: #f4f5f7; padding: 14px; color: #171719; font-family: inherit; font-size: 14px; }
+.recreateEdit::placeholder { color: #17171955; }
+.recreateError { margin: 0; color: #d93025; font-size: 12px; }
 .recreateGo { display: flex; min-height: 50px; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 14px; background: #f26b38; box-shadow: 0 3px 0 #a9440f; color: #fff; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 800; }
 .recreateGo:hover:not(:disabled) { background: #ff7a45; }
 .recreateGo:disabled { cursor: progress; opacity: .7; }
@@ -2950,3 +2932,90 @@
   .recreateLayout { grid-template-columns: 1fr; gap: 16px; padding: 56px 16px 16px; align-items: start; }
   .recreateArt { height: 220px; }
 }
+
+/* Tablet: the create panel stays on the left and the library beside it, both scrolling inside the screen. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .workspace { grid-template-columns: minmax(290px, 320px) minmax(0, 1fr); gap: 6px; padding: 6px; }
+  .libraryPanel { padding: 10px; }
+  .masonry { column-gap: 10px; }
+  .masonry > .tile { margin-bottom: 10px; }
+}
+/* Phone: one column that scrolls with the page. The create panel comes first and its generate bar rides above the app's bottom menu. */
+@media (max-width: 767.98px) {
+  .workspace { grid-template-columns: 1fr; height: auto; min-height: 0; padding: 6px; }
+  .composer, .libraryPanel { overflow: visible; scrollbar-gutter: auto; }
+  .composerTabs { position: static; margin: 0; }
+  .composerBar, .motionGenerateDock { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); z-index: 6; }
+  .composerCard { width: min(70%, 300px); }
+  .composerStage { min-height: 150px; padding: 14px; }
+  .attachBox, .motionBox { min-height: 130px; }
+  .attachBox strong { max-width: 100%; }
+  .masonry > .tile { margin-bottom: 8px; }
+  .masonry { column-gap: 8px; }
+  .libraryPanel { padding: 10px 8px 18px; }
+  .tabs { margin: 0 -8px; padding: 0 8px; }
+  .toolbar { gap: 8px; }
+  .categoryGrid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .categoryCard { min-height: 140px; }
+  .myVideos ul.workGridWide { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  /* The clip window: the video takes its own height, then its details, so the controls are never covered. */
+  .videoPreviewDialog .previewLayout { grid-template-rows: auto auto; }
+  .clipPlayer { height: auto; min-height: 0; }
+  .clipEos { height: auto; }
+  .clipEos :global(.video-modal-player) { height: auto; max-height: 62dvh; aspect-ratio: var(--clip-ratio, 16 / 9); }
+}
+
+/* The Motion Control intro stacks once the library column is narrow. */
+@media (max-width: 1023.98px) {
+  .motionHowHero { grid-template-columns: 1fr; min-height: 0; gap: 16px; padding: 20px 18px; }
+  .motionHowHero h1 { font-size: 26px; }
+}
+
+/* Light theme: what sits on top of a picture or video stays white, whatever the page text colour is. */
+.kind, .tileAuthor, .tileInfo, .tileExpand, .tileActions, .tileLike, .noPreview, .audioMark, .composerCard, .composerChange, .composerHeroChange, .pendingClip, .motionTilt, .motionMute, .clipPlayer, .artworkPane, .categoryCard, .howStage, .heroCoverMain, .heroCoverSide, .libraryHeroCover { color: #fff; }
+.panelTabs em { color: #d9541c; }
+
+/* No grey lines: the panels sit on white, with no divider under the tabs and no scrollbar track. */
+.workspace, .composer, .libraryPanel, .composerTabs, .composerBar, .motionGenerateDock { background: #fff; }
+.composerTabs { border-bottom: 0; }
+.composerBar, .motionGenerateDock { border-top: 0; }
+.composer, .libraryPanel { scrollbar-width: none; }
+.composer::-webkit-scrollbar, .libraryPanel::-webkit-scrollbar { display: none; }
+
+/* The chosen menu is orange: the create tabs, the library tabs and the source tabs. */
+.composerTabs button[aria-selected="true"] { border-bottom-color: #f26b38; color: #f26b38; }
+.panelTabs button[aria-selected="true"] { background: #f26b3818; color: #e0561f; }
+.tabs button[aria-pressed="true"] { background: #f26b38; color: #fff; }
+.motionSourceTabs button[aria-pressed="true"] { background: #f26b3818; color: #e0561f; }
+.composerTabs button:hover, .panelTabs button:hover { color: #e0561f; }
+
+/* Clip window, light: a white panel, soft cards with a hairline, white inner boxes and buttons, one grey for secondary text. */
+.videoPreviewInfo { background: #fff; box-shadow: inset 0 0 0 1px #e8eaee; }
+.videoPreviewDialog .previewClose { border-color: #e3e5e9; background: #fff; color: #3f444b; }
+.clipCard { background: #f7f8fa; box-shadow: inset 0 0 0 1px #eceef1; }
+.clipCardBody { background: #fff; box-shadow: inset 0 0 0 1px #eceef1; }
+.clipCardHead, .clipDetailsHeading, .clipDetails dt, .clipSeeAll { color: #6b7280; }
+.clipSeeAll:hover { color: #171719; }
+.clipCopy { background: #fff; box-shadow: inset 0 0 0 1px #e3e5e9; }
+.clipCopy:hover { background: #f4f5f7; }
+.clipActionGrid > button, .clipActionGrid > a, .clipSave { background: #fff; box-shadow: inset 0 0 0 1px #e3e5e9; color: #3f444b; }
+.clipActionGrid > a:hover, .clipActionGrid > button:not(:disabled):hover, .clipSave:hover { background: #f4f5f7; }
+.clipActionGrid > button[aria-pressed="true"] { color: #f26b38; }
+.clipAsset { background: #f4f5f7; }
+.clipAssetAdd { border-color: #c9cdd3; background: #fff; color: #6b7280; }
+.clipAssetAdd:hover { background: #f4f5f7; color: #171719; }
+
+/* Clip window, flatter: no box inside a box. The panel is one white column; each section is a label, its content and a hairline. */
+.videoPreviewInfo { margin: 0; border-radius: 0; background: #fff; box-shadow: inset 1px 0 0 #e8eaee; }
+.clipCard { margin-bottom: 0; border-radius: 0; background: none; box-shadow: none; border-bottom: 1px solid #eceef1; padding-bottom: 12px; }
+.clipCard + .clipCard { padding-top: 4px; }
+.clipCardHead { padding: 12px 0 8px; }
+.clipCardBody { margin: 0; border-radius: 0; background: none; box-shadow: none; padding: 0; }
+.clipDetails > div { padding: 6px 0; border-bottom: 1px dashed #eceef1; }
+.clipDetails > div:last-child { border-bottom: 0; }
+@media (max-width: 767.98px) {
+  .videoPreviewInfo { box-shadow: inset 0 1px 0 #e8eaee; }
+}
+
+.pagination button[aria-current] { color: #fff; }
+.composerBar .use, .motionGenerateDock button, .editGenerateDock button { color: #fff; }
