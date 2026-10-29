@@ -39,14 +39,20 @@ import type { NavigationItem } from "@/types/navigation";
 import { WorkspaceNavigation } from "./workspace-navigation";
 import { useHydrated } from "./use-hydrated";
 
+type AdminSubItem = { label: string; href: string; mode: string | null };
+type AdminNavItem = NavigationItem & { disabled?: boolean; children?: AdminSubItem[] };
+
 function AdminNavigationGroup({
   label,
   items,
   pathname,
+  mode = null,
 }: {
   label: string;
-  items: Array<NavigationItem & { disabled?: boolean }>;
+  items: AdminNavItem[];
   pathname: string;
+  /** The ?mode= of the page, which tells the sub-menus of Templates apart. */
+  mode?: string | null;
 }) {
   return (
     <SidebarGroup className="px-0">
@@ -61,7 +67,34 @@ function AdminNavigationGroup({
               (item.href === "/admin/model-routes" ? pathname === item.href : pathname.startsWith(item.href));
             return (
               <SidebarMenuItem key={item.label}>
-                {item.disabled ? (
+                {item.children ? (
+                  <details open={active} className="group">
+                    <summary
+                      className={`flex h-10 w-full cursor-pointer list-none items-center gap-2 overflow-hidden rounded-[11px] px-3 text-left text-sm font-medium outline-hidden transition-colors [&::-webkit-details-marker]:hidden ${active ? "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+                    >
+                      <item.icon size={18} strokeWidth={active ? 2.5 : 2} />
+                      <span>{item.label}</span>
+                      <span className="ml-auto">
+                        <ChevronDown size={15} className="transition-transform group-open:rotate-180" />
+                      </span>
+                    </summary>
+                    <div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">
+                      {item.children.map((child) => {
+                        const childActive = pathname === "/admin/templates" && mode === child.mode;
+                        return (
+                          <Link
+                            key={child.label}
+                            href={child.href}
+                            aria-current={childActive ? "page" : undefined}
+                            className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${childActive ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
+                          >
+                            {child.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </details>
+                ) : item.disabled ? (
                   <SidebarMenuButton
                     disabled
                     className="h-10 rounded-[11px] px-3 text-sm font-medium text-muted-foreground"
@@ -352,16 +385,26 @@ function AdminFeatureNavigation({ pathname }: { pathname: string }) {
 }
 
 function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydrated: boolean }) {
+  const adminMode = useSearchParams().get("mode");
   const adminItems = [
     { label: "Model routes", href: "/admin/model-routes", icon: Settings2 },
     { label: "Style presets", href: "/admin/style-presets", icon: Palette },
-    { label: "Templates", href: "/admin/templates", icon: LayoutTemplate },
+    {
+      label: "Templates",
+      href: "/admin/templates",
+      icon: LayoutTemplate,
+      children: [
+        { label: "All templates", href: "/admin/templates", mode: null },
+        { label: "Create Video", href: "/admin/templates?mode=create", mode: "create" },
+        { label: "Motion Control", href: "/admin/templates?mode=motion", mode: "motion" },
+      ],
+    },
     { label: "Video showcase", href: "/admin/video-showcase", icon: Clapperboard },
     { label: "Prompt templates", href: "/admin/prompt-templates", icon: MessageSquareText },
     { label: "User activity", href: "/admin/usage", icon: Activity },
     { label: "Provider catalog", href: "/admin/provider-catalog", icon: Boxes, disabled: true },
     { label: "Feature settings", href: "/admin/feature-settings", icon: ShieldCheck, disabled: true },
-  ] satisfies Array<NavigationItem & { disabled?: boolean }>;
+  ] satisfies AdminNavItem[];
   const operations = [
     { label: "Members & roles", href: "/admin/members", icon: UsersRound },
     { label: "Credits & billing", href: "/admin/credits", icon: BarChart3 },
@@ -379,7 +422,7 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
         <EosLogo />
       </SidebarHeader>
       <SidebarContent className="gap-1">
-        <AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} />
+        <AdminNavigationGroup label="Administration" items={adminItems} pathname={pathname} mode={hydrated ? adminMode : null} />
         <AdminFeatureNavigationTree pathname={pathname} hydrated={hydrated} />
         <AdminNavigationGroup label="Operations" items={operations} pathname={pathname} />
         <SidebarGroup className="mt-2 px-0">

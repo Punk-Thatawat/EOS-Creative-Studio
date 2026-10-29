@@ -2,6 +2,7 @@
 import { GeneratedWorkPicker } from "@/features/templates/generated-work-picker";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, Check, CheckCircle2, FileText, ImageIcon, LayoutTemplate, LoaderCircle, Plus, RefreshCw, Save, Star, Trash2, Upload, Video, X } from "lucide-react";
 import { SidebarNavigation } from "@/components/app-shell/navigation";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -239,7 +240,25 @@ function TemplateEditor({ draft, busy, onChange, onSave, onClose, onCoverSaved }
   </div>;
 }
 
+// A template added from a menu starts in that menu's mode, so Create Video and Motion Control clips stay apart.
+const modeStarts: Record<"create" | "motion", Partial<TemplateAdminInput>> = {
+  create: { kind: "video", format: "16:9", targetPath: "/create/video?tab=text-to-video", settings: { feature: "text-to-video" } },
+  motion: { kind: "video", format: "16:9", targetPath: "/create/video?tab=motion-transfer", settings: { feature: "motion-transfer" } },
+};
+const modeTitles = { create: "Create Video templates", motion: "Motion Control templates" } as const;
+
+// Which mode of the public Templates page lists a template, worked out the same way the public page does it.
+function modeOfTemplate(template: AdminCreativeTemplate): "create" | "edit" | "motion" {
+  const feature = typeof template.settings?.feature === "string" ? template.settings.feature : "";
+  const hint = `${feature} ${template.targetPath}`.toLowerCase();
+  if (/(motion|swap)/.test(hint)) return "motion";
+  if (/(extend|edit|upscale|reframe|lipsync|remove-background)/.test(hint)) return "edit";
+  return "create";
+}
+
 function AdminTemplatesContent() {
+  const modeParam = useSearchParams().get("mode");
+  const modeFilter = modeParam === "create" || modeParam === "motion" ? modeParam : null;
   const [templates, setTemplates] = useState<AdminCreativeTemplate[]>([]);
   const [draft, setDraft] = useState<(TemplateAdminInput & { id?: string }) | null>(null);
   const [loading, setLoading] = useState(true);
@@ -251,14 +270,14 @@ function AdminTemplatesContent() {
 
   const load = useCallback(async () => { setLoading(true); setError(""); try { setTemplates(await listAdminTemplates()); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load templates"); } finally { setLoading(false); } }, []);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
-  const visibleTemplates = useMemo(() => templates.filter((template) => (kindFilter === "all" || template.kind === kindFilter) && (!query.trim() || [template.title, template.slug, template.category, ...template.tags].join(" ").toLowerCase().includes(query.trim().toLowerCase()))), [kindFilter, query, templates]);
-  const openCreate = () => { setError(""); setMessage(""); setDraft({ ...emptyDraft, sortOrder: templates.length ? Math.max(...templates.map((template) => template.sortOrder)) + 10 : 10 }); };
+  const visibleTemplates = useMemo(() => templates.filter((template) => (!modeFilter || modeOfTemplate(template) === modeFilter) && (kindFilter === "all" || template.kind === kindFilter) && (!query.trim() || [template.title, template.slug, template.category, ...template.tags].join(" ").toLowerCase().includes(query.trim().toLowerCase()))), [kindFilter, modeFilter, query, templates]);
+  const openCreate = () => { setError(""); setMessage(""); setDraft({ ...emptyDraft, ...(modeFilter ? modeStarts[modeFilter] : {}), sortOrder: templates.length ? Math.max(...templates.map((template) => template.sortOrder)) + 10 : 10 }); };
   const openEdit = (template: AdminCreativeTemplate) => { setError(""); setMessage(""); setDraft({ id: template.id, settings: template.settings ?? {}, slug: template.slug, title: template.title, titleTh: template.titleTh ?? "", description: template.description, descriptionTh: template.descriptionTh ?? "", category: template.category, kind: template.kind, format: template.format, thumbnailUrl: template.thumbnailUrl, previewUrl: template.previewUrl ?? "", targetPath: template.targetPath, prompt: template.prompt, promptTh: template.promptTh ?? "", tags: template.tags, featured: template.featured, enabled: template.enabled, sortOrder: template.sortOrder }); };
   const save = async () => { if (!draft) return; setBusy(true); setError(""); setMessage(""); try { const saved = draft.id ? await updateAdminTemplate(draft.id, draft) : await createAdminTemplate(draft); setTemplates((current) => (draft.id ? current.map((template) => template.id === saved.id ? saved : template) : [...current, saved]).sort((a, b) => a.sortOrder - b.sortOrder)); setDraft(null); setMessage(`${saved.title} saved.`); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save template"); } finally { setBusy(false); } };
   const remove = async (template: AdminCreativeTemplate) => { if (!window.confirm(`Delete ${template.title}? It will disappear from the public library.`)) return; setBusy(true); setError(""); setMessage(""); try { await deleteAdminTemplate(template.id); setTemplates((current) => current.filter((item) => item.id !== template.id)); setMessage(`${template.title} deleted.`); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to delete template"); } finally { setBusy(false); } };
 
   return <SidebarProvider><div className="min-h-screen w-full min-w-0 bg-background"><SidebarNavigation /><div className="min-w-0 xl:pl-[var(--sidebar-width)]"><StudioHeader /><main className="page-gutter mx-auto w-full max-w-[1600px] py-5 lg:py-8"><div className="min-h-[calc(100vh-120px)] overflow-x-clip rounded-3xl bg-[#faf8f6] px-4 pb-20 sm:px-6 lg:px-8 lg:pb-24"><div className="mx-auto max-w-[1180px] pt-6 lg:pt-8">
-    <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><LayoutTemplate size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">Template library</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Set the creative starting points that appear in the public Templates page.</p></div><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void load()} disabled={loading || busy}><RefreshCw size={16} className={loading ? "animate-spin" : undefined} /> Refresh</Button><Button size="lg" onClick={openCreate} disabled={busy}><Plus size={17} /> Add template</Button></div></div>
+    <div className="mb-8 flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#201d1b] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white"><LayoutTemplate size={13} /> Control plane</div><h1 className="max-w-xl text-3xl font-bold tracking-tight sm:text-4xl">{modeFilter ? modeTitles[modeFilter] : "Template library"}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{modeFilter ? `Clips of the ${modeFilter === "create" ? "Create Video" : "Motion Control"} mode of the public Templates page. New ones added here start in this mode.` : "Set the creative starting points that appear in the public Templates page."}</p></div><div className="flex flex-wrap justify-end gap-2"><Button variant="outline" size="lg" onClick={() => void load()} disabled={loading || busy}><RefreshCw size={16} className={loading ? "animate-spin" : undefined} /> Refresh</Button><Button size="lg" onClick={openCreate} disabled={busy}><Plus size={17} /> Add template</Button></div></div>
     <div className="mb-5 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-[#eaded6] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Total templates</p><p className="mt-2 text-2xl font-bold">{templates.length}</p></div><div className="rounded-2xl border border-[#eaded6] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Published</p><p className="mt-2 text-2xl font-bold text-[#347454]">{templates.filter((template) => template.enabled).length}</p></div><div className="rounded-2xl border border-[#eaded6] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">Featured</p><p className="mt-2 text-2xl font-bold text-primary">{templates.filter((template) => template.featured && template.enabled).length}</p></div></div>
     {error ? <div className="mb-5 flex items-start gap-3 rounded-2xl border border-[#efc2c2] bg-[#fff6f6] p-4 text-sm text-[#9f3b3b]" role="alert"><AlertCircle size={18} className="mt-0.5 shrink-0" /><p>{error}</p></div> : null}{message ? <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#bfe1cc] bg-[#f3fbf5] p-4 text-sm text-[#347454]" role="status"><CheckCircle2 size={18} /><p className="font-semibold">{message}</p></div> : null}
     <section aria-label="Template filters" className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#eaded6] bg-white p-3 sm:flex-row"><SearchInput size="compact" className="min-w-0 flex-1" value={query} onValueChange={setQuery} placeholder="Search title, category, or tag" aria-label="Search templates" /><select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as TemplateKind | "all")} aria-label="Filter templates by type" className="h-10 rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs font-semibold outline-none focus:border-primary"><option value="all">All types</option>{kindOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><span className="flex items-center px-2 text-xs font-semibold text-muted-foreground">{visibleTemplates.length} shown</span></section>
