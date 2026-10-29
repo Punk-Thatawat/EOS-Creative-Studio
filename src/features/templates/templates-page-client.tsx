@@ -2534,6 +2534,8 @@ function MyVideos({
   const { c } = useStudioCopy();
   const [justSaved, setJustSaved] = useState<SavedTemplate | null>(null);
   const [videos, setVideos] = useState<HistoryItem[]>([]);
+  // How many of the clips are on show; the rest open with "Show more" instead of being dropped.
+  const [shown, setShown] = useState(8);
   const [pending, setPending] = useState<HistoryItem[]>([]);
   const [runs, setRuns] = useState<TemplateWorkflowRun[]>([]);
   const [saving, setSaving] = useState<HistoryItem | null>(null);
@@ -2543,12 +2545,12 @@ function MyVideos({
     const load = () => {
       window.clearTimeout(timer);
       const workflows = mode === "create" ? listTemplateWorkflows(12, controller.signal).catch(() => [] as TemplateWorkflowRun[]) : Promise.resolve([] as TemplateWorkflowRun[]);
-      Promise.all([fetchHistory({ type: "video", fromTemplate: true, limit: 24, signal: controller.signal }), workflows])
+      Promise.all([fetchHistory({ type: "video", fromTemplate: true, limit: 50, signal: controller.signal }), workflows])
         .then(([result, flowRuns]) => {
           if (controller.signal.aborted) return;
           setRuns(flowRuns);
           const ofMode = result.items.filter((item) => modeFeatures[mode].includes(item.feature));
-          setVideos(ofMode.filter((item) => item.status === "completed" && item.outputUrl).slice(0, 8));
+          setVideos(ofMode.filter((item) => item.status === "completed" && item.outputUrl));
           const running = ofMode.filter((item) => item.status === "queued" || item.status === "processing");
           setPending(running);
           // Follow the clips and workflow runs still being made until they are done.
@@ -2661,7 +2663,7 @@ function MyVideos({
             <span>{item.prompt?.trim() || item.title}</span>
           </li>
         ))}
-        {videos.map((item) => tiles ? (
+        {videos.slice(0, shown).map((item) => tiles ? (
           <li key={item.id} className={s.workTile}>
             {/* The clip plays on its tile (muted, looping); a click opens its details, where the player has its controls. */}
             <button type="button" className={s.workOpen} onClick={() => onDetails(templateOfWork(item, savedSlugs.has(workSlug(item.id))))} aria-label={c("templates.card.previewAria", { name: item.title })} title={item.prompt?.trim() || item.title}>
@@ -2690,6 +2692,11 @@ function MyVideos({
           </li>
         ))}
       </ul>
+      {videos.length > shown && (
+        <button type="button" className={s.showMore} onClick={() => setShown((count) => count + 8)}>
+          {c("templates.history.more", { count: videos.length - shown })}
+        </button>
+      )}
       {saving && (
         <SaveTemplateDialog
           item={saving}
