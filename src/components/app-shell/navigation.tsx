@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSearchParams } from "next/navigation";
@@ -38,8 +39,10 @@ import {
 import type { NavigationItem } from "@/types/navigation";
 import { WorkspaceNavigation } from "./workspace-navigation";
 import { useHydrated } from "./use-hydrated";
+import { listAdminTemplates } from "@/lib/api/templates";
+import { templateModeCounts } from "@/features/templates/template-mode";
 
-type AdminSubItem = { label: string; href: string; mode: string | null };
+type AdminSubItem = { label: string; href: string; mode: string | null; count?: number };
 type AdminNavItem = NavigationItem & { disabled?: boolean; children?: AdminSubItem[] };
 
 function AdminNavigationGroup({
@@ -80,7 +83,7 @@ function AdminNavigationGroup({
                     </summary>
                     <div className="ml-5 mt-1 border-l border-[#f1d7cc] pl-2">
                       {item.children.map((child) => {
-                        const childActive = pathname === "/admin/templates" && mode === child.mode;
+                        const childActive = child.mode === "settings" ? pathname === "/admin/templates/settings" : pathname === "/admin/templates" && mode === child.mode;
                         return (
                           <Link
                             key={child.label}
@@ -88,7 +91,10 @@ function AdminNavigationGroup({
                             aria-current={childActive ? "page" : undefined}
                             className={`flex h-8 items-center rounded-[9px] px-2.5 text-xs font-medium transition-colors ${childActive ? "bg-[#fff0e9] text-primary" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"}`}
                           >
-                            {child.label}
+                            <span>{child.label}</span>
+                            {child.count !== undefined ? (
+                              <span className={`ml-auto rounded-full px-1.5 text-[10px] font-bold tabular-nums ${childActive ? "bg-white text-primary" : "bg-surface-muted text-muted-foreground"}`}>{child.count}</span>
+                            ) : null}
                           </Link>
                         );
                       })}
@@ -386,6 +392,16 @@ function AdminFeatureNavigation({ pathname }: { pathname: string }) {
 
 function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydrated: boolean }) {
   const adminMode = useSearchParams().get("mode");
+  const [counts, setCounts] = useState<ReturnType<typeof templateModeCounts> | null>(null);
+  const onTemplates = hydrated && pathname.startsWith("/admin/templates");
+  useEffect(() => {
+    if (!onTemplates) return;
+    let alive = true;
+    listAdminTemplates()
+      .then((list) => { if (alive) setCounts(templateModeCounts(list)); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [onTemplates]);
   const adminItems = [
     { label: "Model routes", href: "/admin/model-routes", icon: Settings2 },
     { label: "Style presets", href: "/admin/style-presets", icon: Palette },
@@ -394,9 +410,10 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
       href: "/admin/templates",
       icon: LayoutTemplate,
       children: [
-        { label: "All templates", href: "/admin/templates", mode: null },
-        { label: "Create Video", href: "/admin/templates?mode=create", mode: "create" },
-        { label: "Motion Control", href: "/admin/templates?mode=motion", mode: "motion" },
+        { label: "All templates", href: "/admin/templates", mode: null, count: counts?.all },
+        { label: "Create Video", href: "/admin/templates?mode=create", mode: "create", count: counts?.create },
+        { label: "Motion Control", href: "/admin/templates?mode=motion", mode: "motion", count: counts?.motion },
+        { label: "Settings", href: "/admin/templates/settings", mode: "settings" },
       ],
     },
     { label: "Video showcase", href: "/admin/video-showcase", icon: Clapperboard },

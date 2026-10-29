@@ -69,6 +69,7 @@ import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/ap
 import { createTextVideoGeneration, type TextVideoGenerationInput } from "@/lib/api/text-video-generations";
 import { createMotionTransferGeneration, createVideoSwapGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
+import { listTemplateGenerationModels, loadTemplateModelSettings, type TemplateModelMode, type TemplateModelSetting } from "@/lib/api/template-model-settings";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
 import { createAdminTemplate, createTemplateCoverFromPreview, keepTemplateAssets } from "@/lib/api/templates";
@@ -1127,18 +1128,34 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
  * The models the creator offers for one feature, shaped for the model and quality pickers. Nothing is listed until they load
  * (or when the visitor is signed out), and the pickers then fall back to what the templates themselves say.
  */
+// The modes Admin > Templates > Settings can choose models for, by the feature each mode creates with.
+const templateModeByFeature: Record<string, TemplateModelMode> = { "text-to-video": "create", "motion-transfer": "motion", "video-swap": "motion" };
+/** Keeps the models Admin chose to offer (never an empty list) and makes the chosen default the one that starts selected. */
+function applyTemplateModelSetting(models: GenerationModelOption[], setting?: TemplateModelSetting): GenerationModelOption[] {
+  if (!setting) return models;
+  const offered = setting.visibleModels.length ? models.filter((m) => setting.visibleModels.includes(m.model)) : models;
+  const list = offered.length ? offered : models;
+  if (!setting.defaultModel || !list.some((m) => m.model === setting.defaultModel)) return list;
+  return list.map((m) => ({ ...m, isDefault: m.model === setting.defaultModel }));
+}
 function useModelPicker(feature: string, enabled = true) {
   const { c } = useStudioCopy();
   const [models, setModels] = useState<GenerationModelOption[]>([]);
   // Whether the list has been asked for and answered, so "no models" is not shown while it loads.
   const [ready, setReady] = useState(false);
+  // The model Admin chose to start with (Templates settings), when it is offered; empty otherwise.
+  const [preferredModel, setPreferredModel] = useState("");
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    listGenerationModels(feature)
-      .then((list) => {
+    const mode = templateModeByFeature[feature];
+    Promise.all([mode ? listTemplateGenerationModels(feature).catch(() => listGenerationModels(feature)) : listGenerationModels(feature), mode ? loadTemplateModelSettings() : Promise.resolve([])])
+      .then(([list, settings]) => {
         if (alive) {
-          setModels(list.filter((m) => m.enabled));
+          const setting = settings.find((item) => item.mode === mode);
+          const offered = applyTemplateModelSetting(list.filter((m) => m.enabled), setting);
+          setModels(offered);
+          setPreferredModel(setting?.defaultModel && offered.some((m) => m.model === setting.defaultModel) ? setting.defaultModel : "");
           setReady(true);
         }
       })
@@ -1207,7 +1224,7 @@ function useModelPicker(feature: string, enabled = true) {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.mode;
     return Array.isArray(property?.enum) ? property.enum.filter((value): value is string => value === "person" || value === "object" || value === "background") : [];
   };
-  return { options, ready, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, referenceOf, modesOf, labelOf };
+  return { options, ready, preferredModel, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, referenceOf, modesOf, labelOf };
 }
 
 /**
@@ -1774,7 +1791,7 @@ function Composer({
     setSending({ state: "idle" });
   };
   // The price follows the model and quality the panel shows: picked here, else the template's own.
-  const quoteModel = t && picks.templateId === t.id && picks.model ? picks.model : typeof t?.settings?.model === "string" ? t.settings.model : "";
+  const quoteModel = t && picks.templateId === t.id && picks.model ? picks.model : typeof t?.settings?.model === "string" ? t.settings.model : picker.preferredModel;
   const quoteQuality = t && picks.templateId === t.id && picks.quality ? picks.quality : typeof t?.settings?.resolution === "string" ? t.settings.resolution : undefined;
   // The creator's own defaults when the template does not say: 5 seconds, 16:9.
   const templateDuration = typeof t?.settings?.duration === "number" ? t.settings.duration : 5;
@@ -2068,7 +2085,7 @@ function Composer({
         .map((o) => (picker.referenceOf(o.id) ? { ...o, chips: [c("templates.attach.accepts"), ...(o.chips ?? [])] } : o))
     : baseModels;
   // Nothing picked and nothing in the template: the rows ask for a choice.
-  const shownModel = (picks.templateId === t.id && picks.model) || primary.find((f) => f.key === "model")?.value || "";
+  const shownModel = (picks.templateId === t.id && picks.model) || primary.find((f) => f.key === "model")?.value || picker.preferredModel;
   const shownQuality = (picks.templateId === t.id && picks.quality) || primary.find((f) => f.key === "resolution")?.value || "";
   const qualityIds = new Set(picker.qualitiesOf(shownModel).length ? picker.qualitiesOf(shownModel) : ["480p", "720p", "1080p"]);
   for (const o of [t, ...options]) {
