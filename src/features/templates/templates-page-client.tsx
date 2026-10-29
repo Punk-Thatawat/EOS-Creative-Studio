@@ -197,8 +197,22 @@ const copy = (t: Template, locale: CopyLocale) => {
   );
   return locale === "th" && t.descriptionTh?.trim() ? { ...base, description: t.descriptionTh.trim() } : base;
 };
-const name = (t: Template, locale: CopyLocale) =>
-  (locale === "th" ? t.titleTh?.trim() || titles[t.title] : undefined) ?? copy(t, locale).title;
+/**
+ * A name made from a prompt: the first line only, with a {placeholder} read as plain words, kept to a short length at a word.
+ * A template saved from a clip used to take the start of the whole prompt as its name, line breaks and all.
+ */
+function tidyTitle(text: string, max = 60): string {
+  const line = text.split(/\r?\n/).find((part) => part.trim()) ?? "";
+  const plain = line.replace(/\{([^}]*)\}/g, (_, key: string) => key.replace(/_/g, " ")).replace(/\s+/g, " ").trim();
+  if (plain.length <= max) return plain;
+  const cut = plain.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 20)).trim()}…`;
+}
+const name = (t: Template, locale: CopyLocale) => {
+  const title = (locale === "th" ? t.titleTh?.trim() || titles[t.title] : undefined) ?? copy(t, locale).title;
+  // Only names that look like a prompt need tidying: a line break or a {placeholder} in them.
+  return /[\r\n]|\{[^}]*\}?/.test(title) ? tidyTitle(title) : title;
+};
 
 // Who liked what: the slugs this visitor liked, and the counts that changed after the page loaded.
 type LikesState = { liked: Set<string>; counts: Record<string, number>; toggle: (t: Template) => void };
@@ -2417,7 +2431,7 @@ type SavedTemplate = { slug: string; title: string; coverFailed?: boolean; asset
 function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: (saved: SavedTemplate) => void }) {
   const { c } = useStudioCopy();
   const prompt = item.prompt?.trim() ?? "";
-  const [title, setTitle] = useState((prompt || item.title).slice(0, 80));
+  const [title, setTitle] = useState(tidyTitle(prompt || item.title, 80));
   const [description, setDescription] = useState(prompt.slice(0, 240));
   const [category, setCategory] = useState(modeCategory[mode]);
   const [state, setState] = useState<{ busy: boolean; error?: string }>({ busy: false });
