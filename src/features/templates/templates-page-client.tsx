@@ -416,11 +416,14 @@ function Tile({
   selected,
   onSelect,
   onExpand,
+  onRecreate,
 }: {
   t: Template;
   selected: boolean;
   onSelect: (t: Template) => void;
   onExpand: (t: Template) => void;
+  /** What the Recreate button does when it is not the same as picking the tile (product templates ask for the product first). */
+  onRecreate?: (t: Template) => void;
 }) {
   const { c, locale } = useStudioCopy();
   const likes = useContext(LikesContext);
@@ -445,7 +448,7 @@ function Tile({
           <Heart size={16} fill={liked ? "currentColor" : "none"} aria-hidden="true" />
           {likeCount > 0 ? likeCount : null}
         </button>
-        <button type="button" className={s.tileRecreate} onClick={() => onSelect(t)}>
+        <button type="button" className={s.tileRecreate} onClick={() => (onRecreate ?? onSelect)(t)}>
           <Copy size={14} aria-hidden="true" />
           {c("templates.card.recreate")}
         </button>
@@ -454,8 +457,182 @@ function Tile({
   );
 }
 
+/** A product template: recreating it asks for the visitor's own product (and optionally a person) first. */
+const isProductTemplate = (t: Template) =>
+  t.kind === "video" &&
+  modeOf(t) === "create" &&
+  !t.id.startsWith(WORK_ID) &&
+  (t.category === "Product Ads & Commercial" || (t.tags ?? []).some((tag) => tag.toLowerCase() === "product"));
+
+type PickedImage = { file: File; url: string };
+/** The Recreate window of a product template: the visitor's product (required), a person (optional) and what to change. */
+function RecreateDialog({ t, onClose, onStarted }: { t: Template; onClose: () => void; onStarted: (t: Template) => void }) {
+  const { c, locale } = useStudioCopy();
+  const ref = useRef<HTMLDialogElement>(null);
+  const picker = useModelPicker("text-to-video");
+  const [product, setProduct] = useState<PickedImage | null>(null);
+  const [avatar, setAvatar] = useState<PickedImage | null>(null);
+  const [edit, setEdit] = useState("");
+  const [sending, setSending] = useState<{ state: "idle" | "busy" | "error"; message?: string }>({ state: "idle" });
+  const productInput = useRef<HTMLInputElement>(null);
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const picked = useRef({ product, avatar });
+  useEffect(() => {
+    picked.current = { product, avatar };
+  }, [product, avatar]);
+  useEffect(() => {
+    const el = ref.current,
+      overflow = document.body.style.overflow;
+    el?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      el?.close();
+      document.body.style.overflow = overflow;
+      if (picked.current.product) URL.revokeObjectURL(picked.current.product.url);
+      if (picked.current.avatar) URL.revokeObjectURL(picked.current.avatar.url);
+    };
+  }, []);
+  const settings = t.settings ?? {};
+  // A model that takes a list of reference images: the reference-to-video one when it is offered, else the template's own.
+  const takesList = (id: string) => picker.referenceOf(id)?.list === true;
+  const templateModel = typeof settings.model === "string" ? settings.model : "";
+  const model =
+    picker.options.find((o) => o.id.endsWith("/reference-to-video") && takesList(o.id))?.id ??
+    (templateModel && takesList(templateModel) ? templateModel : picker.options.find((o) => takesList(o.id))?.id ?? "");
+  const qualities = picker.qualitiesOf(model);
+  const resolution = typeof settings.resolution === "string" && qualities.includes(settings.resolution) ? settings.resolution : (qualities[0] ?? "");
+  const duration = picker.durationFor(model, typeof settings.duration === "number" ? settings.duration : 5);
+  const wantedRatio = typeof settings.ratio === "string" ? settings.ratio : typeof settings.aspectRatio === "string" ? settings.aspectRatio : "16:9";
+  const ratios = picker.ratiosOf(model);
+  const aspectRatio = ratios.length && !ratios.includes(wantedRatio) ? (ratios.includes("16:9") ? "16:9" : ratios[0]) : wantedRatio;
+  const credits = useCreditQuote({ feature: "text-to-video", model, resolution, duration, aspectRatio });
+  const choose = (list: FileList | null, set: (image: PickedImage | null) => void, current: PickedImage | null) => {
+    const file = list?.[0];
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return setSending({ state: "error", message: c("templates.attach.unsupported") });
+    if (current) URL.revokeObjectURL(current.url);
+    set({ file, url: URL.createObjectURL(file) });
+    setSending({ state: "idle" });
+  };
+  const clear = (current: PickedImage | null, set: (image: PickedImage | null) => void) => {
+    if (current) URL.revokeObjectURL(current.url);
+    set(null);
+  };
+  const recreate = async () => {
+    if (!product) return setSending({ state: "error", message: c("templates.recreate.needProduct") });
+    const reference = picker.referenceOf(model);
+    if (!model || !reference || !resolution) return setSending({ state: "error", message: c("templates.recreate.noModel") });
+    const requestId = crypto.randomUUID();
+    setSending({ state: "busy" });
+    emitGenerationSubmitting({ feature: "text-to-video", requestId });
+    try {
+      const urls = await Promise.all([product, avatar].filter((image): image is PickedImage => image !== null).map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
+      const lines = [promptOf(t, locale)];
+      if (edit.trim()) lines.push(edit.trim());
+      lines.push(avatar ? "Use @Image 1 as the product shown in the video, and @Image 2 as the person who shows it." : "Use @Image 1 as the product shown in the video.");
+      const request: TextVideoGenerationInput = { prompt: lines.join("\n\n"), model, resolution, duration, aspectRatio, templateSlug: t.slug };
+      request.modelParams = { [reference.parameter]: reference.list ? urls : urls[0] };
+      request.inputImages = urls;
+      const created = await createTextVideoGeneration(request);
+      if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
+      const generationId = created.generationId ?? created.id;
+      const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
+      if (generationId && pollUrl) {
+        emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
+      }
+      onStarted(t);
+    } catch (error) {
+      emitGenerationRequestFailed({ feature: "text-to-video", requestId });
+      setSending({ state: "error", message: formatGenerationError(error, c("templates.composer.generateFailed")) });
+    }
+  };
+  const slot = (label: string, flag: string, required: boolean, image: PickedImage | null, set: (image: PickedImage | null) => void, input: React.RefObject<HTMLInputElement | null>, cta: string, Icon: typeof Plus) => (
+    <div className={s.recreateSlot}>
+      <span className={s.recreateLabel}>{label}</span>
+      <button type="button" className={s.recreateBox} onClick={() => input.current?.click()} aria-label={cta}>
+        <span className={s.recreateFlag}>{flag}</span>
+        {image ? (
+          <Image src={image.url} alt="" fill unoptimized sizes="200px" className={s.recreatePicked} />
+        ) : (
+          <>
+            <span className={s.recreateIcon} aria-hidden="true"><Icon size={16} /></span>
+            <strong>{cta}</strong>
+          </>
+        )}
+      </button>
+      {image && (
+        <button type="button" className={s.recreateRemove} onClick={() => clear(image, set)} aria-label={c("templates.attach.remove")}>
+          <X size={12} aria-hidden="true" />
+        </button>
+      )}
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        hidden
+        onChange={(e) => {
+          choose(e.target.files, set, image);
+          e.target.value = "";
+        }}
+      />
+      <span hidden>{required ? "required" : "optional"}</span>
+    </div>
+  );
+  return (
+    <dialog
+      ref={ref}
+      className={s.recreateDialog}
+      onCancel={onClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose();
+      }}
+      aria-label={c("templates.recreate.title")}
+    >
+      <button type="button" className={s.previewClose} onClick={onClose} aria-label={c("templates.preview.close")}>
+        <X size={20} aria-hidden="true" />
+      </button>
+      <div className={s.recreateLayout}>
+        <div className={s.recreateArt}>
+          {valid(t.previewUrl) ? (
+            <video src={t.previewUrl} poster={valid(t.thumbnailUrl) ? t.thumbnailUrl : undefined} autoPlay muted loop playsInline aria-label={name(t, locale)} />
+          ) : valid(t.thumbnailUrl) ? (
+            <Image src={t.thumbnailUrl} alt={name(t, locale)} fill unoptimized sizes="460px" />
+          ) : null}
+        </div>
+        <div className={s.recreateForm}>
+          <h2>{c("templates.recreate.title")}</h2>
+          <div className={s.recreateSlots}>
+            {slot(c("templates.recreate.product"), c("templates.recreate.required"), true, product, setProduct, productInput, c("templates.recreate.uploadProduct"), Plus)}
+            {slot(c("templates.recreate.avatar"), c("templates.composer.optional"), false, avatar, setAvatar, avatarInput, c("templates.recreate.uploadAvatar"), User)}
+          </div>
+          <label className={s.recreateLabel} htmlFor="recreate-edit">{c("templates.recreate.describe")}</label>
+          <textarea
+            id="recreate-edit"
+            className={s.recreateEdit}
+            value={edit}
+            onChange={(e) => setEdit(e.target.value)}
+            placeholder={c("templates.recreate.placeholder")}
+            maxLength={1000}
+          />
+          {sending.state === "error" && <p className={s.recreateError} role="alert">{sending.message}</p>}
+          <button type="button" className={s.recreateGo} onClick={() => void recreate()} disabled={sending.state === "busy"}>
+            {sending.state === "busy" ? <Loader2 size={16} className={s.recreateSpin} aria-hidden="true" /> : null}
+            {c("templates.recreate.button")}
+            {credits !== null && (
+              <span className={s.recreateCost}>
+                <Sparkles size={14} aria-hidden="true" />
+                {creditText(credits)}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
 type CopyFn = ReturnType<typeof useStudioCopy>["c"];
-type Fact = { key: "model" | "ratio" | "resolution" | "count" | "duration" | "file"; label: string; value: string };
+type Fact ={ key: "model" | "ratio" | "resolution" | "count" | "duration" | "file"; label: string; value: string };
 /** The preset values worth showing for a template. */
 function presetFacts(t: Template, c: CopyFn): Fact[] {
   const settings = t.settings ?? {};
@@ -919,8 +1096,6 @@ function EditWorkspace({ tool, poster }: { tool: EditToolId; poster?: string }) 
   );
 }
 
-/** An address on this site (a kept file), which the page can read as a file. */
-const sameOrigin = (address: string) => /^\/(?!\/)/.test(address);
 /** The images a template starts from, in the order its maker used them. */
 function inputImagesOf(t?: Template): string[] {
   const settings = t?.settings ?? {};
@@ -936,10 +1111,13 @@ function referenceVideoOf(t?: Template): string | undefined {
 }
 /** Which of the two motion-mode tools a template was made with. */
 const variantOf = (t?: Template): "motion" | "swap" => (t?.settings?.feature === "video-swap" || t?.settings?.variant === "swap" ? "swap" : "motion");
-/** Reads the kept images of a template as files, to send again like the visitor's own. What cannot be read is left out. */
+/**
+ * Reads the input images of a template as files, to send again like the visitor's own: the kept ones on this site and the
+ * creator's storage links (both can be read from the page). What cannot be read (an expired link) is left out.
+ */
 async function loadInputFiles(addresses: string[]): Promise<File[]> {
   const files = await Promise.all(
-    addresses.filter(sameOrigin).map(async (address, index) => {
+    addresses.map(async (address, index) => {
       try {
         const response = await fetch(address);
         if (!response.ok) return null;
@@ -1615,10 +1793,13 @@ function Composer({
   onClearStyle,
   onUse,
   onExpand,
+  incoming,
 }: {
   t?: Template;
   mode: Mode;
   onMode: (mode: Mode) => void;
+  /** Images the visitor added in the clip details, put in the attach card when it changes. */
+  incoming?: { key: number; files: File[] } | null;
   /** The look picked in the Styles tab, if any. */
   style: StyleChoice | null;
   onChangeStyle: () => void;
@@ -1680,6 +1861,15 @@ function Composer({
   );
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
+  const handledIncoming = useRef<number | null>(null);
+  useEffect(() => {
+    if (!incoming || handledIncoming.current === incoming.key || mode !== "create" || isWorkflow) return;
+    handledIncoming.current = incoming.key;
+    const transfer = new DataTransfer();
+    incoming.files.forEach((file) => transfer.items.add(file));
+    attach(transfer.files);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for each batch of images the details hand over
+  }, [incoming, mode, isWorkflow]);
   // Generates right here: the same request the creator page sends, then the app's progress panel follows it to the result.
   const generate = async (template: Template, model: string, resolution: string) => {
     const prompt = (promptRef.current?.value ?? promptOf(template, locale)).trim();
@@ -1699,6 +1889,10 @@ function Composer({
       const request: TextVideoGenerationInput = { prompt, model, resolution, duration, aspectRatio, templateSlug: template.slug };
       if (images.length && reference) {
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
+        // The reference-to-video models follow the images the prompt names as "@Image 1"; say so when the prompt does not.
+        if (model.endsWith("/reference-to-video") && !/@Image\s*\d/i.test(prompt)) {
+          request.prompt = `${prompt}\n\nUse the reference images to keep the same subjects and look: ${urls.map((_, index) => `@Image ${index + 1}`).join(", ")}.`;
+        }
         // Model-specific inputs go in modelParams: the server only forwards those to the model (a top-level field is dropped).
         request.modelParams = { ...(request.modelParams ?? {}), [reference.parameter]: reference.list ? urls : urls[0] };
         // Kept with the clip, so it can become a template with the images it was made from.
@@ -2556,12 +2750,14 @@ function HistoryPanel({
   onUseSaved,
   onOpenSaved,
   onTemplateCreated,
+  onRecreate,
 }: {
   mode: Mode;
   recent: Template[];
   items: Template[];
   onSelect: (t: Template) => void;
   onExpand: (t: Template) => void;
+  onRecreate?: (t: Template) => void;
   /** Absent when this mode has no library to open. */
   /** The addresses of the templates in the library. */
   savedSlugs: Set<string>;
@@ -2585,7 +2781,7 @@ function HistoryPanel({
           </div>
           <div className={s.masonry}>
             {recent.map((t) => (
-              <Tile key={t.id} t={t} selected={false} onSelect={onSelect} onExpand={onExpand} />
+              <Tile key={t.id} t={t} selected={false} onSelect={onSelect} onExpand={onExpand} onRecreate={onRecreate} />
             ))}
           </div>
         </section>
@@ -2885,8 +3081,27 @@ function AssetThumb({ src }: { src: string }) {
   );
 }
 /** onEdit opens the template in this page's own panel; without it (or for templates that edit a clip) the editing page is linked instead. */
-function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?: (t: Template) => void }) {
+function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?: (t: Template, addedImages?: File[]) => void }) {
   const { c, locale } = useStudioCopy();
+  // Images added here join the template's own when the clip is recreated, so they need not be attached beforehand.
+  const [added, setAdded] = useState<{ id: string; file: File; url: string }[]>([]);
+  const addedRef = useRef(added);
+  useEffect(() => {
+    addedRef.current = added;
+  }, [added]);
+  useEffect(() => () => addedRef.current.forEach((image) => URL.revokeObjectURL(image.url)), []);
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const addImages = (list: FileList | null) => {
+    if (!list) return;
+    const room = Math.max(0, 5 - inputImagesOf(t).length - added.length);
+    const picked = Array.from(list).filter((file) => ["image/png", "image/jpeg", "image/webp"].includes(file.type)).slice(0, room);
+    setAdded([...added, ...picked.map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }))]);
+  };
+  const removeAdded = (id: string) => {
+    const gone = added.find((image) => image.id === id);
+    if (gone) URL.revokeObjectURL(gone.url);
+    setAdded(added.filter((image) => image.id !== id));
+  };
   const likes = useContext(LikesContext);
   const [shared, setShared] = useState(false);
   const mine = t.id.startsWith(WORK_ID);
@@ -2918,6 +3133,8 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
   const settings = t.settings ?? {};
   const inputAssets = inputImagesOf(t);
   const promptText = promptOf(t, locale);
+  // Images can be added to a clip that is recreated in this page's create panel.
+  const canAddImages = !!onEdit && modeOf(t) === "create";
   const [promptOpen, setPromptOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -2974,7 +3191,7 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
           {t.kind === "video" ? (
             <>
               <div className={s.clipScroll}>
-                {(promptText || inputAssets.length > 0) && (
+                {(promptText || inputAssets.length > 0 || canAddImages) && (
                   <section className={s.clipCard}>
                     <div className={s.clipCardHead}>
                       <span><PenLine size={14} aria-hidden="true" />{c("templates.preview.promptHeading")}</span>
@@ -2986,9 +3203,35 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
                       )}
                     </div>
                     <div className={s.clipCardBody}>
-                      {inputAssets.length > 0 && (
+                      {(inputAssets.length > 0 || canAddImages) && (
                         <div className={s.clipAssets}>
                           {inputAssets.map((address) => <AssetThumb key={address} src={address} />)}
+                          {added.map((image) => (
+                            <span key={image.id} className={s.clipAsset}>
+                              <Image src={image.url} alt="" fill unoptimized sizes="64px" />
+                              <button type="button" className={s.clipAssetRemove} onClick={() => removeAdded(image.id)} aria-label={c("templates.attach.remove")}>
+                                <X size={11} aria-hidden="true" />
+                              </button>
+                            </span>
+                          ))}
+                          {canAddImages && inputAssets.length + added.length < 5 && (
+                            <>
+                              <button type="button" className={s.clipAssetAdd} onClick={() => addInputRef.current?.click()} aria-label={c("templates.attach.title")}>
+                                <Plus size={18} aria-hidden="true" />
+                              </button>
+                              <input
+                                ref={addInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                multiple
+                                hidden
+                                onChange={(e) => {
+                                  addImages(e.target.files);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </>
+                          )}
                         </div>
                       )}
                       {promptText && (
@@ -3024,7 +3267,7 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
               </div>
               <div className={s.clipActions}>
                 {onEdit && modeOf(t) !== "edit" ? (
-                  <button type="button" className={s.clipEdit} onClick={() => onEdit(t)}><Repeat2 size={16} />{c("templates.preview.recreate")}</button>
+                  <button type="button" className={s.clipEdit} onClick={() => onEdit(t, added.map((image) => image.file))}><Repeat2 size={16} />{c("templates.preview.recreate")}</button>
                 ) : valid(t.targetPath) && t.targetPath.startsWith("/") && (
                   <Link href={templateHref(t)} className={s.clipEdit}><Repeat2 size={16} />{c("templates.preview.recreate")}</Link>
                 )}
@@ -3109,6 +3352,8 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
 export function TemplatesPageClient() {
   const { c } = useStudioCopy();
   const [items, setItems] = useState<Template[]>([]);
+  const [addedImages, setAddedImages] = useState<{ key: number; files: File[] } | null>(null);
+  const [recreating, setRecreating] = useState<Template | null>(null);
   const [likedSlugs, setLikedSlugs] = useState<Set<string>>(new Set());
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -3227,6 +3472,8 @@ export function TemplatesPageClient() {
     setMode(nextMode);
     setPanel(nextMode === "motion" ? "how" : "history");
   };
+  // The Recreate button of a tile: a product template opens its own window, any other one goes to the create panel.
+  const recreateTemplate = (t: Template) => (isProductTemplate(t) ? setRecreating(t) : setSelectedId(t.id));
   const change = () => {
     setPage(1);
     setLoading(true);
@@ -3312,7 +3559,7 @@ export function TemplatesPageClient() {
     <section className={s.masonry} aria-label={c("templates.libraryAria")}>
       {visible.map((t) => (
         // In Edit Video the left panel is the tool list, so "Recreate" opens the sample's details, with the button to edit it.
-        <Tile key={t.id} t={t} selected={t.id === selected?.id} onSelect={(x) => (mode === "edit" ? setPreview(x) : setSelectedId(x.id))} onExpand={setPreview} />
+        <Tile key={t.id} t={t} selected={t.id === selected?.id} onSelect={(x) => (mode === "edit" ? setPreview(x) : setSelectedId(x.id))} onExpand={setPreview} onRecreate={mode === "create" ? recreateTemplate : undefined} />
       ))}
     </section>
   );
@@ -3332,6 +3579,7 @@ export function TemplatesPageClient() {
           onClearStyle={() => setStyle(null)}
           onUse={(t) => setRecent(rememberTemplate(t))}
           onExpand={setPreview}
+          incoming={addedImages}
         />
         <section className={s.libraryPanel}>
           <div className={s.panelTopbar}>
@@ -3360,6 +3608,7 @@ export function TemplatesPageClient() {
               items={visible}
               onSelect={(t) => setSelectedId(t.id)}
               onExpand={setPreview}
+              onRecreate={mode === "create" ? recreateTemplate : undefined}
               savedSlugs={new Set([...items, ...community].map((item) => item.slug))}
               onUseSaved={(slug) => {
                 const found = [...items, ...community].find((item) => item.slug === slug);
@@ -3426,15 +3675,32 @@ export function TemplatesPageClient() {
           )}
         </section>
       </div>
+      {recreating && (
+        <RecreateDialog
+          t={recreating}
+          onClose={() => setRecreating(null)}
+          onStarted={(t) => {
+            setRecent(rememberTemplate(t));
+            setRecreating(null);
+          }}
+        />
+      )}
       {preview && (
         <Preview
           t={preview}
           close={() => setPreview(null)}
-          onEdit={(t) => {
+          onEdit={(t, files) => {
+            // A product template asks for the visitor's own product first, unless images were already added in the details.
+            if (!files?.length && mode === "create" && isProductTemplate(t)) {
+              setPreview(null);
+              setRecreating(t);
+              return;
+            }
             // Editing a clip happens here: its template opens in the create panel beside the library.
             // A member's own clip is not in the library: its prompt, model and images open in the panel as they were.
             if (t.id.startsWith(WORK_ID)) setDraft(t);
             else setRecent(rememberTemplate(t));
+            if (files?.length) setAddedImages({ key: Date.now(), files });
             setMode(modeOf(t));
             setPanel("history");
             setSelectedId(t.id);
