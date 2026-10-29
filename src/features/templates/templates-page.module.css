@@ -3019,3 +3019,54 @@
 
 .pagination button[aria-current] { color: #fff; }
 .composerBar .use, .motionGenerateDock button, .editGenerateDock button { color: #fff; }
+
+/* A grey divider between the create panel and the library, the same hairline the Images page uses. */
+.workspace { gap: 0; }
+.composer { border-right: 1px solid #e5e5e5; margin-right: 8px; }
+@media (max-width: 767.98px) {
+  .composer { border-right: 0; margin-right: 0; border-bottom: 1px solid #e5e5e5; margin-bottom: 8px; padding-bottom: 12px; }
+}
+@media (min-width: 768px) {
+  /* The divider runs the full height, from the header's line to the bottom of the screen. */
+  .workspace { padding-top: 0; padding-bottom: 0; }
+}
+
+/* The tabs stay on top while the create panel scrolls: square and full width, so nothing shows around them. */
+@media (min-width: 768px) {
+  .composerTabs { border-radius: 0; margin: 0 -8px; padding: 0 8px; }
+}
+
+/* The source tabs stay on top of the library with a solid white back and a grey line under them. */
+.toolbar { background: #fff; border-bottom: 1px solid #e5e5e5; padding-bottom: 12px; margin-bottom: 10px; }
+
+/* Both stuck bars carry the same grey line, edge to edge of their panel. */
+@media (min-width: 768px) {
+  .composerTabs { border-bottom: 1px solid #e5e5e5; }
+}
+
+/* One line across both panels: the create tabs and the library bar are the same height and stick at the same level. */
+@media (min-width: 768px) {
+  .composerTabs, .toolbar { box-sizing: border-box; min-height: 66px; justify-content: center; }
+  .composerTabs { align-items: center; }
+  .toolbar { top: -10px; padding-top: 0; padding-bottom: 0; margin-bottom: 12px; }
+}
+
+/* Chosen tabs are outlined in orange, not filled, and the bars carry no line underneath. */
+.toolbar { border-bottom: 0; }
+@media (min-width: 768px) {
+  .composerTabs { border-bottom: 0; }
+}
+.composerTabs button { border: 1px solid transparent; border-radius: 10px; margin: 6px 2px; padding: 6px 12px; }
+.composerTabs button[aria-selected="true"] { border-color: #f26b38; background: #fff; color: #f26b38; }
+.tabs button { border: 1px solid transparent; border-radius: 8px; }
+.tabs button[aria-pressed="true"] { border-color: #f26b38; background: #fff; color: #f26b38; }
+.panelTabs button { border: 1px solid transparent; }
+.panelTabs button[aria-selected="true"] { border-color: #f26b38; background: #fff; color: #e0561f; }
+.motionSourceTabs button[aria-pressed="true"] { border: 1px solid #f26b38; background: #fff; color: #e0561f; }
+
+/* Source tabs as a pill switch (like the reference): a rounded track, the chosen one a white pill outlined in orange. */
+.tabs { gap: 4px; border: 1px solid #e5e5e5; border-radius: 999px; background: #f4f5f7; padding: 4px; }
+.tabs button { gap: 8px; border-radius: 999px; padding: 8px 18px; font-size: 14px; }
+.tabs button[aria-pressed="true"] { border-color: #f26b38; background: #fff; color: #f26b38; box-shadow: 0 1px 3px #0000001a; }
+.panelTabs button { border-radius: 999px; padding-left: 14px; padding-right: 14px; }
+.composerTabs button { border-radius: 999px; }
