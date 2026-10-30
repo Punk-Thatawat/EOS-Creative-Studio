@@ -1463,6 +1463,18 @@
   min-height: 520px;
   padding: 16px;
 }
+.musicPromptCount { margin: 6px 0 0; color: var(--audio-muted); font-size: 11px; text-align: right; }
+.musicEmpty { margin: 12px 0; color: var(--audio-muted); font-size: 12px; text-align: center; }
+.musicHistory { margin-top: 24px; border-top: 1px solid var(--audio-line); padding-top: 16px; }
+.musicHistory h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+.musicHistory .historyItem { width: 100%; }
+.musicHistoryLabel { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.musicHistory small { color: var(--audio-muted); font-size: 10px; white-space: nowrap; }
+.musicModel, .musicDurationInput { width: 100%; min-height: 40px; border: 1px solid var(--audio-line); border-radius: 8px; background: #fff; padding: 9px 11px; color: #282a30; font: inherit; font-size: 13px; }
+.musicModelField { margin-bottom: 18px; }
+.musicModel { display: flex; align-items: center; }
+.musicDurationInput:focus-visible { outline: 2px solid #f26b38; outline-offset: 1px; }
+.musicHint { margin: 8px 0 18px; color: var(--audio-muted); font-size: 11px; line-height: 1.5; }
 .alternateHeading {
   display: flex;
   align-items: flex-start;

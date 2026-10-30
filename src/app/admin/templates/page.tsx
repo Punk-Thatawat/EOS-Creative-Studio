@@ -1,7 +1,8 @@
 "use client";
 import { GeneratedWorkPicker } from "@/features/templates/generated-work-picker";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, Check, CheckCircle2, FileText, ImageIcon, LayoutTemplate, LoaderCircle, Plus, RefreshCw, Save, Star, Trash2, Upload, Video, X } from "lucide-react";
 import { SidebarNavigation } from "@/components/app-shell/navigation";
@@ -39,6 +40,17 @@ const emptyDraft: TemplateAdminInput = {
   sortOrder: 10,
 };
 
+const multiCharacterPrompt = `Edit the original video while preserving its existing shots.
+
+Replace [describe the first person in the video] with the character in @Image 1.
+Replace [describe the second person in the video] with the character in @Image 2.
+
+Match each reference character's face, hairstyle, and outfit. Keep their identities separate and consistent throughout the video.
+
+Preserve the original poses, actions, expressions, shot order, camera movement, framing, background, crowd, and lighting.
+
+Use the reference images only for character appearance and clothing. Do not copy their backgrounds. Do not replace other people in the video.`;
+
 function TemplateVisual({ template, large = false }: { template: Pick<AdminCreativeTemplate, "thumbnailUrl" | "title" | "kind">; large?: boolean }) {
   return <div role="img" aria-label={`${template.title} thumbnail`} className={`relative overflow-hidden bg-[#f2ece7] bg-cover bg-top ${large ? "aspect-[16/7]" : "aspect-[16/9]"}`} style={{ backgroundImage: template.thumbnailUrl ? `url("${template.thumbnailUrl.replace(/"/g, "\\\"")}")` : undefined }}><div className="absolute inset-0 bg-gradient-to-t from-[#201d1b]/45 via-transparent to-transparent" /><span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#4a3f38]">{template.kind}</span></div>;
 }
@@ -53,7 +65,7 @@ const behaviorModes = [
   { id: "extend", label: "Edit Video · Extend", feature: "extend-video", tab: "extend-video" },
   { id: "lipsync", label: "Edit Video · Lipsync", feature: "lipsync", tab: "people-video" },
   { id: "motion", label: "Motion Control", feature: "motion-transfer", tab: "motion-transfer" },
-  { id: "swap", label: "Motion Control · Objects swap", feature: "video-swap", tab: "motion-transfer" },
+  { id: "swap", label: "Motion Control · Video Edit (หลายภาพอ้างอิง)", feature: "video-swap", tab: "motion-transfer" },
   { id: "workflow", label: "Workflow · image → video", feature: "workflow-image-to-video", tab: "image-to-video" },
 ] as const;
 
@@ -173,6 +185,8 @@ function TemplateBehavior({ draft, update }: { draft: TemplateAdminInput & { id?
 
 function TemplateEditor({ draft, busy, onChange, onSave, onClose, onCoverSaved }: { draft: (TemplateAdminInput & { id?: string }); busy: boolean; onChange: (next: TemplateAdminInput & { id?: string }) => void; onSave: () => void; onClose: () => void; onCoverSaved: () => void }) {
   const update = (patch: Partial<TemplateAdminInput>) => onChange({ ...draft, ...patch });
+  const draftRef = useRef(draft);
+  useEffect(() => { draftRef.current = draft; }, [draft]);
   const [cover, setCover] = useState<{ busy: boolean; message?: string; error?: boolean }>({ busy: false });
   // The server cuts a frame from the preview video and keeps it: the fix for a clip saved as a template with a stand-in cover.
   const makeCover = async () => {
@@ -187,7 +201,7 @@ function TemplateEditor({ draft, busy, onChange, onSave, onClose, onCoverSaved }
       setCover({ busy: false, error: true, message: reason instanceof Error ? reason.message : "ตัดภาพปกไม่สำเร็จ" });
     }
   };
-  const [upload, setUpload] = useState<{ target?: "previewUrl" | "thumbnailUrl"; busy: boolean; message?: string; error?: boolean }>({ busy: false });
+  const [upload, setUpload] = useState<{ target?: "previewUrl" | "thumbnailUrl" | "sourceVideo" | "inputImages"; busy: boolean; message?: string; error?: boolean }>({ busy: false });
   // A file from the admin's own computer: the server keeps it and the field gets the address the library serves it from.
   const uploadFile = async (target: "previewUrl" | "thumbnailUrl", file: File | undefined) => {
     if (!file) return;
@@ -222,21 +236,73 @@ function TemplateEditor({ draft, busy, onChange, onSave, onClose, onCoverSaved }
     }
   };
   const settingsHaveRemoteFiles = JSON.stringify([draft.settings?.inputImages, draft.settings?.sourceImage, draft.settings?.sourceVideo]).includes("http");
+  const motionSettings = draft.settings ?? {};
+  const isMotionTemplate = draft.kind === "video" && (motionSettings.feature === "motion-transfer" || motionSettings.feature === "video-swap");
+  const sourceVideo = typeof motionSettings.sourceVideo === "string" ? motionSettings.sourceVideo : "";
+  const referenceImages = [...new Set([
+    ...(Array.isArray(motionSettings.inputImages) ? motionSettings.inputImages : Array.isArray(motionSettings.sourceImages) ? motionSettings.sourceImages : []),
+    ...(typeof motionSettings.sourceImage === "string" ? [motionSettings.sourceImage] : []),
+  ].filter((value): value is string => typeof value === "string" && !!value))];
+  const referenceLimit = motionSettings.feature === "video-swap" ? 4 : 1;
+  const saveReferenceImages = (images: string[]) => {
+    const current = draftRef.current;
+    const { sourceImage: _sourceImage, sourceImages: _sourceImages, ...settings } = current.settings ?? {};
+    void _sourceImage; void _sourceImages;
+    onChange({ ...current, settings: { ...settings, inputImages: images } });
+  };
+  const uploadMotionFiles = async (target: "sourceVideo" | "inputImages", files: File[]) => {
+    if (!files.length) return;
+    if (target === "inputImages" && referenceImages.length + files.length > referenceLimit) {
+      setUpload({ target, busy: false, error: true, message: `โหมดนี้เพิ่มรูปอ้างอิงได้ไม่เกิน ${referenceLimit} รูป` });
+      return;
+    }
+    if (files.some((file) => target === "inputImages" ? !["image/jpeg", "image/png", "image/webp"].includes(file.type) : !["video/mp4", "video/webm", "video/quicktime"].includes(file.type))) {
+      setUpload({ target, busy: false, error: true, message: "ชนิดไฟล์ไม่รองรับ" });
+      return;
+    }
+    setUpload({ target, busy: true });
+    try {
+      const saved = await Promise.all(files.map((file) => uploadTemplateFile(file)));
+      if (target === "sourceVideo") {
+        const current = draftRef.current;
+        onChange({ ...current, settings: { ...(current.settings ?? {}), sourceVideo: saved[0]!.url } });
+      } else saveReferenceImages([...referenceImages, ...saved.map((item) => item.url)]);
+      setUpload({ target, busy: false, message: "อัปโหลดแล้ว กดบันทึกเพื่อใช้กับเทมเพลต" });
+    } catch (reason) {
+      setUpload({ target, busy: false, error: true, message: reason instanceof Error ? reason.message : "อัปโหลดไม่สำเร็จ" });
+    }
+  };
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#201d1b]/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="template-editor-title">
     <div className="flex max-h-[min(850px,calc(100vh-32px))] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]">
       <header className="flex items-start justify-between gap-4 border-b border-border bg-white px-5 py-4 sm:px-7 sm:py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Template control</p><h2 id="template-editor-title" className="mt-1 text-xl font-bold tracking-tight">{draft.id ? "Edit template" : "Add template"}</h2><p className="mt-1 text-xs text-muted-foreground">Configure what users see in the public Templates library and where the template starts.</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-muted-foreground hover:bg-surface-muted" aria-label="Close template editor"><X size={19} /></button></header>
-      <form onSubmit={(event) => { event.preventDefault(); onSave(); }} className="min-h-0 flex-1 overflow-y-auto"><div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[1.05fr_.95fr]">
+      <form onSubmit={(event) => { event.preventDefault(); if (!upload.busy && !assets.busy && (!isMotionTemplate || referenceImages.length <= referenceLimit)) onSave(); }} className="min-h-0 flex-1 overflow-y-auto"><div className="grid gap-5 p-5 sm:p-7 lg:grid-cols-[1.05fr_.95fr]">
         <div className="space-y-5">
           <GeneratedWorkPicker onSelect={update} />
           <section className="rounded-2xl border bg-white p-4" data-no-translate><h3 className="text-sm font-bold">ชุดค่าพร้อมใช้</h3><p className="text-xs my-2">มาจากงานต้นฉบับ รวมไฟล์อ้างอิงที่จะเผยแพร่กับเทมเพลต กรุณาตรวจสิทธิ์ก่อนเผยแพร่</p><pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(draft.settings ?? {},null,2)}</pre>{draft.id && settingsHaveRemoteFiles && <div className="mt-3"><button type="button" disabled={assets.busy} onClick={() => void keepAssets()} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold hover:bg-surface-muted disabled:opacity-60">{assets.busy ? "กำลังเก็บ…" : "เก็บรูปและคลิปต้นทางถาวร"}</button><span className="mt-2 block text-xs font-normal text-muted-foreground">ลิงก์ของผู้ให้บริการหมดอายุใน 7 วัน กดเพื่อคัดลอกไฟล์เข้าที่เก็บของระบบ</span>{assets.message && <span role={assets.error ? "alert" : "status"} className={`mt-1 block text-xs ${assets.error ? "text-red-600" : "text-[#347454]"}`}>{assets.message}</span>}</div>}</section>
           <label className="block rounded-2xl border border-border bg-white p-4 text-sm font-semibold" data-no-translate>Preview URL — ไฟล์ตัวอย่าง<input value={draft.previewUrl ?? ""} onChange={event => update({ previewUrl: event.target.value })} maxLength={2000} placeholder="https://…/preview.mp4 หรือ preview.mp3" className="mt-2 h-10 w-full rounded-xl border border-border px-3 text-xs" /><span className="mt-2 block text-xs font-normal text-muted-foreground">วิดีโอ: MP4/WebM · เสียง: MP3/WAV · เว้นว่างเพื่อแสดงเฉพาะภาพปก ไม่ควรใช้ลิงก์หน้า YouTube แทนไฟล์สื่อ</span></label>
           <div className="-mt-3 rounded-b-2xl border border-t-0 border-border bg-white px-4 pb-4" data-no-translate>{uploadButton("previewUrl", "video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,.mp4,.webm,.mov,.mp3,.wav", "อัปโหลดไฟล์ตัวอย่างจากเครื่อง (สูงสุด 100 MB)")}</div>
+          {isMotionTemplate && <section className="rounded-2xl border border-border bg-white p-4" data-no-translate>
+            <h3 className="text-sm font-bold">ไฟล์ต้นฉบับสำหรับสร้างซ้ำ</h3>
+            <p className="mt-1 text-xs text-muted-foreground">แยกจากวิดีโอผลลัพธ์ตัวอย่างด้านบน ไฟล์เหล่านี้จะแสดงและใช้กับเทมเพลตที่เผยแพร่ โปรดตรวจสอบสิทธิ์ก่อนอัปโหลด</p>
+            {motionSettings.feature === "video-swap" && <div className="mt-3"><button type="button" disabled={!!draft.prompt.trim()} onClick={() => update({ prompt: multiCharacterPrompt })} className="rounded-xl border border-border px-3 py-2 text-xs font-semibold disabled:opacity-50">ใส่ prompt ตัวอย่างสำหรับ 2 ตัวละคร</button><p className="mt-1 text-xs text-muted-foreground">ใส่ได้เมื่อช่อง Prompt ว่าง และต้องแก้คำอธิบายในวงเล็บให้ตรงกับคลิปก่อนสร้าง</p></div>}
+            <label className="mt-4 block text-xs font-semibold">วิดีโอต้นฉบับ
+              <input value={sourceVideo} onChange={(event) => update({ settings: { ...motionSettings, sourceVideo: event.target.value } })} maxLength={2000} placeholder="URL วิดีโอต้นฉบับ หรืออัปโหลดจากเครื่อง" className="mt-2 h-10 w-full rounded-xl border border-border px-3 text-xs" />
+            </label>
+            <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold"><Upload size={15} />อัปโหลดวิดีโอต้นฉบับ<input type="file" accept="video/mp4,video/webm,video/quicktime" hidden disabled={busy || upload.busy} onChange={(event) => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ""; if (file) void uploadMotionFiles("sourceVideo", [file]); }} /></label>
+            {sourceVideo && <button type="button" className="ml-3 text-xs text-red-600" onClick={() => update({ settings: { ...motionSettings, sourceVideo: "" } })}>ลบวิดีโอต้นฉบับ</button>}
+            <div className="mt-4 text-xs font-semibold">รูปอ้างอิง ({referenceImages.length}/{referenceLimit})</div>
+            <p className="mt-1 text-xs text-muted-foreground">ลำดับรูปตรงกับ @Image 1, @Image 2 ใน prompt; หากต้องการหลายรูปเลือกโหมด Video Edit และโมเดลที่รองรับ</p>
+            {referenceImages.length > referenceLimit && <p className="mt-1 text-xs text-red-600" role="alert">จำนวนรูปเกินที่โหมดนี้รองรับ กรุณาลบรูปหรือเลือกโหมด Video Edit</p>}
+            <div className="mt-2 flex flex-wrap gap-2">{referenceImages.map((src, index) => <div key={`${src}-${index}`} className="rounded-xl border border-border p-2 text-center"><Image src={src} alt={`รูปอ้างอิง ${index + 1}`} width={64} height={64} unoptimized className="h-16 w-16 rounded-lg object-cover" /><span className="mt-1 block text-[10px]">@Image {index + 1}</span><div className="flex justify-center gap-2 text-xs"><button type="button" disabled={index === 0 || upload.busy} aria-label={`เลื่อนรูป ${index + 1} ไปก่อน`} onClick={() => { const next = [...referenceImages]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; saveReferenceImages(next); }}>←</button><button type="button" disabled={index === referenceImages.length - 1 || upload.busy} aria-label={`เลื่อนรูป ${index + 1} ไปหลัง`} onClick={() => { const next = [...referenceImages]; [next[index], next[index + 1]] = [next[index + 1]!, next[index]!]; saveReferenceImages(next); }}>→</button><button type="button" disabled={upload.busy} aria-label={`ลบรูป ${index + 1}`} onClick={() => saveReferenceImages(referenceImages.filter((_, i) => i !== index))}><X size={13} /></button></div></div>)}</div>
+            <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold"><Plus size={15} />เพิ่มรูปอ้างอิง<input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden disabled={busy || upload.busy || referenceImages.length >= referenceLimit} onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ""; void uploadMotionFiles("inputImages", files); }} /></label>
+            {(upload.target === "sourceVideo" || upload.target === "inputImages") && (upload.busy || upload.message) && <p className={`mt-2 text-xs ${upload.error ? "text-red-600" : "text-muted-foreground"}`} role={upload.error ? "alert" : "status"}>{upload.busy ? "กำลังอัปโหลด…" : upload.message}</p>}
+          </section>}
           <section className="rounded-2xl border border-border bg-white p-4"><div className="mb-4 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e9] text-primary"><LayoutTemplate size={16} /></span><div><h3 className="text-sm font-bold">Identity</h3><p className="text-[10px] text-muted-foreground">The title and route users will recognize.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Title<input value={draft.title} onChange={(event) => update({ title: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="Product ad" /></label><label className="text-xs font-semibold">Slug<input value={draft.slug} onChange={(event) => update({ slug: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 font-mono text-xs outline-none focus:border-primary" placeholder="product-ad" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Lowercase letters, numbers, and hyphens.</span></label></div><label className="mt-4 block text-xs font-semibold">Description<textarea value={draft.description} onChange={(event) => update({ description: event.target.value })} maxLength={240} required className="mt-2 min-h-20 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-5 outline-none focus:border-primary" placeholder="A short reason to choose this template." /></label><div className="mt-4 grid gap-4 border-t border-border pt-4" data-no-translate><label className="text-xs font-semibold">ชื่อภาษาไทย (ไม่บังคับ)<input value={draft.titleTh ?? ""} onChange={(event) => update({ titleTh: event.target.value })} maxLength={80} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="เว้นว่างเพื่อใช้ชื่อด้านบน" /></label><label className="text-xs font-semibold">คำอธิบายภาษาไทย (ไม่บังคับ)<textarea value={draft.descriptionTh ?? ""} onChange={(event) => update({ descriptionTh: event.target.value })} maxLength={240} className="mt-2 min-h-16 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-5 outline-none focus:border-primary" /></label></div></section>
           <section className="rounded-2xl border border-border bg-white p-4"><div className="mb-4 flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fff0e9] text-primary"><Star size={16} /></span><div><h3 className="text-sm font-bold">Library placement</h3><p className="text-[10px] text-muted-foreground">Control type, category, visibility, and ordering.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Type<select value={draft.kind} onChange={(event) => update({ kind: event.target.value as TemplateKind })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary">{kindOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="text-xs font-semibold">Source<select value={draft.source ?? "official"} onChange={(event) => update({ source: event.target.value as "official" | "community" })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary"><option value="official">EOS (official)</option><option value="community">Community</option></select></label><label className="text-xs font-semibold">Category<input value={draft.category} onChange={(event) => update({ category: event.target.value })} maxLength={40} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="Advertising" /></label><label className="text-xs font-semibold">Format<input value={draft.format} onChange={(event) => update({ format: event.target.value })} maxLength={80} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" placeholder="16:9 · 9:16" /></label><label className="text-xs font-semibold">Sort order<input type="number" min={0} max={100000} value={draft.sortOrder} onChange={(event) => update({ sortOrder: Number(event.target.value) })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-sm outline-none focus:border-primary" /></label></div><div className="mt-4 grid gap-2 sm:grid-cols-2"><Toggle label="Published" description="Show this template in the public library." checked={draft.enabled} onChange={() => update({ enabled: !draft.enabled })} /><Toggle label="Featured" description="Place this template in the curated section." checked={draft.featured} onChange={() => update({ featured: !draft.featured })} /></div></section>
           <TemplateBehavior draft={draft} update={update} />
         </div>
         <div className="space-y-5"><section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Visual and destination</h3><label className="mt-4 block text-xs font-semibold">Thumbnail URL<input value={draft.thumbnailUrl} onChange={(event) => update({ thumbnailUrl: event.target.value })} maxLength={1000} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs outline-none focus:border-primary" placeholder="/generated-icons-v2/templates/product-ad.png" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Use a workspace asset path or a public image URL.</span></label>{uploadButton("thumbnailUrl", "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", "อัปโหลดภาพปกจากเครื่อง")}<div className="mt-4 overflow-hidden rounded-2xl border border-border"><TemplateVisual template={draft} large /></div>{draft.id && draft.previewUrl ? <div className="mt-3" data-no-translate><Button type="button" variant="outline" size="sm" onClick={() => void makeCover()} disabled={busy || cover.busy}>{cover.busy ? <LoaderCircle size={15} className="animate-spin" /> : <ImageIcon size={15} />}ตัดภาพปกจากวิดีโอตัวอย่าง</Button><span className={`mt-1 block text-[10px] ${cover.error ? "text-[#9f3b3b]" : "text-muted-foreground"}`} role={cover.error ? "alert" : undefined}>{cover.message ?? "ใช้เฟรมจากวิดีโอตัวอย่างเป็นภาพปก เก็บไว้ในระบบแบบถาวร (ซ่อมเทมเพลตที่ได้ภาพปกสำเร็จรูป)"}</span></div> : null}<label className="mt-4 block text-xs font-semibold">Target path<input value={draft.targetPath} onChange={(event) => update({ targetPath: event.target.value })} maxLength={500} required className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 font-mono text-xs outline-none focus:border-primary" placeholder="/create/image?template=product-ad" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Must start with / so Use template stays inside EOS.</span></label></section><section className="rounded-2xl border border-border bg-white p-4"><h3 className="text-sm font-bold">Generation instruction</h3><label className="mt-3 block text-xs font-semibold">Prompt<textarea value={draft.prompt} onChange={(event) => update({ prompt: event.target.value })} maxLength={promptMaxLength} className="mt-2 min-h-36 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-6 outline-none focus:border-primary" placeholder="เว้นว่างได้สำหรับงานที่ไม่ต้องใช้ prompt เช่น Extend Image หรือ Upscale" /></label><label className="mt-4 block text-xs font-semibold" data-no-translate>พรอมต์ภาษาไทย (ไม่บังคับ)<textarea value={draft.promptTh ?? ""} onChange={(event) => update({ promptTh: event.target.value })} maxLength={promptMaxLength} className="mt-2 min-h-24 w-full resize-y rounded-xl border border-border bg-[#fcfbfa] p-3 text-sm leading-6 outline-none focus:border-primary" placeholder="แสดงให้ผู้ใช้ภาษาไทยเห็น ส่วนพรอมต์ด้านบนยังใช้สร้างงาน" /></label><div className="mt-4 grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold">Tags<input value={draft.tags.join(", ")} onChange={(event) => update({ tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) })} className="mt-2 h-10 w-full rounded-xl border border-border bg-[#fcfbfa] px-3 text-xs outline-none focus:border-primary" placeholder="product, advertising, campaign" /><span className="mt-1 block text-[10px] font-normal text-muted-foreground">Separate tags with commas.</span></label><div className="rounded-xl bg-[#fff8f3] p-3 text-[10px] leading-5 text-[#765d50]"><b>Tip</b><br />Keep the prompt focused on visual direction. The user can personalize it after opening the creator.</div></div></section></div>
-      </div><footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4 sm:px-7"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="sm" disabled={busy || !draft.title.trim() || !draft.slug.trim() || !draft.thumbnailUrl.trim() || !draft.targetPath.trim()}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}{busy ? "Saving..." : "Save template"}</Button></footer></form>
+      </div><footer className="flex justify-end gap-2 border-t border-border bg-white px-5 py-4 sm:px-7"><Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy || upload.busy}>Cancel</Button><Button type="submit" size="sm" disabled={busy || upload.busy || assets.busy || (isMotionTemplate && referenceImages.length > referenceLimit) || !draft.title.trim() || !draft.slug.trim() || !draft.thumbnailUrl.trim() || !draft.targetPath.trim()}>{busy ? <LoaderCircle size={15} className="animate-spin" /> : <Save size={15} />}{busy ? "Saving..." : "Save template"}</Button></footer></form>
     </div>
   </div>;
 }

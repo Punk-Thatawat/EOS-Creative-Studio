@@ -5,11 +5,13 @@ import { CheckCircle2, ChevronDown, ChevronUp, Clock3, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   listGenerationHistory,
+  cancelGeneration,
   resumeGeneration,
   type GenerationHistoryItem,
   type GenerationProgress,
   type PendingGeneration,
 } from "@/lib/api/generations";
+import { cancelVideoStoryboard } from "@/lib/api/video-generations";
 import {
   emitGenerationCompleted,
   GENERATION_REQUEST_FAILED_EVENT,
@@ -39,6 +41,7 @@ const generationLabelKeys: Record<string, TranslationKey> = {
   "audio-podcast": "create.audio.tabs.podcastDialogue",
   "audio-voice-clone": "create.audio.tabs.voiceClone",
   "audio-sound-effects": "create.audio.tabs.soundEffects",
+  "audio-text-to-music": "create.audio.tabs.textToMusic",
   "audio-cleanup": "create.audio.tabs.audioCleanup",
   "document-ocr": "create.document.mode.ocr",
   "document-summary": "create.document.mode.summarize",
@@ -126,6 +129,7 @@ const generationFeatureOptions = [
   { feature: "audio-podcast", key: "eos.generation.pending.audio-podcast", label: "Podcast & Dialogue", tab: "Podcast & Dialogue", kind: "audio" },
   { feature: "audio-voice-clone", key: "eos.generation.pending.audio-voice-clone", label: "Voice Clone", tab: "Voice Clone", kind: "audio" },
   { feature: "audio-sound-effects", key: "eos.generation.pending.audio-sound-effects", label: "Sound Effects", tab: "Sound Effects", kind: "audio" },
+  { feature: "audio-text-to-music", key: "eos.generation.pending.audio-text-to-music", label: "Text to Music", tab: "Text to Music", kind: "audio" },
   { feature: "audio-cleanup", key: "eos.generation.pending.audio-cleanup", label: "Audio Cleanup", tab: "Audio Cleanup", kind: "audio" },
   { feature: "document-ocr", key: "eos.generation.pending.document-ocr", label: "OCR", tab: "ocr", kind: "document" },
   { feature: "document-summary", key: "eos.generation.pending.document-summary", label: "Summarize", tab: "summarize", kind: "document" },
@@ -464,8 +468,12 @@ export function GenerationProgressFloating() {
   const [active, setActive] = useState<ActivePendingGeneration[]>([]);
   const [isCenterOpen, setIsCenterOpen] = useState(false);
   const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [cancelErrorId, setCancelErrorId] = useState<string | null>(null);
+  const [cancelingIds, setCancelingIds] = useState<Set<string>>(() => new Set());
   const launcherRef = useRef<HTMLButtonElement>(null);
   const collapseRef = useRef<HTMLButtonElement>(null);
+  const cancelingIdsRef = useRef(new Set<string>());
   const closeCenter = () => {
     setIsCenterOpen(false);
     requestAnimationFrame(() => launcherRef.current?.focus());
@@ -741,6 +749,58 @@ export function GenerationProgressFloating() {
     setActive((current) => current.filter((entry) => entry.pending.generationId !== item.pending.generationId));
   };
 
+  const handleCancel = async (item: ActivePendingGeneration) => {
+    const generationId = item.pending.generationId;
+    if (cancelingIdsRef.current.has(generationId)) return;
+    cancelingIdsRef.current.add(generationId);
+    setCancelingIds((current) => new Set(current).add(generationId));
+    setCancelErrorId(null);
+
+    try {
+      const status = isStoryboardParentProgress(item)
+        ? (await cancelVideoStoryboard(generationId)).status
+        : await cancelGeneration(generationId, item.pending.workspaceId);
+
+      if (status === "cancelled") {
+        removeProgressForItem(item);
+        setActive((current) => current.filter((entry) => entry.pending.generationId !== generationId));
+        setConfirmCancelId(null);
+      } else if (status === "completed") {
+        const completedProgress: GenerationProgress = {
+          generationId,
+          pollUrl: item.pending.pollUrl,
+          workspaceId: item.pending.workspaceId,
+          provider: item.pending.provider,
+          model: item.pending.model,
+          status: "completed",
+          totalCount: item.pending.totalCount,
+          completedCount: item.pending.totalCount,
+          output: item.pending.output,
+        };
+        persistProgress(item, completedProgress);
+        setActive((current) => current.map((entry) => entry.pending.generationId === generationId
+          ? { ...entry, pending: { ...entry.pending, status: "completed", completedCount: entry.pending.totalCount } }
+          : entry));
+        setConfirmCancelId(null);
+      } else if (status === "failed") {
+        removeProgressForItem(item);
+        setActive((current) => current.filter((entry) => entry.pending.generationId !== generationId));
+        setConfirmCancelId(null);
+      } else {
+        setCancelErrorId(generationId);
+      }
+    } catch {
+      setCancelErrorId(generationId);
+    } finally {
+      cancelingIdsRef.current.delete(generationId);
+      setCancelingIds((current) => {
+        const next = new Set(current);
+        next.delete(generationId);
+        return next;
+      });
+    }
+  };
+
   const handleClearCompleted = () => {
     const completedIds = new Set(completedItems.map((item) => item.pending.generationId));
     completedItems.forEach(removeProgressForItem);
@@ -755,6 +815,8 @@ export function GenerationProgressFloating() {
     const completed = Math.min(total, Math.max(0, pending.completedCount));
     const isCompleted = pending.status === "completed";
     const isQueued = pending.status === "queued";
+    const canCancel = !isCompleted && !item.isSubmitting && !generationId.startsWith("pending:") && (kind === "image" || kind === "video");
+    const isCanceling = cancelingIds.has(generationId);
     const percentage = isCompleted ? 100 : Math.round((completed / total) * 100);
     const statusClass = isCompleted ? styles.statusCompleted : isQueued ? styles.statusQueued : styles.statusProcessing;
     const visiblePercentage = percentage > 0 ? percentage : isQueued ? 10 : 22;
@@ -852,6 +914,48 @@ export function GenerationProgressFloating() {
             </span>
           </div>
         </button>
+        {canCancel && (
+          <div className={styles.cancelRow}>
+            {confirmCancelId === generationId ? (
+              <>
+                <span className={styles.cancelPrompt}>
+                  {cancelErrorId === generationId ? t("shell.generation.cancelError") : t("shell.generation.cancelConfirm")}
+                </span>
+                <button
+                  type="button"
+                  className={styles.cancelSecondary}
+                  onClick={() => {
+                    setConfirmCancelId(null);
+                    setCancelErrorId(null);
+                  }}
+                  disabled={isCanceling}
+                >
+                  {t("shell.generation.cancelKeep")}
+                </button>
+                <button
+                  type="button"
+                  className={styles.cancelConfirm}
+                  onClick={() => void handleCancel(item)}
+                  disabled={isCanceling}
+                >
+                  {isCanceling ? t("shell.generation.canceling") : t("shell.generation.cancelNow")}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className={styles.cancelLink}
+                onClick={() => {
+                  setCancelErrorId(null);
+                  setConfirmCancelId(generationId);
+                }}
+                aria-label={t("shell.generation.cancelItem", { label: localizedLabel })}
+              >
+                {t("shell.generation.cancelItemShort")}
+              </button>
+            )}
+          </div>
+        )}
         {isCompleted && (
           <button
             type="button"

@@ -1317,14 +1317,6 @@
 .motionGenerateDock { position: sticky; bottom: -8px; z-index: 4; margin: auto -8px -8px; border-top: 1px solid #17171912; background: #ffffff; padding: 12px 8px; }
 .motionGenerateDock button { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 0; background: #f26b38; box-shadow: 0 3px 0 #b84a1c; color: #fff; font-size: 15px; font-weight: 800; }
 .motionHow { display: flex; min-height: calc(100% - 46px); flex-direction: column; gap: 12px; }
-.motionHowHero { display: grid; min-height: 270px; grid-template-columns: minmax(0, 1fr) minmax(250px, 34%); align-items: center; gap: 24px; overflow: hidden; border: 0; border-radius: 0; background: #ffffff; padding: 28px 32px; }
-.motionHowHero h1 { max-width: 650px; margin: 0 0 14px; color: #171719; font-size: clamp(28px, 3vw, 42px); font-weight: 850; line-height: 1.15; text-transform: uppercase; }
-.motionHowHero p { max-width: 440px; margin: 0; color: #1717199c; font-size: 15px; line-height: 1.55; }
-.motionMontage { position: relative; display: flex; min-height: 180px; align-items: center; justify-content: center; }
-.motionMontage span { position: relative; width: 34%; aspect-ratio: .75; border: 2px solid #ffffff18; border-radius: 0; background: #26282a center / cover; box-shadow: 0 12px 32px #0008; }
-.motionMontage1 { z-index: 1; transform: rotate(-7deg) translateX(18%); }
-.motionMontage2 { z-index: 2; transform: translateY(-3px); }
-.motionMontage3 { z-index: 1; transform: rotate(7deg) translateX(-18%); }
 .motionLibrary { min-height: 320px; overflow: hidden; border: 0; border-radius: 0; background: #ffffff; padding: 18px 20px; }
 .motionLibrary h2 { margin: 0 0 16px; color: #171719; font-size: 16px; font-weight: 750; }
 .motionGallery { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)); gap: 14px; overflow-x: auto; padding: 2px 2px 14px; }
@@ -1332,7 +1324,6 @@
 .motionGallery button { position: relative; min-width: 0; aspect-ratio: 9 / 16; overflow: hidden; border: 0; border-radius: 16px; background: #202225 center / cover; color: #fff; text-align: left; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
 .motionGallery button:hover, .motionGallery button:focus-visible { transform: translateY(-2px); outline: none; }
 .motionGallery button > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
-.motionGallery button > .motionMute, .workOpen > .motionMute { position: absolute; right: 10px; bottom: 10px; z-index: 1; display: grid; width: 34px; height: 34px; place-items: center; border-radius: 999px; background: #17171999; color: #ffffffd9; backdrop-filter: blur(4px); }
 .motionLibraryEmpty { color: #17171970; font-size: 13px; }
 
 /* The list the "change" chip opens. */
@@ -2832,6 +2823,21 @@
 .clipAssets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .clipAsset { position: relative; width: 64px; height: 64px; overflow: hidden; border-radius: 10px; background: #e9ebee; }
 .clipAsset img { width: 100%; height: 100%; object-fit: cover; }
+.clipSourceVideo { width: 100%; height: 240px; overflow: hidden; border-radius: 10px; background: #111; }
+.clipSourceVideo :global(.video-modal-player) { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; object-fit: contain; }
+.clipSourceVideo :global(.intro-video-controls) { padding: 24px 10px 8px; }
+.clipSourceVideo :global(.intro-video-progress) { margin-bottom: 8px; }
+.clipSourceVideo :global(.intro-video-control-row) { grid-template-columns: auto 1fr auto; gap: 4px; }
+.clipSourceVideo :global(.intro-video-volume-control) { min-width: 0; }
+.clipSourceVideo :global(.intro-video-volume-control input) { display: none; }
+.clipSourceVideo :global(.intro-video-center-controls) { justify-self: center; gap: 6px; }
+.clipSourceVideo :global(.intro-video-transport) { gap: 4px; }
+.clipSourceVideo :global(.intro-video-icon-button) { width: 27px; height: 30px; }
+.clipSourceVideo :global(.intro-video-play-button) { width: 34px; height: 34px; }
+.clipSourceVideo :global(.intro-video-time) { font-size: 11px; }
+.clipSourceVideo :global(.intro-video-extra-controls) { gap: 0; }
+.clipSourceVideo:fullscreen { width: 100vw; height: 100vh; border-radius: 0; }
+.referenceIndex { position: absolute; bottom: 3px; left: 3px; z-index: 1; border-radius: 4px; padding: 1px 4px; background: #111c; color: #fff; font-size: 10px; line-height: 1.4; }
 .clipAssetAdd { display: grid; width: 64px; height: 64px; place-items: center; border: 1px dashed #17171940; border-radius: 10px; background: #dfe2e6; color: #171719b0; cursor: pointer; }
 .clipAssetAdd:hover { background: #dfe2e6; color: #171719; }
 .clipAssetRemove { position: absolute; top: 3px; right: 3px; display: grid; width: 18px; height: 18px; place-items: center; border: 0; border-radius: 50%; background: #000a; color: #fff; cursor: pointer; }
@@ -2854,8 +2860,8 @@
 .motionBoxIcon { display: grid; width: 38px; height: 38px; place-items: center; margin-bottom: 4px; border-radius: 999px; background: #17171914; color: #171719d0; }
 .motionBoxFilled { border-style: solid; border-color: #17171914; background: #f4f5f7; padding: 0; }
 /* The chosen motion, held like a card that is slightly turned. */
-.motionTilt { position: relative; display: block; height: 134px; transform: rotate(-4deg); overflow: hidden; border-radius: 12px; box-shadow: 0 10px 26px #000a; }
-.motionTilt > video { display: block; width: auto; height: 100%; max-width: 100%; object-fit: cover; }
+.motionTilt { position: relative; display: block; max-width: calc(100% - 30px); transform: rotate(-4deg); overflow: hidden; border: 1px solid #ffffffcc; border-radius: 12px; box-shadow: 0 10px 26px #000a; }
+.motionTilt > video { display: block; width: auto; height: auto; max-width: 100%; max-height: 140px; object-fit: contain; }
 .motionTilt > i { position: absolute; right: 7px; bottom: 7px; display: grid; width: 22px; height: 22px; place-items: center; border-radius: 7px; background: #17171999; color: #fff; }
 .motionBoxImage { object-fit: cover; }
 .motionBoxClear { position: absolute; top: 8px; right: 8px; z-index: 2; display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 999px; background: #111b; color: #fff; cursor: pointer; }
@@ -2967,12 +2973,10 @@
 
 /* The Motion Control intro stacks once the library column is narrow. */
 @media (max-width: 1023.98px) {
-  .motionHowHero { grid-template-columns: 1fr; min-height: 0; gap: 16px; padding: 20px 18px; }
-  .motionHowHero h1 { font-size: 26px; }
 }
 
 /* Light theme: what sits on top of a picture or video stays white, whatever the page text colour is. */
-.kind, .tileAuthor, .tileInfo, .tileExpand, .tileActions, .tileLike, .noPreview, .audioMark, .composerCard, .composerChange, .composerHeroChange, .pendingClip, .motionTilt, .motionMute, .clipPlayer, .artworkPane, .categoryCard, .howStage, .heroCoverMain, .heroCoverSide, .libraryHeroCover { color: #fff; }
+.kind, .tileAuthor, .tileInfo, .tileExpand, .tileActions, .tileLike, .noPreview, .audioMark, .composerCard, .composerChange, .composerHeroChange, .pendingClip, .motionTilt, .clipPlayer, .artworkPane, .categoryCard, .howStage, .heroCoverMain, .heroCoverSide, .libraryHeroCover { color: #fff; }
 .panelTabs em { color: #d9541c; }
 
 /* No grey lines: the panels sit on white, with no divider under the tabs, and a thin scrollbar. */
@@ -3090,6 +3094,31 @@
 .styleRow, .composerRow, .composerBlock, .composerPrompt, .motionSceneControl, .motionAssets, .motionReference, .motionCharacter { background: #fff; border: 1px solid #e2e2e2; }
 .composerStage, .attachBox, .attachFiles, .motionBox { background: #fff; border-color: #dcdfe3; }
 .attachBox:hover, .motionBox:hover { background: #fffaf7; border-color: #f26b38; }
+.motionVideoBox, .motionVideoBox:hover { min-height: 178px; padding: 14px; border-color: #2b2b2e; background: #1d1e20; }
+.motionMediaGroup, .motionReferenceGroup { display: grid; gap: 9px; }
+.motionMediaHeading { display: flex; width: 100%; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; color: #34353a; font-size: 12px; font-weight: 700; }
+.motionMediaHeading > span { display: inline-flex; min-width: 0; align-items: center; gap: 7px; }
+.motionMediaHeading > span svg { color: #f26b38; }
+.motionReferenceGroup .motionMediaHeading > small { flex-basis: auto; color: #8b8c91; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.motionVideoEditBox, .motionVideoEditBox:hover { min-height: 190px; border: 0; background: radial-gradient(ellipse at 50% 30%, #353538 0%, #202124 70%); }
+.motionVideoEditBox .motionTilt { transform: none; border-color: #ffffff40; border-radius: 9px; box-shadow: 0 7px 24px #0008; }
+.motionVideoEditBox .motionTilt > video { max-height: 160px; }
+.motionReferenceGroup { padding: 0; }
+.motionReferenceList { display: flex; flex-wrap: wrap; gap: 9px; align-items: stretch; }
+.motionReferenceThumb, .motionReferenceAdd { position: relative; width: 64px; height: 72px; overflow: hidden; border-radius: 9px; }
+.motionReferenceThumb { display: block; background: #ececef; }
+.motionReferenceThumb img { object-fit: cover; }
+.motionReferenceEdit { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.motionReferenceEditLabel { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: #1119; color: #fff; font-size: 11px; font-weight: 700; opacity: 0; transition: opacity .15s ease; }
+.motionReferenceEdit:hover .motionReferenceEditLabel, .motionReferenceEdit:focus-visible .motionReferenceEditLabel { opacity: 1; }
+.motionReferenceNumber { position: absolute; bottom: 4px; left: 4px; z-index: 1; display: grid; width: 19px; height: 19px; place-items: center; border-radius: 6px; background: #1d1e20d9; color: #fff; font-size: 11px; font-weight: 700; }
+.motionReferenceRemove { position: absolute; top: 4px; right: 4px; z-index: 1; display: grid; width: 21px; height: 21px; place-items: center; padding: 0; border: 0; border-radius: 6px; background: #1d1e20cf; color: #fff; cursor: pointer; }
+.motionReferenceRemove:hover { background: #c73d2c; }
+.motionReferenceAdd { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1px dashed #d8c6bc; background: #fffaf7; color: #bf5a30; cursor: pointer; }
+.motionReferenceAdd span { font-size: 10px; font-weight: 650; }
+.motionReferenceAdd:hover { border-color: #f26b38; background: #fff1e9; }
+.motionReferenceAdd:focus-visible, .motionReferenceRemove:focus-visible { outline: 2px solid #f26b38; outline-offset: 2px; }
+.motionReferenceEdit:focus-visible { outline: 2px solid #f26b38; outline-offset: -3px; }
 .switch { background: #fff; border: 1px solid #e2e2e2; }
 
 /* No empty strip around the panels: they run to the edge of the page, so the scrollbar sits flush on the right like on the other pages. */

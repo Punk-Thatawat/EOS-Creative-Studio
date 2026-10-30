@@ -123,6 +123,7 @@ export type DirectVideoQuoteInput = {
   aspectRatio?: unknown;
   audioUrl?: string;
   sourceVideo?: string;
+  referenceImageCount?: number;
   sourceImage?: string;
   modelParams?: Record<string, unknown>;
   promptOptimizerEnabled?: boolean;
@@ -286,6 +287,7 @@ export async function quoteDirectVideoGeneration(input: DirectVideoQuoteInput, s
       ...(input.aspectRatio !== undefined ? { aspectRatio: input.aspectRatio } : {}),
       ...(input.audioUrl ? { audioUrl: input.audioUrl } : {}),
       ...(input.sourceVideo ? { sourceVideo: input.sourceVideo } : {}),
+      ...(input.referenceImageCount !== undefined ? { referenceImageCount: input.referenceImageCount } : {}),
       ...(input.sourceImage ? { sourceImage: input.sourceImage } : {}),
       ...(input.promptOptimizerEnabled ? { promptOptimizerEnabled: true } : {}),
       ...(input.modelParams ? { modelParams: input.modelParams } : {}),

@@ -23,7 +23,7 @@ const adminItems: BottomItem[] = [
   { label: "Credits", href: "/admin/credits", icon: BarChart3 },
 ];
 
-export function MobileBottomNavigation() {
+export function MobileBottomNavigation({ hidden = false }: { hidden?: boolean }) {
   const pathnameFromRouter = usePathname();
   const hydrated = useHydrated();
   const { locale } = useLocale();
@@ -31,6 +31,7 @@ export function MobileBottomNavigation() {
   const pathname = hydrated ? pathnameFromRouter : "";
   const isAdminRoute = pathname.startsWith("/admin");
   const items = isAdminRoute ? adminItems : workspaceItems;
+  if (hidden) return null;
   const isActive = (item: BottomItem) => item.accent
     ? pathname.startsWith("/create/")
     : pathname === item.href || pathname.startsWith(`${item.href}/`);

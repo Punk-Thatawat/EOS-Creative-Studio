@@ -106,6 +106,7 @@ const featureLabels: Record<string, string> = {
   podcastDialogue: "Podcast & Dialogue",
   "audio-voice-clone": "Voice Clone",
   "audio-sound-effects": "Sound Effects",
+  "audio-text-to-music": "Text to Music",
   "audio-cleanup": "Audio Cleanup",
   document: "Document",
   "document-ocr": "Document OCR",
@@ -138,6 +139,7 @@ const featureOrder = [
   "podcastDialogue",
   "audio-voice-clone",
   "audio-sound-effects",
+  "audio-text-to-music",
   "audio-cleanup",
   "audio-music",
   "document",
@@ -188,6 +190,7 @@ const audioFeatureKeys = new Set([
   "podcastDialogue",
   "audio-voice-clone",
   "audio-sound-effects",
+  "audio-text-to-music",
   "video-to-sfx",
   "audio-cleanup",
 ]);
@@ -197,6 +200,7 @@ const audioFeatureGroups: Array<{ key: string; featureKeys: readonly string[] }>
   { key: "podcastDialogue", featureKeys: ["podcastDialogue"] },
   { key: "audio-voice-clone", featureKeys: ["audio-voice-clone"] },
   { key: "audio-sound-effects", featureKeys: ["audio-sound-effects", "video-to-sfx"] },
+  { key: "audio-text-to-music", featureKeys: ["audio-text-to-music"] },
   { key: "audio-cleanup", featureKeys: ["audio-cleanup"] },
 ];
 
@@ -422,6 +426,15 @@ function audioPricingRows(settings: AdminAudioSettings): PricingRow[] {
   });
 
   rows.push(
+    {
+      feature: featureLabels["audio-text-to-music"],
+      featureKey: "audio-text-to-music",
+      model: "sonilo/text-to-music",
+      provider: "wavespeed",
+      displayName: "Sonilo Text-to-Music",
+      unit: "Per second · 10 second minimum",
+      note: "WaveSpeed Sonilo · $0.0025 / second",
+    },
     {
       feature: featureLabels["audio-sound-effects"],
       featureKey: "audio-sound-effects",

@@ -165,7 +165,7 @@ export type SoundEffectsInput = {
   outputFormat: "mp3" | "wav" | "ogg";
 };
 export type SoundEffectVariant = { index: number; audioBase64: string; contentType: string; outputFormat: "mp3" | "wav" | "ogg" };
-export type AudioHistoryFeature = "tts" | "dialogue" | "voice-clone" | "sound-effects" | "audio-cleanup";
+export type AudioHistoryFeature = "tts" | "dialogue" | "voice-clone" | "sound-effects" | "audio-cleanup" | "text-to-music";
 export type AudioHistoryEntry = {
   id: string;
   feature: AudioHistoryFeature;
@@ -291,7 +291,7 @@ async function adminRequest(path: string, init: RequestInit = {}): Promise<unkno
 }
 
 // Endpoints that take credits, so the header balance is refreshed after they succeed.
-const CHARGED_AUDIO_PATH = /^\/audio\/(tts|tts\/scenes|dialogue|cleanup|sound-effects|sound-effects\/video|voice-clones|voice-clones\/[^/]+\/preview)$/;
+const CHARGED_AUDIO_PATH = /^\/audio\/(tts|tts\/scenes|dialogue|cleanup|text-to-music|sound-effects|sound-effects\/video|voice-clones|voice-clones\/[^/]+\/preview)$/;
 
 async function userAudioRequest(path: string, init: RequestInit = {}): Promise<Response> {
   const accessToken = await getApiAccessToken();
@@ -606,6 +606,17 @@ export async function createVideoSoundEffect(input: { video: File; description?:
 }
 
 export type SoundEffectsQuote = { provider: "wavespeed"; model: string; creditCost: number; pricingSource: "provider" | "fallback" };
+
+export async function quoteTextToMusic(durationSeconds: number, signal?: AbortSignal): Promise<SoundEffectsQuote> {
+  const response = await userAudioRequest("/audio/text-to-music/quote", { method: "POST", body: JSON.stringify({ durationSeconds }), signal });
+  const payload = await response.json() as { data?: SoundEffectsQuote };
+  if (!payload.data || !Number.isFinite(payload.data.creditCost)) throw new Error("Music pricing unavailable");
+  return payload.data;
+}
+
+export async function createTextToMusic(input: { prompt: string; durationSeconds: number }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
+  return userAudioBlobRequest("/audio/text-to-music", { method: "POST", headers: { Accept: "audio/mpeg, audio/wav, audio/ogg" }, body: JSON.stringify(input), signal });
+}
 
 export async function quoteVideoSoundEffects(durationSeconds: number, signal?: AbortSignal): Promise<SoundEffectsQuote> {
   const response = await userAudioRequest("/audio/sound-effects/video/quote", {

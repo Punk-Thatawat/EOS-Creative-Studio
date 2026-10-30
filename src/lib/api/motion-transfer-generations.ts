@@ -29,6 +29,8 @@ export type VideoSwapGenerationInput = {
   prompt?: string;
   swapMode?: "person" | "object" | "background";
   resolution?: string;
+  duration?: number;
+  aspectRatio?: string;
   modelParams?: Record<string, unknown>;
   [key: string]: unknown;
 };

@@ -172,12 +172,13 @@ const adminCreativeFeatures = [
 function AdminFeatureNavigationTree({ pathname, hydrated }: { pathname: string; hydrated: boolean }) {
   const searchParams = useSearchParams();
   const requestedFeature = hydrated ? searchParams.get("feature") : null;
+  const isModelRoutesPage = pathname === "/admin/model-routes";
   const selectedFeature = requestedFeature === "video" ? "image-to-video" : (requestedFeature ?? "text-to-image");
-  const isImageFeature = adminImageFeatures.some((item) => item.id === selectedFeature);
-  const isVideoFeature = adminVideoFeatures.some((item) => item.id === selectedFeature);
-  const isAiPresenterFeature = selectedFeature === "ai-presenter" || selectedFeature === "ai-presenter-script";
-  const isAudioFeature = selectedFeature === "audio" || adminAudioFeatures.some((item) => item.id === selectedFeature);
-  const isDocumentFeature = adminDocumentFeatures.some((item) => item.id === selectedFeature);
+  const isImageFeature = isModelRoutesPage && adminImageFeatures.some((item) => item.id === selectedFeature);
+  const isVideoFeature = isModelRoutesPage && adminVideoFeatures.some((item) => item.id === selectedFeature);
+  const isAiPresenterFeature = isModelRoutesPage && (selectedFeature === "ai-presenter" || selectedFeature === "ai-presenter-script");
+  const isAudioFeature = isModelRoutesPage && (selectedFeature === "audio" || adminAudioFeatures.some((item) => item.id === selectedFeature));
+  const isDocumentFeature = isModelRoutesPage && adminDocumentFeatures.some((item) => item.id === selectedFeature);
 
   return (
     <SidebarGroup className="px-0">

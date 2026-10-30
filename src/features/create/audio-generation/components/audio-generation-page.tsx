@@ -23,6 +23,7 @@ import {
   History,
   LockKeyhole,
   Mic2,
+  Music2,
   Pause,
   Pencil,
   Play,
@@ -62,6 +63,7 @@ import {
   createDialogue,
   cleanupAudio,
   createSoundEffects,
+  createTextToMusic,
   createTextToSpeech,
   createTextToSpeechScenes,
   createVideoSoundEffect,
@@ -78,6 +80,7 @@ import {
   quoteAudioCleanup,
   quoteDialogue,
   quoteSoundEffects,
+  quoteTextToMusic,
   quoteVideoSoundEffects,
   quoteTextToSpeech,
   quoteTextToSpeechScenes,
@@ -98,7 +101,7 @@ import {
   type VoiceCloneQuote,
 } from "@/lib/api/audio";
 
-type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Audio Cleanup";
+type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Text to Music" | "Audio Cleanup";
 const MIN_PODCAST_SPEAKERS = 2;
 const podcastVoiceAvatarEntries = [
   ["jessica", "/generated-assets/podcast-voices/jessica.jpg"],
@@ -122,12 +125,11 @@ const visibleTabs: readonly AudioTab[] = [
   "Podcast & Dialogue",
   "Voice Clone",
   "Sound Effects",
+  "Text to Music",
   "Audio Cleanup",
 ];
 // The backend may list Eleven models under either their WaveSpeed-style keys or raw ElevenLabs ids.
 const ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS = [
-  "elevenlabs/eleven-v3",
-  "eleven_v3",
   "eleven_v4",
   "elevenlabs/eleven-v4",
 ];
@@ -139,19 +141,14 @@ function supportsMiniMaxSpeechTuning(modelId: string): boolean {
 }
 
 /**
- * Offer Eleven v3, Eleven v4, and MiniMax Speech 2.8 HD when the backend lists
- * them. Keep v3 first for backwards-compatible defaults, while allowing v4 to
- * be selected alongside it.
+ * Use Eleven v4 for preset voices and retain MiniMax for cloned voices.
+ * Both supported Eleven v4 keys represent the same model, so select only one.
  */
 function pickTextToSpeechModels(items: AudioModel[]): AudioModel[] {
-  const preferredKeys = [...ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS, ...MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS];
-  const offered = preferredKeys
-    .map((key) => items.find((model) => model.key === key))
-    .filter((model): model is AudioModel => model !== undefined)
-    .filter((model, index, models) => models.findIndex((candidate) => candidate.key === model.key) === index);
-  if (offered.length) return offered;
-  const chosen = items.find((model) => model.isActive) ?? items[0];
-  return chosen ? [chosen] : [];
+  const v4Models = items.filter((model) => ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key.toLowerCase()));
+  const v4 = v4Models.find((model) => model.isActive) ?? v4Models[0];
+  const cloneModel = items.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key.toLowerCase()));
+  return [v4, cloneModel].filter((model): model is AudioModel => model !== undefined);
 }
 const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
 
@@ -160,6 +157,7 @@ const audioTabKeys = {
   "Podcast & Dialogue": "create.audio.tabs.podcastDialogue",
   "Voice Clone": "create.audio.tabs.voiceClone",
   "Sound Effects": "create.audio.tabs.soundEffects",
+  "Text to Music": "create.audio.tabs.textToMusic",
   "Audio Cleanup": "create.audio.tabs.audioCleanup",
 } as const;
 const audioModeIcons = {
@@ -167,6 +165,7 @@ const audioModeIcons = {
   "Podcast & Dialogue": AudioWaveform,
   "Voice Clone": Mic2,
   "Sound Effects": Waves,
+  "Text to Music": Music2,
   "Audio Cleanup": WandSparkles,
 } as const;
 const mobileAudioModeOptions = visibleTabs.map((label) => ({
@@ -3372,6 +3371,137 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   );
 }
 
+function TextToMusicLayout() {
+  const { t, locale } = useLocale();
+  const [prompt, setPrompt] = useState("");
+  const [durationInput, setDurationInput] = useState("30");
+  const duration = Number(durationInput);
+  const validDuration = /^\d+$/.test(durationInput) && Number.isInteger(duration) && duration >= 10 && duration <= 360;
+  const [quote, setQuote] = useState<{ duration: number; cost: number } | null>(null);
+  const [quoteFailed, setQuoteFailed] = useState(false);
+  const [quoteRetry, setQuoteRetry] = useState(0);
+  const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [history, setHistory] = useState<AudioHistoryEntry[]>([]);
+  const [historyError, setHistoryError] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFormat, setPreviewFormat] = useState("mp3");
+  const [playing, setPlaying] = useState(false);
+  const [time, setTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const mounted = useRef(false);
+  const currentQuote = validDuration && quote?.duration === duration ? quote : null;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; audioRef.current?.pause(); if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    void listAudioHistory({ feature: "text-to-music", limit: AUDIO_HISTORY_LIMIT }).then((items) => {
+      if (active) { setHistory(items); setHistoryError(false); }
+    }).catch(() => { if (active) setHistoryError(true); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!validDuration) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setQuoteFailed(false);
+      void quoteTextToMusic(duration, controller.signal).then((result) => {
+        if (!controller.signal.aborted) setQuote({ duration, cost: result.creditCost });
+      }).catch(() => { if (!controller.signal.aborted) { setQuote(null); setQuoteFailed(true); } });
+    }, 350);
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [duration, validDuration, quoteRetry]);
+
+  const showAudio = (blob: Blob, contentType: string) => {
+    audioRef.current?.pause();
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    const url = URL.createObjectURL(blob);
+    objectUrlRef.current = url;
+    setPreviewUrl(url);
+    setPreviewFormat(contentType.includes("wav") ? "wav" : contentType.includes("ogg") ? "ogg" : "mp3");
+    setPlaying(false); setTime(0); setAudioDuration(0);
+  };
+  const generate = async () => {
+    if (!prompt.trim() || !validDuration || !currentQuote || status === "generating") return;
+    const requestId = startAudioProgress("audio-text-to-music");
+    setStatus("generating"); setError(null); setNotice(null);
+    try {
+      const result = await createTextToMusic({ prompt: prompt.trim(), durationSeconds: duration });
+      finishAudioProgress("audio-text-to-music", requestId);
+      if (!mounted.current) return;
+      showAudio(result.blob, result.contentType);
+      setStatus("ready");
+      if (!result.localHistoryId) setNotice(t("create.audio.music.historySaveError"));
+      void listAudioHistory({ feature: "text-to-music", limit: AUDIO_HISTORY_LIMIT }).then((items) => {
+        if (mounted.current) { setHistory(items); setHistoryError(false); }
+      }).catch(() => { if (mounted.current) setHistoryError(true); });
+    } catch (cause) {
+      failAudioProgress("audio-text-to-music", requestId);
+      if (mounted.current) { setStatus("error"); setError(cause instanceof Error && cause.message === "Insufficient credits" ? t("create.audio.error.insufficientCredits") : cause instanceof Error ? cause.message : t("create.audio.music.quoteError")); }
+    }
+  };
+  const openHistory = async (item: AudioHistoryEntry) => {
+    try { const result = await fetchAudioHistoryAudio(item.id); if (mounted.current) { showAudio(result.blob, result.contentType); setError(null); setNotice(null); } }
+    catch { if (mounted.current) setError(t("create.audio.music.historyError")); }
+  };
+  const download = () => {
+    if (!previewUrl) return;
+    const link = document.createElement("a"); link.href = previewUrl; link.download = `text-to-music.${previewFormat}`; link.click();
+  };
+  const progress = audioDuration > 0 ? Math.min(100, (time / audioDuration) * 100) : 0;
+
+  return (
+    <div className={styles.alternateLayout}>
+      <section className={`${styles.alternatePanel} ${styles.alternateFormPanel}`}>
+        <AlternateHeading eyebrow={t("create.audio.music.eyebrow")} title={t("create.audio.music.title")} description={t("create.audio.music.description")} icon={<Music2 size={24} />} />
+        <label className={styles.altTextField}>
+          <span>{t("create.audio.music.prompt")}</span>
+          <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={2000} disabled={status === "generating"} placeholder={t("create.audio.music.placeholder")} />
+        </label>
+        <p className={styles.musicPromptCount}>{prompt.length.toLocaleString()} / 2,000</p>
+      </section>
+      <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel}`}>
+        <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>{t("create.audio.music.eyebrow")}</span><h2>{t("create.audio.music.preview")}</h2></div></div>
+        {error && <p className={styles.podcastError} role="alert">{error}</p>}
+        {notice && <p className={styles.podcastError} role="status">{notice}</p>}
+        <PreviewWaveform audioUrl={previewUrl} progress={progress} isPlaying={playing} />
+        {previewUrl ? <>
+          <div className={styles.playerRow}>
+            <button type="button" className={styles.playButton} aria-label={t(playing ? "create.audio.a11y.pause" : "create.audio.a11y.play")} onClick={() => { const audio = audioRef.current; if (audio) { if (audio.paused) void audio.play().catch(() => setPlaying(false)); else audio.pause(); } }}>{playing ? <Pause size={20} /> : <Play size={20} fill="currentColor" />}</button>
+            <span className={styles.timeLabel}>{formatSceneSeconds(time)} / {formatSceneSeconds(audioDuration)}</span>
+            <input className={styles.scrubber} type="range" min="0" max="100" value={progress} aria-label={t("create.audio.a11y.audioProgress")} onChange={(event) => { if (audioRef.current && audioDuration) audioRef.current.currentTime = Number(event.target.value) / 100 * audioDuration; }} />
+          </div>
+          <audio ref={audioRef} src={previewUrl} preload="metadata" onLoadedMetadata={(event) => setAudioDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} />
+        </> : <p className={styles.musicEmpty}>{t("create.audio.music.empty")}</p>}
+        <div className={styles.altActionRow}><button type="button" className={styles.altPrimaryButton} disabled={!previewUrl} onClick={download}><Download size={15} />{t("create.audio.music.download")}</button></div>
+        <div className={styles.musicHistory}>
+          <h3><History size={15} />{t("create.audio.music.history")}</h3>
+          {historyError && <p className={styles.podcastError} role="status">{t("create.audio.music.historyError")}</p>}
+          <div className={styles.historyList}>{history.length ? history.map((item) => <button type="button" key={item.id} className={styles.historyItem} onClick={() => void openHistory(item)}><Play size={14} /><span className={styles.musicHistoryLabel}>{item.label}</span><small>{formatAudioHistoryDate(item.createdAt, locale)}</small></button>) : <div className={styles.historyEmpty}>{t("create.audio.music.historyEmpty")}</div>}</div>
+        </div>
+      </section>
+      <aside className={styles.alternateSettings}>
+        <div className={styles.altPanelHeader}><h2>{t("create.audio.settings")}</h2><Settings2 size={20} /></div>
+        <div className={`${styles.altField} ${styles.musicModelField}`}><span>{t("create.audio.music.model")}</span><div className={styles.musicModel}>Sonilo Text-to-Music</div></div>
+        <label className={styles.altField}><span>{t("create.audio.music.duration")}</span><input className={styles.musicDurationInput} type="number" min="10" max="360" step="1" value={durationInput} disabled={status === "generating"} onChange={(event) => setDurationInput(event.target.value)} aria-invalid={!validDuration} /></label>
+        <p className={validDuration ? styles.musicHint : styles.podcastError}>{t(validDuration ? "create.audio.music.durationHint" : "create.audio.music.invalidDuration")}</p>
+        <div data-mobile-action-dock className={styles.mobileActionDock}>
+          <div className={styles.creditEstimate}><div className={styles.creditEstimateHeader}><strong>{t("create.audio.estimatedCredits")} <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} /></strong><b>{currentQuote ? t("create.audio.creditsAmount", { amount: formatCreditAmount(currentQuote.cost) }) : quoteFailed ? t("create.audio.music.quoteError") : validDuration ? t("create.audio.calculating") : ""}</b></div></div>
+          {quoteFailed && <button type="button" className={styles.altSecondaryButton} onClick={() => setQuoteRetry((value) => value + 1)}>{t("create.audio.music.tryAgain")}</button>}
+          <button type="button" className={styles.altGenerateButton} onClick={() => void generate()} disabled={!prompt.trim() || !validDuration || !currentQuote || status === "generating"}>{t(status === "generating" ? "create.audio.music.generating" : "create.audio.music.generate")} <Sparkles size={16} /></button>
+          <p className={styles.securityNote}><LockKeyhole size={11} /> {t("create.audio.privateSecure")}</p>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 function formatAudioFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -3921,13 +4051,13 @@ export function AudioGenerationPage() {
   const isModelLockedToClonedVoice = voiceMode === "cloned" && Boolean(clonedVoiceModelKey);
   // MiniMax is only used through cloned voices, so the tone-voice list offers the other models.
   const toneVoiceModels = availableModels.filter((model) => !MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key));
-  const selectableModels = toneVoiceModels.length ? toneVoiceModels : availableModels;
+  const selectableModels = toneVoiceModels;
   const selectedModel =
     isModelLockedToClonedVoice && clonedVoiceModelKey
       ? clonedVoiceModelKey
       : selectableModels.some((model) => model.key === chosenModel)
         ? chosenModel
-        : (selectableModels[0]?.key ?? chosenModel);
+        : (selectableModels[0]?.key ?? "");
   const [modelLoadState, setModelLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [selectedVoice, setSelectedVoice] = useState("");
   const [availableVoices, setAvailableVoices] = useState<AudioVoice[]>([]);
@@ -3953,10 +4083,6 @@ export function AudioGenerationPage() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(78);
-  const [backgroundMusic, setBackgroundMusic] = useState(false);
-  const [backgroundMusicPreset, setBackgroundMusicPreset] = useState("");
-  const [backgroundMusicPresets, setBackgroundMusicPresets] = useState<AudioBackgroundMusic[]>([]);
-  const [backgroundMusicLoadState, setBackgroundMusicLoadState] = useState<"loading" | "ready" | "error">("ready");
   const [creditEstimate, setCreditEstimate] = useState<AudioCreditQuote | null>(null);
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
@@ -4054,29 +4180,6 @@ export function AudioGenerationPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "Text to Speech" || !backgroundMusic || backgroundMusicPresets.length > 0) return undefined;
-    let cancelled = false;
-    void listAudioBackgroundMusic()
-      .then((items) => {
-        if (cancelled) return;
-        setBackgroundMusicPresets(items);
-        setBackgroundMusicPreset((current) =>
-          items.some((preset) => preset.key === current) ? current : (items[0]?.key ?? ""),
-        );
-        setBackgroundMusicLoadState("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setBackgroundMusicPresets([]);
-        setBackgroundMusicPreset("");
-        setBackgroundMusicLoadState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, backgroundMusic, backgroundMusicPresets.length]);
-
-  useEffect(() => {
     if (activeTab !== "Text to Speech") return undefined;
     let cancelled = false;
     const timer = window.setTimeout(
@@ -4142,15 +4245,6 @@ export function AudioGenerationPage() {
     },
     [updatePreviewingVoiceKey],
   );
-
-  const toggleBackgroundMusic = () => {
-    if (backgroundMusic) {
-      setBackgroundMusic(false);
-      return;
-    }
-    if (backgroundMusicPresets.length === 0) setBackgroundMusicLoadState("loading");
-    setBackgroundMusic(true);
-  };
 
   useEffect(() => {
     if (activeTab !== "Text to Speech") return undefined;
@@ -4450,8 +4544,6 @@ export function AudioGenerationPage() {
     setSpeed(0.95);
     setPitch(0);
     setSynthVolume(1);
-    setBackgroundMusic(false);
-    setBackgroundMusicPreset(backgroundMusicPresets[0]?.key ?? "");
     setAudioScenes(defaultAudioScenes.map((scene) => ({ ...scene, text: "", voice: availableVoices[0]?.key ?? "" })));
     setSelectedSceneId(defaultAudioScenes[0]!.id);
     setSelectedScene(defaultAudioScenes[0]!.id);
@@ -4496,8 +4588,6 @@ export function AudioGenerationPage() {
               speed,
               pronunciationHint: pronunciation.trim() || undefined,
               pauseSeconds: 0.25,
-              backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
-              backgroundMusicKey: backgroundMusicPreset || undefined,
             },
           }
         : {
@@ -4511,8 +4601,6 @@ export function AudioGenerationPage() {
               ...(tone ? { tone } : {}),
               speed,
               pronunciationHint: pronunciation.trim() || undefined,
-              backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
-              backgroundMusicKey: backgroundMusicPreset || undefined,
             },
           }
       : null;
@@ -4672,8 +4760,6 @@ export function AudioGenerationPage() {
             }
           : {}),
         pronunciationHint: pronunciation.trim() || undefined,
-        backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
-        backgroundMusicKey: backgroundMusicPreset || undefined,
         idempotencyKey: createAudioIdempotencyKey(),
       });
       setGeneratedAudioResult(result, `Generation ${historySequenceRef.current + 1}`, selectedVoice);
@@ -4735,8 +4821,6 @@ export function AudioGenerationPage() {
           : {}),
         pronunciationHint: pronunciation.trim() || undefined,
         pauseSeconds: 0.25,
-        backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
-        backgroundMusicKey: backgroundMusicPreset || undefined,
         idempotencyKey: createAudioIdempotencyKey(),
       });
       setGeneratedAudioResult(result, `Scenes · ${scenesToGenerate.length} scenes`, scenesToGenerate[0]!.voice, {
@@ -5459,7 +5543,9 @@ export function AudioGenerationPage() {
                       <div className={styles.fixedVoiceModel}>
                         {availableModels.find((model) => model.key === selectedModel)?.name ??
                           selectableModels[0]?.name ??
-                          "ElevenLabs · Eleven v3"}
+                          (modelLoadState === "loading"
+                            ? (locale === "th" ? "กำลังโหลดโมเดล..." : "Loading model...")
+                            : t("create.audio.validation.noModel"))}
                       </div>
                     )}
                   </div>
@@ -5478,7 +5564,7 @@ export function AudioGenerationPage() {
                       ))}
                     </div>
                   </div>
-                  <div className={styles.settingBlock}>
+                  {!['eleven_v4', 'elevenlabs/eleven-v4'].includes(selectedModel.toLowerCase()) && <div className={styles.settingBlock}>
                     <div className={styles.speedHeader}>
                       <FieldLabel>{t("create.audio.speechSpeed")}</FieldLabel>
                       <strong>{speed.toFixed(2)}x</strong>
@@ -5497,7 +5583,7 @@ export function AudioGenerationPage() {
                       <span>1x</span>
                       <span>2x</span>
                     </div>
-                  </div>
+                  </div>}
                   {supportsMiniMaxSpeechTuning(selectedModel) ? (
                     <>
                       <div className={styles.settingBlock}>
@@ -5614,30 +5700,6 @@ export function AudioGenerationPage() {
                       </div>
                     </>
                   ) : null}
-                  <div className={styles.settingBlock}>
-                    <div className={styles.musicHeader}>
-                      <FieldLabel>{t("create.audio.autoBackgroundMusic")}</FieldLabel>
-                      <button
-                        type="button"
-                        className={backgroundMusic ? styles.toggleOn : styles.toggleOff}
-                        onClick={toggleBackgroundMusic}
-                        aria-pressed={backgroundMusic}
-                        disabled={backgroundMusicLoadState === "loading"}
-                      >
-                        <span />
-                      </button>
-                    </div>
-                    {backgroundMusic ? (
-                      <SelectField
-                        label=""
-                        value={backgroundMusicPreset}
-                        onChange={setBackgroundMusicPreset}
-                        disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}
-                        loading={backgroundMusicLoadState === "loading"}
-                        options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))}
-                      />
-                    ) : null}
-                  </div>
                   <div data-mobile-action-dock className={styles.mobileActionDock}>
                     <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}>
                       <div className={styles.creditEstimateHeader}>
@@ -5709,6 +5771,8 @@ export function AudioGenerationPage() {
               />
             ) : activeTab === "Sound Effects" ? (
               <SoundEffectsLayout onHistorySaved={persistGeneratedAudio} />
+            ) : activeTab === "Text to Music" ? (
+              <TextToMusicLayout />
             ) : (
               <AudioCleanupLayout />
             )}

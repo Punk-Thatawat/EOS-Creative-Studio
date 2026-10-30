@@ -48,7 +48,6 @@ import {
   TrendingUp,
   Type,
   Video,
-  VolumeX,
   Zap,
   Upload,
   User,
@@ -1057,6 +1056,8 @@ function inputImagesOf(t?: Template): string[] {
 function referenceVideoOf(t?: Template): string | undefined {
   const own = t?.settings?.sourceVideo;
   if (typeof own === "string" && valid(own)) return own;
+  // A video-edit template's preview is the result, not the source to edit.
+  if (t?.settings?.feature === "video-swap" || t?.settings?.variant === "swap") return undefined;
   return t && valid(t.previewUrl) ? t.previewUrl : undefined;
 }
 /** Which of the two motion-mode tools a template was made with. */
@@ -1065,7 +1066,7 @@ const variantOf = (t?: Template): "motion" | "swap" => (t?.settings?.feature ===
  * Reads the input images of a template as files, to send again like the visitor's own: the kept ones on this site and the
  * creator's storage links (both can be read from the page). What cannot be read (an expired link) is left out.
  */
-async function loadInputFiles(addresses: string[]): Promise<File[]> {
+async function loadInputFiles(addresses: string[]): Promise<(File | null)[]> {
   const files = await Promise.all(
     addresses.map(async (address, index) => {
       try {
@@ -1079,22 +1080,25 @@ async function loadInputFiles(addresses: string[]): Promise<File[]> {
       }
     }),
   );
-  return files.filter((file): file is File => file !== null);
+  return files;
 }
 /**
  * The images attached to a panel, up to a limit. A template that has its own input images puts them here when it is opened
  * (and takes them away again when another one is), while the visitor's own images stay.
  */
-function useTemplateImages(t: Template | undefined, limit: number, enabled: boolean) {
+function useTemplateImages(t: Template | undefined, limit: number, enabled: boolean, fixedSlots = false) {
   const { c } = useStudioCopy();
   const [images, setImages] = useState<AttachedImage[]>([]);
   const [error, setError] = useState<string | undefined>();
+  const [readyKey, setReadyKey] = useState("");
   const imagesRef = useRef(images);
   useEffect(() => {
     imagesRef.current = images;
   }, [images]);
   useEffect(() => () => imagesRef.current.forEach((image) => URL.revokeObjectURL(image.url)), []);
   const addresses = enabled ? inputImagesOf(t).join("\n") : "";
+  const requestKey = JSON.stringify([addresses, limit, enabled, fixedSlots]);
+  const loadError = c("templates.attach.templateLoadFailed");
   useEffect(() => {
     let alive = true;
     void loadInputFiles(addresses ? addresses.split("\n") : []).then((files) => {
@@ -1102,17 +1106,30 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
       const before = imagesRef.current;
       const own = before.filter((image) => !image.fromTemplate);
       before.filter((image) => image.fromTemplate).forEach((image) => URL.revokeObjectURL(image.url));
-      const loaded = files.slice(0, Math.max(0, limit - own.length)).map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), fromTemplate: true }));
-      setImages([...own, ...loaded]);
+      if (files.some((file) => file === null)) {
+        imagesRef.current = own;
+        setImages(own);
+        setError(loadError);
+        setReadyKey(requestKey);
+        return;
+      }
+      const loaded = files.filter((file): file is File => file !== null).slice(0, Math.max(0, limit - own.length)).map((file, index) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), fromTemplate: true, ...(fixedSlots ? { slot: index } : {}) }));
+      // Template references precede images added by the visitor, matching @Image numbering.
+      const next = [...loaded, ...own];
+      imagesRef.current = next;
+      setImages(next);
+      setError(undefined);
+      setReadyKey(requestKey);
     });
     return () => {
       alive = false;
     };
-  }, [addresses, limit]);
+  }, [addresses, limit, loadError, requestKey, fixedSlots]);
   const attach = (list: FileList | null) => {
     if (!list) return;
     // A panel that takes one image swaps it for the new one.
-    const next = limit === 1 ? [] : [...images];
+    const current = imagesRef.current;
+    const next = limit === 1 && !fixedSlots ? [] : [...current];
     let problem: string | undefined;
     for (const file of Array.from(list)) {
       if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
@@ -1120,22 +1137,44 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
         continue;
       }
       if (next.length >= limit) {
-        problem = c("templates.attach.tooMany");
+        problem = fixedSlots ? c("templates.motion.referenceLimit", { count: limit }) : c("templates.attach.tooMany");
         break;
       }
-      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) });
+      const slot = fixedSlots ? Array.from({ length: limit }, (_, index) => index).find((index) => !next.some((image) => image.slot === index)) : undefined;
+      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(slot !== undefined ? { slot } : {}) });
     }
-    images.filter((image) => !next.includes(image)).forEach((image) => URL.revokeObjectURL(image.url));
+    if (fixedSlots) next.sort((a, b) => (a.slot ?? limit) - (b.slot ?? limit));
+    current.filter((image) => !next.includes(image)).forEach((image) => URL.revokeObjectURL(image.url));
+    imagesRef.current = next;
     setImages(next);
     setError(problem);
   };
   const detach = (id: string) => {
-    const gone = images.find((image) => image.id === id);
+    const gone = imagesRef.current.find((image) => image.id === id);
     if (gone) URL.revokeObjectURL(gone.url);
-    setImages(images.filter((image) => image.id !== id));
+    const next = imagesRef.current.filter((image) => image.id !== id);
+    imagesRef.current = next;
+    setImages(next);
     setError(undefined);
   };
-  return { images, attach, detach, error };
+  const replace = (id: string, file: File | undefined) => {
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setError(c("templates.attach.unsupported"));
+      return;
+    }
+    const current = imagesRef.current;
+    const index = current.findIndex((image) => image.id === id);
+    if (index < 0) return;
+    const previous = current[index]!;
+    const next = [...current];
+    next[index] = { id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(previous.slot !== undefined ? { slot: previous.slot } : {}) };
+    URL.revokeObjectURL(previous.url);
+    imagesRef.current = next;
+    setImages(next);
+    setError(undefined);
+  };
+  return { images, attach, detach, replace, error, loading: readyKey !== requestKey };
 }
 
 /**
@@ -1212,14 +1251,15 @@ function useModelPicker(feature: string, enabled = true) {
     return wanted;
   };
   // Where the model takes reference images, if it does: the parameter name and whether it wants a list.
-  const referenceOf = (id: string): { parameter: string; list: boolean } | null => {
+  const referenceOf = (id: string): { parameter: string; list: boolean; maxImages?: number } | null => {
     const capabilities = models.find((m) => m.model === id)?.capabilities;
     const properties = capabilities?.apiSchema?.request_schema?.properties ?? {};
     const parameter =
       capabilities?.referenceImagesParameter ??
       capabilities?.imageParameter ??
       Object.keys(properties).find((key) => ["referenceImage", "reference_image", "referenceImages", "reference_images", "image", "image_url"].includes(key));
-    return parameter ? { parameter, list: properties[parameter]?.type === "array" } : null;
+    const maxItems = parameter ? properties[parameter]?.maxItems : undefined;
+    return parameter ? { parameter, list: properties[parameter]?.type === "array", ...(typeof maxItems === "number" ? { maxImages: maxItems } : {}) } : null;
   };
   // The lengths (in seconds) the model takes: its own list, or the usual steps between its shortest and longest.
   const durationsOf = (id: string): number[] => {
@@ -1238,7 +1278,7 @@ function useModelPicker(feature: string, enabled = true) {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.mode;
     return Array.isArray(property?.enum) ? property.enum.filter((value): value is string => value === "person" || value === "object" || value === "background") : [];
   };
-  return { options, ready, preferredModel, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, referenceOf, modesOf, labelOf };
+  return { options, ready, preferredModel, defaultModel: models.find((model) => model.isDefault)?.model ?? models[0]?.model ?? "", qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, referenceOf, modesOf, labelOf };
 }
 
 /**
@@ -1278,15 +1318,15 @@ function useWorkflowQuote(
  * What the creator would charge for the chosen model and quality, from its own quote endpoint. Null until a model is picked or
  * while the answer is on its way (or when the quote cannot be given), so the button then shows no price rather than a guess.
  */
-function useCreditQuote(input: Pick<DirectVideoQuoteInput, "feature" | "model" | "aspectRatio"> & { resolution?: string; duration?: number }): number | null {
-  const { feature, model, resolution, duration, aspectRatio } = input;
-  const key = [feature, model, resolution, duration, aspectRatio].join("|");
+function useCreditQuote(input: Pick<DirectVideoQuoteInput, "feature" | "model" | "aspectRatio" | "sourceVideo" | "referenceImageCount"> & { resolution?: string; duration?: number; retry?: number }): number | null {
+  const { feature, model, resolution, duration, aspectRatio, sourceVideo, referenceImageCount, retry } = input;
+  const key = [feature, model, resolution, duration, aspectRatio, sourceVideo, referenceImageCount, retry].join("|");
   const [quote, setQuote] = useState<{ key: string; credits: number } | null>(null);
   useEffect(() => {
     if (!model) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      quoteDirectVideoGeneration({ feature, model, resolution, duration, aspectRatio }, controller.signal)
+      quoteDirectVideoGeneration({ feature, model, resolution, duration, aspectRatio, sourceVideo, referenceImageCount }, controller.signal)
         .then((result) => {
           if (typeof result.creditCost === "number") setQuote({ key, credits: result.creditCost });
         })
@@ -1296,12 +1336,12 @@ function useCreditQuote(input: Pick<DirectVideoQuoteInput, "feature" | "model" |
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [key, feature, model, resolution, duration, aspectRatio]);
+  }, [key, feature, model, resolution, duration, aspectRatio, sourceVideo, referenceImageCount]);
   return quote?.key === key ? quote.credits : null;
 }
 const creditText = (credits: number | null) => (credits === null ? "" : String(Math.round(credits * 10) / 10));
 
-function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void }) {
+function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () => void; incoming?: { key: number; templateId: string; files: File[] } | null }) {
   const { c, locale } = useStudioCopy();
   // "Motion transfer" moves the clip's motion onto a character; "Objects swap" puts what the images show in place of a person,
   // an object or the background of the clip. A template opens in the tool it was made with.
@@ -1312,7 +1352,19 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
     setVariant(variantOf(t));
   }
   const swapping = variant === "swap";
-  const { images, attach, detach, error: attachError } = useTemplateImages(t, swapping ? 4 : 1, true);
+  const configuredImages = swapping && t ? inputImagesOf(t).length : 0;
+  const fixedImageSlots = swapping && configuredImages > 0;
+  const imageLimit = swapping ? Math.min(configuredImages || 4, 4) : 1;
+  const { images, attach, detach, replace, error: attachError, loading: imagesLoading } = useTemplateImages(t, imageLimit, true, fixedImageSlots);
+  const handledIncoming = useRef<number | null>(null);
+  useEffect(() => {
+    if (!incoming || incoming.templateId !== t?.id || handledIncoming.current === incoming.key) return;
+    handledIncoming.current = incoming.key;
+    const transfer = new DataTransfer();
+    incoming.files.forEach((file) => transfer.items.add(file));
+    attach(transfer.files);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- each batch is transferred once
+  }, [incoming, t?.id]);
   const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
   // Where the background comes from (scene control), and which source the character's orientation follows.
   // A motion video of the visitor's own (3-30 seconds); it takes the place of the template's clip.
@@ -1323,45 +1375,96 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
   const [orientation, setOrientation] = useState<"video" | "image">("video");
   // What was picked in each tool; until something is picked, the model, quality and swap target of the template stand.
-  const [picked, setPicked] = useState<Record<"motion" | "swap", { model: string; quality: string; swapMode: string }>>({
-    motion: { model: "", quality: "", swapMode: "" },
-    swap: { model: "", quality: "", swapMode: "" },
+  const [picked, setPicked] = useState<Record<"motion" | "swap", { quality: string; swapMode: string; duration: number }>>({
+    motion: { quality: "", swapMode: "", duration: 0 },
+    swap: { quality: "", swapMode: "", duration: 0 },
   });
   const motionPicker = useModelPicker("motion-transfer");
   const swapPicker = useModelPicker("video-swap");
   const picker = swapping ? swapPicker : motionPicker;
   const mine = picked[variant];
   const own = t && variantOf(t) === variant ? (t.settings ?? {}) : {};
-  const model = mine.model || (typeof own.model === "string" && picker.options.some((option) => option.id === own.model) ? own.model : "");
+  const templateModel = typeof own.model === "string" && picker.options.some((option) => option.id === own.model) ? own.model : "";
+  const h3Template = own.model === "minimax/h3-lite/reference-to-video" || own.model === "wavespeed-ai/minimax-h3/reference-to-video";
+  // Never silently substitute a more expensive model for an H3 Lite trial template.
+  const model = h3Template ? templateModel : picker.preferredModel || templateModel || picker.defaultModel;
+  const isH3Open = swapping && model === "wavespeed-ai/minimax-h3/reference-to-video";
+  const isH3Reference = isH3Open || (swapping && model === "minimax/h3-lite/reference-to-video");
   const qualityChoices = picker.qualitiesOf(model).length ? picker.qualitiesOf(model) : ["720p", "1080p"];
   const ownQuality = [own.quality, own.resolution].find((value): value is string => typeof value === "string");
-  const quality = mine.quality || (ownQuality && qualityChoices.includes(ownQuality) ? ownQuality : "");
+  const quality = mine.quality && qualityChoices.includes(mine.quality) ? mine.quality : (ownQuality && qualityChoices.includes(ownQuality) ? ownQuality : isH3Reference ? "480p" : "");
+  const duration = isH3Reference ? picker.durationFor(model, mine.duration || (typeof own.duration === "number" ? own.duration : 6)) : undefined;
+  const aspectRatio = isH3Reference ? (typeof own.aspectRatio === "string" ? own.aspectRatio : "9:16") : undefined;
   const swapModes = swapping ? picker.modesOf(model) : [];
   const swapMode = mine.swapMode || (typeof own.swapMode === "string" && swapModes.includes(own.swapMode) ? own.swapMode : (swapModes[0] ?? ""));
   const pick = (patch: Partial<typeof mine>) => setPicked({ ...picked, [variant]: { ...mine, ...patch } });
-  const credits = useCreditQuote({ feature: swapping ? "video-swap" : "motion-transfer", model, resolution: quality || undefined });
   const inputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replaceTargetRef = useRef<string | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const reference = referenceVideoOf(t);
   const motionSrc = ownMotion?.url ?? reference;
+  const [preparedVideo, setPreparedVideo] = useState<{ source: string; url?: string; failed?: boolean } | null>(null);
+  const [videoRetry, setVideoRetry] = useState(0);
+  useEffect(() => {
+    if (!swapping || !model || !motionSrc) return;
+    let alive = true;
+    const prepare = async () => {
+      try {
+        let url = motionSrc;
+        if (ownMotion) {
+          url = await uploadImageAsset(ownMotion.file, { purpose: "content", feature: "motion-transfer" });
+        } else if (!/^https?:\/\//i.test(url)) {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("Cannot load source video");
+          const blob = await response.blob();
+          url = await uploadImageAsset(new File([blob], `${t?.slug ?? "motion"}.${blob.type.includes("webm") ? "webm" : "mp4"}`, { type: blob.type || "video/mp4" }), { purpose: "content", feature: "motion-transfer" });
+        }
+        if (alive) setPreparedVideo({ source: motionSrc, url });
+      } catch {
+        if (alive) setPreparedVideo({ source: motionSrc, failed: true });
+      }
+    };
+    void prepare();
+    return () => { alive = false; };
+  }, [swapping, model, motionSrc, ownMotion, t?.slug, videoRetry]);
+  const readyVideo = swapping && preparedVideo && preparedVideo.source === motionSrc ? preparedVideo.url : undefined;
+  const videoPrepareFailed = swapping && preparedVideo && preparedVideo.source === motionSrc && preparedVideo.failed;
+  const [quoteRetry, setQuoteRetry] = useState(0);
+  const credits = useCreditQuote({ feature: swapping ? "video-swap" : "motion-transfer", model: swapping && (!readyVideo || (isH3Open && images.length === 0)) ? "" : model, resolution: quality || undefined, duration, aspectRatio, ...(readyVideo ? { sourceVideo: readyVideo } : {}), ...(isH3Open && images.length ? { referenceImageCount: images.length } : {}), retry: quoteRetry });
   const qualityOptions: FlyoutOption[] = qualityChoices.map((label) => ({ id: label, label }));
   // A model with a single image field uses the first image only.
   const firstOnly = swapping && images.length > 1 && !!model && !swapPicker.referenceOf(model)?.list;
+  const modelImageLimit = swapping && model ? swapPicker.referenceOf(model)?.maxImages : undefined;
+  const tooManyForModel = typeof modelImageLimit === "number" && images.length > modelImageLimit;
   // Generates right here: the images and the clip go up as files, then the same request the creator page sends; the app's
   // progress panel follows the job to the result (it names a swap like a motion transfer).
   const generate = async () => {
+    if (imagesLoading || attachError) return setSending({ state: "error", message: attachError ?? c("templates.attach.loading") });
+    if (configuredImages > 4) return setSending({ state: "error", message: c("templates.motion.referenceConfigurationInvalid") });
     if (!images.length) return setSending({ state: "error", message: c(swapping ? "templates.swap.needImage" : "templates.motion.needCharacter") });
-    if (!swapping && !ownMotion && !reference) return setSending({ state: "error", message: c("templates.motion.needReference") });
-    if (swapping && (!t || !reference)) return setSending({ state: "error", message: c("templates.motion.needReference") });
-    if (!model) return setSending({ state: "error", message: c("templates.composer.pickModel") });
+    if (fixedImageSlots && images.length < imageLimit) return setSending({ state: "error", message: c("templates.motion.referenceRequired", { count: imageLimit }) });
+    if (!ownMotion && !reference) return setSending({ state: "error", message: c("templates.motion.needReference") });
+    if (!model) return setSending({ state: "error", message: c(swapping ? "templates.motion.serviceUnavailable" : "templates.motion.modelUnavailable") });
     if (!quality) return setSending({ state: "error", message: c("templates.composer.pickQuality") });
+    if (swapping && !readyVideo) return setSending({ state: "error", message: c("templates.motion.videoPreparing") });
+    if (swapping && credits === null) { setQuoteRetry((value) => value + 1); return setSending({ state: "error", message: c("templates.motion.quoteUnavailable") }); }
+    if (firstOnly) return setSending({ state: "error", message: c("templates.swap.multipleUnsupported") });
+    if (tooManyForModel) return setSending({ state: "error", message: c("templates.swap.modelImageLimit", { count: modelImageLimit ?? 0 }) });
+    const instruction = (swapping ? (t?.prompt ?? "") : (promptRef.current?.value ?? ""))
+      .replace(/\[describe the first person in the video\]/gi, "the first person in the video")
+      .replace(/\[describe the second person in the video\]/gi, "the second person in the video")
+      .trim();
+    if (/\[describe [^\]]+\]/i.test(instruction)) return setSending({ state: "error", message: c(swapping ? "templates.motion.templatePromptIncomplete" : "templates.motion.completePrompt") });
     const requestId = crypto.randomUUID();
     setSending({ state: "busy" });
     emitGenerationSubmitting({ feature: "motion-transfer", requestId });
     try {
       const uploaded = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "motion-transfer" })));
       let video: string = reference ?? "";
-      if (!swapping && ownMotion) {
+      if (swapping && readyVideo) {
+        video = readyVideo;
+      } else if (ownMotion) {
         video = await uploadImageAsset(ownMotion.file, { purpose: "content", feature: "motion-transfer" });
       } else if (!/^https?:\/\//i.test(video)) {
         const response = await fetch(video);
@@ -1369,7 +1472,6 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
         const blob = await response.blob();
         video = await uploadImageAsset(new File([blob], `${t?.slug ?? "motion"}.${blob.type.includes("webm") ? "webm" : "mp4"}`, { type: blob.type || "video/mp4" }), { purpose: "content", feature: "motion-transfer" });
       }
-      const instruction = (promptRef.current?.value ?? "").trim();
       const created = swapping
         ? await createVideoSwapGeneration({
             sourceVideo: video,
@@ -1377,6 +1479,7 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
             inputImages: uploaded,
             model,
             resolution: quality,
+            ...(isH3Reference ? { duration, aspectRatio } : {}),
             ...(t ? { templateSlug: t.slug } : {}),
             ...(swapMode ? { swapMode: swapMode as "person" | "object" | "background" } : {}),
             ...(instruction ? { prompt: instruction } : {}),
@@ -1407,42 +1510,33 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
   };
   return (
     <>
-      <div className={s.switch} role="group">
-        {(
-          [
-            ["motion", "templates.composer.motionTransfer"],
-            ["swap", "templates.composer.objectsSwap"],
-          ] as const
-        ).map(([id, key]) => (
-          <button key={id} type="button" aria-pressed={variant === id} onClick={() => { setVariant(id); setSending({ state: "idle" }); }}>
-            {c(key)}
-          </button>
-        ))}
-      </div>
       {swapping ? (
-        <div className={s.motionAssets}>
-          <div className={s.motionReference}>
-            {t && valid(t.thumbnailUrl) ? <Image src={t.thumbnailUrl} alt={name(t, locale)} fill unoptimized sizes="140px" className={s.poster} /> : <Video size={22} />}
-            <span>{t ? (swapping ? c("templates.swap.videoLabel") : name(t, locale)) : c("templates.motion.reference")}</span>
-            <button type="button" aria-label={c("templates.card.previewAria", { name: t ? name(t, locale) : c("templates.motion.reference") })} onClick={() => t && window.open(reference || t.thumbnailUrl, "_blank", "noopener,noreferrer")}><Expand size={13} /></button>
+        <div className={s.motionMediaGroup}>
+          <div className={s.motionMediaHeading}>
+            <span><Video size={15} aria-hidden="true" />{c("templates.motion.sourceVideoLabel")}</span>
           </div>
-          <button type="button" className={s.motionCharacter} onClick={() => inputRef.current?.click()}>
-            {images[0] ? (
-              <Image src={images[0].url} alt={c("templates.motion.character")} fill unoptimized sizes="140px" className={s.poster} />
-            ) : (
-              <>
-                <Plus size={20} />
-                <strong>{c(swapping ? "templates.swap.addImages" : "templates.motion.addCharacter")}</strong>
-                <small>{c(swapping ? "templates.swap.imagesHint" : "templates.motion.characterHint")}</small>
-              </>
-            )}
-          </button>
+          <div className={s.motionBoxWrap}>
+            <button type="button" className={`${s.motionBox} ${motionSrc ? `${s.motionBoxFilled} ${s.motionVideoBox} ${s.motionVideoEditBox}` : ""}`} aria-label={motionSrc ? c("templates.motion.changeVideo") : c("templates.motion.addMotion")} onClick={() => motionInputRef.current?.click()}>
+              {motionSrc ? (
+                <span className={s.motionTilt}>
+                  <video key={motionSrc} src={motionSrc} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
+                </span>
+              ) : (
+                <>
+                  <i className={s.motionBoxIcon} aria-hidden="true"><Video size={20} /></i>
+                  <strong>{c("templates.motion.addMotion")}</strong>
+                  <small>{c("templates.motion.motionHint")}</small>
+                </>
+              )}
+            </button>
+            {ownMotion && <button type="button" className={s.motionBoxClear} aria-label={c("templates.attach.remove")} onClick={() => setOwnMotion(null)}><X size={13} aria-hidden="true" /></button>}
+          </div>
         </div>
       ) : (
         <div className={s.motionStack}>
           {/* As in a motion library: the motion to copy, then the character, each in its own box. */}
           <div className={s.motionBoxWrap}>
-            <button type="button" className={`${s.motionBox} ${motionSrc ? s.motionBoxFilled : ""}`} onClick={() => motionInputRef.current?.click()}>
+            <button type="button" className={`${s.motionBox} ${motionSrc ? `${s.motionBoxFilled} ${s.motionVideoBox}` : ""}`} onClick={() => motionInputRef.current?.click()}>
               {motionSrc ? (
                 <span className={s.motionTilt}>
                   <video key={motionSrc} src={motionSrc} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
@@ -1523,29 +1617,46 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
           event.currentTarget.value = "";
         }}
       />
+      <input
+        ref={replaceInputRef}
+        className={s.visuallyHidden}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        onChange={(event) => {
+          if (replaceTargetRef.current) replace(replaceTargetRef.current, event.currentTarget.files?.[0]);
+          replaceTargetRef.current = null;
+          setSending({ state: "idle" });
+          event.currentTarget.value = "";
+        }}
+      />
       {(swapping || attachError || images.some((image) => image.fromTemplate)) && (
-        <div className={s.motionThumbs}>
-          {swapping && images.map((image) => (
-            <span key={image.id} className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
-              <Image src={image.url} alt={image.file.name} fill unoptimized sizes="46px" />
-              <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
-                <X size={11} aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-          {swapping && images.length > 0 && images.length < 4 && (
-            <button type="button" className={s.slotAdd} onClick={() => inputRef.current?.click()} aria-label={c("templates.attach.add")}>
-              <Plus size={18} aria-hidden="true" />
-            </button>
-          )}
-          <small className={attachError ? s.sendError : undefined} role={attachError ? "alert" : undefined}>
-            {attachError ?? (firstOnly ? c("templates.swap.firstOnly") : images.some((image) => image.fromTemplate) ? c("templates.attach.fromTemplate") : "")}
+        <div className={`${s.motionThumbs} ${swapping ? s.motionReferenceGroup : ""}`}>
+          {swapping && <>
+            <div className={s.motionMediaHeading}><span><ImagePlus size={15} aria-hidden="true" />{c("templates.motion.referenceImages")}</span><small>{images.length} / {imageLimit}</small></div>
+            <div className={s.motionReferenceList}>
+              {images.map((image, index) => (
+                <span key={image.id} className={s.motionReferenceThumb} title={image.file.name}>
+                  <button type="button" className={s.motionReferenceEdit} aria-label={c("templates.motion.replaceReference", { number: (image.slot ?? index) + 1 })} onClick={() => { replaceTargetRef.current = image.id; replaceInputRef.current?.click(); }}>
+                    <Image src={image.url} alt={c("templates.motion.referenceImage", { number: (image.slot ?? index) + 1 })} fill unoptimized sizes="64px" />
+                    <span className={s.motionReferenceEditLabel}>{c("templates.motion.replaceReferenceShort")}</span>
+                  </button>
+                  <span className={s.motionReferenceNumber}>{(image.slot ?? index) + 1}</span>
+                  <button type="button" className={s.motionReferenceRemove} aria-label={c("templates.motion.removeReference", { number: (image.slot ?? index) + 1 })} onClick={() => detach(image.id)}><X size={12} aria-hidden="true" /></button>
+                </span>
+              ))}
+              {images.length < imageLimit && <button type="button" className={s.motionReferenceAdd} disabled={imagesLoading} onClick={() => inputRef.current?.click()} aria-label={c("templates.attach.add")}><Plus size={18} aria-hidden="true" /><span>{c("templates.motion.addReference")}</span></button>}
+            </div>
+          </>}
+          <small className={attachError || firstOnly || tooManyForModel ? s.sendError : undefined} role={attachError || firstOnly || tooManyForModel ? "alert" : undefined}>
+            {attachError ?? (firstOnly ? c("templates.swap.multipleUnsupported") : tooManyForModel ? c("templates.swap.modelImageLimit", { count: modelImageLimit ?? 0 }) : images.some((image) => image.fromTemplate) ? c("templates.attach.fromTemplate") : "")}
           </small>
         </div>
       )}
-      {swapping && swapPicker.ready && swapPicker.options.length === 0 && <p className={s.sendError} role="alert">{c("templates.swap.noModels")}</p>}
-      <PickerRow label={c("templates.edit.setting.model")} value={model ? picker.labelOf(model) : c("templates.composer.pickModel")} placeholder={!model} heading={c("templates.composer.featuredModels")} empty={c("templates.composer.noModels")} options={picker.options} selectedId={model} onPick={(id) => pick({ model: id, quality: "", swapMode: "" })} />
+      {!swapping && picker.ready && !model && <p className={s.sendError} role="alert">{c("templates.motion.modelUnavailable")}</p>}
+      {configuredImages > 4 && <p className={s.sendError} role="alert">{c("templates.motion.referenceConfigurationInvalid")}</p>}
+      {videoPrepareFailed && <p className={s.sendError} role="alert">{c("templates.motion.videoPrepareFailed")} <button type="button" onClick={() => { setPreparedVideo(null); setVideoRetry((value) => value + 1); }}>{c("templates.retry")}</button></p>}
       <PickerRow label={c("templates.edit.setting.quality")} value={quality || c("templates.composer.pickQuality")} placeholder={!quality} heading={c("templates.edit.setting.quality")} empty={c("templates.composer.noModels")} options={qualityOptions} selectedId={quality} onPick={(id) => pick({ quality: id })} />
+      {isH3Reference && <PickerRow label={c("templates.composer.duration")} value={c("templates.preview.seconds", { value: duration ?? 6 })} heading={c("templates.composer.duration")} empty={c("templates.composer.noModels")} options={Array.from({ length: isH3Open ? 13 : 12 }, (_, index) => ({ id: String(index + (isH3Open ? 3 : 4)), label: c("templates.preview.seconds", { value: index + (isH3Open ? 3 : 4) }) }))} selectedId={String(duration)} onPick={(id) => pick({ duration: Number(id) })} />}
       {swapping ? (
         <>
           {swapModes.length > 0 && (
@@ -1560,14 +1671,6 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
               </div>
             </section>
           )}
-          <textarea
-            key={`${t?.id}-${locale}`}
-            ref={promptRef}
-            className={s.composerPrompt}
-            defaultValue={t && variantOf(t) === "swap" ? promptOf(t, locale) : ""}
-            placeholder={c("templates.swap.promptPlaceholder")}
-            aria-label={c("templates.composer.prompt")}
-          />
         </>
       ) : (
         <>
@@ -1590,6 +1693,7 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
                 key={`${t?.id}-${locale}-motion`}
                 ref={promptRef}
                 className={s.composerPrompt}
+                defaultValue={t?.prompt ?? ""}
                 placeholder={c("templates.motion.promptPlaceholder")}
               />
             </label>
@@ -1604,7 +1708,7 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
         </>
       )}
       <div className={s.motionGenerateDock}>
-        <button type="button" disabled={sending.state === "busy"} onClick={() => void generate()}>
+        <button type="button" disabled={sending.state === "busy" || imagesLoading || !picker.ready} onClick={() => void generate()}>
           {sending.state === "busy" ? c("templates.composer.sending") : c("templates.edit.generate")} <Sparkles size={15} />{creditText(credits)}
         </button>
         {sending.message && <p role={sending.state === "error" ? "alert" : "status"} className={sending.state === "error" ? s.sendError : s.sendNote}>{sending.message}</p>}
@@ -1745,7 +1849,7 @@ function PickerRow({
  * quality rows, the rest of the settings folded under "Advanced", and the button that opens it in the creator.
  */
 /** An image attached in the optional card, with its preview address. */
-type AttachedImage = { id: string; file: File; url: string; /** Put there by a template, not picked by the visitor. */ fromTemplate?: boolean };
+type AttachedImage = { id: string; file: File; url: string; /** Put there by a template, not picked by the visitor. */ fromTemplate?: boolean; slot?: number };
 
 function Composer({
   t,
@@ -1765,7 +1869,7 @@ function Composer({
   mode: Mode;
   onMode: (mode: Mode) => void;
   /** Images the visitor added in the clip details, put in the attach card when it changes. */
-  incoming?: { key: number; files: File[] } | null;
+  incoming?: { key: number; templateId: string; files: File[] } | null;
   /** The look picked in the Styles tab, if any. */
   style: StyleChoice | null;
   onChangeStyle: () => void;
@@ -1829,13 +1933,13 @@ function Composer({
   const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
   const handledIncoming = useRef<number | null>(null);
   useEffect(() => {
-    if (!incoming || handledIncoming.current === incoming.key || mode !== "create" || isWorkflow) return;
+    if (!incoming || incoming.templateId !== t?.id || handledIncoming.current === incoming.key || mode !== "create" || isWorkflow) return;
     handledIncoming.current = incoming.key;
     const transfer = new DataTransfer();
     incoming.files.forEach((file) => transfer.items.add(file));
     attach(transfer.files);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for each batch of images the details hand over
-  }, [incoming, mode, isWorkflow]);
+  }, [incoming, mode, isWorkflow, t?.id]);
   // Generates right here: the same request the creator page sends, then the app's progress panel follows it to the result.
   const generate = async (template: Template, model: string, resolution: string) => {
     const prompt = (promptRef.current?.value ?? promptOf(template, locale)).trim();
@@ -2032,7 +2136,7 @@ function Composer({
       <aside className={s.composer} aria-label={c("templates.composer.aria")}>
         {tabs}
         {banner}
-        <MotionWorkspace t={t} onClear={onClear} />
+        <MotionWorkspace key={t?.id ?? "empty-motion"} t={t} onClear={onClear} incoming={incoming} />
       </aside>
     );
   if (mode === "edit" && !editToolId)
@@ -2668,7 +2772,6 @@ function MyVideos({
             {/* The clip plays on its tile (muted, looping); a click opens its details, where the player has its controls. */}
             <button type="button" className={s.workOpen} onClick={() => onDetails(templateOfWork(item, savedSlugs.has(workSlug(item.id))))} aria-label={c("templates.card.previewAria", { name: item.title })} title={item.prompt?.trim() || item.title}>
               <video src={item.outputUrl} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
-              <i className={s.motionMute} aria-hidden="true"><VolumeX size={15} /></i>
             </button>
           </li>
         ) : (
@@ -2955,15 +3058,8 @@ function HowItWorks({ mode, items, onSelect }: { mode: Mode; items: Template[]; 
   const go = (delta: number) => setStep((v) => (v + delta + steps.length) % steps.length);
   if (mode === "motion") {
     const motionItems = items.filter((item) => item.kind === "video" && valid(item.thumbnailUrl));
-    const montage = motionItems.slice(0, 3);
     return (
       <section className={s.motionHow}>
-        <header className={s.motionHowHero}>
-          <div><h1>{c(heroKeys.motion.title)}</h1><p>{c(heroKeys.motion.body)}</p></div>
-          <div className={s.motionMontage} aria-hidden="true">
-            {montage.map((item, index) => <span key={item.id} className={s[`motionMontage${index + 1}`]} style={{ backgroundImage: `url("${item.thumbnailUrl}")` }} />)}
-          </div>
-        </header>
         <section className={s.motionLibrary}>
           <h2>{c("templates.motion.library.heading")}</h2>
           {motionItems.length ? <div className={s.motionGallery}>
@@ -2974,7 +3070,6 @@ function HowItWorks({ mode, items, onSelect }: { mode: Mode; items: Template[]; 
               ) : (
                 <Image src={item.thumbnailUrl} alt="" fill unoptimized sizes="(max-width: 800px) 40vw, 240px" className={s.poster} />
               )}
-              <i className={s.motionMute} aria-hidden="true"><VolumeX size={15} /></i>
             </button>)}
           </div> : <p className={s.motionLibraryEmpty}>{c("templates.motion.library.empty")}</p>}
         </section>
@@ -3044,18 +3139,20 @@ function rememberTemplate(t: Template): Template[] {
 }
 const skeletonHeights = [210, 150, 260, 180, 230, 140, 200, 170, 250, 160];
 /** One input image of a template in its details; one that no longer loads (an expired link) is left out. */
-function AssetThumb({ src }: { src: string }) {
+function AssetThumb({ src, index }: { src: string; index: number }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   return (
     <span className={s.clipAsset}>
       <Image src={src} alt="" fill unoptimized sizes="64px" onError={() => setFailed(true)} />
+      <span className={s.referenceIndex}>{index}</span>
     </span>
   );
 }
 /** onEdit opens the template in this page's own panel; without it (or for templates that edit a clip) the editing page is linked instead. */
 function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?: (t: Template, addedImages?: File[]) => void }) {
   const { c, locale } = useStudioCopy();
+  const maxImages = modeOf(t) === "motion" ? (variantOf(t) === "swap" ? Math.min(inputImagesOf(t).length || 4, 4) : 1) : 5;
   // Images added here join the template's own when the clip is recreated, so they need not be attached beforehand.
   const [added, setAdded] = useState<{ id: string; file: File; url: string }[]>([]);
   const addedRef = useRef(added);
@@ -3066,7 +3163,7 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
   const addInputRef = useRef<HTMLInputElement>(null);
   const addImages = (list: FileList | null) => {
     if (!list) return;
-    const room = Math.max(0, 5 - inputImagesOf(t).length - added.length);
+    const room = Math.max(0, maxImages - inputImagesOf(t).length - added.length);
     const picked = Array.from(list).filter((file) => ["image/png", "image/jpeg", "image/webp"].includes(file.type)).slice(0, room);
     setAdded([...added, ...picked.map((file) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file) }))]);
   };
@@ -3105,9 +3202,10 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
   }, []);
   const settings = t.settings ?? {};
   const inputAssets = inputImagesOf(t);
+  const sourceClip = modeOf(t) === "motion" && typeof settings.sourceVideo === "string" && valid(settings.sourceVideo) ? settings.sourceVideo : undefined;
   const promptText = promptOf(t, locale);
   // Images can be added to a clip that is recreated in this page's create panel.
-  const canAddImages = !!onEdit && modeOf(t) === "create";
+  const canAddImages = !!onEdit && (modeOf(t) === "create" || modeOf(t) === "motion");
   const [promptOpen, setPromptOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -3147,6 +3245,12 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
       onClick={(e) => {
         if (e.target === ref.current) close();
       }}
+      onPlayCapture={(event) => {
+        if (!(event.target instanceof HTMLVideoElement)) return;
+        ref.current?.querySelectorAll("video").forEach((video) => {
+          if (video !== event.target) video.pause();
+        });
+      }}
       aria-labelledby={t.kind === "video" ? undefined : "template-preview-title"}
       aria-label={t.kind === "video" ? c("templates.preview.clipDetails") : undefined}
     >
@@ -3164,6 +3268,10 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
           {t.kind === "video" ? (
             <>
               <div className={s.clipScroll}>
+                {sourceClip && <section className={s.clipCard}>
+                  <div className={s.clipCardHead}><span><Video size={14} aria-hidden="true" />{c("templates.preview.sourceVideo")}</span></div>
+                  <EosVideoPlayer key={sourceClip} className={s.clipSourceVideo} src={sourceClip} muted={false} ariaLabel={c("templates.preview.sourceVideo")} />
+                </section>}
                 {(promptText || inputAssets.length > 0 || canAddImages) && (
                   <section className={s.clipCard}>
                     <div className={s.clipCardHead}>
@@ -3178,16 +3286,17 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
                     <div className={s.clipCardBody}>
                       {(inputAssets.length > 0 || canAddImages) && (
                         <div className={s.clipAssets}>
-                          {inputAssets.map((address) => <AssetThumb key={address} src={address} />)}
-                          {added.map((image) => (
+                          {inputAssets.map((address, index) => <AssetThumb key={address} src={address} index={index + 1} />)}
+                          {added.map((image, index) => (
                             <span key={image.id} className={s.clipAsset}>
                               <Image src={image.url} alt="" fill unoptimized sizes="64px" />
+                              <span className={s.referenceIndex}>{inputAssets.length + index + 1}</span>
                               <button type="button" className={s.clipAssetRemove} onClick={() => removeAdded(image.id)} aria-label={c("templates.attach.remove")}>
                                 <X size={11} aria-hidden="true" />
                               </button>
                             </span>
                           ))}
-                          {canAddImages && inputAssets.length + added.length < 5 && (
+                          {canAddImages && inputAssets.length + added.length < maxImages && (
                             <>
                               <button type="button" className={s.clipAssetAdd} onClick={() => addInputRef.current?.click()} aria-label={c("templates.attach.title")}>
                                 <Plus size={18} aria-hidden="true" />
@@ -3325,7 +3434,7 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
 export function TemplatesPageClient() {
   const { c } = useStudioCopy();
   const [items, setItems] = useState<Template[]>([]);
-  const [addedImages, setAddedImages] = useState<{ key: number; files: File[] } | null>(null);
+  const [addedImages, setAddedImages] = useState<{ key: number; templateId: string; files: File[] } | null>(null);
   const [recreating, setRecreating] = useState<Template | null>(null);
   const [likedSlugs, setLikedSlugs] = useState<Set<string>>(new Set());
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
@@ -3532,7 +3641,7 @@ export function TemplatesPageClient() {
     <section className={s.masonry} aria-label={c("templates.libraryAria")}>
       {visible.map((t) => (
         // In Edit Video the left panel is the tool list, so "Recreate" opens the sample's details, with the button to edit it.
-        <Tile key={t.id} t={t} selected={t.id === selected?.id} onSelect={(x) => (mode === "edit" ? setPreview(x) : setSelectedId(x.id))} onExpand={setPreview} onRecreate={mode === "create" ? recreateTemplate : undefined} />
+        <Tile key={t.id} t={t} selected={t.id === selected?.id} onSelect={(x) => (mode === "edit" || mode === "motion" ? setPreview(x) : setSelectedId(x.id))} onExpand={setPreview} onRecreate={mode === "create" ? recreateTemplate : undefined} />
       ))}
     </section>
   );
@@ -3571,15 +3680,14 @@ export function TemplatesPageClient() {
           </div>
           {activePanel === "how" ? (
             <>
-              {mode === "motion" && laneToolbar}
-              <HowItWorks key={mode} mode={mode} items={visible} onSelect={(item) => setSelectedId(item.id)} />
+              <HowItWorks key={mode} mode={mode} items={visible} onSelect={(item) => mode === "motion" ? setPreview(item) : setSelectedId(item.id)} />
             </>
           ) : activePanel === "history" ? (
             <HistoryPanel
               mode={mode}
               recent={recentForMode}
               items={visible}
-              onSelect={(t) => setSelectedId(t.id)}
+              onSelect={(t) => mode === "motion" ? setPreview(t) : setSelectedId(t.id)}
               onExpand={setPreview}
               onRecreate={mode === "create" ? recreateTemplate : undefined}
               savedSlugs={new Set([...items, ...community].map((item) => item.slug))}
@@ -3673,7 +3781,7 @@ export function TemplatesPageClient() {
             // A member's own clip is not in the library: its prompt, model and images open in the panel as they were.
             if (t.id.startsWith(WORK_ID)) setDraft(t);
             else setRecent(rememberTemplate(t));
-            if (files?.length) setAddedImages({ key: Date.now(), files });
+            setAddedImages(files?.length ? { key: Date.now(), templateId: t.id, files } : null);
             setMode(modeOf(t));
             setPanel("history");
             setSelectedId(t.id);
