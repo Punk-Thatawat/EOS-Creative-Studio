@@ -69,6 +69,7 @@ import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/ap
 import { createTextVideoGeneration, type TextVideoGenerationInput } from "@/lib/api/text-video-generations";
 import { createMotionTransferGeneration, createVideoSwapGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
+import { MediaPicker, rememberUploads } from "./media-picker";
 import { listTemplateGenerationModels, loadTemplateModelSettings, type TemplateModelMode, type TemplateModelSetting } from "@/lib/api/template-model-settings";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
@@ -1319,6 +1320,9 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
   const [ownMotion, setOwnMotion] = useState<{ file: File; url: string } | null>(null);
   const motionInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => () => { if (ownMotion) URL.revokeObjectURL(ownMotion.url); }, [ownMotion]);
+  // The pickers: media already uploaded, saved, generated or liked, instead of a new upload.
+  const [motionPickerOpen, setMotionPickerOpen] = useState(false);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [sceneControl, setSceneControl] = useState(true);
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
   const [orientation, setOrientation] = useState<"video" | "image">("video");
@@ -1344,6 +1348,26 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const reference = referenceVideoOf(t);
   const motionSrc = ownMotion?.url ?? reference;
+  // The model takes a motion video of 3 to 30 seconds; the file comes from the device or from the picker.
+  const acceptMotion = (file: File) => {
+    const url = URL.createObjectURL(file);
+    const probe = document.createElement("video");
+    probe.preload = "metadata";
+    probe.onloadedmetadata = () => {
+      if (probe.duration >= 3 && probe.duration <= 30) {
+        setOwnMotion({ file, url });
+        setSending({ state: "idle" });
+      } else {
+        URL.revokeObjectURL(url);
+        setSending({ state: "error", message: c("templates.motion.durationRange") });
+      }
+    };
+    probe.onerror = () => {
+      URL.revokeObjectURL(url);
+      setSending({ state: "error", message: c("templates.motion.referenceFailed") });
+    };
+    probe.src = url;
+  };
   const qualityOptions: FlyoutOption[] = qualityChoices.map((label) => ({ id: label, label }));
   // A model with a single image field uses the first image only.
   const firstOnly = swapping && images.length > 1 && !!model && !swapPicker.referenceOf(model)?.list;
@@ -1360,9 +1384,11 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
     emitGenerationSubmitting({ feature: "motion-transfer", requestId });
     try {
       const uploaded = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "motion-transfer" })));
+      rememberUploads(uploaded);
       let video: string = reference ?? "";
       if (!swapping && ownMotion) {
         video = await uploadImageAsset(ownMotion.file, { purpose: "content", feature: "motion-transfer" });
+        rememberUploads([video], "video");
       } else if (!/^https?:\/\//i.test(video)) {
         const response = await fetch(video);
         if (!response.ok) throw new Error(c("templates.motion.referenceFailed"));
@@ -1442,7 +1468,7 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
         <div className={s.motionStack}>
           {/* As in a motion library: the motion to copy, then the character, each in its own box. */}
           <div className={s.motionBoxWrap}>
-            <button type="button" className={`${s.motionBox} ${motionSrc ? s.motionBoxFilled : ""}`} onClick={() => motionInputRef.current?.click()}>
+            <button type="button" className={`${s.motionBox} ${motionSrc ? s.motionBoxFilled : ""}`} onClick={() => setMotionPickerOpen(true)}>
               {motionSrc ? (
                 <span className={s.motionTilt}>
                   <video key={motionSrc} src={motionSrc} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
@@ -1463,7 +1489,7 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
             )}
           </div>
           <div className={s.motionBoxWrap}>
-            <button type="button" className={`${s.motionBox} ${images[0] ? s.motionBoxFilled : ""}`} onClick={() => inputRef.current?.click()}>
+            <button type="button" className={`${s.motionBox} ${images[0] ? s.motionBoxFilled : ""}`} onClick={() => setImagePickerOpen(true)}>
               {images[0] ? (
                 <Image src={images[0].url} alt={c("templates.motion.character")} fill unoptimized sizes="320px" className={s.motionBoxImage} />
               ) : (
@@ -1490,25 +1516,30 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = "";
-          if (!file) return;
-          // The model takes a motion video of 3 to 30 seconds.
-          const url = URL.createObjectURL(file);
-          const probe = document.createElement("video");
-          probe.preload = "metadata";
-          probe.onloadedmetadata = () => {
-            if (probe.duration >= 3 && probe.duration <= 30) {
-              setOwnMotion({ file, url });
-              setSending({ state: "idle" });
-            } else {
-              URL.revokeObjectURL(url);
-              setSending({ state: "error", message: c("templates.motion.durationRange") });
-            }
-          };
-          probe.onerror = () => {
-            URL.revokeObjectURL(url);
-            setSending({ state: "error", message: c("templates.motion.referenceFailed") });
-          };
-          probe.src = url;
+          if (file) acceptMotion(file);
+        }}
+      />
+      <MediaPicker
+        open={motionPickerOpen}
+        kind="video"
+        remaining={1}
+        onClose={() => setMotionPickerOpen(false)}
+        onUploadFromDevice={() => motionInputRef.current?.click()}
+        onPick={(files) => {
+          if (files[0]) acceptMotion(files[0]);
+        }}
+      />
+      <MediaPicker
+        open={imagePickerOpen}
+        kind="image"
+        remaining={swapping ? Math.max(0, 4 - images.length) : 1}
+        onClose={() => setImagePickerOpen(false)}
+        onUploadFromDevice={() => inputRef.current?.click()}
+        onPick={(files) => {
+          const transfer = new DataTransfer();
+          files.forEach((file) => transfer.items.add(file));
+          attach(transfer.files);
+          setSending({ state: "idle" });
         }}
       />
       <input
@@ -1534,7 +1565,7 @@ function MotionWorkspace({ t, onClear }: { t?: Template; onClear?: () => void })
             </span>
           ))}
           {swapping && images.length > 0 && images.length < 4 && (
-            <button type="button" className={s.slotAdd} onClick={() => inputRef.current?.click()} aria-label={c("templates.attach.add")}>
+            <button type="button" className={s.slotAdd} onClick={() => setImagePickerOpen(true)} aria-label={c("templates.attach.add")}>
               <Plus size={18} aria-hidden="true" />
             </button>
           )}
@@ -1800,6 +1831,8 @@ function Composer({
   // The images a template was made with start in it.
   const { images, attach: attachImages, detach, error: attachError } = useTemplateImages(t, 5, !isWorkflow);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The picker: images already uploaded, saved or generated, instead of a new upload.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const attach = (list: FileList | null) => {
     attachImages(list);
     setSending({ state: "idle" });
@@ -1855,6 +1888,7 @@ function Composer({
       const request: TextVideoGenerationInput = { prompt, model, resolution, duration, aspectRatio, templateSlug: template.slug };
       if (images.length && reference) {
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
+        rememberUploads(urls);
         // The reference-to-video models follow the images the prompt names as "@Image 1"; say so when the prompt does not.
         if (model.endsWith("/reference-to-video") && !/@Image\s*\d/i.test(prompt)) {
           request.prompt = `${prompt}\n\nUse the reference images to keep the same subjects and look: ${urls.map((_, index) => `@Image ${index + 1}`).join(", ")}.`;
@@ -2146,7 +2180,7 @@ function Composer({
             }}
           />
           {images.length === 0 ? (
-            <button type="button" className={s.attachBox} onClick={() => fileInputRef.current?.click()}>
+            <button type="button" className={s.attachBox} onClick={() => setPickerOpen(true)}>
               <span className={s.attachIcons} aria-hidden="true">
                 <i><User size={13} /></i>
                 <i><Shirt size={13} /></i>
@@ -2166,12 +2200,23 @@ function Composer({
                 </span>
               ))}
               {images.length < 5 && (
-                <button type="button" className={s.slotAdd} onClick={() => fileInputRef.current?.click()} aria-label={c("templates.attach.add")}>
+                <button type="button" className={s.slotAdd} onClick={() => setPickerOpen(true)} aria-label={c("templates.attach.add")}>
                   <Plus size={18} aria-hidden="true" />
                 </button>
               )}
             </div>
           )}
+          <MediaPicker
+            open={pickerOpen}
+            remaining={Math.max(0, 5 - images.length)}
+            onClose={() => setPickerOpen(false)}
+            onUploadFromDevice={() => fileInputRef.current?.click()}
+            onPick={(files) => {
+              const transfer = new DataTransfer();
+              files.forEach((file) => transfer.items.add(file));
+              attach(transfer.files);
+            }}
+          />
           {(attachError || images.some((image) => image.fromTemplate)) && (
             <small className={attachError ? s.sendError : undefined} role={attachError ? "alert" : undefined}>{attachError ?? c("templates.attach.fromTemplate")}</small>
           )}
