@@ -39,7 +39,7 @@ import {
   type ModelUploadConstraints,
   type ModelPreviewType,
 } from "@/lib/api/generation-models";
-import { generateAdminAudioVoicePreview, getAdminAudioSettings, testAdminElevenLabsConnection, testAdminWaveSpeedConnection, updateAdminAudioSettings, uploadAdminAudioVoicePreview, type AdminAudioBackgroundMusicPreset, type AdminAudioFeature, type AdminAudioProvider, type AdminAudioSettings, type AdminAudioVoiceProfile, type AdminAudioVoiceSettings } from "@/lib/api/audio";
+import { generateAdminAudioVoicePreview, getAdminAudioSettings, listAdminElevenLabsVoices, testAdminElevenLabsConnection, testAdminWaveSpeedConnection, updateAdminAudioSettings, uploadAdminAudioVoicePreview, type AdminAudioBackgroundMusicPreset, type AdminAudioFeature, type AdminAudioProvider, type AdminAudioSettings, type AdminAudioVoiceProfile, type AdminAudioVoiceSettings } from "@/lib/api/audio";
 import { defaultVideoStoryboardModeLabels, getAdminVideoStoryboardSettings, updateAdminVideoStoryboardSettings, type VideoStoryboardModeKey, type AdminVideoStoryboardSettings } from "@/lib/api/video-settings";
 import { FeatureTutorialPanel } from "@/components/admin/feature-tutorial-panel";
 import { useSearchParams } from "next/navigation";
@@ -60,10 +60,16 @@ const videoFunctions = [
   { id: "text-to-video", label: "Text to Video", description: "Create videos from a prompt" },
   { id: "people-video", label: "People Video", description: "Create videos with people" },
   { id: "motion-transfer", label: "Motion Transfer", description: "Transfer motion to a subject" },
+  { id: "video-swap", label: "Objects Swap", description: "Swap a person, object or background in a video" },
   { id: "lipsync", label: "Lipsync", description: "Synchronize speech and mouth movement" },
   { id: "extend-video", label: "Extend Video", description: "Continue an existing video" },
   { id: "video-to-sfx", label: "Video to SFX", description: "Generate sound effects from a video" },
   { id: "video-to-music", label: "Video to Music", description: "Generate music from a video" },
+] as const;
+
+const aiPresenterFunctions = [
+  { id: "ai-presenter", label: "Presenter Video", description: "Create presenter videos from a presenter reference and script" },
+  { id: "ai-presenter-script", label: "Script Splitter", description: "Split presenter scripts into scenes" },
 ] as const;
 
 const documentFunctions = [
@@ -116,10 +122,10 @@ function sameVideoStoryboardModeRouteDraft(left?: VideoStoryboardModeRouteDraft,
   return left.enabledModels.every((model) => right.enabledModels.includes(model));
 }
 
-type FeatureId = (typeof imageFunctions)[number]["id"] | (typeof videoFunctions)[number]["id"] | (typeof documentFunctions)[number]["id"] | (typeof features)[number]["id"] | "document";
+type FeatureId = (typeof imageFunctions)[number]["id"] | (typeof videoFunctions)[number]["id"] | (typeof aiPresenterFunctions)[number]["id"] | (typeof documentFunctions)[number]["id"] | (typeof features)[number]["id"] | "document";
 
 function formatFeature(id: FeatureId) {
-  return imageFunctions.find((feature) => feature.id === id)?.label ?? videoFunctions.find((feature) => feature.id === id)?.label ?? documentFunctions.find((feature) => feature.id === id)?.label ?? features.find((feature) => feature.id === id)?.label ?? id;
+  return imageFunctions.find((feature) => feature.id === id)?.label ?? videoFunctions.find((feature) => feature.id === id)?.label ?? aiPresenterFunctions.find((feature) => feature.id === id)?.label ?? documentFunctions.find((feature) => feature.id === id)?.label ?? features.find((feature) => feature.id === id)?.label ?? id;
 }
 
 function ModelInitials({ name }: { name: string }) {
@@ -425,8 +431,9 @@ function OcrEnginePanel() {
 }
 
 function modelKindForFeature(feature: FeatureId): string {
+  if (feature === "ai-presenter-script") return "document";
   if (feature === "video-to-sfx" || feature === "video-to-music") return "audio";
-  if (videoFunctions.some((item) => item.id === feature)) return "video";
+  if (feature === "ai-presenter" || videoFunctions.some((item) => item.id === feature)) return "video";
   if (feature === "audio") return "audio";
   if (feature === "document" || documentFunctions.some((item) => item.id === feature)) return "document";
   return "image";
@@ -434,13 +441,18 @@ function modelKindForFeature(feature: FeatureId): string {
 
 function isFeatureCompatible(item: GenerationModelOption, feature: FeatureId): boolean {
   const capabilities = item.capabilities;
-  const isDocumentFeature = feature === "document" || documentFunctions.some((documentFeature) => documentFeature.id === feature);
+  const isDocumentFeature = feature === "ai-presenter-script" || feature === "document" || documentFunctions.some((documentFeature) => documentFeature.id === feature);
   const isLlm = capabilities.providerType?.trim().toLowerCase() === "llm";
   if (isDocumentFeature) return item.kind === "document" && isLlm;
   if (item.kind !== modelKindForFeature(feature)) return false;
   if (feature === "text-to-image") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter);
   if (feature === "image-to-image") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && (capabilities.imageParameter || capabilities.referenceImagesParameter));
   if (feature === "image-to-video") return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && (capabilities.imageParameter || capabilities.referenceImagesParameter));
+  if (feature === "ai-presenter") {
+    const hasAudioInput = Boolean(capabilities.audioParameter || capabilities.referenceAudiosParameter);
+    const hasPresenterReference = Boolean(capabilities.referenceImagesParameter);
+    return capabilities.parameters.length > 0 && Boolean(capabilities.promptParameter && hasAudioInput && hasPresenterReference);
+  }
   if (feature === "video-to-sfx" || feature === "video-to-music") return capabilities.parameters.length > 0 && Boolean(capabilities.videoParameter);
   if (videoFunctions.some((item) => item.id === feature)) return capabilities.parameters.length > 0;
   if (feature === "style-transfer") return capabilities.styleTransferCompatible === true;
@@ -515,7 +527,7 @@ function MultiTargetModelAssignmentDialog({
     <div className="flex max-h-[min(820px,calc(100vh-32px))] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-[#eaded6] bg-[#faf8f6] shadow-[0_24px_80px_rgba(68,49,36,0.25)]">
       <header className="border-b border-border bg-white px-5 py-4 sm:px-7 sm:py-5">
         <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">Model assignment</p><h2 id="assign-models-title" className="mt-1 text-xl font-bold tracking-tight">Assign models to features</h2><p className="mt-1 text-xs text-muted-foreground">เลือกฟีเจอร์ปลายทาง แล้วลาก model เข้าไป หรือกด Add</p></div><button type="button" onClick={onClose} className="rounded-xl p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground" aria-label="Close dialog"><X size={19} /></button></div>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Assign to</span><select value={feature} onChange={(event) => handleFeatureChange(event.target.value as FeatureId)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><optgroup label="Image">{imageFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Video">{videoFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Document">{documentFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>{features.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{feature === "background-removal" ? <label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">AI Background mode</span><select value={backgroundMode} onChange={(event) => onBackgroundModeChange(event.target.value as AiBackgroundMode)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10">{aiBackgroundModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label> : null}</div>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"><label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Assign to</span><select value={feature} onChange={(event) => handleFeatureChange(event.target.value as FeatureId)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"><optgroup label="Image">{imageFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Video">{videoFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="AI Presenter">{aiPresenterFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup><optgroup label="Document">{documentFunctions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>{features.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{feature === "background-removal" ? <label className="block max-w-md flex-1"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">AI Background mode</span><select value={backgroundMode} onChange={(event) => onBackgroundModeChange(event.target.value as AiBackgroundMode)} className="h-10 w-full rounded-xl border border-border bg-[#fcfaf8] px-3 text-sm font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10">{aiBackgroundModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select></label> : null}</div>
       </header>
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -549,6 +561,7 @@ const waveSpeedAudioModelOptions = [
   { id: "elevenlabs/flash-v2.5", label: "ElevenLabs · Flash v2.5" },
   { id: "elevenlabs/turbo-v2.5", label: "ElevenLabs · Turbo v2.5" },
   { id: "elevenlabs/eleven-v3", label: "ElevenLabs · Eleven v3" },
+  { id: "eleven_v4", label: "ElevenLabs · Eleven v4" },
   { id: "minimax/speech-2.6-hd", label: "WaveSpeed · MiniMax Speech 2.6 HD" },
   { id: "mirelo-ai/sfx-1.6/text-to-audio", label: "WaveSpeed · Mirelo SFX 1.6" },
   { id: "elevenlabs/music", label: "WaveSpeed · Eleven Music" },
@@ -817,6 +830,7 @@ function VideoStoryboardSettingsPanel({ catalog, routeOverview, onRoutesChanged,
 
 const audioFeatureProfileRows: Array<{ key: AdminAudioFeature; label: string; description: string }> = [
   { key: "textToSpeech", label: "Text to Speech", description: "Narration and voiceover" },
+  { key: "aiPresenter", label: "AI Presenter Speech", description: "ElevenLabs voice settings for presenter videos" },
   { key: "podcastDialogue", label: "Podcast & Dialogue", description: "Multi-speaker rendering" },
   { key: "voiceClone", label: "Voice Clone", description: "Clone preview synthesis" },
   { key: "soundEffects", label: "Sound Effects", description: "Prompt-based sound generation" },
@@ -828,6 +842,7 @@ function audioProviderLabel(provider: AdminAudioProvider) {
 }
 
 function audioProviderOptions(feature: AdminAudioFeature): AdminAudioProvider[] {
+  if (feature === "aiPresenter") return ["elevenlabs"];
   if (feature === "audioCleanup") return ["internal"];
   if (feature === "voiceClone" || feature === "soundEffects") return ["wavespeed"];
   return ["elevenlabs", "wavespeed"];
@@ -864,6 +879,9 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
   const [voiceAudioUploadingKey, setVoiceAudioUploadingKey] = useState("");
   const [voiceAudioUploadIndex, setVoiceAudioUploadIndex] = useState<number | null>(null);
   const [selectedVoiceIndex, setSelectedVoiceIndex] = useState<number | null>(null);
+  const [catalogVoices, setCatalogVoices] = useState<AdminAudioVoiceProfile[] | null>(null);
+  const [catalogNext, setCatalogNext] = useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const voiceImageInputRef = useRef<HTMLInputElement | null>(null);
   const voiceAudioInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -930,12 +948,15 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
   const selectedProviderSettings = draft?.providerSettings[selectedFeatureProvider];
   const selectedProviderTimeoutMs = selectedFeatureProvider === "internal" ? undefined : draft?.providerSettings[selectedFeatureProvider === "elevenlabs" ? "elevenlabs" : "wavespeed"]?.timeoutMs;
   const configuredFeatureModelIds = Object.keys(selectedFeatureProfile?.models ?? {});
+  const dialogueSettings = selectedFeatureProfile?.settings ?? { stability: 0.5, similarity: 0.75 };
   const modelOptionMap = new Map<string, { id: string; label: string }>();
   [...configuredFeatureModelIds, selectedFeatureModelId].forEach((modelId) => {
     if (modelId && !waveSpeedAudioModelOptions.some((option) => option.id === modelId)) modelOptionMap.set(modelId, { id: modelId, label: `Custom · ${modelId}` });
   });
   waveSpeedAudioModelOptions.forEach((option) => modelOptionMap.set(option.id, option));
-  const modelOptions = Array.from(modelOptionMap.values());
+  const modelOptions = Array.from(modelOptionMap.values()).filter((option) =>
+    selectedFeature === "aiPresenter" ? option.id === "eleven_v4" : selectedFeature !== "podcastDialogue" || !["eleven_v3", "elevenlabs_v3", "elevenlabs/eleven-v3"].includes(option.id),
+  );
   const activeVoices = selectedFeatureProfile?.models?.[selectedFeatureModelId]?.voices ?? selectedFeatureProfile?.voices ?? [];
   const selectFeatureModel = (modelId: string) => setDraft((current) => {
     if (!current) return current;
@@ -943,11 +964,26 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
     const currentModelId = currentFeatureProfile.modelId;
     const currentModelVoices = currentFeatureProfile.models?.[currentModelId]?.voices ?? currentFeatureProfile.voices ?? [];
     const models = { ...(currentFeatureProfile.models ?? {}), [currentModelId]: { voices: currentModelVoices } };
+    const canReuseElevenLabsVoices = current.routing[selectedFeature] === "elevenlabs"
+      && modelId === "eleven_v4"
+      && currentModelId.startsWith("eleven");
     const voices = selectedFeature === "soundEffects" || selectedFeature === "audioCleanup"
       ? []
-      : models[modelId]?.voices ?? [];
+      : models[modelId]?.voices ?? (canReuseElevenLabsVoices ? currentModelVoices : []);
     if (!models[modelId]) models[modelId] = { voices };
-    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { modelId, voices, models } } };
+    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...currentFeatureProfile, modelId, voices, models } } };
+  });
+  const updateDialogueSetting = (setting: "stability" | "similarity", value: number) => setDraft((current) => {
+    if (!current) return current;
+    const profile = current.featureProfiles.podcastDialogue ?? { modelId: "eleven_v4", voices: [], models: {} };
+    const settings = profile.settings ?? { stability: 0.5, similarity: 0.75 };
+    return {
+      ...current,
+      featureProfiles: {
+        ...current.featureProfiles,
+        podcastDialogue: { ...profile, settings: { ...settings, [setting]: Math.min(1, Math.max(0, value)) } },
+      },
+    };
   });
   const updateActiveVoice = (index: number, patch: Partial<AdminAudioVoiceProfile>) => setDraft((current) => {
     if (!current) return current;
@@ -986,6 +1022,24 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
     const modelId = profile.modelId;
     const baseVoices = profile.models?.[modelId]?.voices ?? profile.voices ?? [];
     const voices = [...baseVoices, { id: "", name: `Voice ${baseVoices.length + 1}`, description: "", imageUrl: "", previewUrl: "" }];
+    return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...profile, voices, models: { ...(profile.models ?? {}), [modelId]: { voices } } } } };
+  });
+  const loadElevenLabsVoices = async (pageToken?: string) => {
+    setCatalogLoading(true); setError("");
+    try {
+      const result = await listAdminElevenLabsVoices(pageToken);
+      setCatalogVoices((current) => pageToken ? [...(current ?? []), ...result.voices] : result.voices);
+      setCatalogNext(result.nextPageToken);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load ElevenLabs voices"); }
+    finally { setCatalogLoading(false); }
+  };
+  const addCatalogVoice = (voice: AdminAudioVoiceProfile) => setDraft((current) => {
+    if (!current || (selectedFeature !== "textToSpeech" && selectedFeature !== "aiPresenter")) return current;
+    const profile = current.featureProfiles[selectedFeature];
+    const modelId = profile.modelId;
+    const baseVoices = profile.models?.[modelId]?.voices ?? profile.voices ?? [];
+    if (baseVoices.some((item) => item.id === voice.id)) return current;
+    const voices = [...baseVoices, voice];
     return { ...current, featureProfiles: { ...current.featureProfiles, [selectedFeature]: { ...profile, voices, models: { ...(profile.models ?? {}), [modelId]: { voices } } } } };
   });
   const removeActiveVoice = (index: number) => setDraft((current) => {
@@ -1056,11 +1110,16 @@ function AudioProviderSettingsPanel({ initialFeature = "textToSpeech" }: { initi
     {loading || !draft ? <div className="mt-5 rounded-2xl border border-dashed border-[#d8d0ca] p-6 text-center text-xs text-muted-foreground">Loading audio provider settings...</div> : <>
       <section className="mt-4 rounded-2xl border border-[#f1c7b5] bg-[#fffaf7] p-4" aria-labelledby="audio-provider-details-heading">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Audio feature</p><h3 id="audio-provider-details-heading" className="mt-1 text-base font-bold">{audioFeatureProfileRows.find((row) => row.key === selectedFeature)?.label ?? "Text to Speech"}</h3><p className="mt-1 text-[11px] leading-5 text-muted-foreground">ตั้งค่า model, provider, voice mapping และ transport ของฟีเจอร์นี้</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#fff0e9] px-2.5 py-1 text-[10px] font-bold text-primary">{audioProviderLabel(selectedFeatureProvider)}</span><Button variant="outline" size="sm" onClick={() => void testConnection()} disabled={testing || selectedFeatureProvider === "internal"}>{testing ? <LoaderCircle size={14} className="animate-spin" /> : <CheckCircle2 size={14} />} {testing ? "Testing..." : "Test connection"}</Button></div></div>
-        <div className="mt-4 flex gap-1 overflow-x-auto rounded-xl bg-[#f7f3f0] p-1 md:hidden" role="tablist" aria-label="Audio features">{audioFeatureProfileRows.map((row) => <button key={row.key} type="button" role="tab" aria-selected={selectedFeature === row.key} onClick={() => setSelectedFeature(row.key)} className={`shrink-0 rounded-lg px-3 py-2 text-[10px] font-bold transition ${selectedFeature === row.key ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{row.label}</button>)}</div>
+        {initialFeature !== "aiPresenter" ? <div className="mt-4 flex gap-1 overflow-x-auto rounded-xl bg-[#f7f3f0] p-1 md:hidden" role="tablist" aria-label="Audio features">{audioFeatureProfileRows.filter((row) => row.key !== "aiPresenter").map((row) => <button key={row.key} type="button" role="tab" aria-selected={selectedFeature === row.key} onClick={() => setSelectedFeature(row.key)} className={`shrink-0 rounded-lg px-3 py-2 text-[10px] font-bold transition ${selectedFeature === row.key ? "bg-white text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{row.label}</button>)}</div> : null}
         <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Provider</span><select value={draft.routing[selectedFeature]} onChange={(event) => setDraft((current) => current ? { ...current, routing: { ...current.routing, [selectedFeature]: event.target.value as AdminAudioProvider } } : current)} disabled={audioProviderOptions(selectedFeature).length === 1} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioFeatureProfileRows.find((row) => row.key === selectedFeature)?.label ?? selectedFeature} provider`}>{audioProviderOptions(selectedFeature).map((provider) => <option key={provider} value={provider}>{audioProviderLabel(provider)}</option>)}</select></label></div>
         <label className="mt-4 block max-w-xl"><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{audioFeatureProfileRows.find((row) => row.key === selectedFeature)?.label} model</span><select value={selectedFeatureModelId} onChange={(event) => selectFeatureModel(event.target.value)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${selectedFeature} model`}>{modelOptions.map((option) => <option key={option.id} value={option.id}>{option.label} ({option.id})</option>)}</select><span className="mt-1 block text-[10px] text-muted-foreground">ตั้ง model แยกเฉพาะ tab นี้</span></label>
         <div className="mt-4 grid gap-3 sm:grid-cols-2"><label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Default format</span><select value={selectedProviderSettings?.defaultFormat ?? "mp3"} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, [selectedFeatureProvider]: { ...current.providerSettings[selectedFeatureProvider], defaultFormat: event.target.value as "mp3" | "wav" | "ogg" } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 text-xs font-semibold outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioProviderLabel(selectedFeatureProvider)} default format`}><option value="mp3">MP3</option><option value="wav">WAV</option><option value="ogg">OGG</option></select></label>{selectedFeatureProvider === "internal" ? null : <label><span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">Request timeout (ms)</span><input type="number" min="1000" max="180000" step="1000" value={selectedProviderTimeoutMs ?? 60000} onChange={(event) => setDraft((current) => current ? { ...current, providerSettings: { ...current.providerSettings, [selectedFeatureProvider]: { ...current.providerSettings[selectedFeatureProvider], timeoutMs: Number(event.target.value) } } } : current)} className="h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary focus:ring-3 focus:ring-primary/10" aria-label={`${audioProviderLabel(selectedFeatureProvider)} request timeout`} /></label>}</div>
+        {selectedFeature === "podcastDialogue" && selectedFeatureModelId === "eleven_v4" ? <div className="mt-4 rounded-xl border border-[#eaded6] bg-white p-4"><div><h4 className="text-xs font-bold">Eleven v4 dialogue settings</h4><p className="mt-1 text-[10px] leading-4 text-muted-foreground">ปรับความคงที่ของการแสดงอารมณ์และความคล้ายของเสียง ตั้งแต่ 0 ถึง 1</p></div><div className="mt-3 grid gap-4 sm:grid-cols-2">{(["stability", "similarity"] as const).map((setting) => <label key={setting} className="block"><span className="mb-2 flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground"><span>{setting === "stability" ? "Stability" : "Similarity"}</span><span className="font-mono text-foreground">{dialogueSettings[setting].toFixed(2)}</span></span><input type="range" min="0" max="1" step="0.01" value={dialogueSettings[setting]} onChange={(event) => updateDialogueSetting(setting, Number(event.target.value))} className="w-full accent-[#f26b38]" aria-label={`Eleven v4 ${setting}`} /><span className="mt-1 flex justify-between text-[9px] text-muted-foreground"><span>0</span><span>1</span></span></label>)}</div></div> : null}
         <div className="mt-4 space-y-3">
+          {(selectedFeature === "textToSpeech" || selectedFeature === "aiPresenter") && selectedFeatureModelId === "eleven_v4" ? <div className="rounded-xl border border-[#eaded6] bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2"><div><strong className="text-xs">เสียงจากบัญชี ElevenLabs</strong><p className="mt-1 text-[11px] text-muted-foreground">เลือกเสียงที่ต้องการ แล้วแก้ชื่อและรูปด้านล่าง ก่อนกด Save provider settings</p></div><button type="button" className="rounded-lg border border-primary/40 px-3 py-2 text-xs font-semibold text-primary disabled:opacity-50" onClick={() => void loadElevenLabsVoices()} disabled={catalogLoading}>{catalogLoading ? "กำลังโหลด…" : "โหลดเสียง ElevenLabs"}</button></div>
+            {catalogVoices ? <div className="mt-3 max-h-64 space-y-1 overflow-y-auto">{catalogVoices.length ? catalogVoices.map((voice) => { const added = activeVoices.some((item) => item.id === voice.id); return <div key={voice.id} className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2"><div className="min-w-0"><strong className="block truncate text-xs">{voice.name}</strong><small className="block truncate text-muted-foreground">{voice.description || voice.id}</small></div><button type="button" className="shrink-0 rounded-lg border border-primary/30 px-3 py-1.5 text-xs text-primary disabled:opacity-50" onClick={() => addCatalogVoice(voice)} disabled={added}>{added ? "เพิ่มแล้ว" : "เพิ่ม"}</button></div>; }) : <p className="text-xs text-muted-foreground">ไม่พบเสียงในบัญชีนี้</p>}{catalogNext ? <button type="button" className="mt-2 text-xs font-semibold text-primary" disabled={catalogLoading} onClick={() => void loadElevenLabsVoices(catalogNext)}>โหลดเพิ่มเติม</button> : null}</div> : null}
+          </div> : null}
           <input ref={voiceImageInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file && voiceImageUploadIndex !== null) void uploadVoiceImage(voiceImageUploadIndex, file); event.currentTarget.value = ""; }} />
           <input ref={voiceAudioInputRef} type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/ogg,audio/mp4,audio/*" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file && voiceAudioUploadIndex !== null) void uploadVoiceAudio(voiceAudioUploadIndex, file); event.currentTarget.value = ""; }} />
           {selectedVoice ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#201d1b]/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="voice-detail-dialog-title"><div className="w-full max-w-2xl rounded-2xl border border-[#eaded6] bg-[#faf8f6] p-5 shadow-[0_24px_80px_rgba(68,49,36,0.25)]"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-primary">Voice {selectedVoiceIndex! + 1}</p><h3 id="voice-detail-dialog-title" className="mt-1 text-lg font-bold">Voice details</h3></div><button type="button" className="rounded-lg p-2 text-muted-foreground hover:bg-white" onClick={() => setSelectedVoiceIndex(null)} aria-label="Close voice details"><X size={17} /></button></div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Voice ID<input value={selectedVoice.id} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { id: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 font-mono text-xs outline-none focus:border-primary" /></label><label className="text-xs font-semibold">Display name<input value={selectedVoice.name} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { name: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary" /></label><label className="text-xs font-semibold sm:col-span-2">Description<input value={selectedVoice.description} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { description: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary" /></label><label className="text-xs font-semibold sm:col-span-2">Image URL<input type="url" value={selectedVoice.imageUrl ?? ""} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { imageUrl: event.target.value })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary" placeholder="https://.../voice.png" /><button type="button" className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/50 bg-[#fff0e9] px-3 text-[10px] font-bold text-primary hover:bg-[#ffe5d9] disabled:opacity-60" onClick={() => { setVoiceImageUploadIndex(selectedVoiceIndex); voiceImageInputRef.current?.click(); }} disabled={Boolean(voiceImageUploadingKey) || Boolean(voiceAudioUploadingKey)}>{voiceImageUploadingKey ? <LoaderCircle size={13} className="animate-spin" /> : <ImagePlus size={13} />} {voiceImageUploadingKey ? "Uploading…" : "Upload image"}</button></label><label className="text-xs font-semibold sm:col-span-2">Preview audio URL<input type="url" value={selectedVoice.previewUrl ?? ""} onChange={(event) => updateActiveVoice(selectedVoiceIndex!, { previewUrl: event.target.value, previewStorageKey: undefined })} className="mt-1.5 h-10 w-full rounded-xl border border-border bg-white px-3 text-xs outline-none focus:border-primary" /><button type="button" className="mt-2 inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/50 bg-[#fff0e9] px-3 text-[10px] font-bold text-primary hover:bg-[#ffe5d9] disabled:opacity-60" onClick={() => { setVoiceAudioUploadIndex(selectedVoiceIndex); voiceAudioInputRef.current?.click(); }} disabled={Boolean(voiceAudioUploadingKey) || Boolean(voiceImageUploadingKey)}>{voiceAudioUploadingKey ? <LoaderCircle size={13} className="animate-spin" /> : <AudioWaveform size={13} />} {voiceAudioUploadingKey ? "Uploading…" : "Upload audio"}</button></label></div><div className="mt-5 flex justify-between gap-2"><div className="flex gap-2"><button type="button" className="rounded-lg border border-[#9f3b3b]/40 px-3 py-2 text-xs font-semibold text-[#9f3b3b]" onClick={() => { removeActiveVoice(selectedVoiceIndex!); setSelectedVoiceIndex(null); }}>Remove</button><button type="button" className="rounded-lg border border-primary/50 px-3 py-2 text-xs font-semibold text-primary" onClick={() => void generateVoicePreview(selectedVoiceIndex!, selectedVoice)} disabled={Boolean(generatingPreviewKey) || Boolean(voiceAudioUploadingKey)}>{generatingPreviewKey ? "Generating…" : "Regenerate preview"}</button></div><button type="button" className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white hover:opacity-90" onClick={() => setSelectedVoiceIndex(null)}>Done</button></div></div></div> : null}
@@ -1085,7 +1144,7 @@ function AdminModelRoutesContent() {
   const requestedFeature = searchParams.get("feature");
   const audioFeatureParam = audioFeatureProfileRows.some((item) => item.key === requestedFeature) ? requestedFeature as AdminAudioFeature : null;
   const featureParam = (requestedFeature === "video" ? "image-to-video" : audioFeatureParam ? "audio" : requestedFeature) as FeatureId | null;
-  const feature = featureParam && [...imageFunctions, ...videoFunctions, ...documentFunctions, ...features].some((item) => item.id === featureParam) ? featureParam : imageFunctions[0].id;
+  const feature = featureParam && [...imageFunctions, ...videoFunctions, ...aiPresenterFunctions, ...documentFunctions, ...features].some((item) => item.id === featureParam) ? featureParam : imageFunctions[0].id;
   const [backgroundMode, setBackgroundMode] = useState<AiBackgroundMode>("remove");
   const routeKey = feature === "background-removal" ? `background-removal:${backgroundMode}` : feature;
   const [models, setModels] = useState<GenerationModelOption[]>([]);
@@ -1151,7 +1210,7 @@ function AdminModelRoutesContent() {
   const enabledCount = enabledModels.length;
   const enabledChanged = enabledModels.length !== savedEnabledModels.length || enabledModels.some((model) => !savedEnabledModels.includes(model));
   const hasChanges = selectedModel !== savedModel || enabledChanged;
-  const activeFeature = imageFunctions.find((item) => item.id === feature) ?? videoFunctions.find((item) => item.id === feature) ?? documentFunctions.find((item) => item.id === feature) ?? features.find((item) => item.id === feature) ?? imageFunctions[0];
+  const activeFeature = imageFunctions.find((item) => item.id === feature) ?? videoFunctions.find((item) => item.id === feature) ?? aiPresenterFunctions.find((item) => item.id === feature) ?? documentFunctions.find((item) => item.id === feature) ?? features.find((item) => item.id === feature) ?? imageFunctions[0];
   const tutorialFeature = audioFeatureParam ?? feature;
   const tutorialFeatureName = audioFeatureParam ? audioFeatureProfileRows.find((item) => item.key === audioFeatureParam)?.label ?? activeFeature.label : activeFeature.label;
 
@@ -1206,7 +1265,7 @@ function AdminModelRoutesContent() {
     setAssignmentBackgroundMode(backgroundMode);
     const assignmentModels = [...new Map([...catalog, ...models].map((item) => [item.model, item])).values()];
     setAssignmentCatalog(assignmentModels);
-    const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...documentFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
+    const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...aiPresenterFunctions.map((item) => item.id), ...documentFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
     const drafts = Object.fromEntries(targetFeatures.map((target) => {
       const targetRouteKey = target === "background-removal" ? `background-removal:${backgroundMode}` : target;
       // Use the already loaded mode-specific list for the active feature. This
@@ -1233,7 +1292,7 @@ function AdminModelRoutesContent() {
     setAssignmentSaving(true);
     setError("");
     try {
-      const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...documentFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
+      const targetFeatures = [...imageFunctions.map((item) => item.id), ...videoFunctions.map((item) => item.id), ...aiPresenterFunctions.map((item) => item.id), ...documentFunctions.map((item) => item.id), ...features.map((item) => item.id)] as FeatureId[];
       for (const target of targetFeatures) {
         const draft = assignmentDrafts[target] ?? { assignedModelIds: [], defaultModel: "" };
         if (draft.assignedModelIds.length > 0 && !draft.defaultModel) throw new Error(`${formatFeature(target)} needs a default model`);
@@ -1401,8 +1460,9 @@ function AdminModelRoutesContent() {
 
             {feature === "audio" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Audio provider" value="ElevenLabs" detail="Direct API for speech" accent="orange" /><StatCard label="Voice mappings" value="Per model" detail="Add Voice IDs below" accent="green" /><StatCard label="Other audio" value="WaveSpeed / Internal" detail="Clone, effects &amp; cleanup" accent="pink" /></div> : feature === "document-ocr" ? <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="OCR engine" value="iApp Thai OCR" detail="Dedicated OCR service" accent="orange" /><StatCard label="Status" value="Ready" detail="Available for document OCR" accent="green" /><StatCard label="Billing" value="Per page" detail="Based on document type" accent="pink" /></div> : <div className="mb-6 grid gap-3 sm:grid-cols-3"><StatCard label="Active feature" value={activeFeature.label} detail="Currently configuring" accent="orange" /><StatCard label="Allowed models" value={loading ? "—" : String(enabledCount)} detail={`${models.length} available for this function`} accent="green" /><StatCard label="All catalog models" value={loading ? "—" : String(catalogCount)} detail="Loaded before feature setup" accent="pink" /></div>}
 
-            <FeatureTutorialPanel feature={tutorialFeature} featureName={tutorialFeatureName} includeFeatureOverview={feature !== "image-to-video"} />
+            {feature !== "ai-presenter" ? <FeatureTutorialPanel feature={tutorialFeature} featureName={tutorialFeatureName} includeFeatureOverview={feature !== "image-to-video"} /> : null}
             {feature === "audio" ? <AudioProviderSettingsPanel key={audioFeatureParam ?? "textToSpeech"} initialFeature={audioFeatureParam ?? undefined} /> : null}
+            {feature === "ai-presenter" ? <AudioProviderSettingsPanel key="aiPresenter" initialFeature="aiPresenter" /> : null}
         {feature === "image-to-video" ? <VideoStoryboardSettingsPanel catalog={catalog} routeOverview={routeOverview} onRoutesChanged={load} onDetails={(item, routeFeature) => setDetailsModel({ item, routeFeature })} /> : null}
 
         {feature === "document-ocr" ? <OcrEnginePanel /> : feature === "audio" || feature === "image-to-video" ? null : <div className="grid gap-6 lg:grid-cols-1 lg:items-start">

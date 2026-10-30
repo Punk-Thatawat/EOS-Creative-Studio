@@ -9,6 +9,10 @@ export type DocumentSummary = {
   reportType?: string;
   reportTypeLabel?: string;
   reportTypeConfidence?: number;
+  reportPeriod?: string;
+  metrics?: Array<{ label: string; value: string; change?: string; trend?: "up" | "down" | "flat"; context?: string }>;
+  risks?: string[];
+  recommendations?: string[];
   sections?: Array<{ heading: string; items: string[] }>;
   keyTakeaways: string[];
   actionItems: Array<{ task: string; owner?: string; dueDate?: string }>;

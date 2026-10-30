@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText } from "lucide-react";
+import { ChevronDown, Download, FileText } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { OcrOutputFormat } from "@/lib/api/document-ocr";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
@@ -22,6 +22,7 @@ const DEFAULT_FORMATS: ReadonlyArray<{ id: OcrOutputFormat; label: string }> = [
 export function ExportMenu<F extends string = OcrOutputFormat>({
   hasResult,
   busy,
+  disabled = false,
   active,
   isUnavailable,
   hint,
@@ -30,6 +31,8 @@ export function ExportMenu<F extends string = OcrOutputFormat>({
 }: {
   hasResult: boolean;
   busy: boolean;
+  /** Keeps the whole button unusable, e.g. while there is nothing to export yet. */
+  disabled?: boolean;
   /** The format to highlight, if the menu is also a way of choosing one. */
   active?: F;
   isUnavailable?: (format: F) => boolean;
@@ -65,11 +68,12 @@ export function ExportMenu<F extends string = OcrOutputFormat>({
         aria-haspopup="menu"
         aria-expanded={open}
         title={hasResult ? t(K("ocr.tool.exportHint")) : t(K("ocr.tool.needResult"))}
-        disabled={busy}
+        disabled={busy || disabled}
         onClick={() => setOpen((value) => !value)}
       >
         <Download size={13} aria-hidden="true" />
         <span className={styles.toolbarLabel}>{busy ? t(K("ocr.exporting")) : t(K("preview.export"))}</span>
+        <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open && (
         <div className={styles.exportMenu} role="menu" aria-label={t(K("ocr.exportAs"))}>

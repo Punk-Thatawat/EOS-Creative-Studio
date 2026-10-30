@@ -43,6 +43,8 @@ export type CreditPricingSettings = {
 export type SignupCreditGrantSettings = {
   enabled: boolean;
   credits: number;
+  startDate: string | null;
+  endDate: string | null;
   updatedAt?: string;
 };
 
@@ -50,7 +52,7 @@ export type CreditPricingPreview = {
   provider: string;
   model: string;
   featureKey: string | null;
-  status: "ready" | "unavailable";
+  status: "ready" | "unavailable" | "internal";
   providerCostUsd?: number;
   providerCostThb?: number;
   costCredits?: number;
@@ -133,6 +135,6 @@ export async function getAdminSignupCreditGrant(): Promise<SignupCreditGrantSett
   return await adminRequest("/admin/signup-credit-grant") as SignupCreditGrantSettings;
 }
 
-export async function updateAdminSignupCreditGrant(input: { enabled: boolean; credits: number }): Promise<SignupCreditGrantSettings> {
+export async function updateAdminSignupCreditGrant(input: { enabled: boolean; credits: number; startDate: string | null; endDate: string | null }): Promise<SignupCreditGrantSettings> {
   return await adminRequest("/admin/signup-credit-grant", { method: "PATCH", body: JSON.stringify(input) }) as SignupCreditGrantSettings;
 }

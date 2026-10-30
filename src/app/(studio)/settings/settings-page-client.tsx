@@ -30,6 +30,7 @@ import { changePasswordWithBackend, getStoredBackendSession } from "@/lib/auth/b
 import { getApiAccessToken } from "@/lib/auth/access-token";
 import { fetchBackendAuthProvider, fetchBackendAuthSessions, type BackendSessionSummary } from "@/lib/auth/backend-session";
 import { useLocale, type Locale, type TranslationKey } from "@/lib/i18n/locale-provider";
+import { ApiKeysSection } from "./api-keys-section";
 import styles from "./settings-page.module.css";
 
 const settingsKeys = {
@@ -52,6 +53,7 @@ const settingsKeys = {
   fontValue: "settings.fontValue",
   fontHint: "settings.fontHint",
   security: "settings.security",
+  apiKeysNav: "settings.apiKeys.nav",
   securityDescription: "settings.securityDescription",
   authentication: "settings.authentication",
   authenticationValue: "settings.authenticationValue",
@@ -106,7 +108,7 @@ const settingsKeys = {
 
 type Copy = { [Key in keyof typeof settingsKeys]: string };
 
-const sectionIds = ["legal", "language", "security"] as const;
+const sectionIds = ["legal", "language", "security", "apikeys"] as const;
 const showNotificationSettings = false;
 const SETTINGS_CACHE_TTL_MS = 60_000;
 let cachedAuthProvider: { value: "email" | "google" | "unknown"; cachedAt: number } | null = null;
@@ -373,8 +375,8 @@ export function SettingsPageClient() {
         <aside className={styles.sectionNav} aria-label={t.overview}>
           <p className={styles.navLabel}>{t.overview}</p>
           {sectionIds.map((id) => {
-            const labels = { legal: t.legal, language: t.language, security: t.security };
-            const icons = { legal: FileText, language: Languages, security: LockKeyhole };
+            const labels = { legal: t.legal, language: t.language, security: t.security, apikeys: t.apiKeysNav };
+            const icons = { legal: FileText, language: Languages, security: LockKeyhole, apikeys: KeyRound };
             const Icon = icons[id];
             return (
               <button key={id} type="button" className={`${styles.navItem} ${activeSection === id ? styles.navItemActive : ""}`} onClick={() => scrollToSection(id)}>
@@ -433,9 +435,7 @@ export function SettingsPageClient() {
                   <p className={styles.rowTitle}>{t.password}</p>
                   <p className={styles.rowDescription}>{authProvider === "google" ? t.passwordManagedByGoogle : t.passwordDescription}</p>
                 </div>
-                {authProvider === "google" ? (
-                  <p className={styles.passwordGoogleNote} role="status">{t.passwordManagedByGoogle}</p>
-                ) : authProvider === "loading" ? (
+                {authProvider === "google" ? null : authProvider === "loading" ? (
                   <p className={styles.passwordGoogleNote} role="status">{t.authenticationLoading}</p>
                 ) : (
                   <form className={styles.passwordForm} onSubmit={handleChangePassword}>
@@ -452,6 +452,8 @@ export function SettingsPageClient() {
               </SettingRow>
             </div>
           </Card>
+
+          <ApiKeysSection />
 
           {showNotificationSettings && <Card className={styles.settingsCard} id="settings-notifications">
             <SectionHeading icon={Bell} title={t.notifications} description={t.notificationsDescription} tone="yellow" />

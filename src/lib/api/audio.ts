@@ -1,10 +1,12 @@
 import { getApiAccessToken } from "@/lib/auth/access-token";
+import { requestCreditBalanceSync } from "@/lib/credits/credit-events";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendOrigin = configuredBackendUrl.replace(/\/api\/v1$/, "");
 const backendApiUrl = `${backendOrigin}/api/v1`;
 
 export type TextToSpeechInput = {
+  feature?: "textToSpeech" | "aiPresenter";
   text: string;
   voice: string;
   modelId?: string;
@@ -31,6 +33,7 @@ export type TextToSpeechInput = {
 
 export type TextToSpeechSceneInput = { title: string; text: string; voice: string };
 export type TextToSpeechScenesInput = {
+  feature?: "textToSpeech" | "aiPresenter";
   scenes: TextToSpeechSceneInput[];
   modelId?: string;
   outputFormat: "mp3" | "wav" | "ogg";
@@ -110,7 +113,7 @@ export type AudioBackgroundMusic = {
   description: string;
   previewUrl?: string | null;
 };
-export type AudioFeatureKey = "textToSpeech" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
+export type AudioFeatureKey = "textToSpeech" | "aiPresenter" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
 
 export type DialogueSpeakerInput = { name: string; voice: string };
 export type DialogueEmotionTag = "happy" | "excited" | "calm" | "sad" | "serious" | "whispering" | "angry";
@@ -162,7 +165,7 @@ export type SoundEffectsInput = {
   outputFormat: "mp3" | "wav" | "ogg";
 };
 export type SoundEffectVariant = { index: number; audioBase64: string; contentType: string; outputFormat: "mp3" | "wav" | "ogg" };
-export type AudioHistoryFeature = "tts" | "dialogue" | "voice-clone" | "sound-effects" | "audio-cleanup";
+export type AudioHistoryFeature = "tts" | "dialogue" | "voice-clone" | "sound-effects" | "audio-cleanup" | "text-to-music";
 export type AudioHistoryEntry = {
   id: string;
   feature: AudioHistoryFeature;
@@ -200,7 +203,8 @@ export type AdminAudioVoiceSettings = {
 };
 export type AdminAudioVoiceProfile = { id: string; name: string; description: string; imageUrl: string; previewUrl: string; previewStorageKey?: string };
 export type AdminAudioModelProfile = { voices: AdminAudioVoiceProfile[] };
-export type AdminAudioFeatureProfile = { modelId: string; voices: AdminAudioVoiceProfile[]; models: Record<string, AdminAudioModelProfile> };
+export type AdminAudioDialogueSettings = { stability: number; similarity: number };
+export type AdminAudioFeatureProfile = { modelId: string; voices: AdminAudioVoiceProfile[]; models: Record<string, AdminAudioModelProfile>; settings?: AdminAudioDialogueSettings };
 export type AdminAudioBackgroundMusicPreset = {
   key: string;
   name: string;
@@ -214,7 +218,7 @@ export type AdminAudioBackgroundMusicPreset = {
 };
 
 export type AdminAudioProvider = "wavespeed" | "elevenlabs" | "internal";
-export type AdminAudioFeature = "textToSpeech" | "podcastDialogue" | "voiceClone" | "soundEffects" | "audioCleanup";
+export type AdminAudioFeature = AudioFeatureKey;
 export type AdminAudioRouting = Record<AdminAudioFeature, AdminAudioProvider>;
 export type AdminAudioProviderSettings = {
   wavespeed: { defaultFormat: "mp3" | "wav" | "ogg"; timeoutMs: number };
@@ -286,6 +290,9 @@ async function adminRequest(path: string, init: RequestInit = {}): Promise<unkno
   return payload;
 }
 
+// Endpoints that take credits, so the header balance is refreshed after they succeed.
+const CHARGED_AUDIO_PATH = /^\/audio\/(tts|tts\/scenes|dialogue|cleanup|text-to-music|sound-effects|sound-effects\/video|voice-clones|voice-clones\/[^/]+\/preview)$/;
+
 async function userAudioRequest(path: string, init: RequestInit = {}): Promise<Response> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in before generating audio");
@@ -304,6 +311,7 @@ async function userAudioRequest(path: string, init: RequestInit = {}): Promise<R
     const payload = await response.json().catch(() => null);
     throw new Error(getErrorMessage(payload));
   }
+  if (init.method === "POST" && CHARGED_AUDIO_PATH.test(path)) requestCreditBalanceSync();
   return response;
 }
 
@@ -398,8 +406,8 @@ export async function quoteTextToSpeechScenes(input: Omit<TextToSpeechScenesInpu
   throw new Error("Audio pricing unavailable");
 }
 
-export async function getAudioCreditBalance(): Promise<AudioCreditBalance> {
-  const response = await userAudioRequest("/users/me/credits", { headers: { Accept: "application/json" } });
+export async function getAudioCreditBalance(signal?: AbortSignal): Promise<AudioCreditBalance> {
+  const response = await userAudioRequest("/users/me/credits", { headers: { Accept: "application/json" }, signal });
   const payload = await response.json().catch(() => null) as { data?: { balance?: unknown } } | { balance?: unknown } | null;
   const data = payload && typeof payload === "object" && "data" in payload ? payload.data : payload;
   const balance = data && typeof data === "object" && "balance" in data ? Number(data.balance) : NaN;
@@ -599,6 +607,29 @@ export async function createVideoSoundEffect(input: { video: File; description?:
 
 export type SoundEffectsQuote = { provider: "wavespeed"; model: string; creditCost: number; pricingSource: "provider" | "fallback" };
 
+export async function quoteTextToMusic(durationSeconds: number, signal?: AbortSignal): Promise<SoundEffectsQuote> {
+  const response = await userAudioRequest("/audio/text-to-music/quote", { method: "POST", body: JSON.stringify({ durationSeconds }), signal });
+  const payload = await response.json() as { data?: SoundEffectsQuote };
+  if (!payload.data || !Number.isFinite(payload.data.creditCost)) throw new Error("Music pricing unavailable");
+  return payload.data;
+}
+
+export async function createTextToMusic(input: { prompt: string; durationSeconds: number }, signal?: AbortSignal): Promise<TextToSpeechResponse> {
+  return userAudioBlobRequest("/audio/text-to-music", { method: "POST", headers: { Accept: "audio/mpeg, audio/wav, audio/ogg" }, body: JSON.stringify(input), signal });
+}
+
+export async function quoteVideoSoundEffects(durationSeconds: number, signal?: AbortSignal): Promise<SoundEffectsQuote> {
+  const response = await userAudioRequest("/audio/sound-effects/video/quote", {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    body: JSON.stringify({ durationSeconds }),
+    signal,
+  });
+  const payload = await response.json().catch(() => null) as { data?: SoundEffectsQuote } | null;
+  if (!payload?.data) throw new Error("Sound effects pricing unavailable");
+  return payload.data;
+}
+
 export async function quoteSoundEffects(input: { durationSeconds: number; variationCount: number }, signal?: AbortSignal): Promise<SoundEffectsQuote> {
   const response = await userAudioRequest("/audio/sound-effects/quote", {
     method: "POST",
@@ -756,7 +787,7 @@ function legacyAdminVoicesFromProfiles(profiles: AdminAudioVoiceProfile[], fallb
   return voices;
 }
 
-const adminFeatureKeys: AudioFeatureKey[] = ["textToSpeech", "podcastDialogue", "voiceClone", "soundEffects", "audioCleanup"];
+const adminFeatureKeys: AudioFeatureKey[] = ["textToSpeech", "aiPresenter", "podcastDialogue", "voiceClone", "soundEffects", "audioCleanup"];
 
 function normalizeAdminModelProfileMap(
   value: unknown,
@@ -783,7 +814,8 @@ function normalizeAdminFeatureProfiles(value: unknown, modelProfiles: Record<str
   const activeVoices = modelProfiles[modelId]?.voices ?? fallbackVoices;
   const defaults: Record<AudioFeatureKey, AdminAudioFeatureProfile> = {
     textToSpeech: { modelId, voices: activeVoices, models: { [modelId]: { voices: activeVoices } } },
-    podcastDialogue: { modelId, voices: activeVoices, models: { [modelId]: { voices: activeVoices } } },
+    aiPresenter: { modelId: "eleven_v4", voices: [], models: { eleven_v4: { voices: [] } } },
+    podcastDialogue: { modelId: "eleven_v4", voices: activeVoices, models: { eleven_v4: { voices: activeVoices } }, settings: { stability: 0.5, similarity: 0.75 } },
     voiceClone: { modelId: "minimax/speech-2.6-hd", voices: activeVoices, models: { "minimax/speech-2.6-hd": { voices: activeVoices } } },
     soundEffects: { modelId: "mirelo-ai/sfx-1.6/text-to-audio", voices: [], models: { "mirelo-ai/sfx-1.6/text-to-audio": { voices: [] } } },
     audioCleanup: { modelId: "internal", voices: [], models: { internal: { voices: [] } } },
@@ -797,7 +829,16 @@ function normalizeAdminFeatureProfiles(value: unknown, modelProfiles: Record<str
     const baseVoices = models[selectedModelId]?.voices ?? modelProfiles[selectedModelId]?.voices ?? defaults[key].voices;
     const voices = profile.voices === undefined ? baseVoices : normalizeAdminVoiceProfiles(profile.voices, baseVoices);
     models[selectedModelId] = { voices };
-    return [key, { modelId: selectedModelId, voices: models[selectedModelId].voices, models }];
+    const settings = profile.settings && typeof profile.settings === "object" && !Array.isArray(profile.settings)
+      ? profile.settings as Record<string, unknown>
+      : {};
+    const clamp = (value: unknown, fallback: number) => typeof value === "number" && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : fallback;
+    return [key, {
+      modelId: selectedModelId,
+      voices: models[selectedModelId].voices,
+      models,
+      ...(key === "podcastDialogue" ? { settings: { stability: clamp(settings.stability, 0.5), similarity: clamp(settings.similarity, 0.75) } } : {}),
+    }];
   })) as Record<AudioFeatureKey, AdminAudioFeatureProfile>;
 }
 
@@ -843,9 +884,17 @@ export async function getAdminAudioSettings(): Promise<AdminAudioSettings> {
   return normalizeAdminAudioSettings(payload.data);
 }
 
+export async function listAdminElevenLabsVoices(pageToken?: string): Promise<{ voices: AdminAudioVoiceProfile[]; nextPageToken: string | null }> {
+  const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : "";
+  const payload = await adminRequest(`/api/v1/admin/audio-settings/providers/elevenlabs/voices${query}`) as { data?: { voices: Array<Omit<AdminAudioVoiceProfile, "imageUrl">>; nextPageToken: string | null } };
+  if (!payload.data || !Array.isArray(payload.data.voices)) throw new Error("Unable to load ElevenLabs voices");
+  return { voices: payload.data.voices.map((voice) => ({ ...voice, imageUrl: "" })), nextPageToken: payload.data.nextPageToken };
+}
+
 export async function updateAdminAudioSettings(input: AdminAudioSettingsPatch): Promise<AdminAudioSettings> {
   const payload = await adminRequest("/api/v1/admin/audio-settings", { method: "PATCH", body: JSON.stringify(input) }) as { data?: AdminAudioSettings };
   if (!payload.data) throw new Error("Unable to save audio settings");
+  audioCatalogCache.clear();
   return normalizeAdminAudioSettings(payload.data);
 }
 

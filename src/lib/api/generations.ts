@@ -358,7 +358,7 @@ export async function resumeTextToImage(pending: PendingGeneration, onProgress?:
   return resumeGeneration(pending, onProgress, signal);
 }
 
-export async function cancelGeneration(generationId: string, workspaceId: string): Promise<void> {
+export async function cancelGeneration(generationId: string, workspaceId: string): Promise<GenerationStatus> {
   const accessToken = await getAccessToken();
   const params = new URLSearchParams({ workspaceId });
   const response = await fetch(`${backendApiUrl}/generations/${encodeURIComponent(generationId)}/cancel?${params.toString()}`, {
@@ -367,6 +367,11 @@ export async function cancelGeneration(generationId: string, workspaceId: string
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
+  const status = payload && typeof payload === "object" ? unwrapGenerationStatus(payload)?.status : undefined;
+  if (status !== "queued" && status !== "processing" && status !== "completed" && status !== "failed" && status !== "cancelled") {
+    throw new Error("Could not confirm the generation status after cancellation");
+  }
+  return status;
 }
 
 export async function createImageToImage(input: ImageToImageInput, onProgress?: (progress: GenerationProgress) => void, signal?: AbortSignal): Promise<TextToImageResponse> {

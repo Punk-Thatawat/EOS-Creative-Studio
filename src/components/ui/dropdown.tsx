@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,12 +33,15 @@ export type DropdownProps = {
 export function Dropdown({ value, options, onChange, placeholder = "Select an option", triggerLabel, ariaLabel, disabled = false, loading = false, className, triggerClassName, menuClassName, optionClassName, menuPosition = "absolute" }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const [fixedMenuStyle, setFixedMenuStyle] = useState<CSSProperties | null>(null);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const selectedOption = options.find((option) => option.value === value);
   const isDisabled = disabled || loading || options.length === 0;
+  const enabledIndexes = options.flatMap((option, index) => (option.disabled ? [] : [index]));
+  const menuMounted = open && !isDisabled && (menuPosition === "absolute" || fixedMenuStyle !== null);
 
   useEffect(() => {
     if (!open) return;
@@ -99,6 +102,26 @@ export function Dropdown({ value, options, onChange, placeholder = "Select an op
     };
   }, [menuPosition, open]);
 
+  useEffect(() => {
+    // Keyboard focus lives on the listbox while it is open; Escape and choosing hand it back to the trigger.
+    if (menuMounted) menuRef.current?.focus({ preventScroll: true });
+  }, [menuMounted]);
+
+  useEffect(() => {
+    if (activeIndex >= 0) document.getElementById(`${listboxId}-option-${activeIndex}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, listboxId]);
+
+  const openMenu = () => {
+    const selectedIndex = options.findIndex((option) => option.value === value && !option.disabled);
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : (enabledIndexes[0] ?? -1));
+    setOpen(true);
+  };
+
+  const closeMenu = () => {
+    setOpen(false);
+    setFixedMenuStyle(null);
+  };
+
   const choose = (option: DropdownOption) => {
     if (option.disabled) return;
     onChange(option.value);
@@ -107,15 +130,42 @@ export function Dropdown({ value, options, onChange, placeholder = "Select an op
     triggerRef.current?.focus();
   };
 
-  const menu = open && !isDisabled && (menuPosition === "absolute" || fixedMenuStyle) ? <div ref={menuRef} id={listboxId} style={fixedMenuStyle ?? undefined} className={cn(menuPosition === "fixed" ? "fixed z-50 max-h-72 overflow-y-auto rounded-xl border border-border bg-white p-1.5 shadow-[0_14px_32px_rgba(33,29,25,0.16)]" : "absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-72 overflow-y-auto rounded-xl border border-border bg-white p-1.5 shadow-[0_14px_32px_rgba(33,29,25,0.16)]", menuClassName)} role="listbox" aria-label={ariaLabel}>
-    {options.map((option) => <button key={option.value} type="button" role="option" aria-selected={option.value === value} disabled={option.disabled} className={cn("flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-foreground transition-colors hover:bg-[#fff7f3] hover:text-primary disabled:cursor-not-allowed disabled:opacity-45", option.value === value && "bg-[#fff7f3] text-primary", optionClassName)} onClick={() => choose(option)}>
+  const handleListKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const position = enabledIndexes.indexOf(activeIndex);
+    const moveTo = (next: number | undefined) => {
+      if (next === undefined) return;
+      event.preventDefault();
+      setActiveIndex(next);
+    };
+    switch (event.key) {
+      case "ArrowDown": moveTo(enabledIndexes[Math.min(position + 1, enabledIndexes.length - 1)]); break;
+      case "ArrowUp": moveTo(enabledIndexes[Math.max(position - 1, 0)]); break;
+      case "Home": moveTo(enabledIndexes[0]); break;
+      case "End": moveTo(enabledIndexes[enabledIndexes.length - 1]); break;
+      case "Enter":
+      case " ": {
+        event.preventDefault();
+        const option = options[activeIndex];
+        if (option) choose(option);
+        break;
+      }
+      case "Tab":
+        // Behave like a native select: close and let Tab continue from the trigger.
+        closeMenu();
+        triggerRef.current?.focus();
+        break;
+    }
+  };
+
+  const menu = menuMounted ? <div ref={menuRef} id={listboxId} tabIndex={-1} aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined} onKeyDown={handleListKeyDown} style={fixedMenuStyle ?? undefined} className={cn(menuPosition === "fixed" ? "fixed z-50 max-h-72 overflow-y-auto rounded-xl border border-border bg-white p-1.5 shadow-[0_14px_32px_rgba(33,29,25,0.16)]" : "absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-72 overflow-y-auto rounded-xl border border-border bg-white p-1.5 shadow-[0_14px_32px_rgba(33,29,25,0.16)]", menuClassName, "outline-none")} role="listbox" aria-label={ariaLabel}>
+    {options.map((option, index) => <button key={option.value} id={`${listboxId}-option-${index}`} type="button" role="option" tabIndex={-1} aria-selected={option.value === value} disabled={option.disabled} onMouseEnter={() => { if (!option.disabled) setActiveIndex(index); }} className={cn("flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-foreground transition-colors hover:bg-[#fff7f3] hover:text-primary disabled:cursor-not-allowed disabled:opacity-45", (option.value === value || index === activeIndex) && "bg-[#fff7f3] text-primary", optionClassName)} onClick={() => choose(option)}>
       <span className="min-w-0 flex-1" data-no-translate={option.preserveLabel ? "true" : undefined}>{option.label}{option.description ? <small className="mt-0.5 block truncate text-[10px] font-normal text-muted-foreground" data-no-translate={option.preserveDescription ? "true" : undefined}>{option.description}</small> : null}</span>
       {option.value === value ? <Check size={15} className="shrink-0 text-primary" aria-hidden="true" /> : null}
     </button>)}
   </div> : null;
 
   return <div ref={rootRef} className={cn("relative min-w-0", className)}>
-    <button ref={triggerRef} type="button" className={cn("flex min-h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-white px-3 text-left text-xs font-semibold text-foreground outline-none transition focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-60", triggerClassName)} disabled={isDisabled} aria-haspopup="listbox" aria-expanded={open} aria-controls={listboxId} aria-label={ariaLabel} onClick={() => setOpen((current) => !current)}>
+    <button ref={triggerRef} type="button" className={cn("flex min-h-10 w-full items-center justify-between gap-3 rounded-xl border border-border bg-white px-3 text-left text-xs font-semibold text-foreground outline-none transition focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/10 disabled:cursor-not-allowed disabled:opacity-60", triggerClassName)} disabled={isDisabled} aria-haspopup="listbox" aria-expanded={open} aria-controls={listboxId} aria-label={ariaLabel} onClick={() => (open ? closeMenu() : openMenu())} onKeyDown={(event) => { if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) { event.preventDefault(); openMenu(); } }}>
       <span className="min-w-0 flex-1 truncate" data-no-translate={selectedOption?.preserveLabel ? "true" : undefined}>{loading ? <span className="inline-block h-3 w-24 animate-pulse rounded bg-surface-muted" aria-label="Loading" /> : triggerLabel ?? selectedOption?.label ?? placeholder}</span>
       <ChevronDown size={15} className={cn("shrink-0 transition-transform", open && "rotate-180")} aria-hidden="true" />
     </button>

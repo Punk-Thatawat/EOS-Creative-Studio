@@ -42,6 +42,10 @@ import {
   type AdminAudioSettings,
 } from "@/lib/api/audio";
 import {
+  listDocumentOcrTypes,
+  type OcrDocumentTypeInfo,
+} from "@/lib/api/document-ocr";
+import {
   listAdminCreditPricingRules,
   getAdminSignupCreditGrant,
   previewAdminCreditPricingRules,
@@ -85,7 +89,7 @@ const featureLabels: Record<string, string> = {
   "text-to-image": "Text to Image",
   "image-to-image": "Image to Image",
   "image-to-video": "Image to Video",
-  "video-to-sfx": "Video to SFX",
+  "video-to-sfx": "Sound Effects",
   "video-to-music": "Video to Music",
   "text-to-video": "Text to Video",
   "people-video": "People Video",
@@ -98,7 +102,20 @@ const featureLabels: Record<string, string> = {
   upscale: "Upscale",
   "extend-image": "Extend Image",
   audio: "Audio Text to Speech",
-  "audio-music": "Audio Background Music",
+  "audio-music": "Background Music Add-on",
+  podcastDialogue: "Podcast & Dialogue",
+  "audio-voice-clone": "Voice Clone",
+  "audio-sound-effects": "Sound Effects",
+  "audio-text-to-music": "Text to Music",
+  "audio-cleanup": "Audio Cleanup",
+  document: "Document",
+  "document-ocr": "Document OCR",
+  "document-summary": "Document Summary",
+  "document-translate": "Document Translation",
+  "document-contract": "Contract Review",
+  "document-report": "Document Report",
+  "document-form": "Form Reading",
+  "ai-presenter": "AI Presenter",
 };
 
 const featureOrder = [
@@ -117,24 +134,75 @@ const featureOrder = [
   "background-removal",
   "upscale",
   "extend-image",
+  "ai-presenter",
   "audio",
+  "podcastDialogue",
+  "audio-voice-clone",
+  "audio-sound-effects",
+  "audio-text-to-music",
+  "audio-cleanup",
   "audio-music",
+  "document",
+  "document-ocr",
+  "document-summary",
+  "document-translate",
+  "document-contract",
+  "document-report",
+  "document-form",
 ];
 
 const videoFeatureKeys = new Set([
   "video",
   "image-to-video",
-  "video-to-sfx",
   "video-to-music",
   "text-to-video",
   "people-video",
   "motion-transfer",
   "lipsync",
   "extend-video",
+  "ai-presenter",
 ]);
-type PricingCategoryFilter = "all" | "image" | "video" | "audio";
+type PricingCategoryFilter = "all" | "image" | "video" | "audio" | "document" | "presenter";
 
-const audioFeatureKeys = new Set(["audio", "audio-music"]);
+const presenterFeatureKeys = new Set(["ai-presenter"]);
+const documentFeatureKeys = new Set([
+  "document",
+  "document-ocr",
+  "document-summary",
+  "document-translate",
+  "document-contract",
+  "document-report",
+  "document-form",
+]);
+
+function matchesPricingCategory(featureKey: string, category: PricingCategoryFilter) {
+  if (category === "all") return true;
+  if (category === "presenter") return presenterFeatureKeys.has(featureKey);
+  if (category === "document") return documentFeatureKeys.has(featureKey);
+  if (category === "audio") return audioFeatureKeys.has(featureKey);
+  if (category === "video") return videoFeatureKeys.has(featureKey) && !presenterFeatureKeys.has(featureKey);
+  return !videoFeatureKeys.has(featureKey) && !audioFeatureKeys.has(featureKey) && !documentFeatureKeys.has(featureKey);
+}
+
+const audioFeatureKeys = new Set([
+  "audio",
+  "audio-music",
+  "podcastDialogue",
+  "audio-voice-clone",
+  "audio-sound-effects",
+  "audio-text-to-music",
+  "video-to-sfx",
+  "audio-cleanup",
+]);
+
+const audioFeatureGroups: Array<{ key: string; featureKeys: readonly string[] }> = [
+  { key: "audio", featureKeys: ["audio", "audio-music"] },
+  { key: "podcastDialogue", featureKeys: ["podcastDialogue"] },
+  { key: "audio-voice-clone", featureKeys: ["audio-voice-clone"] },
+  { key: "audio-sound-effects", featureKeys: ["audio-sound-effects", "video-to-sfx"] },
+  { key: "audio-text-to-music", featureKeys: ["audio-text-to-music"] },
+  { key: "audio-cleanup", featureKeys: ["audio-cleanup"] },
+];
 
 const fallbackModelRows: PricingRow[] = [
   {
@@ -179,12 +247,38 @@ function rowKey(row: PricingRow) {
   return `${row.provider}:${row.model}:${row.featureKey}`;
 }
 
+const PRICING_PREVIEW_BATCH_SIZE = 50;
+const UNUSED_VOICE_CLONE_MODELS = new Set([
+  "eleven_v3",
+  "elevenlabs_v3",
+  "elevenlabs/eleven-v3",
+  "eleven_multilingual_v2",
+  "elevenlabs_multilingual_v2",
+  "elevenlabs/multilingual-v2",
+]);
+
+async function previewPricingRowsInBatches(
+  models: Array<{
+    provider: string;
+    model: string;
+    featureKey?: string;
+    input?: Record<string, unknown>;
+  }>,
+): Promise<CreditPricingPreview[]> {
+  const previews: CreditPricingPreview[] = [];
+  for (let start = 0; start < models.length; start += PRICING_PREVIEW_BATCH_SIZE) {
+    const batch = models.slice(start, start + PRICING_PREVIEW_BATCH_SIZE);
+    previews.push(...(await previewAdminCreditPricingRules(batch)));
+  }
+  return previews;
+}
+
 function modelRowsFromOverview(
   overview: AdminModelRoutesOverview,
 ): PricingRow[] {
   const rows: PricingRow[] = [];
   for (const featureKey of featureOrder) {
-    if (audioFeatureKeys.has(featureKey)) continue;
+    if (audioFeatureKeys.has(featureKey) || featureKey === "document-ocr") continue;
     const routes = overview.routes[featureKey] ?? [];
     const visibleRoutes = routes.some((route) => route.enabled)
       ? routes.filter((route) => route.enabled)
@@ -196,14 +290,49 @@ function modelRowsFromOverview(
         model: route.model,
         provider: route.provider,
         displayName: route.displayName,
-        unit: videoFeatureKeys.has(featureKey) ? "Per video" : "Per image",
+        unit: presenterFeatureKeys.has(featureKey)
+          ? "Per scene · 13 sec sample"
+          : documentFeatureKeys.has(featureKey)
+            ? "Per document · token estimate"
+            : videoFeatureKeys.has(featureKey)
+              ? "Per video"
+              : "Per image",
         note:
-          route.provider === "wavespeed"
+          presenterFeatureKeys.has(featureKey)
+            ? "Provider quote for one 13-second scene; configure duration for a different estimate"
+            : documentFeatureKeys.has(featureKey)
+            ? "Estimate: 2,000 input + 1,000 output tokens; current Document billing remains unchanged"
+            : route.provider === "wavespeed"
             ? "Live quote from provider"
             : "Fallback until provider quote is available",
         capabilities: route.capabilities,
       });
     }
+  }
+  return rows;
+}
+
+function readableDocumentType(documentType: string) {
+  return documentType.replace(/-/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function documentOcrPricingRows(types: OcrDocumentTypeInfo[]): PricingRow[] {
+  const rows: PricingRow[] = [];
+  for (const type of types) {
+    const name = readableDocumentType(type.id);
+    const add = (variant: string, output: string) => rows.push({
+      feature: featureLabels["document-ocr"],
+      featureKey: "document-ocr",
+      model: `document-ocr/${type.id}/${variant}`,
+      provider: "iapp",
+      displayName: `${name} · ${output}`,
+      unit: "Per page",
+      note: "iApp published rate at 1.25 THB / IC · Document billing remains unchanged",
+    });
+    add("basic", "Text / JSON");
+    if (type.depths?.includes("advanced")) add("advanced", "Layout");
+    if (type.outputFormats.includes("docx")) add("docx", "DOCX export");
+    if (type.outputFormats.includes("pdf")) add("pdf", "Searchable PDF");
   }
   return rows;
 }
@@ -217,6 +346,8 @@ function audioModelName(model: string): string {
         ? "Eleven Turbo v2.5"
         : model === "eleven_v3"
           ? "Eleven v3"
+          : model === "eleven_v4" || model === "elevenlabs/eleven-v4"
+            ? "Eleven v4"
           : model === "music_v1"
             ? "ElevenLabs Music v1"
             : model === "music_v2"
@@ -226,40 +357,127 @@ function audioModelName(model: string): string {
 
 function audioPricingRows(settings: AdminAudioSettings): PricingRow[] {
   const rows: PricingRow[] = [];
-  const textToSpeech = settings.featureProfiles.textToSpeech;
-  const speechModelIds = new Set([
-    ...Object.keys(textToSpeech.models),
-    textToSpeech.modelId,
+  const addProfileRows = (
+    featureKey: string,
+    profile: AdminAudioSettings["featureProfiles"]["textToSpeech"],
+    provider: string,
+    unit: string,
+    note: string,
+  ) => {
+    const modelIds = new Set([...Object.keys(profile.models), profile.modelId]);
+    modelIds.forEach((model) => {
+      if (!model || model === "internal") return;
+      // MiniMax speech models are always served through WaveSpeed, even when
+      // the general Text-to-Speech route is configured as ElevenLabs.
+      const modelProvider =
+        featureKey === "audio" &&
+        model.trim().toLowerCase().startsWith("minimax/speech-")
+          ? "wavespeed"
+          : provider;
+      rows.push({
+        feature: featureLabels[featureKey] ?? featureKey,
+        featureKey,
+        model,
+        provider: modelProvider,
+        displayName: audioModelName(model),
+        unit,
+        note,
+      });
+    });
+  };
+
+  addProfileRows(
+    "audio",
+    settings.featureProfiles.textToSpeech,
+    settings.routing.textToSpeech,
+    "Per scene",
+    "Provider quote by text length",
+  );
+  addProfileRows(
+    "podcastDialogue",
+    settings.featureProfiles.podcastDialogue,
+    settings.routing.podcastDialogue,
+    "Per dialogue",
+    "Provider quote by spoken text length",
+  );
+
+  const cloneModels = new Set([
+    ...Object.keys(settings.featureProfiles.voiceClone.models),
+    settings.featureProfiles.voiceClone.modelId,
+    "minimax/voice-clone",
   ]);
-  speechModelIds.forEach((model) => {
-    if (!model || model === "internal") return;
+  cloneModels.forEach((model) => {
+    if (
+      !model ||
+      model === "internal" ||
+      UNUSED_VOICE_CLONE_MODELS.has(model.trim().toLowerCase())
+    ) return;
     rows.push({
-      feature: featureLabels.audio,
-      featureKey: "audio",
+      feature: featureLabels["audio-voice-clone"],
+      featureKey: "audio-voice-clone",
       model,
-      provider: "elevenlabs",
+      provider: settings.routing.voiceClone,
       displayName: audioModelName(model),
-      unit: "Per scene",
-      note: "ElevenLabs API pricing by character",
+      unit: model.trim().toLowerCase() === "minimax/voice-clone" ? "Per clone registration" : "Per voice preview",
+      note: model.trim().toLowerCase() === "minimax/voice-clone"
+        ? "WaveSpeed quote for MiniMax voice-clone creation"
+        : "WaveSpeed quote for speech generated with a cloned voice",
     });
   });
-  const musicModelIds = new Set(
-    settings.backgroundMusicPresets
-      .filter((preset) => preset.isActive)
-      .map((preset) => preset.musicModelId),
+
+  rows.push(
+    {
+      feature: featureLabels["audio-text-to-music"],
+      featureKey: "audio-text-to-music",
+      model: "sonilo/text-to-music",
+      provider: "wavespeed",
+      displayName: "Sonilo Text-to-Music",
+      unit: "Per second · 10 second minimum",
+      note: "WaveSpeed Sonilo · $0.0025 / second",
+    },
+    {
+      feature: featureLabels["audio-sound-effects"],
+      featureKey: "audio-sound-effects",
+      model: "sonilo/v1/text-to-sfx",
+      provider: settings.routing.soundEffects,
+      displayName: "Sonilo Text-to-SFX",
+      unit: "Per second · variations",
+      note: "WaveSpeed Sonilo · $0.002 / second",
+    },
+    {
+      feature: featureLabels["audio-sound-effects"],
+      featureKey: "video-to-sfx",
+      model: "sonilo/v1/video-to-sfx",
+      provider: settings.routing.soundEffects,
+      displayName: "Sonilo Video-to-SFX",
+      unit: "Per video second",
+      note: "WaveSpeed Sonilo · $0.009 / second",
+    },
+    {
+      feature: featureLabels["audio-cleanup"],
+      featureKey: "audio-cleanup",
+      model: "voice_isolator",
+      provider: "elevenlabs",
+      displayName: "ElevenLabs Voice Isolator",
+      unit: "Per audio minute",
+      note: "Used when paid cleanup tools are selected",
+    },
   );
-  if (!musicModelIds.size) musicModelIds.add("music_v1");
-  musicModelIds.forEach((model) => {
+
+  const hasGeneratedMusicPreset = settings.backgroundMusicPresets.some(
+    (preset) => preset.isActive && !preset.audioUrl && preset.prompt.trim(),
+  );
+  if (hasGeneratedMusicPreset) {
     rows.push({
       feature: featureLabels["audio-music"],
       featureKey: "audio-music",
-      model,
-      provider: "elevenlabs",
-      displayName: audioModelName(model),
+      model: "elevenlabs/music",
+      provider: "wavespeed",
+      displayName: audioModelName("elevenlabs/music"),
       unit: "Per background track",
-      note: "Eleven Music API pricing by minute",
+      note: "Background music add-on for speech and dialogue",
     });
-  });
+  }
   return rows;
 }
 
@@ -462,10 +680,26 @@ function pricingProperties(row: PricingRow): Array<[string, PricingProperty]> {
   const fromSchema = Object.entries(properties).filter(([name, property]) =>
     isPricingProperty(name, property as PricingProperty),
   ) as Array<[string, PricingProperty]>;
-  if (fromSchema.length > 0) return fromSchema.slice(0, 8);
+  const customProperties: Array<[string, PricingProperty]> = [];
+  if (row.provider === "iapp" && row.featureKey === "document-ocr") {
+    customProperties.push(["pages", { title: "Pages", type: "integer", default: 1, minimum: 1, maximum: 100000 }]);
+  } else if (documentFeatureKeys.has(row.featureKey) && row.featureKey !== "document-ocr") {
+    customProperties.push(
+      ["input_tokens", { title: "Estimated input tokens", type: "integer", default: 2000, minimum: 0, maximum: 1000000 }],
+      ["output_tokens", { title: "Estimated output tokens", type: "integer", default: 1000, minimum: 0, maximum: 1000000 }],
+    );
+  }
+  if (presenterFeatureKeys.has(row.featureKey)) {
+    customProperties.push(["duration", { title: "Scene duration (seconds)", type: "integer", default: 13, minimum: 1, maximum: 15 }]);
+  }
+  const mergeCustomProperties = (base: Array<[string, PricingProperty]>) => {
+    const missingCustom = customProperties.filter(([name]) => !base.some(([baseName]) => baseName === name));
+    return [...base.slice(0, Math.max(0, 8 - missingCustom.length)), ...missingCustom].slice(0, 8);
+  };
+  if (fromSchema.length > 0) return mergeCustomProperties(fromSchema);
 
   const capabilities = row.capabilities;
-  if (!capabilities) return [];
+  if (!capabilities) return customProperties;
   const fields = new Map<string, PricingProperty>();
   const add = (name: string | undefined, property: PricingProperty) => {
     if (name && capabilities.parameters.includes(name))
@@ -497,11 +731,11 @@ function pricingProperties(row: PricingRow): Array<[string, PricingProperty]> {
     minimum: 1,
     maximum: 8,
   });
-  return [...fields.entries()];
+  return mergeCustomProperties([...fields.entries()]);
 }
 
 function defaultScenarioValues(row: PricingRow): Record<string, unknown> {
-  return Object.fromEntries(
+  const values = Object.fromEntries(
     pricingProperties(row).map(([name, property]) => {
       if (property.default !== undefined) return [name, property.default];
       if (Array.isArray(property.enum) && property.enum.length > 0) {
@@ -514,6 +748,14 @@ function defaultScenarioValues(row: PricingRow): Record<string, unknown> {
       return [name, undefined];
     }),
   );
+  return {
+    ...values,
+    ...(row.provider === "iapp" && row.featureKey === "document-ocr" ? { pages: 1 } : {}),
+    ...(documentFeatureKeys.has(row.featureKey) && row.featureKey !== "document-ocr"
+      ? { input_tokens: 2000, output_tokens: 1000 }
+      : {}),
+    ...(presenterFeatureKeys.has(row.featureKey) ? { duration: 13, aspect_ratio: "16:9" } : {}),
+  };
 }
 
 function cleanScenarioValues(values: Record<string, unknown>) {
@@ -1140,20 +1382,24 @@ function AdminCreditsContent() {
   const [modelSearch, setModelSearch] = useState("");
   const [signupBonusEnabled, setSignupBonusEnabled] = useState(false);
   const [signupBonusCredits, setSignupBonusCredits] = useState("0");
+  const [signupBonusStartDate, setSignupBonusStartDate] = useState("");
+  const [signupBonusEndDate, setSignupBonusEndDate] = useState("");
   const [signupBonusDirty, setSignupBonusDirty] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [settings, overview, audioSettings]: [
+      const [settings, overview, audioSettings, documentOcrTypes]: [
         CreditPricingSettings,
         AdminModelRoutesOverview,
         AdminAudioSettings,
+        OcrDocumentTypeInfo[],
       ] = await Promise.all([
         listAdminCreditPricingRules(),
         listAdminModelRoutesOverview(),
         getAdminAudioSettings(),
+        listDocumentOcrTypes().catch(() => []),
       ]);
       const signupBonus: SignupCreditGrantSettings = await getAdminSignupCreditGrant();
       setPricingRules(settings.rules);
@@ -1170,11 +1416,14 @@ function AdminCreditsContent() {
       setRoundingDecimals(settings.defaults.roundingDecimals);
       setSignupBonusEnabled(signupBonus.enabled);
       setSignupBonusCredits(String(signupBonus.credits));
+      setSignupBonusStartDate(signupBonus.startDate ?? "");
+      setSignupBonusEndDate(signupBonus.endDate ?? "");
       setSignupBonusDirty(false);
       setGlobalDirty(false);
       const nextRows = [
         ...modelRowsFromOverview(overview),
         ...audioPricingRows(audioSettings),
+        ...documentOcrPricingRows(documentOcrTypes),
       ];
       const rowsForPreview = nextRows.length > 0 ? nextRows : fallbackModelRows;
       if (nextRows.length > 0) setModelRows(nextRows);
@@ -1187,7 +1436,7 @@ function AdminCreditsContent() {
         ),
       );
       setQuotesLoading(true);
-      void previewAdminCreditPricingRules(
+      void previewPricingRowsInBatches(
         rowsForPreview.map((row) => ({
           provider: row.provider,
           model: row.model,
@@ -1425,12 +1674,23 @@ function AdminCreditsContent() {
       setError("Welcome credits must be between 0 and 1,000,000");
       return;
     }
+    if (signupBonusStartDate && signupBonusEndDate && signupBonusEndDate < signupBonusStartDate) {
+      setError("End date must be on or after the start date");
+      return;
+    }
     setSavingKey("signup-bonus");
     setError("");
     try {
-      const savedSettings = await updateAdminSignupCreditGrant({ enabled: signupBonusEnabled, credits });
+      const savedSettings = await updateAdminSignupCreditGrant({
+        enabled: signupBonusEnabled,
+        credits,
+        startDate: signupBonusStartDate || null,
+        endDate: signupBonusEndDate || null,
+      });
       setSignupBonusEnabled(savedSettings.enabled);
       setSignupBonusCredits(String(savedSettings.credits));
+      setSignupBonusStartDate(savedSettings.startDate ?? "");
+      setSignupBonusEndDate(savedSettings.endDate ?? "");
       setSignupBonusDirty(false);
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2800);
@@ -1535,39 +1795,52 @@ function AdminCreditsContent() {
     }
   };
 
-  const dirtyRows = modelRows.filter((row) => draftFor(row).dirty);
+  const dirtyRows = modelRows.filter(
+    (row) => draftFor(row).dirty && !documentFeatureKeys.has(row.featureKey),
+  );
   const availableFeatureKeys = useMemo(
-    () =>
-      featureOrder.filter((featureKey) =>
-        modelRows.some((row) => {
-          if (row.featureKey !== featureKey) return false;
-          if (categoryFilter === "video")
-            return videoFeatureKeys.has(featureKey);
-          if (categoryFilter === "image")
-            return !videoFeatureKeys.has(featureKey) && !audioFeatureKeys.has(featureKey);
-          if (categoryFilter === "audio")
-            return audioFeatureKeys.has(featureKey);
-          return true;
-        }),
-      ),
+    () => {
+      const rowMatchesCategory = (featureKey: string) => matchesPricingCategory(featureKey, categoryFilter);
+      const groupHasRows = (featureKeys: readonly string[]) =>
+        modelRows.some((row) => featureKeys.includes(row.featureKey) && rowMatchesCategory(row.featureKey));
+
+      if (categoryFilter === "audio") {
+        return audioFeatureGroups
+          .filter((group) => groupHasRows(group.featureKeys))
+          .map((group) => group.key);
+      }
+
+      const available: string[] = [];
+      const seenGroups = new Set<string>();
+      for (const featureKey of featureOrder) {
+        if (audioFeatureKeys.has(featureKey)) {
+          const group = audioFeatureGroups.find((candidate) => candidate.featureKeys.includes(featureKey));
+          if (!group || seenGroups.has(group.key)) continue;
+          seenGroups.add(group.key);
+          if (groupHasRows(group.featureKeys)) available.push(group.key);
+          continue;
+        }
+        if (modelRows.some((row) => row.featureKey === featureKey && rowMatchesCategory(featureKey))) {
+          available.push(featureKey);
+        }
+      }
+      return available;
+    },
     [categoryFilter, modelRows],
   );
   const selectedFeatureFilter = availableFeatureKeys.includes(featureFilter)
     ? featureFilter
     : "all";
+  const selectedFeatureKeys = audioFeatureGroups.find(
+    (group) => group.key === selectedFeatureFilter,
+  )?.featureKeys;
   const filteredModelRows = useMemo(() => {
     const normalizedSearch = modelSearch.trim().toLowerCase();
     return modelRows.filter((row) => {
-      const matchesCategory = categoryFilter === "all"
-        ? true
-        : categoryFilter === "video"
-          ? videoFeatureKeys.has(row.featureKey)
-          : categoryFilter === "audio"
-            ? audioFeatureKeys.has(row.featureKey)
-            : !videoFeatureKeys.has(row.featureKey) && !audioFeatureKeys.has(row.featureKey);
+      const matchesCategory = matchesPricingCategory(row.featureKey, categoryFilter);
       const matchesFeature =
         selectedFeatureFilter === "all" ||
-        row.featureKey === selectedFeatureFilter;
+        (selectedFeatureKeys ?? [selectedFeatureFilter]).includes(row.featureKey);
       const searchable =
         `${row.feature} ${row.displayName} ${row.provider} ${row.model}`.toLowerCase();
       return (
@@ -1576,7 +1849,7 @@ function AdminCreditsContent() {
         (!normalizedSearch || searchable.includes(normalizedSearch))
       );
     });
-  }, [categoryFilter, modelRows, modelSearch, selectedFeatureFilter]);
+  }, [categoryFilter, modelRows, modelSearch, selectedFeatureFilter, selectedFeatureKeys]);
   const hasActiveFilters =
     categoryFilter !== "all" ||
     selectedFeatureFilter !== "all" ||
@@ -1714,13 +1987,13 @@ function AdminCreditsContent() {
                   <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
-                        New user welcome credits
+                        New user credit campaign
                       </p>
                       <h2 className="mt-1 text-xl font-bold tracking-tight">
-                        เครดิตต้อนรับผู้สมัครใหม่
+                        แคมเปญเครดิตผู้สมัครใหม่
                       </h2>
                       <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                        แจกอัตโนมัติครั้งเดียวหลังสมัครสมาชิกสำเร็จ ใช้ idempotency กันการแจกซ้ำ
+                        แจกเครดิตครั้งเดียวให้ผู้สมัครใหม่ เฉพาะผู้ที่สมัครภายในช่วงวันที่กำหนด
                       </p>
                     </div>
                     <Button
@@ -1756,6 +2029,37 @@ function AdminCreditsContent() {
                       />
                       เปิดใช้งานการแจกเครดิตอัตโนมัติ
                     </label>
+                  </div>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <label className="block text-xs font-semibold text-foreground">
+                      วันเริ่มแคมเปญ
+                      <input
+                        type="date"
+                        value={signupBonusStartDate}
+                        max={signupBonusEndDate || undefined}
+                        onChange={(event) => {
+                          setSignupBonusStartDate(event.target.value);
+                          setSignupBonusDirty(true);
+                        }}
+                        className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-foreground">
+                      วันสิ้นสุดแคมเปญ
+                      <input
+                        type="date"
+                        value={signupBonusEndDate}
+                        min={signupBonusStartDate || undefined}
+                        onChange={(event) => {
+                          setSignupBonusEndDate(event.target.value);
+                          setSignupBonusDirty(true);
+                        }}
+                        className="mt-2 h-11 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary focus:ring-3 focus:ring-primary/10"
+                      />
+                    </label>
+                    <p className="text-xs leading-5 text-muted-foreground sm:col-span-2">
+                      ระบบนับรวมวันเริ่มต้นและวันสิ้นสุดตามเวลาไทย เว้นวันที่ว่างไว้หากต้องการให้แคมเปญไม่มีวันจำกัด
+                    </p>
                   </div>
                 </Card>
 
@@ -2007,6 +2311,8 @@ function AdminCreditsContent() {
                         <option value="image">Image</option>
                         <option value="video">Video</option>
                         <option value="audio">Audio</option>
+                        <option value="document">Document</option>
+                        <option value="presenter">AI Presenter</option>
                       </select>
                     </label>
                     <label className="min-w-[170px] flex-1 sm:flex-none">
@@ -2122,6 +2428,11 @@ function AdminCreditsContent() {
                                   <p className="mt-0.5 break-all font-mono text-[9px] leading-3 text-muted-foreground">
                                     {row.provider} · {row.model}
                                   </p>
+                                  {(documentFeatureKeys.has(row.featureKey) || presenterFeatureKeys.has(row.featureKey)) ? (
+                                    <p className="mt-1 text-[9px] leading-3 text-muted-foreground" title={row.note}>
+                                      {row.note}
+                                    </p>
+                                  ) : null}
                                 </td>
                                 <td className="px-3 py-2">
                                   {previewLoading ? (
@@ -2135,12 +2446,20 @@ function AdminCreditsContent() {
                                         credit
                                       </p>
                                       <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                                        ฿{formatMetric(preview.providerCostThb)}{" "}
-                                        · $
-                                        {formatMetric(
-                                          preview.providerCostUsd,
-                                          4,
-                                        )}
+                                        ฿{formatMetric(preview.providerCostThb)}
+                                        {preview.providerCostUsd !== undefined ? ` · $${formatMetric(preview.providerCostUsd, 4)}` : ""}
+                                      </p>
+                                    </>
+                                  ) : preview?.status === "internal" ? (
+                                    <>
+                                      <p className="font-semibold text-muted-foreground">
+                                        Internal
+                                      </p>
+                                      <p
+                                        className="mt-0.5 text-[9px] text-muted-foreground"
+                                        title={preview.message}
+                                      >
+                                        No provider charge
                                       </p>
                                     </>
                                   ) : (
@@ -2302,8 +2621,8 @@ function AdminCreditsContent() {
                                       variant={dirty ? "default" : "outline"}
                                       className="h-7 px-1.5 text-[10px]"
                                       onClick={() => void saveRows([row])}
-                                      disabled={!dirty || savingKey !== ""}
-                                      title="Save pricing rule"
+                                      disabled={!dirty || savingKey !== "" || documentFeatureKeys.has(row.featureKey)}
+                                      title={documentFeatureKeys.has(row.featureKey) ? "Preview only; Document uses its existing fixed-credit billing" : "Save pricing rule"}
                                     >
                                       {savingKey === "all" ? (
                                         <LoaderCircle

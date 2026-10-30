@@ -19,6 +19,12 @@ const generationPendingStorageKeys = [
   "eos.generation.pending.motion-transfer",
   "eos.generation.pending.lipsync",
   "eos.generation.pending.extend-video",
+  "eos.generation.pending.document-ocr",
+  "eos.generation.pending.document-summary",
+  "eos.generation.pending.document-translate",
+  "eos.generation.pending.document-contract",
+  "eos.generation.pending.document-report",
+  "eos.generation.pending.document-form",
 ];
 
 const accountScopedCreateStorageKeys = [

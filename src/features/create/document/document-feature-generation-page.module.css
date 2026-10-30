@@ -24,6 +24,34 @@
   padding: 20px 32px;
 }
 
+/* The generated Gen Document artwork is the shared hero for every document mode. */
+.hero {
+  display: block;
+  height: 220px;
+  min-height: 0;
+  aspect-ratio: auto;
+  padding: 0;
+  background: #fff;
+}
+.heroBanner {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+.heroBannerImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+@media (max-width: 767.98px) {
+  .hero {
+    height: 115px;
+    min-height: 115px;
+  }
+}
+
 .heroCopy {
   position: relative;
   z-index: 2;
@@ -302,6 +330,12 @@
   color: #a1a6ab;
 }
 
+@media (max-width: 700px) {
+  .modeTabs {
+    display: none;
+  }
+}
+
 .sourcePanel,
 .previewPanel,
 .settingsPanel {
@@ -576,14 +610,16 @@
   min-height: 52px;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
   border-bottom: 1px solid #efedeb;
 }
 
 .previewHeader > div:first-child {
   display: flex;
+  min-width: 0;
   align-items: baseline;
   gap: 8px;
+  white-space: nowrap;
 }
 .previewHeader > div:first-child > span {
   color: #252a2f;
@@ -599,7 +635,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
   color: #59626b;
   font-size: 10px;
 }
@@ -1145,7 +1181,7 @@
   margin-top: 14px;
   border: 0;
   border-radius: 8px;
-  background: linear-gradient(90deg, #f64d00, #fa6a0a);
+  background: #ff620b url("/generated-assets/generate-button-bg.png") center / 100% 100% no-repeat;
   color: #fff;
   font: inherit;
   font-size: 11px;
@@ -1165,12 +1201,7 @@
   color: #969ca2;
   font-size: 10px;
 }
-.secureNote > span {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #42a87c;
-}
+.secureNote > svg { flex: none; color: #7b818a; }
 
 .resourceShelf {
   display: grid;
@@ -1484,6 +1515,12 @@
   .settingsPanel .estimate,
   .settingsPanel .generateButton {
     max-width: none;
+  }
+  .settingsPanel .generateButton {
+    border: 1px solid rgba(255, 255, 255, .22);
+    border-radius: 9px;
+    background: #ff620b url("/generated-assets/generate-button-bg.png") center / 100% 100% no-repeat;
+    box-shadow: 0 8px 18px rgba(242, 107, 56, .26);
   }
   .resourceShelf {
     gap: 11px;
@@ -2166,30 +2203,38 @@
 }
 .toolbarButton {
   display: inline-flex;
-  min-height: 26px;
+  min-height: 28px;
+  flex: none;
   align-items: center;
+  justify-content: center;
   gap: 4px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  padding: 0 6px;
+  padding: 0 5px;
   color: #59626b;
   font: inherit;
   font-size: 10px;
   cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
 }
 .toolbarButton:hover:not(:disabled) {
-  background: #fff2ea;
-  color: var(--doc-orange);
+  border-color: #eee5df;
+  background: #fff8f4;
+  color: #e65e2e;
+}
+.toolbarButton:focus-visible {
+  outline: 2px solid #f36c35;
+  outline-offset: 1px;
 }
 .toolbarButton:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .toolbarButtonActive {
-  background: #fff2ea;
-  color: var(--doc-orange);
-  box-shadow: inset 0 0 0 1px #f6a17d;
+  border-color: #f2c8b5;
+  background: #fff6f1;
+  color: #e65e2e;
 }
 .zoomSelect {
   position: relative;
@@ -2320,6 +2365,11 @@
   white-space: nowrap;
 }
 
+.toolbarZoomValue {
+  min-width: 43px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Phones and small tablets */
 @media (max-width: 767px) {
   .previewHeader {
@@ -2401,6 +2451,26 @@
   color: #9aa1a8;
   font-size: 11px;
   line-height: 1.5;
+}
+
+/* Keep the document toolbar inside the preview column on medium desktop widths. */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  .previewHeader > div:first-child {
+    min-width: 0;
+  }
+  .previewToolbar {
+    flex: 0 1 auto;
+    gap: 4px;
+  }
+  .toolbarButton {
+    padding-inline: 4px;
+  }
+  .toolbarLabel {
+    display: none;
+  }
+  .exportMenuWrap .toolbarLabel {
+    display: inline;
+  }
 }
 .outputCardFilled {
   cursor: pointer;
@@ -3526,48 +3596,6 @@
   margin-left: 8px;
 }
 
-/*
- * Screen sizes. The shared workspace shell puts the settings beside the preview from 768px up, which leaves a tablet in
- * portrait a preview column too narrow for the form tools. So below 1440px (every tablet, and 1280px smart displays such
- * as the Nest Hub Max, whose sidebar leaves only about 1090px) everything stacks in one column like on an iPad.
- */
-@media (max-width: 1439.98px) {
-  [data-creator-workspace].docShell {
-    --creator-workspace-columns: minmax(0, 1fr);
-  }
-  [data-creator-workspace].docShell aside,
-  [data-creator-workspace].docShell main {
-    border-left: 0;
-    border-right: 0;
-  }
-  [data-creator-workspace].docShell main {
-    border-top: 1px solid #e5e2df;
-    border-bottom: 1px solid #e5e2df;
-  }
-  /* From 1280px the shell lays the row of modes over two of its three columns; with one column it takes the whole width. */
-  [data-creator-workspace].docShell > [class*="creator-workspace-layout_tabs"] > * {
-    grid-column: 1 / -1;
-  }
-  [data-creator-workspace].docShell > [class*="creator-workspace-layout_tabs"]::after {
-    display: none;
-  }
-  [data-creator-workspace].docShell aside:last-child {
-    grid-column: 1 / -1;
-  }
-  /* Stacked, the panels are as tall as what they hold: the 660px they keep side by side would leave empty space below. */
-  .sourcePanel,
-  .previewPanel,
-  .settingsPanel {
-    min-height: 0;
-  }
-  /* The settings would otherwise stretch across the whole width. */
-  .settingsPanel .modelCards {
-    max-width: 420px;
-  }
-  .settingsPanel .formatCards {
-    max-width: 380px;
-  }
-}
 /* Narrow phones: three tabs share the width, so their labels get less padding to wrap onto two lines, not three. */
 @media (max-width: 479.98px) {
   .previewTabs button {
@@ -3576,54 +3604,6 @@
   }
   .previewTabs {
     gap: 2px;
-  }
-}
-/*
- * Laptops from 1440px (with the app's own sidebar taking about 190px of it): the shell's default columns leave the form
- * too little room for its tools, so the two side panels give it some of theirs.
- */
-@media (min-width: 1440px) and (max-width: 1599.98px) {
-  [data-creator-workspace].docShell {
-    --creator-workspace-columns: minmax(230px, 0.6fr) minmax(0, 2fr) minmax(230px, 0.65fr);
-  }
-  /* The row of modes would no longer fit in the first two columns, so it takes the whole width. */
-  [data-creator-workspace].docShell > [class*="creator-workspace-layout_tabs"] > * {
-    grid-column: 1 / -1;
-  }
-  [data-creator-workspace].docShell > [class*="creator-workspace-layout_tabs"]::after {
-    display: none;
-  }
-}
-/*
- * Stacked on a tablet or a smart display, the settings would be one narrow strip along a wide page. They are laid out in
- * two columns instead: what to read the form with on the left, and the cost and the button to start on the right, like
- * the summary beside a checkout.
- */
-@media (min-width: 768px) and (max-width: 1439.98px) {
-  .settingsPanel {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-    grid-auto-flow: row dense;
-    column-gap: 32px;
-    align-content: start;
-    align-items: start;
-  }
-  .settingsPanel > * {
-    grid-column: 1;
-  }
-  .settingsPanel > :first-child {
-    grid-column: 1 / -1;
-  }
-  .settingsPanel > .estimate,
-  .settingsPanel > .generateButton,
-  .settingsPanel > .summaryError,
-  .settingsPanel > .secureNote {
-    grid-column: 2;
-  }
-  .settingsPanel .estimate,
-  .settingsPanel .generateButton,
-  .settingsPanel .modelCards {
-    max-width: none;
   }
 }
 .modelLoadError {
@@ -3649,4 +3629,9 @@
 /* OCR: the tabs sit under the preview and the results, like Summarize, so the page is what you see first. */
 .previewTabsBottom {
   margin-top: 14px;
+}
+
+/* Nothing uploaded in OCR: the sample page is shown at full strength, with no card over it. */
+.documentSheetSample {
+  opacity: 1;
 }

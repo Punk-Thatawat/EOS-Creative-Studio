@@ -138,7 +138,7 @@ function AuthField({ id, name, label, value, placeholder, type, autoComplete, ic
       <div className="auth-input-wrap">
         <Icon className="auth-input-icon" size={17} aria-hidden="true" />
         <input id={id} name={name ?? id} value={value} onChange={(event) => onChange(event.target.value)} type={inputType} placeholder={placeholder} autoComplete={autoComplete} autoCapitalize={type === "email" ? "none" : undefined} spellCheck={type === "email" ? false : undefined} required={required} minLength={minLength} disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={descriptionId} />
-        {type === "password" && onTogglePassword ? <button type="button" className="auth-password-toggle" aria-label={passwordToggleLabel} onClick={onTogglePassword} disabled={disabled}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button> : null}
+        {type === "password" && onTogglePassword ? <button type="button" className="auth-password-toggle" aria-label={passwordToggleLabel} onClick={onTogglePassword} disabled={disabled}>{showPassword ? <Eye size={17} /> : <EyeOff size={17} />}</button> : null}
       </div>
       {error ? <p id={`${id}-error`} className="auth-field-error"><CircleAlert size={13} aria-hidden="true" />{error}</p> : null}
     </div>
@@ -155,6 +155,17 @@ function getPasswordStrength(password: string): { labelKey: PasswordStrengthLabe
 function isInvalidCredentialsError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return /invalid (email or password|credentials)|incorrect (email|password)|อีเมลหรือรหัสผ่านไม่ถูกต้อง/i.test(message);
+}
+
+const emailPattern = /^[^\s@]+@[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?(?:\.[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?)*\.\p{L}{2,}$/u;
+
+// The backend returns class-validator messages in English; swap known ones for the localized copy.
+function localizeBackendValidationMessage(message: string, t: ReturnType<typeof useLocale>["t"]): string {
+  return message
+    .replace(/\bemail must be an email\b/gi, t("auth.validation.emailInvalid"))
+    .replace(/\bemail should not be empty\b/gi, t("auth.validation.emailRequired"))
+    .replace(/\bpassword must be longer than or equal to \d+ characters\b/gi, t("auth.validation.passwordMinFull"))
+    .replace(/\bpassword should not be empty\b/gi, t("auth.validation.passwordRequired"));
 }
 
 export function PreLoginPage() {
@@ -187,7 +198,7 @@ export function PreLoginPage() {
   const recaptchaWidgetRef = useRef<string | number | null>(null);
   const maxExampleOffset = Math.max(0, examples.length - 5);
   const visibleExampleOffset = Math.min(exampleOffset, maxExampleOffset);
-  const authEmailError = authEmail.length > 0 && !/^\S+@\S+\.\S+$/.test(authEmail) ? t("auth.validation.emailInvalid") : null;
+  const authEmailError = authEmail.length > 0 && !emailPattern.test(authEmail) ? t("auth.validation.emailInvalid") : null;
   const authPasswordError = authMode === "register" && authPassword.length > 0 && authPassword.length < 8 ? t("auth.validation.passwordMin") : null;
 
   useEffect(() => {
@@ -394,7 +405,7 @@ export function PreLoginPage() {
       window.sessionStorage.setItem("eos.backend.user-profile", JSON.stringify(backendProfile));
       window.location.replace(authRedirect);
     } catch (error: unknown) {
-      setAuthError(authMode === "login" && isInvalidCredentialsError(error) ? t("auth.error.invalidCredentials") : error instanceof Error ? error.message : t("auth.error.authenticationFailed"));
+      setAuthError(authMode === "login" && isInvalidCredentialsError(error) ? t("auth.error.invalidCredentials") : error instanceof Error ? localizeBackendValidationMessage(error.message, t) : t("auth.error.authenticationFailed"));
     } finally {
       setAuthSubmitting(false);
     }
@@ -442,7 +453,7 @@ export function PreLoginPage() {
       setAuthMessage(t("auth.confirmation.resent", { email: authEmail }));
       setResendCooldown(resendConfirmationCooldownSeconds);
     } catch (error: unknown) {
-      setAuthError(error instanceof Error ? error.message : t("auth.error.resendConfirmation"));
+      setAuthError(error instanceof Error ? localizeBackendValidationMessage(error.message, t) : t("auth.error.resendConfirmation"));
     } finally {
       setAuthSubmitting(false);
     }

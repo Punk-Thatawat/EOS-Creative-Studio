@@ -23,6 +23,7 @@ import {
   History,
   LockKeyhole,
   Mic2,
+  Music2,
   Pause,
   Pencil,
   Play,
@@ -45,6 +46,7 @@ import styles from "./audio-generation-page.module.css";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
 import { ClearValuesButton } from "@/features/create/components/clear-values-button";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
+import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { ImageTutorialButton } from "@/features/create/image-generation/components/image-tutorial-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { Dropdown, type DropdownOption } from "@/components/ui/dropdown";
@@ -61,6 +63,7 @@ import {
   createDialogue,
   cleanupAudio,
   createSoundEffects,
+  createTextToMusic,
   createTextToSpeech,
   createTextToSpeechScenes,
   createVideoSoundEffect,
@@ -77,6 +80,8 @@ import {
   quoteAudioCleanup,
   quoteDialogue,
   quoteSoundEffects,
+  quoteTextToMusic,
+  quoteVideoSoundEffects,
   quoteTextToSpeech,
   quoteTextToSpeechScenes,
   quoteVoiceClone,
@@ -96,14 +101,33 @@ import {
   type VoiceCloneQuote,
 } from "@/lib/api/audio";
 
-type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Audio Cleanup";
+type AudioTab = "Text to Speech" | "Podcast & Dialogue" | "Voice Clone" | "Sound Effects" | "Text to Music" | "Audio Cleanup";
 const MIN_PODCAST_SPEAKERS = 2;
+const podcastVoiceAvatarEntries = [
+  ["jessica", "/generated-assets/podcast-voices/jessica.jpg"],
+  ["laura", "/generated-assets/podcast-voices/laura.jpg"],
+  ["alice", "/generated-assets/podcast-voices/alice.jpg"],
+  ["bill", "/generated-assets/podcast-voices/bill.jpg"],
+  ["brian", "/generated-assets/podcast-voices/brian.jpg"],
+  ["haytham", "/generated-assets/podcast-voices/haytham.jpg"],
+  ["amelia", "/generated-assets/podcast-voices/amelia.jpg"],
+  ["otto", "/generated-assets/podcast-voices/otto.jpg"],
+] as const;
+
+function getPodcastVoiceAvatar(voice: AudioVoice | null | undefined): string | null {
+  if (!voice) return null;
+  const identity = `${voice.key} ${voice.name}`.toLowerCase();
+  return podcastVoiceAvatarEntries.find(([name]) => identity.includes(name))?.[1] ?? voice.imageUrl ?? null;
+}
 
 const visibleTabs: readonly AudioTab[] = [
   "Text to Speech",
 ];
-// The backend may list Eleven v3 under either its WaveSpeed-style key or the raw ElevenLabs id.
-const TEXT_TO_SPEECH_MODEL_KEYS = ["elevenlabs/eleven-v3", "eleven_v3"];
+// The backend may list Eleven models under either their WaveSpeed-style keys or raw ElevenLabs ids.
+const ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS = [
+  "eleven_v4",
+  "elevenlabs/eleven-v4",
+];
 const MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS = ["minimax/speech-2.8-hd"];
 type MiniMaxSpeechEmotion = "happy" | "sad" | "angry" | "fearful" | "disgusted" | "surprised" | "neutral";
 
@@ -112,17 +136,14 @@ function supportsMiniMaxSpeechTuning(modelId: string): boolean {
 }
 
 /**
- * Offer Eleven v3 (default, listed first) and MiniMax Speech 2.8 HD when the backend lists them; otherwise fall
- * back to the active (or first) model so generation is never left without one.
+ * Use Eleven v4 for preset voices and retain MiniMax for cloned voices.
+ * Both supported Eleven v4 keys represent the same model, so select only one.
  */
 function pickTextToSpeechModels(items: AudioModel[]): AudioModel[] {
-  const offered = [
-    items.find((model) => TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key)),
-    items.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key)),
-  ].filter((model): model is AudioModel => model !== undefined);
-  if (offered.length) return offered;
-  const chosen = items.find((model) => model.isActive) ?? items[0];
-  return chosen ? [chosen] : [];
+  const v4Models = items.filter((model) => ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key.toLowerCase()));
+  const v4 = v4Models.find((model) => model.isActive) ?? v4Models[0];
+  const cloneModel = items.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key.toLowerCase()));
+  return [v4, cloneModel].filter((model): model is AudioModel => model !== undefined);
 }
 const AUDIO_TAB_STORAGE_KEY = "eos.audio.active-tab";
 
@@ -131,6 +152,7 @@ const audioTabKeys = {
   "Podcast & Dialogue": "create.audio.tabs.podcastDialogue",
   "Voice Clone": "create.audio.tabs.voiceClone",
   "Sound Effects": "create.audio.tabs.soundEffects",
+  "Text to Music": "create.audio.tabs.textToMusic",
   "Audio Cleanup": "create.audio.tabs.audioCleanup",
 } as const;
 const audioModeIcons = {
@@ -138,8 +160,14 @@ const audioModeIcons = {
   "Podcast & Dialogue": AudioWaveform,
   "Voice Clone": Mic2,
   "Sound Effects": Waves,
+  "Text to Music": Music2,
   "Audio Cleanup": WandSparkles,
 } as const;
+const mobileAudioModeOptions = visibleTabs.map((label) => ({
+  value: label,
+  label,
+  icon: audioModeIcons[label],
+}));
 
 const tones = [
   { label: "Energetic", icon: Zap },
@@ -169,6 +197,8 @@ const waveformBars = Array.from({ length: 88 }, (_, index) =>
 
 type AudioHistoryItem = Omit<AudioHistoryEntry, "url"> & { url: string; localUrl?: boolean; persisted?: boolean };
 const AUDIO_HISTORY_LIMIT = 10;
+// Most recent Text to Speech entries (the API maximum) scanned for ones made with a cloned voice.
+const CLONE_HISTORY_SPEECH_SCAN_LIMIT = 50;
 const VOICE_PAGE_SIZE = 8;
 type SaveHistoryCallback = (input: SaveAudioHistoryInput) => Promise<AudioHistoryEntry | null>;
 type AudioScene = { id: string; title: string; durationSeconds: number; text: string; voice: string };
@@ -387,6 +417,7 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(78);
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const { t } = useLocale();
 
   useEffect(() => {
     audioRef.current?.pause();
@@ -419,57 +450,58 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
       <div className={styles.cleanupPlayerWaveform}>
         <PreviewWaveform audioUrl={src} progress={progress} isPlaying={isPlaying} />
       </div>
-      <div className={styles.cleanupPlayerControls}>
+      <div className={`${styles.playerRow} ${styles.cleanupPlayerControls}`}>
         <button
           type="button"
-          className={`${styles.podcastPlayButton} ${styles.cleanupPlayerPlay}`}
+          className={styles.playButton}
           onClick={() => void togglePlayback()}
           disabled={!src}
-          aria-label={isPlaying ? "หยุดเสียงชั่วคราว" : "เล่นเสียง"}
+          aria-label={t(isPlaying ? "create.audio.a11y.pause" : "create.audio.a11y.play")}
         >
-          {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+          {isPlaying ? <span className={styles.pauseGlyph} /> : <Play size={20} fill="currentColor" />}
         </button>
         <button
           type="button"
-          className={styles.cleanupSkipButton}
+          className={styles.skipButton}
           onClick={() => seekBy(-10)}
           disabled={!src || duration <= 0}
-          aria-label="ย้อนกลับ 10 วินาที"
-          title="ย้อนกลับ 10 วินาที"
+          aria-label={t("create.audio.a11y.rewind10")}
         >
-          <RotateCcw size={15} aria-hidden="true" /><span>10</span>
+          <RotateCcw size={17} aria-hidden="true" /><small>10</small>
         </button>
         <button
           type="button"
-          className={styles.cleanupSkipButton}
+          className={styles.skipButton}
           onClick={() => seekBy(10)}
           disabled={!src || duration <= 0}
-          aria-label="ข้ามไปข้างหน้า 10 วินาที"
-          title="ข้ามไปข้างหน้า 10 วินาที"
+          aria-label={t("create.audio.a11y.forward10")}
         >
-          <RotateCw size={15} aria-hidden="true" /><span>10</span>
+          <RotateCw size={17} aria-hidden="true" /><small>10</small>
         </button>
-        <span className={styles.cleanupPlayerTime}>
+        <span className={styles.timeLabel}>
           {formatSceneSeconds(currentTime)} / {formatSceneSeconds(duration)}
         </span>
         <input
-          className={styles.cleanupSeekSlider}
+          className={styles.scrubber}
           type="range"
           min="0"
-          max={duration || 1}
-          step="0.01"
-          value={Math.min(currentTime, duration || 0)}
+          max="100"
+          step="0.1"
+          value={progress}
           onChange={(event) => {
-            const nextTime = Number(event.target.value);
-            if (audioRef.current && duration > 0) audioRef.current.currentTime = nextTime;
-            setCurrentTime(nextTime);
+            const nextProgress = Number(event.target.value);
+            if (audioRef.current && duration > 0) {
+              const nextTime = (nextProgress / 100) * duration;
+              audioRef.current.currentTime = nextTime;
+              setCurrentTime(nextTime);
+            }
           }}
-          aria-label={`${label}: ตำแหน่งเสียง`}
+          aria-label={t("create.audio.a11y.audioProgress")}
           disabled={!src || duration <= 0}
         />
-        <Volume2 size={15} className={styles.cleanupVolumeIcon} aria-hidden="true" />
+        <Volume2 size={17} className={styles.volumeIcon} aria-hidden="true" />
         <input
-          className={styles.cleanupVolumeSlider}
+          className={styles.volumeSlider}
           type="range"
           min="0"
           max="100"
@@ -479,7 +511,7 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
             setVolume(nextVolume);
             if (audioRef.current) audioRef.current.volume = nextVolume / 100;
           }}
-          aria-label={`${label}: ระดับเสียง`}
+          aria-label={t("create.audio.a11y.volume")}
           disabled={!src}
         />
       </div>
@@ -579,12 +611,13 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const [backgroundMusicPreset, setBackgroundMusicPreset] = useState("");
   const [backgroundMusicPresets, setBackgroundMusicPresets] = useState<AudioBackgroundMusic[]>([]);
   const [backgroundMusicLoading, setBackgroundMusicLoading] = useState(true);
-  const [normalizeAudio, setNormalizeAudio] = useState(true);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [podcastHistory, setPodcastHistory] = useState<AudioHistoryItem[]>([]);
   const [podcastHistoryLoadingId, setPodcastHistoryLoadingId] = useState<string | null>(null);
+  const [podcastHistorySavingId, setPodcastHistorySavingId] = useState<string | null>(null);
+  const [podcastHistorySaveFailed, setPodcastHistorySaveFailed] = useState(false);
   const [pendingPodcastHistoryDelete, setPendingPodcastHistoryDelete] = useState<AudioHistoryItem | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
@@ -612,6 +645,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
   const voicePreviewObjectUrlsRef = useRef<string[]>([]);
   const podcastHistoryRef = useRef<AudioHistoryItem[]>([]);
+  const pendingPodcastHistorySavesRef = useRef(new Map<string, SaveAudioHistoryInput>());
 
   const totalDuration = lines.reduce((total, line) => total + estimatePodcastLineSeconds(line.text), 0);
   // Keep the visible count identical to the trimmed text sent in episodeScript
@@ -625,10 +659,12 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const episodeEmotionTags = spokenLines.map((line) => line.emotionTag ?? "natural");
   useEffect(
     () => () => {
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
       voicePreviewAudioRef.current?.pause();
+      podcastHistoryRef.current
+        .filter((item) => item.localUrl && item.url)
+        .forEach((item) => URL.revokeObjectURL(item.url));
     },
-    [audioUrl],
+    [],
   );
 
   useEffect(
@@ -644,21 +680,20 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     void listAudioHistory({ feature: "dialogue", limit: AUDIO_HISTORY_LIMIT })
       .then((items) => {
         if (!active) return;
-        const history = items.map((item) => ({
+        const savedHistory = items.map((item) => ({
           ...item,
           url: item.url ?? item.audioUrl ?? item.downloadUrl ?? "",
           localUrl: false,
           persisted: true,
         }));
+        const localHistory = podcastHistoryRef.current.filter((item) => !item.persisted);
+        const history = [...localHistory, ...savedHistory].slice(0, AUDIO_HISTORY_LIMIT);
         podcastHistoryRef.current = history;
         setPodcastHistory(history);
       })
       .catch(() => undefined);
     return () => {
       active = false;
-      podcastHistoryRef.current
-        .filter((item) => item.localUrl && item.url)
-        .forEach((item) => URL.revokeObjectURL(item.url));
     };
   }, []);
 
@@ -675,7 +710,6 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           outputFormat,
           backgroundMusicEnabled: backgroundMusic,
           ...(backgroundMusicPreset ? { backgroundMusicKey: backgroundMusicPreset } : {}),
-          normalizeAudio,
         }
       : null;
   const podcastCreditQuoteKey = JSON.stringify(podcastCreditQuoteInput);
@@ -736,7 +770,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
               );
               const nextVoice = configuredVoice ?? hydratedVoices[index % hydratedVoices.length];
               return nextVoice
-                ? { ...speaker, voice: nextVoice.key, image: nextVoice.imageUrl ?? "" }
+                ? { ...speaker, voice: nextVoice.key, image: getPodcastVoiceAvatar(nextVoice) ?? "" }
                 : { ...speaker, image: "" };
             }),
           );
@@ -784,6 +818,45 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     };
   }, []);
 
+  const savePodcastHistoryItem = async (itemId: string, input: SaveAudioHistoryInput) => {
+    if (!onHistorySaved) {
+      setPodcastHistorySaveFailed(true);
+      return;
+    }
+    setPodcastHistorySavingId(itemId);
+    try {
+      const saved = await onHistorySaved(input);
+      if (!saved) {
+        setPodcastHistorySaveFailed(true);
+        return;
+      }
+      pendingPodcastHistorySavesRef.current.delete(itemId);
+      const localItem = podcastHistoryRef.current.find((item) => item.id === itemId);
+      const historyItem: AudioHistoryItem = {
+        ...saved,
+        url: localItem?.url ?? saved.url ?? saved.audioUrl ?? saved.downloadUrl ?? "",
+        localUrl: localItem?.localUrl ?? false,
+        persisted: true,
+      };
+      const nextHistory = podcastHistoryRef.current
+        .map((item) => (item.id === itemId ? historyItem : item))
+        .slice(0, AUDIO_HISTORY_LIMIT);
+      podcastHistoryRef.current = nextHistory;
+      setPodcastHistory(nextHistory);
+      setPodcastHistorySaveFailed(nextHistory.some((item) => !item.persisted));
+    } catch (cause) {
+      console.warn("Unable to save podcast audio history", cause);
+      setPodcastHistorySaveFailed(true);
+    } finally {
+      setPodcastHistorySavingId(null);
+    }
+  };
+
+  const retrySavePodcastHistory = (item: AudioHistoryItem) => {
+    const input = pendingPodcastHistorySavesRef.current.get(item.id);
+    if (input) void savePodcastHistoryItem(item.id, input);
+  };
+
   const handleGenerate = async () => {
     if (!episodeScript.trim()) return;
     if (speakers.length < MIN_PODCAST_SPEAKERS) {
@@ -800,10 +873,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     // generated. The preview should appear only when this generation finishes.
     previewAudioRef.current?.pause();
     setIsPlaying(false);
-    setAudioUrl((previous) => {
-      if (previous) URL.revokeObjectURL(previous);
-      return null;
-    });
+    setAudioUrl(null);
     setPreviewProgress(0);
     setPreviewCurrentTime(0);
     setPreviewDuration(0);
@@ -823,15 +893,11 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
         outputFormat,
         backgroundMusicEnabled: backgroundMusic,
         ...(backgroundMusicPreset ? { backgroundMusicKey: backgroundMusicPreset } : {}),
-        normalizeAudio,
         idempotencyKey: createAudioIdempotencyKey(),
       });
       const nextUrl = URL.createObjectURL(result.blob);
-      setAudioUrl((previous) => {
-        if (previous) URL.revokeObjectURL(previous);
-        return nextUrl;
-      });
-      const savedHistory = await onHistorySaved?.({
+      setAudioUrl(nextUrl);
+      const historyInput: SaveAudioHistoryInput = {
         audio: result.blob,
         feature: "dialogue",
         label: "Podcast Episode 01",
@@ -842,21 +908,35 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           language,
           backgroundMusic,
           backgroundMusicPreset,
-          normalizeAudio,
           speed,
         },
+      };
+      const localHistoryId = `podcast-local-${Date.now()}`;
+      const localHistoryItem: AudioHistoryItem = {
+        id: localHistoryId,
+        feature: "dialogue",
+        label: historyInput.label,
+        provider: "wavespeed",
+        outputFormat,
+        mimeType: result.blob.type || "audio/mpeg",
+        sizeBytes: result.blob.size,
+        createdAt: new Date().toISOString(),
+        metadata: historyInput.metadata ?? {},
+        url: nextUrl,
+        localUrl: true,
+        persisted: false,
+      };
+      pendingPodcastHistorySavesRef.current.set(localHistoryId, historyInput);
+      const allHistory = [localHistoryItem, ...podcastHistoryRef.current];
+      allHistory.slice(AUDIO_HISTORY_LIMIT).forEach((item) => {
+        pendingPodcastHistorySavesRef.current.delete(item.id);
+        if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
       });
-      if (savedHistory) {
-        const historyItem: AudioHistoryItem = {
-          ...savedHistory,
-          url: savedHistory.url ?? savedHistory.audioUrl ?? savedHistory.downloadUrl ?? "",
-          localUrl: false,
-          persisted: true,
-        };
-        const nextHistory = [historyItem, ...podcastHistoryRef.current].slice(0, AUDIO_HISTORY_LIMIT);
-        podcastHistoryRef.current = nextHistory;
-        setPodcastHistory(nextHistory);
-      }
+      const nextHistory = allHistory.slice(0, AUDIO_HISTORY_LIMIT);
+      podcastHistoryRef.current = nextHistory;
+      setPodcastHistory(nextHistory);
+      setPodcastHistorySaveFailed(false);
+      await savePodcastHistoryItem(localHistoryId, historyInput);
       setStatus("ready");
       finishAudioProgress("audio-podcast", requestId);
     } catch (cause) {
@@ -894,7 +974,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
       return;
     }
     const selectedVoice = availableVoices.find((item) => item.key === voice || item.name === voice);
-    const image = selectedVoice?.imageUrl ?? "";
+    const image = getPodcastVoiceAvatar(selectedVoice) ?? "";
     const nextSpeaker: PodcastSpeaker = {
       id: editingSpeakerId ?? `speaker-${Date.now()}`,
       role,
@@ -998,6 +1078,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const draftVoice = availableVoices.find(
     (voice) => voice.key === speakerDraft.voice || voice.name === speakerDraft.voice,
   );
+  const draftVoiceAvatar = getPodcastVoiceAvatar(draftVoice);
   const togglePreview = async () => {
     if (!audioUrl) {
       await handleGenerate();
@@ -1056,7 +1137,8 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     const item = pendingPodcastHistoryDelete;
     if (!item) return;
     setPendingPodcastHistoryDelete(null);
-    const removeFromView = () => {
+  const removeFromView = () => {
+      pendingPodcastHistorySavesRef.current.delete(item.id);
       if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
       const nextHistory = podcastHistoryRef.current.filter((historyItem) => historyItem.id !== item.id);
       podcastHistoryRef.current = nextHistory;
@@ -1413,6 +1495,22 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
                   >
                     <Trash2 size={13} />
                   </button>
+                  {!item.persisted ? (
+                    <button
+                      type="button"
+                      className={styles.historyRetry}
+                      aria-label={t("create.audio.saveToHistory")}
+                      title={t("create.audio.saveToHistory")}
+                      onClick={() => retrySavePodcastHistory(item)}
+                      disabled={podcastHistorySavingId === item.id}
+                    >
+                      {podcastHistorySavingId === item.id ? (
+                        <span className={styles.historyLoading} />
+                      ) : (
+                        <RotateCcw size={13} />
+                      )}
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -1422,6 +1520,11 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
               <span>{t("create.audio.historyEmpty")}</span>
             </div>
           )}
+          {podcastHistorySaveFailed ? (
+            <p className={styles.historySaveWarning} role="status">
+              {t("create.audio.historySaveFailed")}
+            </p>
+          ) : null}
         </section>
       </main>
 
@@ -1501,20 +1604,6 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           </div>
         </div>
         <div className={styles.podcastToggleGroup}>
-          <label>
-            <span>
-              <strong>{t("create.audio.podcast.normalizeAudio")}</strong>
-              <small>ปรับระดับเสียงให้สม่ำเสมอ</small>
-            </span>
-            <button
-              type="button"
-              className={normalizeAudio ? styles.podcastToggleOn : styles.podcastToggleOff}
-              onClick={() => setNormalizeAudio((current) => !current)}
-              aria-pressed={normalizeAudio}
-            >
-              <i />
-            </button>
-          </label>
           <label>
             <span>
               <strong>{t("create.audio.podcast.backgroundMusic")}</strong>
@@ -1622,7 +1711,16 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
               <span>เสียง</span>
               <Dropdown
                 value={speakerDraft.voice}
-                options={availableVoices.map((voice) => ({ value: voice.key, label: voice.name }))}
+                options={availableVoices.map((voice) => {
+                  const imageUrl = getPodcastVoiceAvatar(voice);
+                  return {
+                    value: voice.key,
+                    label: <span className={styles.podcastDropdownVoiceOption}>
+                      <span className={styles.podcastDropdownVoiceImage}>{imageUrl ? <Image src={imageUrl} alt="" fill unoptimized sizes="28px" /> : null}</span>
+                      <span className={styles.podcastDropdownVoiceCopy}><strong>{voice.name}</strong><small>{voice.description || "เสียงพอดแคสต์"}</small></span>
+                    </span>,
+                  };
+                })}
                 onChange={(value) => setSpeakerDraft((current) => ({ ...current, voice: value }))}
                 ariaLabel="เสียงผู้พูด"
                 disabled={voicesLoading || availableVoices.length === 0}
@@ -1637,7 +1735,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
             </div>
             <div className={styles.podcastSpeakerDialogPreview}>
               <span className={styles.podcastSpeakerDialogVoiceImage}>
-                {draftVoice?.imageUrl ? <Image src={draftVoice.imageUrl} alt="" fill unoptimized sizes="34px" /> : null}
+                {draftVoiceAvatar ? <Image src={draftVoiceAvatar} alt="" fill unoptimized sizes="34px" /> : null}
               </span>
               <span className={styles.podcastSpeakerDialogVoiceCopy}>
                 <strong>{draftVoice?.name ?? "ยังไม่ได้เลือกเสียง"}</strong>
@@ -1750,6 +1848,7 @@ function VoiceCloneLayout({
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [previewModel, setPreviewModel] = useState(VOICE_CLONE_MODEL_ID);
   const [cloneHistory, setCloneHistory] = useState<AudioHistoryEntry[]>([]);
+  const [cloneVoices, setCloneVoices] = useState<VoiceCloneListItem[]>([]);
   const [activeCloneHistoryId, setActiveCloneHistoryId] = useState<string | null>(null);
   const [cloneHistoryLoadingId, setCloneHistoryLoadingId] = useState<string | null>(null);
   const [pendingCloneHistoryDelete, setPendingCloneHistoryDelete] = useState<AudioHistoryEntry | null>(null);
@@ -1784,9 +1883,26 @@ function VoiceCloneLayout({
 
   useEffect(() => {
     let active = true;
-    void listAudioHistory({ feature: "voice-clone", limit: AUDIO_HISTORY_LIMIT })
-      .then((items) => {
-        if (active) setCloneHistory(items);
+    void Promise.all([
+      listAudioHistory({ feature: "voice-clone", limit: AUDIO_HISTORY_LIMIT }),
+      listVoiceClones()
+        .then((result) => result.voices)
+        .catch(() => [] as VoiceCloneListItem[]),
+      // Speech made with a cloned voice is saved as Text to Speech, so scan it for entries that used one of the clones.
+      listAudioHistory({ feature: "tts", limit: CLONE_HISTORY_SPEECH_SCAN_LIMIT }).catch(
+        () => [] as AudioHistoryEntry[],
+      ),
+    ])
+      .then(([previews, voices, speech]) => {
+        if (!active) return;
+        const cloneIds = new Set(voices.map((voice) => voice.voiceId));
+        const speechWithClones = speech.filter((item) => Boolean(item.voice) && cloneIds.has(item.voice as string));
+        const merged = [...previews, ...speechWithClones].filter(
+          (entry, index, all) => all.findIndex((other) => other.id === entry.id) === index,
+        );
+        merged.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+        setCloneHistory(merged.slice(0, AUDIO_HISTORY_LIMIT));
+        setCloneVoices(voices);
       })
       .catch(() => undefined);
     return () => {
@@ -1834,6 +1950,7 @@ function VoiceCloneLayout({
       "At least one voice sample is required": t("create.audio.clone.error.noSample"),
       "Voice samples must be valid audio files": t("create.audio.clone.error.invalidFile"),
       "Voice Clone is not routed to WaveSpeed": t("create.audio.clone.error.notConfigured"),
+      "Insufficient credits": t("create.audio.error.insufficientCredits"),
     };
     return known[message] ?? `${t("create.audio.clone.error.generic")}: ${message}`;
   };
@@ -2048,6 +2165,17 @@ function VoiceCloneLayout({
         setStatus("error");
       });
   };
+
+  // The list shows what was made with cloning (previews and speech) together with the newest voices, newest first.
+  const historyRows = [
+    ...cloneHistory.map((entry) => ({ kind: "entry" as const, key: entry.id, createdAt: entry.createdAt, entry })),
+    ...cloneVoices.slice(0, AUDIO_HISTORY_LIMIT).map((voice) => ({
+      kind: "voice" as const,
+      key: `voice:${voice.voiceId}`,
+      createdAt: voice.createdAt,
+      voice,
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 
   return (
     <div className={styles.alternateLayout}>
@@ -2305,16 +2433,39 @@ function VoiceCloneLayout({
               <History size={13} /> {t("create.audio.generationHistory")}
             </h2>
             <span className={styles.timelineHint}>
-              {cloneHistory.length
-                ? cloneHistory.length === 1
+              {historyRows.length
+                ? historyRows.length === 1
                   ? t("create.audio.resultCountOne")
-                  : t("create.audio.resultCountMany", { count: cloneHistory.length })
+                  : t("create.audio.resultCountMany", { count: historyRows.length })
                 : t("create.audio.noResults")}
             </span>
           </div>
-          {cloneHistory.length ? (
+          {historyRows.length ? (
             <div className={styles.historyList}>
-              {cloneHistory.map((item) => {
+              {historyRows.map((row) => {
+                if (row.kind === "voice") {
+                  const voiceLabel = row.voice.name.trim() || t("create.audio.clone.unnamedVoice");
+                  return (
+                    <div key={row.key} className={styles.historyItemRow}>
+                      <button
+                        type="button"
+                        className={styles.historyItem}
+                        onClick={() => onOpenInTextToSpeech?.(row.voice.voiceId)}
+                        disabled={!onOpenInTextToSpeech}
+                      >
+                        <span className={styles.historyPlay}>
+                          <Mic2 size={13} />
+                        </span>
+                        <span className={styles.historyCopy}>
+                          <strong>{voiceLabel}</strong>
+                          <small>{formatAudioHistoryDate(row.voice.createdAt, locale)}</small>
+                        </span>
+                        <span className={styles.historyCurrent}>{t("create.audio.clone.historyVoice")}</span>
+                      </button>
+                    </div>
+                  );
+                }
+                const item = row.entry;
                 const isActive = item.id === activeCloneHistoryId;
                 return (
                   <div key={item.id} className={isActive ? styles.historyItemRowActive : styles.historyItemRow}>
@@ -2603,6 +2754,9 @@ function VoiceCloneLayout({
             {status === "creating" ? t("create.audio.clone.creatingButton") : t("create.audio.clone.createVoice")}{" "}
             <Sparkles size={16} />
           </button>
+          <p className={styles.securityNote}>
+            <LockKeyhole size={11} /> {t("create.audio.privateSecure")}
+          </p>
         </div>
       </aside>
       <PodcastConfirmationDialog
@@ -2626,6 +2780,8 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   const [effectDuration, setEffectDuration] = useState(4);
   const [variationCount, setVariationCount] = useState(4);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [videoDurationError, setVideoDurationError] = useState(false);
   const [videoDescription, setVideoDescription] = useState("");
   const [outputFormat, setOutputFormat] = useState<"mp3" | "wav" | "ogg">("mp3");
   const [variants, setVariants] = useState<SoundEffectVariant[]>([]);
@@ -2640,6 +2796,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   const [volume, setVolume] = useState(80);
   const [creditQuote, setCreditQuote] = useState<SoundEffectsQuote | null>(null);
   const [creditQuoteLoading, setCreditQuoteLoading] = useState(false);
+  const [creditQuoteError, setCreditQuoteError] = useState(false);
   const audioUrlsRef = useRef<Record<number, string>>({});
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -2654,36 +2811,79 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
   );
 
   useEffect(() => {
+    if (!videoFile) return;
     let active = true;
-    if (sourceMode !== "text") {
-      const resetTimer = window.setTimeout(() => {
-        if (!active) return;
-        setCreditQuote(null);
-        setCreditQuoteLoading(false);
-      }, 0);
-      return () => {
-        active = false;
-        window.clearTimeout(resetTimer);
-      };
-    }
+    let released = false;
+    const videoUrl = URL.createObjectURL(videoFile);
+    const video = document.createElement("video");
+    const releaseVideoUrl = () => {
+      if (released) return;
+      released = true;
+      video.onloadedmetadata = null;
+      video.onerror = null;
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(videoUrl);
+    };
+
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
+      if (active) {
+        setVideoDuration(duration);
+        setVideoDurationError(duration === null);
+      }
+      releaseVideoUrl();
+    };
+    video.onerror = () => {
+      if (active) {
+        setVideoDuration(null);
+        setVideoDurationError(true);
+      }
+      releaseVideoUrl();
+    };
+    video.src = videoUrl;
+
+    return () => {
+      active = false;
+      releaseVideoUrl();
+    };
+  }, [videoFile]);
+
+  useEffect(() => {
+    let active = true;
     const timer = window.setTimeout(() => {
+      setCreditQuote(null);
+      setCreditQuoteError(false);
+      const quoteRequest = sourceMode === "video"
+        ? videoFile && videoDuration !== null && !videoDurationError
+          ? quoteVideoSoundEffects(Math.min(180, Math.max(1, Math.ceil(videoDuration))))
+          : null
+        : quoteSoundEffects({ durationSeconds: effectDuration, variationCount });
+      if (!quoteRequest) {
+        setCreditQuoteLoading(false);
+        return;
+      }
       setCreditQuoteLoading(true);
-      void quoteSoundEffects({ durationSeconds: effectDuration, variationCount })
+      void quoteRequest
         .then((quote) => {
           if (active) setCreditQuote(quote);
         })
         .catch(() => {
-          if (active) setCreditQuote(null);
+          if (active) {
+            setCreditQuote(null);
+            setCreditQuoteError(true);
+          }
         })
         .finally(() => {
           if (active) setCreditQuoteLoading(false);
         });
-    }, 400);
+    }, sourceMode === "text" ? 400 : 0);
     return () => {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [sourceMode, effectDuration, variationCount]);
+  }, [sourceMode, effectDuration, variationCount, videoFile, videoDuration, videoDurationError]);
 
   const handleGenerate = async () => {
     const inputVideoFile = videoFile;
@@ -2749,7 +2949,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
       finishAudioProgress("audio-sound-effects", requestId);
     } catch (cause) {
       failAudioProgress("audio-sound-effects", requestId);
-      setError(cause instanceof Error ? cause.message : "Sound effect generation failed");
+      setError(cause instanceof Error ? (cause.message === "Insufficient credits" ? t("create.audio.error.insufficientCredits") : cause.message) : "Sound effect generation failed");
       setStatus("error");
     }
   };
@@ -2888,7 +3088,16 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
               hidden
               type="file"
               accept="video/mp4,video/quicktime,video/webm,video/x-m4v,image/gif,video/*"
-              onChange={(event) => setVideoFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setVideoFile(file);
+                setVideoDuration(null);
+                setVideoDurationError(false);
+                setCreditQuote(null);
+                setCreditQuoteLoading(false);
+                setCreditQuoteError(false);
+                event.target.value = "";
+              }}
             />
             <button
               type="button"
@@ -3103,9 +3312,19 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
                 {t("create.audio.estimatedCredits")}{" "}
                 <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} />
               </strong>
-              <b>
+              <b title={creditQuoteError ? t("create.audio.sfx.videoQuoteUnavailableHint") : undefined}>
                 {sourceMode === "video"
-                  ? "—"
+                  ? creditQuoteLoading
+                    ? t("create.audio.calculating")
+                    : creditQuote
+                      ? t("create.audio.creditsAmount", { amount: formatCreditAmount(creditQuote.creditCost) })
+                      : creditQuoteError
+                        ? t("create.audio.sfx.videoQuoteUnavailable")
+                        : !videoFile
+                          ? t("create.audio.sfx.videoUploadFirst")
+                          : videoDurationError
+                            ? t("create.audio.sfx.videoDurationUnreadable")
+                            : t("create.audio.sfx.videoReadingDuration")
                   : creditQuoteLoading
                     ? t("create.audio.calculating")
                     : creditQuote
@@ -3115,7 +3334,17 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
             </div>
             <p className={styles.creditEstimateCount}>
               {sourceMode === "video"
-                ? t("create.audio.sfx.videoLabel")
+                ? creditQuote
+                  ? `${formatSceneSeconds(videoDuration ?? 0)} · ${t("create.audio.sfx.videoLabel")}`
+                  : creditQuoteError
+                    ? t("create.audio.sfx.videoQuoteUnavailableHint")
+                    : videoDurationError
+                      ? t("create.audio.sfx.videoDurationUnreadableHint")
+                      : videoFile
+                        ? videoDuration === null
+                          ? t("create.audio.sfx.videoReadingDuration")
+                          : t("create.audio.calculating")
+                        : t("create.audio.sfx.videoEstimateHint")
                 : t("create.audio.sfx.variationsLabel", { count: variationCount })}
             </p>
           </div>
@@ -3128,6 +3357,140 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
             {status === "generating" ? t("create.audio.sfx.generatingButton") : t("create.audio.sfx.generate")}{" "}
             <Sparkles size={16} />
           </button>
+          <p className={styles.securityNote}>
+            <LockKeyhole size={11} /> {t("create.audio.privateSecure")}
+          </p>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function TextToMusicLayout() {
+  const { t, locale } = useLocale();
+  const [prompt, setPrompt] = useState("");
+  const [durationInput, setDurationInput] = useState("30");
+  const duration = Number(durationInput);
+  const validDuration = /^\d+$/.test(durationInput) && Number.isInteger(duration) && duration >= 10 && duration <= 360;
+  const [quote, setQuote] = useState<{ duration: number; cost: number } | null>(null);
+  const [quoteFailed, setQuoteFailed] = useState(false);
+  const [quoteRetry, setQuoteRetry] = useState(0);
+  const [status, setStatus] = useState<"idle" | "generating" | "ready" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [history, setHistory] = useState<AudioHistoryEntry[]>([]);
+  const [historyError, setHistoryError] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFormat, setPreviewFormat] = useState("mp3");
+  const [playing, setPlaying] = useState(false);
+  const [time, setTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  const mounted = useRef(false);
+  const currentQuote = validDuration && quote?.duration === duration ? quote : null;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; audioRef.current?.pause(); if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current); };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    void listAudioHistory({ feature: "text-to-music", limit: AUDIO_HISTORY_LIMIT }).then((items) => {
+      if (active) { setHistory(items); setHistoryError(false); }
+    }).catch(() => { if (active) setHistoryError(true); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!validDuration) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setQuoteFailed(false);
+      void quoteTextToMusic(duration, controller.signal).then((result) => {
+        if (!controller.signal.aborted) setQuote({ duration, cost: result.creditCost });
+      }).catch(() => { if (!controller.signal.aborted) { setQuote(null); setQuoteFailed(true); } });
+    }, 350);
+    return () => { controller.abort(); window.clearTimeout(timer); };
+  }, [duration, validDuration, quoteRetry]);
+
+  const showAudio = (blob: Blob, contentType: string) => {
+    audioRef.current?.pause();
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    const url = URL.createObjectURL(blob);
+    objectUrlRef.current = url;
+    setPreviewUrl(url);
+    setPreviewFormat(contentType.includes("wav") ? "wav" : contentType.includes("ogg") ? "ogg" : "mp3");
+    setPlaying(false); setTime(0); setAudioDuration(0);
+  };
+  const generate = async () => {
+    if (!prompt.trim() || !validDuration || !currentQuote || status === "generating") return;
+    const requestId = startAudioProgress("audio-text-to-music");
+    setStatus("generating"); setError(null); setNotice(null);
+    try {
+      const result = await createTextToMusic({ prompt: prompt.trim(), durationSeconds: duration });
+      finishAudioProgress("audio-text-to-music", requestId);
+      if (!mounted.current) return;
+      showAudio(result.blob, result.contentType);
+      setStatus("ready");
+      if (!result.localHistoryId) setNotice(t("create.audio.music.historySaveError"));
+      void listAudioHistory({ feature: "text-to-music", limit: AUDIO_HISTORY_LIMIT }).then((items) => {
+        if (mounted.current) { setHistory(items); setHistoryError(false); }
+      }).catch(() => { if (mounted.current) setHistoryError(true); });
+    } catch (cause) {
+      failAudioProgress("audio-text-to-music", requestId);
+      if (mounted.current) { setStatus("error"); setError(cause instanceof Error && cause.message === "Insufficient credits" ? t("create.audio.error.insufficientCredits") : cause instanceof Error ? cause.message : t("create.audio.music.quoteError")); }
+    }
+  };
+  const openHistory = async (item: AudioHistoryEntry) => {
+    try { const result = await fetchAudioHistoryAudio(item.id); if (mounted.current) { showAudio(result.blob, result.contentType); setError(null); setNotice(null); } }
+    catch { if (mounted.current) setError(t("create.audio.music.historyError")); }
+  };
+  const download = () => {
+    if (!previewUrl) return;
+    const link = document.createElement("a"); link.href = previewUrl; link.download = `text-to-music.${previewFormat}`; link.click();
+  };
+  const progress = audioDuration > 0 ? Math.min(100, (time / audioDuration) * 100) : 0;
+
+  return (
+    <div className={styles.alternateLayout}>
+      <section className={`${styles.alternatePanel} ${styles.alternateFormPanel}`}>
+        <AlternateHeading eyebrow={t("create.audio.music.eyebrow")} title={t("create.audio.music.title")} description={t("create.audio.music.description")} icon={<Music2 size={24} />} />
+        <label className={styles.altTextField}>
+          <span>{t("create.audio.music.prompt")}</span>
+          <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={2000} disabled={status === "generating"} placeholder={t("create.audio.music.placeholder")} />
+        </label>
+        <p className={styles.musicPromptCount}>{prompt.length.toLocaleString()} / 2,000</p>
+      </section>
+      <section className={`${styles.alternatePanel} ${styles.alternateCenterPanel}`}>
+        <div className={styles.altPanelHeader}><div><span className={styles.altEyebrow}>{t("create.audio.music.eyebrow")}</span><h2>{t("create.audio.music.preview")}</h2></div></div>
+        {error && <p className={styles.podcastError} role="alert">{error}</p>}
+        {notice && <p className={styles.podcastError} role="status">{notice}</p>}
+        <PreviewWaveform audioUrl={previewUrl} progress={progress} isPlaying={playing} />
+        {previewUrl ? <>
+          <div className={styles.playerRow}>
+            <button type="button" className={styles.playButton} aria-label={t(playing ? "create.audio.a11y.pause" : "create.audio.a11y.play")} onClick={() => { const audio = audioRef.current; if (audio) { if (audio.paused) void audio.play().catch(() => setPlaying(false)); else audio.pause(); } }}>{playing ? <Pause size={20} /> : <Play size={20} fill="currentColor" />}</button>
+            <span className={styles.timeLabel}>{formatSceneSeconds(time)} / {formatSceneSeconds(audioDuration)}</span>
+            <input className={styles.scrubber} type="range" min="0" max="100" value={progress} aria-label={t("create.audio.a11y.audioProgress")} onChange={(event) => { if (audioRef.current && audioDuration) audioRef.current.currentTime = Number(event.target.value) / 100 * audioDuration; }} />
+          </div>
+          <audio ref={audioRef} src={previewUrl} preload="metadata" onLoadedMetadata={(event) => setAudioDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onTimeUpdate={(event) => setTime(event.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} />
+        </> : <p className={styles.musicEmpty}>{t("create.audio.music.empty")}</p>}
+        <div className={styles.altActionRow}><button type="button" className={styles.altPrimaryButton} disabled={!previewUrl} onClick={download}><Download size={15} />{t("create.audio.music.download")}</button></div>
+        <div className={styles.musicHistory}>
+          <h3><History size={15} />{t("create.audio.music.history")}</h3>
+          {historyError && <p className={styles.podcastError} role="status">{t("create.audio.music.historyError")}</p>}
+          <div className={styles.historyList}>{history.length ? history.map((item) => <button type="button" key={item.id} className={styles.historyItem} onClick={() => void openHistory(item)}><Play size={14} /><span className={styles.musicHistoryLabel}>{item.label}</span><small>{formatAudioHistoryDate(item.createdAt, locale)}</small></button>) : <div className={styles.historyEmpty}>{t("create.audio.music.historyEmpty")}</div>}</div>
+        </div>
+      </section>
+      <aside className={styles.alternateSettings}>
+        <div className={styles.altPanelHeader}><h2>{t("create.audio.settings")}</h2><Settings2 size={20} /></div>
+        <div className={`${styles.altField} ${styles.musicModelField}`}><span>{t("create.audio.music.model")}</span><div className={styles.musicModel}>Sonilo Text-to-Music</div></div>
+        <label className={styles.altField}><span>{t("create.audio.music.duration")}</span><input className={styles.musicDurationInput} type="number" min="10" max="360" step="1" value={durationInput} disabled={status === "generating"} onChange={(event) => setDurationInput(event.target.value)} aria-invalid={!validDuration} /></label>
+        <p className={validDuration ? styles.musicHint : styles.podcastError}>{t(validDuration ? "create.audio.music.durationHint" : "create.audio.music.invalidDuration")}</p>
+        <div data-mobile-action-dock className={styles.mobileActionDock}>
+          <div className={styles.creditEstimate}><div className={styles.creditEstimateHeader}><strong>{t("create.audio.estimatedCredits")} <InfoTooltip content={t("create.audio.info.estimatedCredits")} size={11} /></strong><b>{currentQuote ? t("create.audio.creditsAmount", { amount: formatCreditAmount(currentQuote.cost) }) : quoteFailed ? t("create.audio.music.quoteError") : validDuration ? t("create.audio.calculating") : ""}</b></div></div>
+          {quoteFailed && <button type="button" className={styles.altSecondaryButton} onClick={() => setQuoteRetry((value) => value + 1)}>{t("create.audio.music.tryAgain")}</button>}
+          <button type="button" className={styles.altGenerateButton} onClick={() => void generate()} disabled={!prompt.trim() || !validDuration || !currentQuote || status === "generating"}>{t(status === "generating" ? "create.audio.music.generating" : "create.audio.music.generate")} <Sparkles size={16} /></button>
+          <p className={styles.securityNote}><LockKeyhole size={11} /> {t("create.audio.privateSecure")}</p>
         </div>
       </aside>
     </div>
@@ -3140,7 +3503,7 @@ function formatAudioFileSize(bytes: number): string {
 }
 
 function AudioCleanupLayout() {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -3159,6 +3522,44 @@ function AudioCleanupLayout() {
   const [creditEstimate, setCreditEstimate] = useState<AudioCleanupCreditQuote | null>(null);
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
+  const [cleanupHistory, setCleanupHistory] = useState<AudioHistoryItem[]>([]);
+  const [cleanupHistoryLoadingId, setCleanupHistoryLoadingId] = useState<string | null>(null);
+  const [pendingCleanupHistoryDelete, setPendingCleanupHistoryDelete] = useState<AudioHistoryItem | null>(null);
+  const cleanupHistoryRef = useRef<AudioHistoryItem[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void listAudioHistory({ feature: "audio-cleanup", limit: AUDIO_HISTORY_LIMIT })
+      .then((items) => {
+        if (!active) return;
+        const savedHistory = items.map((item) => ({
+          ...item,
+          url: item.url ?? item.audioUrl ?? item.downloadUrl ?? "",
+          localUrl: false,
+          persisted: true,
+        }));
+        const localHistory = cleanupHistoryRef.current.filter((item) => item.localUrl);
+        const history = [
+          ...localHistory,
+          ...savedHistory.filter((item) => !localHistory.some((localItem) => localItem.id === item.id)),
+        ].slice(0, AUDIO_HISTORY_LIMIT);
+        cleanupHistoryRef.current = history;
+        setCleanupHistory(history);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      cleanupHistoryRef.current
+        .filter((item) => item.localUrl && item.url)
+        .forEach((item) => URL.revokeObjectURL(item.url));
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!file) {
@@ -3172,12 +3573,6 @@ function AudioCleanupLayout() {
       URL.revokeObjectURL(url);
     };
   }, [file]);
-
-  useEffect(() => {
-    return () => {
-      if (cleanedUrl) URL.revokeObjectURL(cleanedUrl);
-    };
-  }, [cleanedUrl]);
 
   useEffect(() => {
     if (!file || durationSeconds <= 0) {
@@ -3231,6 +3626,71 @@ function AudioCleanupLayout() {
     preview.src = previewUrl;
   };
 
+  const appendCleanupHistory = (item: AudioHistoryItem) => {
+    const nextHistory = [item, ...cleanupHistoryRef.current];
+    const removedItems = nextHistory.slice(AUDIO_HISTORY_LIMIT);
+    removedItems
+      .filter((removed) => removed.localUrl && removed.url)
+      .forEach((removed) => URL.revokeObjectURL(removed.url));
+    const limitedHistory = nextHistory.slice(0, AUDIO_HISTORY_LIMIT);
+    cleanupHistoryRef.current = limitedHistory;
+    setCleanupHistory(limitedHistory);
+  };
+
+  const playCleanupHistory = async (item: AudioHistoryItem) => {
+    setCleanupHistoryLoadingId(item.id);
+    setError(null);
+    try {
+      let nextUrl = item.url;
+      if (!nextUrl) {
+        const result = await fetchAudioHistoryAudio(item.id);
+        nextUrl = URL.createObjectURL(result.blob);
+        const nextHistory = cleanupHistoryRef.current.map((historyItem) =>
+          historyItem.id === item.id ? { ...historyItem, url: nextUrl, localUrl: true } : historyItem,
+        );
+        cleanupHistoryRef.current = nextHistory;
+        setCleanupHistory(nextHistory);
+      }
+      setCleanedUrl(nextUrl);
+      setStatus("done");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to load saved audio cleanup");
+    } finally {
+      setCleanupHistoryLoadingId(null);
+    }
+  };
+
+  const removeCleanupHistory = (item: AudioHistoryItem) => {
+    setPendingCleanupHistoryDelete(item);
+  };
+
+  const confirmRemoveCleanupHistory = () => {
+    const item = pendingCleanupHistoryDelete;
+    if (!item) return;
+    setPendingCleanupHistoryDelete(null);
+
+    const removeFromView = () => {
+      if (item.localUrl && item.url) URL.revokeObjectURL(item.url);
+      const nextHistory = cleanupHistoryRef.current.filter((historyItem) => historyItem.id !== item.id);
+      cleanupHistoryRef.current = nextHistory;
+      setCleanupHistory(nextHistory);
+      if (item.url && item.url === cleanedUrl) {
+        setCleanedUrl(null);
+        setStatus(file ? "ready" : "empty");
+      }
+    };
+
+    if (!item.persisted) {
+      removeFromView();
+      return;
+    }
+    void deleteAudioHistory(item.id)
+      .then(removeFromView)
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Unable to delete saved audio cleanup");
+      });
+  };
+
   const handleCleanup = async () => {
     if (!file) {
       setError(t("create.audio.cleanup.selectFile"));
@@ -3249,7 +3709,31 @@ function AudioCleanupLayout() {
     setError(null);
     try {
       const result = await cleanupAudio({ audio: file, durationSeconds, ...options, outputFormat });
-      setCleanedUrl(URL.createObjectURL(result.blob));
+      const nextUrl = URL.createObjectURL(result.blob);
+      const historyItem: AudioHistoryItem = {
+        id: result.localHistoryId ?? `audio-cleanup-local-${Date.now()}`,
+        feature: "audio-cleanup",
+        label: file.name || "Cleaned audio",
+        provider: creditEstimate?.provider ?? "internal",
+        outputFormat,
+        mimeType: result.contentType || file.type || "audio/mpeg",
+        sizeBytes: result.blob.size,
+        createdAt: new Date().toISOString(),
+        durationSeconds,
+        metadata: {
+          noiseReduction: options.noiseReduction,
+          voiceClarity: options.voiceClarity,
+          removeReverb: options.removeReverb,
+          normalizeLoudness: options.normalizeLoudness,
+          preserveTone: options.preserveTone,
+          creditCost: creditEstimate?.creditCost,
+        },
+        url: nextUrl,
+        localUrl: true,
+        persisted: Boolean(result.localHistoryId),
+      };
+      appendCleanupHistory(historyItem);
+      setCleanedUrl(nextUrl);
       setStatus("done");
       finishAudioProgress("audio-cleanup", requestId);
     } catch (cleanupError) {
@@ -3267,10 +3751,10 @@ function AudioCleanupLayout() {
 
   const formattedDuration = durationSeconds > 0 ? formatSceneSeconds(durationSeconds) : "—";
   const optionRows = [
-    { key: "noiseReduction" as const, label: t("create.audio.cleanup.noiseReduction"), hint: t("create.audio.cleanup.noiseReductionHint"), provider: "ElevenLabs", icon: VolumeX },
-    { key: "voiceClarity" as const, label: t("create.audio.cleanup.voiceClarity"), hint: t("create.audio.cleanup.voiceClarityHint"), provider: "ElevenLabs", icon: Mic2 },
-    { key: "removeReverb" as const, label: t("create.audio.cleanup.removeReverb"), hint: t("create.audio.cleanup.removeReverbHint"), provider: t("create.audio.cleanup.internalProcessor"), icon: Waves },
-    { key: "normalizeLoudness" as const, label: t("create.audio.cleanup.normalizeLoudness"), hint: t("create.audio.cleanup.normalizeLoudnessHint"), provider: t("create.audio.cleanup.internalProcessor"), icon: SlidersHorizontal },
+    { key: "noiseReduction" as const, label: t("create.audio.cleanup.noiseReduction"), hint: t("create.audio.cleanup.noiseReductionHint"), icon: VolumeX },
+    { key: "voiceClarity" as const, label: t("create.audio.cleanup.voiceClarity"), hint: t("create.audio.cleanup.voiceClarityHint"), icon: Mic2 },
+    { key: "removeReverb" as const, label: t("create.audio.cleanup.removeReverb"), hint: t("create.audio.cleanup.removeReverbHint"), icon: Waves },
+    { key: "normalizeLoudness" as const, label: t("create.audio.cleanup.normalizeLoudness"), hint: t("create.audio.cleanup.normalizeLoudnessHint"), icon: SlidersHorizontal },
   ];
 
   return (
@@ -3370,19 +3854,19 @@ function AudioCleanupLayout() {
           </div>
           <div className={`${styles.cleanupPreviewCard} ${styles.cleanupPreviewCardAfter}`}>
             <div className={styles.cleanupPreviewLabel}>
-              <span>{t("create.audio.cleanup.cleaned")}</span>
+              <span>{t("create.audio.preview")}</span>
               <span className={styles.cleanupPreviewLabelActions}>
                 <small>{cleanedUrl ? outputFormat.toUpperCase() : "—"}</small>
                 {cleanedUrl ? (
                   <a
-                    className={styles.cleanupInlineDownload}
+                    className={styles.cleanupDownload}
                     href={cleanedUrl}
                     download={`cleaned-audio.${outputFormat}`}
-                    aria-label={t("create.audio.cleanup.download")}
-                    title={t("create.audio.cleanup.download")}
+                    aria-label={t("create.audio.download")}
+                    title={t("create.audio.download")}
                   >
                     <Download size={13} aria-hidden="true" />
-                    <span>{t("create.audio.cleanup.download")}</span>
+                    <span>{t("create.audio.download")}</span>
                   </a>
                 ) : null}
               </span>
@@ -3395,23 +3879,62 @@ function AudioCleanupLayout() {
             <WandSparkles size={14} /> {t("create.audio.cleanup.previewHint")}
           </div>
         ) : null}
-        <div className={styles.cleanupProcessBoard}>
-          <div className={styles.cleanupProcessHeader}>
-            <div><span>PROCESS OVERVIEW</span><h3>เสียงของคุณจะถูกปรับอย่างไร</h3></div>
-            <span className={file ? styles.cleanupBoardReady : ""}>{file ? "พร้อมเริ่ม" : "รอไฟล์เสียง"}</span>
+        <section className={styles.historyPanel} aria-label={t("create.audio.a11y.historyPanel")}>
+          <div className={styles.sectionHeading}>
+            <h2>
+              <History size={13} /> {t("create.audio.generationHistory")}
+            </h2>
+            <span className={styles.timelineHint}>
+              {cleanupHistory.length
+                ? cleanupHistory.length === 1
+                  ? t("create.audio.resultCountOne")
+                  : t("create.audio.resultCountMany", { count: cleanupHistory.length })
+                : t("create.audio.noResults")}
+            </span>
           </div>
-          <div className={styles.cleanupProcessTrack}>
-            <div><span>01</span><strong>วิเคราะห์ต้นฉบับ</strong><small>ตรวจระดับเสียงและเสียงรบกวน</small></div>
-            <ChevronRight size={15} />
-            <div><span>02</span><strong>ปรับแต่งเสียง</strong><small>ใช้เครื่องมือที่คุณเลือกไว้</small></div>
-            <ChevronRight size={15} />
-            <div><span>03</span><strong>ฟังและเปรียบเทียบ</strong><small>ตรวจผลก่อนดาวน์โหลด</small></div>
-          </div>
-          <div className={styles.cleanupProcessFooter}>
-            <Sparkles size={15} />
-            <span>{file ? `เลือกไว้ ${optionRows.filter((option) => options[option.key]).length} เครื่องมือ · เสียงต้นฉบับจะยังคงโทนธรรมชาติ` : "อัปโหลดไฟล์เพื่อเริ่มดูตัวอย่างการปรับปรุงเสียง"}</span>
-          </div>
-        </div>
+          {cleanupHistory.length ? (
+            <div className={styles.historyList}>
+              {cleanupHistory.map((item) => (
+                <div
+                  key={item.id}
+                  className={item.url === cleanedUrl ? styles.historyItemRowActive : styles.historyItemRow}
+                >
+                  <button
+                    type="button"
+                    className={item.url === cleanedUrl ? styles.historyItemActive : styles.historyItem}
+                    onClick={() => void playCleanupHistory(item)}
+                    disabled={cleanupHistoryLoadingId === item.id}
+                    aria-busy={cleanupHistoryLoadingId === item.id}
+                  >
+                    <span className={cleanupHistoryLoadingId === item.id ? styles.historyLoading : styles.historyPlay}>
+                      {cleanupHistoryLoadingId === item.id ? null : <Play size={13} fill="currentColor" />}
+                    </span>
+                    <span className={styles.historyCopy}>
+                      <strong>{item.label}</strong>
+                      <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
+                    </span>
+                    <span className={styles.historyCurrent}>
+                      {item.url === cleanedUrl ? t("create.audio.historyCurrent") : t("create.audio.historyPlay")}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.historyDelete}
+                    aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
+                    onClick={() => removeCleanupHistory(item)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className={styles.historyEmpty}>
+              <History size={15} />
+              <span>{t("create.audio.historyEmpty")}</span>
+            </div>
+          )}
+        </section>
       </section>
 
       <aside className={`${styles.alternateSettings} ${styles.cleanupSettingsPanel}`}>
@@ -3429,7 +3952,7 @@ function AudioCleanupLayout() {
               <input type="checkbox" checked={options[option.key]} onChange={() => toggleOption(option.key)} aria-label={option.label} />
               <span className={styles.cleanupToolIcon}><option.icon size={18} strokeWidth={2.1} /></span>
               <span className={styles.cleanupToolCopy}>
-                <span className={styles.cleanupToolTitleRow}><strong>{option.label}</strong><em>{option.provider}</em></span>
+                <span className={styles.cleanupToolTitleRow}><strong>{option.label}</strong></span>
                 <small>{option.hint}</small>
               </span>
               <span className={styles.cleanupToolSwitch} aria-hidden="true"><span /></span>
@@ -3458,14 +3981,6 @@ function AudioCleanupLayout() {
             menuPosition="fixed"
           />
         </div>
-        <div className={styles.cleanupSettingsSummary}>
-          <div className={styles.cleanupSettingsSummaryHeader}><span>สรุปการตั้งค่า</span><strong>{optionRows.filter((option) => options[option.key]).length + (options.preserveTone ? 1 : 0)} รายการ</strong></div>
-          <div className={styles.cleanupSelectedTags}>
-            {optionRows.filter((option) => options[option.key]).map((option) => <span key={option.key}>{option.label}</span>)}
-            {options.preserveTone ? <span>คงโทนเสียง</span> : null}
-          </div>
-          <p>เหมาะสำหรับเสียงพูด พอดแคสต์ และบทสนทนา</p>
-        </div>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
           <div className={styles.creditEstimate}>
             <div className={styles.creditEstimateHeader}>
@@ -3478,7 +3993,7 @@ function AudioCleanupLayout() {
                     : "—"}
               </b>
             </div>
-            <p className={styles.creditEstimateCount}>
+            <p className={`${styles.creditEstimateCount} ${!file ? styles.cleanupEstimateWaiting : ""}`}>
               {creditEstimate
                 ? `${formattedDuration} · ${creditEstimate.provider === "elevenlabs" ? "ElevenLabs Voice Isolator" : t("create.audio.cleanup.internalProcessor")}`
                 : file
@@ -3500,6 +4015,15 @@ function AudioCleanupLayout() {
           </p>
         </div>
       </aside>
+      <PodcastConfirmationDialog
+        open={Boolean(pendingCleanupHistoryDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingCleanupHistoryDelete(null);
+        }}
+        title="ลบประวัติการปรับปรุงเสียงหรือไม่?"
+        description={`“${pendingCleanupHistoryDelete?.label ?? "รายการนี้"}” จะถูกลบออกจากประวัติการสร้างและกู้คืนไม่ได้`}
+        onConfirm={confirmRemoveCleanupHistory}
+      />
     </div>
   );
 }
@@ -3513,8 +4037,22 @@ export function AudioGenerationPage() {
   const [savedVoices, setSavedVoices] = useState<VoiceCloneListItem[]>([]);
   const [language, setLanguage] = useState("Thai");
   const [pronunciation, setPronunciation] = useState("");
-  const [selectedModel, setSelectedModel] = useState("");
+  const [chosenModel, setSelectedModel] = useState("");
   const [availableModels, setAvailableModels] = useState<AudioModel[]>([]);
+  // Cloned voices are registered with MiniMax Speech 2.8 HD, so that model is fixed while cloned voices are in use.
+  const clonedVoiceModelKey = availableModels.find((model) =>
+    MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key),
+  )?.key;
+  const isModelLockedToClonedVoice = voiceMode === "cloned" && Boolean(clonedVoiceModelKey);
+  // MiniMax is only used through cloned voices, so the tone-voice list offers the other models.
+  const toneVoiceModels = availableModels.filter((model) => !MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key));
+  const selectableModels = toneVoiceModels;
+  const selectedModel =
+    isModelLockedToClonedVoice && clonedVoiceModelKey
+      ? clonedVoiceModelKey
+      : selectableModels.some((model) => model.key === chosenModel)
+        ? chosenModel
+        : (selectableModels[0]?.key ?? "");
   const [modelLoadState, setModelLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [selectedVoice, setSelectedVoice] = useState("");
   const [availableVoices, setAvailableVoices] = useState<AudioVoice[]>([]);
@@ -3540,10 +4078,6 @@ export function AudioGenerationPage() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [volume, setVolume] = useState(78);
-  const [backgroundMusic, setBackgroundMusic] = useState(false);
-  const [backgroundMusicPreset, setBackgroundMusicPreset] = useState("");
-  const [backgroundMusicPresets, setBackgroundMusicPresets] = useState<AudioBackgroundMusic[]>([]);
-  const [backgroundMusicLoadState, setBackgroundMusicLoadState] = useState<"loading" | "ready" | "error">("ready");
   const [creditEstimate, setCreditEstimate] = useState<AudioCreditQuote | null>(null);
   const [creditEstimateLoading, setCreditEstimateLoading] = useState(false);
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
@@ -3576,8 +4110,6 @@ export function AudioGenerationPage() {
   const savedVoicesRef = useRef<VoiceCloneListItem[]>([]);
   // A voice that was just opened from the Voice Clone tab; it can be missing from savedVoices until the list refreshes.
   const pendingClonedVoiceRef = useRef<string | null>(null);
-  // Cloned voices are registered with MiniMax Speech 2.8 HD; when the model list is not loaded yet, pick it on load.
-  const preferClonedVoiceModelRef = useRef(false);
   const [previewingVoiceKey, setPreviewingVoiceKey] = useState<string | null>(null);
   // The click handlers read this instead of the state above: state lags a render behind, so a quick second
   // click on a playing voice would otherwise start it again rather than stop it.
@@ -3601,7 +4133,21 @@ export function AudioGenerationPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const tabBodyRef = useRef<HTMLDivElement>(null);
+  const [tabBodyMinHeight, setTabBodyMinHeight] = useState<number | null>(null);
+
   const changeActiveTab = (tab: AudioTab) => {
+    // A shorter tab would shrink the page and the browser would clamp the scroll position, jerking the banner and tab
+    // bar upwards. While the page is scrolled, the tab being left holds its height so the new one opens where it was.
+    const body = tabBodyRef.current;
+    if (body && window.scrollY > 0) {
+      const lockedHeight = body.style.minHeight;
+      body.style.minHeight = "";
+      setTabBodyMinHeight(body.offsetHeight);
+      body.style.minHeight = lockedHeight;
+    } else {
+      setTabBodyMinHeight(null);
+    }
     setActiveTab(tab);
     try {
       window.localStorage.setItem(AUDIO_TAB_STORAGE_KEY, tab);
@@ -3610,20 +4156,9 @@ export function AudioGenerationPage() {
     }
   };
 
-  // Entering the cloned-voice list starts on MiniMax Speech 2.8 HD, and the model can still be changed afterwards.
-  const changeVoiceMode = (mode: "tone" | "cloned") => {
-    setVoiceMode(mode);
-    if (mode !== "cloned") return;
-    const clonedVoiceModelKey = availableModels.find((model) =>
-      MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key),
-    )?.key;
-    if (clonedVoiceModelKey) setSelectedModel(clonedVoiceModelKey);
-    else preferClonedVoiceModelRef.current = true;
-  };
-
   const openClonedVoiceInTextToSpeech = (voiceId?: string | null) => {
     pendingClonedVoiceRef.current = voiceId ?? null;
-    changeVoiceMode("cloned");
+    setVoiceMode("cloned");
     if (voiceId) setSelectedVoice(voiceId);
     changeActiveTab("Text to Speech");
   };
@@ -3638,29 +4173,6 @@ export function AudioGenerationPage() {
       audioHistoryRef.current.filter((item) => item.localUrl).forEach((item) => URL.revokeObjectURL(item.url));
     };
   }, []);
-
-  useEffect(() => {
-    if (activeTab !== "Text to Speech" || !backgroundMusic || backgroundMusicPresets.length > 0) return undefined;
-    let cancelled = false;
-    void listAudioBackgroundMusic()
-      .then((items) => {
-        if (cancelled) return;
-        setBackgroundMusicPresets(items);
-        setBackgroundMusicPreset((current) =>
-          items.some((preset) => preset.key === current) ? current : (items[0]?.key ?? ""),
-        );
-        setBackgroundMusicLoadState("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setBackgroundMusicPresets([]);
-        setBackgroundMusicPreset("");
-        setBackgroundMusicLoadState("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, backgroundMusic, backgroundMusicPresets.length]);
 
   useEffect(() => {
     if (activeTab !== "Text to Speech") return undefined;
@@ -3694,16 +4206,7 @@ export function AudioGenerationPage() {
       const items = await listAudioModels("textToSpeech");
       const eligible = pickTextToSpeechModels(items);
       setAvailableModels(eligible);
-      const clonedVoiceModelKey = eligible.find((model) => MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS.includes(model.key))?.key;
-      const preferClonedVoiceModel = preferClonedVoiceModelRef.current && Boolean(clonedVoiceModelKey);
-      preferClonedVoiceModelRef.current = false;
-      setSelectedModel((current) =>
-        preferClonedVoiceModel && clonedVoiceModelKey
-          ? clonedVoiceModelKey
-          : eligible.some((model) => model.key === current)
-            ? current
-            : (eligible[0]?.key ?? ""),
-      );
+      setSelectedModel((current) => (eligible.some((model) => model.key === current) ? current : (eligible[0]?.key ?? "")));
       setModelLoadState("ready");
     } catch {
       setAvailableModels([]);
@@ -3737,15 +4240,6 @@ export function AudioGenerationPage() {
     },
     [updatePreviewingVoiceKey],
   );
-
-  const toggleBackgroundMusic = () => {
-    if (backgroundMusic) {
-      setBackgroundMusic(false);
-      return;
-    }
-    if (backgroundMusicPresets.length === 0) setBackgroundMusicLoadState("loading");
-    setBackgroundMusic(true);
-  };
 
   useEffect(() => {
     if (activeTab !== "Text to Speech") return undefined;
@@ -3925,7 +4419,7 @@ export function AudioGenerationPage() {
           url = URL.createObjectURL(result.blob);
           clonePreviewUrlsRef.current.set(voiceKey, url);
         } catch (error) {
-          setErrorMessage(error instanceof Error ? error.message : "Unable to preview this voice");
+          setErrorMessage(error instanceof Error ? (error.message === "Insufficient credits" ? t("create.audio.error.insufficientCredits") : error.message) : "Unable to preview this voice");
           return;
         } finally {
           setPreviewLoadingKey(null);
@@ -3933,7 +4427,7 @@ export function AudioGenerationPage() {
       }
       startVoicePreview(audio, voiceKey, url);
     },
-    [language, startVoicePreview, stopVoicePreview, updatePreviewingVoiceKey],
+    [language, startVoicePreview, stopVoicePreview, t, updatePreviewingVoiceKey],
   );
 
   useEffect(() => {
@@ -4016,6 +4510,16 @@ export function AudioGenerationPage() {
     carouselVoices.slice(pageIndex * VOICE_PAGE_SIZE, pageIndex * VOICE_PAGE_SIZE + VOICE_PAGE_SIZE),
   );
   const carouselLoadState = voiceMode === "cloned" ? "ready" : voiceLoadState;
+  // The history also lists the newest cloned voices, the same way the Voice Clone tab does, newest first.
+  const historyRows = [
+    ...audioHistory.map((item) => ({ kind: "entry" as const, key: item.id, createdAt: item.createdAt, item })),
+    ...savedVoices.slice(0, AUDIO_HISTORY_LIMIT).map((voice) => ({
+      kind: "voice" as const,
+      key: `voice:${voice.voiceId}`,
+      createdAt: voice.createdAt,
+      voice,
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
   const isSceneMode = activeTab === "Podcast & Dialogue" && audioScenes.length > 0;
   const hasIncompleteScene = audioScenes.some((scene) => !scene.text.trim() || !scene.voice.trim());
   const isGenerating = status === "generating" || sceneGenerationStatus === "generating";
@@ -4035,8 +4539,6 @@ export function AudioGenerationPage() {
     setSpeed(0.95);
     setPitch(0);
     setSynthVolume(1);
-    setBackgroundMusic(false);
-    setBackgroundMusicPreset(backgroundMusicPresets[0]?.key ?? "");
     setAudioScenes(defaultAudioScenes.map((scene) => ({ ...scene, text: "", voice: availableVoices[0]?.key ?? "" })));
     setSelectedSceneId(defaultAudioScenes[0]!.id);
     setSelectedScene(defaultAudioScenes[0]!.id);
@@ -4081,8 +4583,6 @@ export function AudioGenerationPage() {
               speed,
               pronunciationHint: pronunciation.trim() || undefined,
               pauseSeconds: 0.25,
-              backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
-              backgroundMusicKey: backgroundMusicPreset || undefined,
             },
           }
         : {
@@ -4096,8 +4596,6 @@ export function AudioGenerationPage() {
               ...(tone ? { tone } : {}),
               speed,
               pronunciationHint: pronunciation.trim() || undefined,
-              backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
-              backgroundMusicKey: backgroundMusicPreset || undefined,
             },
           }
       : null;
@@ -4188,7 +4686,8 @@ export function AudioGenerationPage() {
         persisted: true,
       });
       return saved;
-    } catch {
+    } catch (cause) {
+      console.warn("Unable to persist generated audio history", cause);
       // Generation preview remains available when persistent history storage is unavailable.
       return null;
     }
@@ -4256,8 +4755,6 @@ export function AudioGenerationPage() {
             }
           : {}),
         pronunciationHint: pronunciation.trim() || undefined,
-        backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
-        backgroundMusicKey: backgroundMusicPreset || undefined,
         idempotencyKey: createAudioIdempotencyKey(),
       });
       setGeneratedAudioResult(result, `Generation ${historySequenceRef.current + 1}`, selectedVoice);
@@ -4319,8 +4816,6 @@ export function AudioGenerationPage() {
           : {}),
         pronunciationHint: pronunciation.trim() || undefined,
         pauseSeconds: 0.25,
-        backgroundMusicEnabled: backgroundMusic && Boolean(backgroundMusicPreset),
-        backgroundMusicKey: backgroundMusicPreset || undefined,
         idempotencyKey: createAudioIdempotencyKey(),
       });
       setGeneratedAudioResult(result, `Scenes · ${scenesToGenerate.length} scenes`, scenesToGenerate[0]!.voice, {
@@ -4532,8 +5027,25 @@ export function AudioGenerationPage() {
             })}
           </nav>
         }
+        mobileTabs={
+          <MobileModeDropdown
+            menuId="audio-mode-menu"
+            value={activeTab}
+            options={mobileAudioModeOptions.map((option) => ({
+              ...option,
+              label: t(audioTabKeys[option.value]),
+            }))}
+            ariaLabel={t("create.audio.tools")}
+            currentModeLabel={t("create.mode.current")}
+            switchModeLabel={t("create.mode.switch")}
+            otherModesLabel={t("create.mode.other")}
+            onChange={(nextTab) => {
+              if (nextTab !== activeTab) changeActiveTab(nextTab);
+            }}
+          />
+        }
         content={
-          <>
+          <div ref={tabBodyRef} className={styles.tabBody} style={tabBodyMinHeight ? { minHeight: tabBodyMinHeight } : undefined}>
             {activeTab === "Text to Speech" ? (
               <div className={styles.audioGrid}>
                 <section className={styles.scriptPanel} aria-label={t("create.audio.a11y.scriptPanel")}>
@@ -4548,7 +5060,7 @@ export function AudioGenerationPage() {
                     </div>
                     <Dropdown
                       value={voiceMode}
-                      onChange={(value) => changeVoiceMode(value as "tone" | "cloned")}
+                      onChange={(value) => setVoiceMode(value as "tone" | "cloned")}
                       options={[
                         { value: "tone", label: t("create.audio.voiceMode.tone") },
                         { value: "cloned", label: t("create.audio.voiceMode.cloned") },
@@ -4917,59 +5429,86 @@ export function AudioGenerationPage() {
                         <History size={13} /> {t("create.audio.generationHistory")}
                       </h2>
                       <span className={styles.timelineHint}>
-                        {audioHistory.length
-                          ? audioHistory.length === 1
+                        {historyRows.length
+                          ? historyRows.length === 1
                             ? t("create.audio.resultCountOne")
-                            : t("create.audio.resultCountMany", { count: audioHistory.length })
+                            : t("create.audio.resultCountMany", { count: historyRows.length })
                           : t("create.audio.noResults")}
                       </span>
                     </div>
-                    {audioHistory.length ? (
+                    {historyRows.length ? (
                       <div className={styles.historyList}>
-                        {audioHistory.map((item) => (
-                          <div
-                            key={item.id}
-                            className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}
-                          >
-                            <button
-                              type="button"
-                              className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem}
-                              onClick={() => selectHistoryItem(item)}
-                              disabled={historyLoadingId === item.id}
-                              aria-busy={historyLoadingId === item.id}
+                        {historyRows.map((row) => {
+                          if (row.kind === "voice") {
+                            const voiceLabel = row.voice.name.trim() || t("create.audio.clone.unnamedVoice");
+                            return (
+                              <div key={row.key} className={styles.historyItemRow}>
+                                <button
+                                  type="button"
+                                  className={styles.historyItem}
+                                  onClick={() => {
+                                    setVoiceMode("cloned");
+                                    setSelectedVoice(row.voice.voiceId);
+                                  }}
+                                >
+                                  <span className={styles.historyPlay}>
+                                    <Mic2 size={13} />
+                                  </span>
+                                  <span className={styles.historyCopy}>
+                                    <strong>{voiceLabel}</strong>
+                                    <small>{formatAudioHistoryDate(row.voice.createdAt, locale)}</small>
+                                  </span>
+                                  <span className={styles.historyCurrent}>{t("create.audio.clone.historyVoice")}</span>
+                                </button>
+                              </div>
+                            );
+                          }
+                          const item = row.item;
+                          return (
+                            <div
+                              key={item.id}
+                              className={item.url === audioUrl ? styles.historyItemRowActive : styles.historyItemRow}
                             >
-                              <span
-                                className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}
+                              <button
+                                type="button"
+                                className={item.url === audioUrl ? styles.historyItemActive : styles.historyItem}
+                                onClick={() => selectHistoryItem(item)}
+                                disabled={historyLoadingId === item.id}
+                                aria-busy={historyLoadingId === item.id}
                               >
-                                {historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? (
-                                  <Pause size={13} fill="currentColor" />
-                                ) : (
-                                  <Play size={13} fill="currentColor" />
-                                )}
-                              </span>
-                              <span className={styles.historyCopy}>
-                                <strong>{item.label}</strong>
-                                <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
-                              </span>
-                              <span className={styles.historyCurrent}>
-                                {item.url === audioUrl
-                                  ? t("create.audio.historyCurrent")
-                                  : t("create.audio.historyPlay")}
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.historyDelete}
-                              aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
-                              onClick={() => {
-                                setPendingHistoryDelete(item);
-                                setHistoryDeleteOpen(true);
-                              }}
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        ))}
+                                <span
+                                  className={historyLoadingId === item.id ? styles.historyLoading : styles.historyPlay}
+                                >
+                                  {historyLoadingId === item.id ? null : isPlaying && item.url === audioUrl ? (
+                                    <Pause size={13} fill="currentColor" />
+                                  ) : (
+                                    <Play size={13} fill="currentColor" />
+                                  )}
+                                </span>
+                                <span className={styles.historyCopy}>
+                                  <strong>{item.label}</strong>
+                                  <small>{formatAudioHistoryDate(item.createdAt, locale)}</small>
+                                </span>
+                                <span className={styles.historyCurrent}>
+                                  {item.url === audioUrl
+                                    ? t("create.audio.historyCurrent")
+                                    : t("create.audio.historyPlay")}
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.historyDelete}
+                                aria-label={t("create.audio.a11y.deleteItem", { label: item.label })}
+                                onClick={() => {
+                                  setPendingHistoryDelete(item);
+                                  setHistoryDeleteOpen(true);
+                                }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <div className={styles.historyEmpty}>
@@ -4987,16 +5526,22 @@ export function AudioGenerationPage() {
                   </div>
                   <div className={styles.settingBlock}>
                     <FieldLabel>{t("create.audio.voiceModel")}</FieldLabel>
-                    {availableModels.length > 1 ? (
+                    {selectableModels.length > 1 && !isModelLockedToClonedVoice ? (
                       <Dropdown
                         value={selectedModel}
-                        options={availableModels.map((model) => ({ value: model.key, label: model.name }))}
+                        options={selectableModels.map((model) => ({ value: model.key, label: model.name }))}
                         onChange={setSelectedModel}
                         ariaLabel={t("create.audio.voiceModel")}
                         triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
                       />
                     ) : (
-                      <div className={styles.fixedVoiceModel}>{availableModels[0]?.name ?? "ElevenLabs · Eleven v3"}</div>
+                      <div className={styles.fixedVoiceModel}>
+                        {availableModels.find((model) => model.key === selectedModel)?.name ??
+                          selectableModels[0]?.name ??
+                          (modelLoadState === "loading"
+                            ? (locale === "th" ? "กำลังโหลดโมเดล..." : "Loading model...")
+                            : t("create.audio.validation.noModel"))}
+                      </div>
                     )}
                   </div>
                   <div className={styles.settingBlock}>
@@ -5014,7 +5559,7 @@ export function AudioGenerationPage() {
                       ))}
                     </div>
                   </div>
-                  <div className={styles.settingBlock}>
+                  {!['eleven_v4', 'elevenlabs/eleven-v4'].includes(selectedModel.toLowerCase()) && <div className={styles.settingBlock}>
                     <div className={styles.speedHeader}>
                       <FieldLabel>{t("create.audio.speechSpeed")}</FieldLabel>
                       <strong>{speed.toFixed(2)}x</strong>
@@ -5033,7 +5578,7 @@ export function AudioGenerationPage() {
                       <span>1x</span>
                       <span>2x</span>
                     </div>
-                  </div>
+                  </div>}
                   {supportsMiniMaxSpeechTuning(selectedModel) ? (
                     <>
                       <div className={styles.settingBlock}>
@@ -5150,30 +5695,6 @@ export function AudioGenerationPage() {
                       </div>
                     </>
                   ) : null}
-                  <div className={styles.settingBlock}>
-                    <div className={styles.musicHeader}>
-                      <FieldLabel>{t("create.audio.autoBackgroundMusic")}</FieldLabel>
-                      <button
-                        type="button"
-                        className={backgroundMusic ? styles.toggleOn : styles.toggleOff}
-                        onClick={toggleBackgroundMusic}
-                        aria-pressed={backgroundMusic}
-                        disabled={backgroundMusicLoadState === "loading"}
-                      >
-                        <span />
-                      </button>
-                    </div>
-                    {backgroundMusic ? (
-                      <SelectField
-                        label=""
-                        value={backgroundMusicPreset}
-                        onChange={setBackgroundMusicPreset}
-                        disabled={backgroundMusicLoadState !== "ready" || backgroundMusicPresets.length === 0}
-                        loading={backgroundMusicLoadState === "loading"}
-                        options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))}
-                      />
-                    ) : null}
-                  </div>
                   <div data-mobile-action-dock className={styles.mobileActionDock}>
                     <div className={styles.creditEstimate} title={creditEstimateError ?? undefined}>
                       <div className={styles.creditEstimateHeader}>
@@ -5245,10 +5766,12 @@ export function AudioGenerationPage() {
               />
             ) : activeTab === "Sound Effects" ? (
               <SoundEffectsLayout onHistorySaved={persistGeneratedAudio} />
+            ) : activeTab === "Text to Music" ? (
+              <TextToMusicLayout />
             ) : (
               <AudioCleanupLayout />
             )}
-          </>
+          </div>
         }
       />
       <Dialog

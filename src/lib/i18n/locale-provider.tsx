@@ -25,7 +25,7 @@ function createShellCopy(locale: Locale): ShellCopy {
   const t = (key: TranslationKey) => translate(locale, key);
   return {
     nav: {
-      "/home": t("shell.nav.home"), "/projects": t("shell.nav.projects"), "/templates": t("shell.nav.templates"), "/assets": t("shell.nav.assets"), "/history": t("shell.nav.history"), "/usage": t("shell.nav.usage"), "/settings": t("shell.nav.settings"), "/create/image": t("shell.nav.image"), "/create/video": t("shell.nav.video"), "/create/audio": t("shell.nav.audio"), "/create/document": locale === "th" ? "เอกสาร" : "Document", create: t("shell.nav.create"),
+      "/home": t("shell.nav.home"), "/projects": t("shell.nav.projects"), "/templates": t("shell.nav.templates"), "/assets": t("shell.nav.assets"), "/history": t("shell.nav.history"), "/usage": t("shell.nav.usage"), "/settings": t("shell.nav.settings"), "/create/image": t("shell.nav.image"), "/create/video": t("shell.nav.video"), "/create/ai-presenter": locale === "th" ? "พรีเซนเตอร์ AI" : "AI Presenter", "/create/audio": t("shell.nav.audio"), "/create/document": locale === "th" ? "เอกสาร" : "Document", create: t("shell.nav.create"),
     },
     header: { search: t("shell.header.search"), searchAssets: t("shell.header.searchAssets"), openSearch: t("shell.header.openSearch"), openNotifications: t("shell.header.openNotifications") },
     rail: { thisMonth: t("shell.rail.thisMonth"), creditsRemaining: t("shell.rail.creditsRemaining"), used: t("shell.rail.used"), total: t("shell.rail.total"), viewUsage: t("shell.rail.viewUsage"), quickTip: t("shell.rail.quickTip"), tip: t("shell.rail.tip"), browseTemplates: t("shell.rail.browseTemplates"), needHelp: t("shell.rail.needHelp"), helpCenter: t("shell.rail.helpCenter") },
@@ -458,6 +458,8 @@ const featurePhraseTranslations: Record<string, string> = {
   "Unable to resume image upscaling": "ไม่สามารถเพิ่มความละเอียดรูปภาพต่อได้",
   "Unable to resume style transfer": "ไม่สามารถถ่ายโอนสไตล์ต่อได้",
   "Unable to resume background generation": "ไม่สามารถสร้างพื้นหลังต่อได้",
+  "YOUR CREATIVE ARCHIVE": "คลังผลงานสร้างสรรค์ของคุณ",
+  "Video Storyboard": "สตอรี่บอร์ดวิดีโอ",
 };
 
 const translatableAttributes = ["aria-label", "placeholder", "title", "alt"] as const;

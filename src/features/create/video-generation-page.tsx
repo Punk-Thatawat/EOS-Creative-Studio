@@ -108,6 +108,9 @@ function isActiveVideoTab(value: string | null): value is ActiveVideoTab {
   return mobileVideoModeOptions.some((option) => option.value === value);
 }
 
+/** The tab last picked in this browser, so a refresh opens the same tool again. */
+const VIDEO_TAB_STORAGE_KEY = "eos.video.active-tab";
+
 const videoModeOptions = [
   {
     value: "storyboard",
@@ -1102,6 +1105,22 @@ export function VideoGenerationPage() {
     setActiveVideoTab(tab);
     setVisitedVideoTabs((current) => current.has(tab) ? current : new Set(current).add(tab));
   }, []);
+  const restoredVideoTabRef = useRef(false);
+  // A tab picked by hand is remembered, and a ?tab= link that was only the way in is dropped so a refresh does not undo the pick.
+  const selectVideoTab = (tab: ActiveVideoTab) => {
+    activateVideoTab(tab);
+    try {
+      window.localStorage.setItem(VIDEO_TAB_STORAGE_KEY, tab);
+    } catch {
+      // Ignore storage restrictions; the tab still changes for this visit.
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("tab")) {
+      params.delete("tab");
+      const query = params.toString();
+      router.replace(`${window.location.pathname}${query ? `?${query}` : ""}`, { scroll: false });
+    }
+  };
   useEffect(() => {
     generationStatusRef.current = generationStatus;
   }, [generationStatus]);
@@ -1220,6 +1239,25 @@ export function VideoGenerationPage() {
     if (!isActiveVideoTab(requestedTab)) return;
     const timeoutId = window.setTimeout(() => {
       activateVideoTab(requestedTab);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [activateVideoTab, searchParams]);
+
+  // On a fresh load without a ?tab= link, go back to the tab that was open before the refresh.
+  useEffect(() => {
+    if (restoredVideoTabRef.current) return;
+    if (isActiveVideoTab(searchParams.get("tab"))) {
+      restoredVideoTabRef.current = true;
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      restoredVideoTabRef.current = true;
+      try {
+        const savedTab = window.localStorage.getItem(VIDEO_TAB_STORAGE_KEY);
+        if (isActiveVideoTab(savedTab)) activateVideoTab(savedTab);
+      } catch {
+        // Ignore storage restrictions and keep the default tab.
+      }
     }, 0);
     return () => window.clearTimeout(timeoutId);
   }, [activateVideoTab, searchParams]);
@@ -2699,7 +2737,7 @@ export function VideoGenerationPage() {
                 aria-current={isActive ? "page" : undefined}
                 onClick={() => {
                   if (tab && tab !== activeVideoTab) {
-                    activateVideoTab(tab);
+                    selectVideoTab(tab);
                   }
                 }}
               >
@@ -2719,7 +2757,7 @@ export function VideoGenerationPage() {
           otherModesLabel={t("create.mode.other")}
           onChange={(tab) => {
             if (tab !== activeVideoTab) {
-              activateVideoTab(tab);
+              selectVideoTab(tab);
             }
           }}
         />}

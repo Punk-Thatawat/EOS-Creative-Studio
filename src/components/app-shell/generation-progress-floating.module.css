@@ -10,6 +10,11 @@
   gap: 8px;
   pointer-events: none;
 }
+/* On the Templates page the left column holds the generate button, so the tracker sits on the right. */
+.wrapperRight {
+  right: 16px;
+  left: auto;
+}
 
 .center {
   width: 100%;
@@ -231,6 +236,67 @@
   right: 8px;
   width: 24px;
   height: 24px;
+}
+
+.cancelRow {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 5px 3px 0;
+}
+
+.cancelPrompt {
+  min-width: 0;
+  flex: 1;
+  color: #756f69;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.cancelLink,
+.cancelSecondary,
+.cancelConfirm {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #9a5a45;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cancelLink:hover,
+.cancelLink:focus-visible,
+.cancelSecondary:hover,
+.cancelSecondary:focus-visible {
+  border-color: #e7e1dc;
+  background: #faf8f6;
+  outline: none;
+}
+
+.cancelConfirm {
+  border-color: #f1c7b7;
+  background: #fff4ef;
+  color: #c84626;
+}
+
+.cancelConfirm:hover,
+.cancelConfirm:focus-visible {
+  border-color: #e85b28;
+  background: #ffebe2;
+  outline: none;
+}
+
+.cancelLink:disabled,
+.cancelSecondary:disabled,
+.cancelConfirm:disabled {
+  cursor: wait;
+  opacity: .6;
 }
 
 .launcher {

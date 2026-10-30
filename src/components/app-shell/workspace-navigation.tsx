@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { AudioLines, BarChart3, ChevronDown, Clock3, Home, ImageIcon, Settings, Video, WandSparkles, type LucideIcon } from "lucide-react";
+import { AudioLines, BarChart3, ChevronDown, Clock3, Home, ImageIcon, LayoutTemplate, Settings, UserRound, Video, WandSparkles, type LucideIcon } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { preloadCreatePage } from "@/features/create/components/preload-create-page";
 import type { GenerationKind } from "@/features/create/types/generation";
@@ -9,6 +9,7 @@ import { shellCopy, useLocale } from "@/lib/i18n/locale-provider";
 
 const workspaceItems = [
   { label: "Home", href: "/home", icon: Home },
+  { label: "Templates", href: "/templates", icon: LayoutTemplate },
   { label: "Assets", href: "/assets", icon: ImageIcon },
   { label: "History", href: "/history", icon: Clock3 },
   { label: "Usage & Credits", href: "/usage", icon: BarChart3 },
@@ -18,6 +19,7 @@ const createItems: { kind?: GenerationKind; label: string; href: string; icon: L
   { kind: "image", label: "Image", href: "/create/image", icon: ImageIcon },
   { kind: "video", label: "Video", href: "/create/video", icon: Video },
   { kind: "audio", label: "Audio", href: "/create/audio", icon: AudioLines },
+  { label: "AI Presenter", href: "/create/ai-presenter", icon: UserRound },
 ];
 const mainClass = "flex min-h-11 select-none items-center gap-2 rounded-[11px] px-3 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary";
 const activeClass = "bg-[linear-gradient(90deg,#f26b38_0_6px,#f5f4f6_6px_100%)] text-primary";
@@ -48,7 +50,10 @@ export function WorkspaceNavigation({ pathname, onNavigate }: { pathname: string
   const text = shellCopy[locale];
   const navigationLockRef = useRef<string | null>(null);
   const navigationUnlockTimeoutRef = useRef<number | null>(null);
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) => {
+    const baseHref = href.split("?")[0];
+    return pathname === baseHref || pathname.startsWith(`${baseHref}/`);
+  };
   const isCreateRoute = pathname.startsWith("/create/");
   const [createOpen, setCreateOpen] = useState(isCreateRoute);
 
