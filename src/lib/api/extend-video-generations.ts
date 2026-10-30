@@ -21,6 +21,8 @@ export type ExtendVideoGenerationInput = {
   seed?: number;
   modelParams?: Record<string, unknown>;
   idempotencyKey?: string;
+  /** The template this was started from, so the history can tell template clips from the rest. */
+  templateSlug?: string;
 };
 
 export type ExtendVideoOutput = {

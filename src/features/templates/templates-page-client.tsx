@@ -68,6 +68,8 @@ import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/ap
 import { createTextVideoGeneration, type TextVideoGenerationInput } from "@/lib/api/text-video-generations";
 import { createMotionTransferGeneration, createVideoSwapGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
+import { MediaPicker, rememberUploads } from "./media-picker";
+import { longClipLengths, longClipModels, queueExtension, useExtensionQueue } from "./long-clip";
 import { listTemplateGenerationModels, loadTemplateModelSettings, type TemplateModelMode, type TemplateModelSetting } from "@/lib/api/template-model-settings";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
@@ -1244,12 +1246,19 @@ function useModelPicker(feature: string, enabled = true) {
   // The length to ask for: the wanted one when the model takes it, else the closest it allows (Omni only takes 3 to 10 seconds).
   const durationFor = (id: string, wanted: number): number => {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.duration;
+    if (longerThanOnce(id) && longClipLengths.includes(wanted)) return wanted;
     const allowed = Array.isArray(property?.enum) ? property.enum.filter((value): value is number => typeof value === "number") : [];
     if (allowed.length) return allowed.includes(wanted) ? wanted : allowed.reduce((best, value) => (Math.abs(value - wanted) < Math.abs(best - wanted) ? value : best));
     if (typeof property?.minimum === "number" && wanted < property.minimum) return property.minimum;
     if (typeof property?.maximum === "number" && wanted > property.maximum) return property.maximum;
     return wanted;
   };
+  // The most the model makes at once, and whether a longer clip can be had by extending it.
+  const onceOf = (id: string): number | undefined => {
+    const maximum = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.duration?.maximum;
+    return typeof maximum === "number" ? maximum : undefined;
+  };
+  const longerThanOnce = (id: string) => longClipModels.test(id) && onceOf(id) === 30;
   // Where the model takes reference images, if it does: the parameter name and whether it wants a list.
   const referenceOf = (id: string): { parameter: string; list: boolean; maxImages?: number } | null => {
     const capabilities = models.find((m) => m.model === id)?.capabilities;
@@ -1262,7 +1271,8 @@ function useModelPicker(feature: string, enabled = true) {
     return parameter ? { parameter, list: properties[parameter]?.type === "array", ...(typeof maxItems === "number" ? { maxImages: maxItems } : {}) } : null;
   };
   // The lengths (in seconds) the model takes: its own list, or the usual steps between its shortest and longest.
-  const durationsOf = (id: string): number[] => {
+  const durationsOf = (id: string): number[] => [...ownDurationsOf(id), ...(longerThanOnce(id) ? longClipLengths : [])];
+  const ownDurationsOf = (id: string): number[] => {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.duration;
     const allowed = Array.isArray(property?.enum) ? property.enum.filter((value): value is number => typeof value === "number") : [];
     if (allowed.length) return allowed;
@@ -1278,7 +1288,7 @@ function useModelPicker(feature: string, enabled = true) {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.mode;
     return Array.isArray(property?.enum) ? property.enum.filter((value): value is string => value === "person" || value === "object" || value === "background") : [];
   };
-  return { options, ready, preferredModel, defaultModel: models.find((model) => model.isDefault)?.model ?? models[0]?.model ?? "", qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, referenceOf, modesOf, labelOf };
+  return { options, ready, preferredModel, defaultModel: models.find((model) => model.isDefault)?.model ?? models[0]?.model ?? "", qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, onceOf, referenceOf, modesOf, labelOf };
 }
 
 /**
@@ -1371,6 +1381,9 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
   const [ownMotion, setOwnMotion] = useState<{ file: File; url: string } | null>(null);
   const motionInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => () => { if (ownMotion) URL.revokeObjectURL(ownMotion.url); }, [ownMotion]);
+  // The pickers: media already uploaded, saved, generated or liked, instead of a new upload.
+  const [motionPickerOpen, setMotionPickerOpen] = useState(false);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const [sceneControl, setSceneControl] = useState(true);
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
   const [orientation, setOrientation] = useState<"video" | "image">("video");
@@ -1432,6 +1445,26 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
   const videoPrepareFailed = swapping && preparedVideo && preparedVideo.source === motionSrc && preparedVideo.failed;
   const [quoteRetry, setQuoteRetry] = useState(0);
   const credits = useCreditQuote({ feature: swapping ? "video-swap" : "motion-transfer", model: swapping && (!readyVideo || (isH3Open && images.length === 0)) ? "" : model, resolution: quality || undefined, duration, aspectRatio, ...(readyVideo ? { sourceVideo: readyVideo } : {}), ...(isH3Open && images.length ? { referenceImageCount: images.length } : {}), retry: quoteRetry });
+  // The model takes a motion video of 3 to 30 seconds; the file comes from the device or from the picker.
+  const acceptMotion = (file: File) => {
+    const url = URL.createObjectURL(file);
+    const probe = document.createElement("video");
+    probe.preload = "metadata";
+    probe.onloadedmetadata = () => {
+      if (probe.duration >= 3 && probe.duration <= 30) {
+        setOwnMotion({ file, url });
+        setSending({ state: "idle" });
+      } else {
+        URL.revokeObjectURL(url);
+        setSending({ state: "error", message: c("templates.motion.durationRange") });
+      }
+    };
+    probe.onerror = () => {
+      URL.revokeObjectURL(url);
+      setSending({ state: "error", message: c("templates.motion.referenceFailed") });
+    };
+    probe.src = url;
+  };
   const qualityOptions: FlyoutOption[] = qualityChoices.map((label) => ({ id: label, label }));
   // A model with a single image field uses the first image only.
   const firstOnly = swapping && images.length > 1 && !!model && !swapPicker.referenceOf(model)?.list;
@@ -1461,11 +1494,13 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
     emitGenerationSubmitting({ feature: "motion-transfer", requestId });
     try {
       const uploaded = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "motion-transfer" })));
+      rememberUploads(uploaded);
       let video: string = reference ?? "";
       if (swapping && readyVideo) {
         video = readyVideo;
       } else if (ownMotion) {
         video = await uploadImageAsset(ownMotion.file, { purpose: "content", feature: "motion-transfer" });
+        rememberUploads([video], "video");
       } else if (!/^https?:\/\//i.test(video)) {
         const response = await fetch(video);
         if (!response.ok) throw new Error(c("templates.motion.referenceFailed"));
@@ -1516,7 +1551,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
             <span><Video size={15} aria-hidden="true" />{c("templates.motion.sourceVideoLabel")}</span>
           </div>
           <div className={s.motionBoxWrap}>
-            <button type="button" className={`${s.motionBox} ${motionSrc ? `${s.motionBoxFilled} ${s.motionVideoBox} ${s.motionVideoEditBox}` : ""}`} aria-label={motionSrc ? c("templates.motion.changeVideo") : c("templates.motion.addMotion")} onClick={() => motionInputRef.current?.click()}>
+            <button type="button" className={`${s.motionBox} ${motionSrc ? `${s.motionBoxFilled} ${s.motionVideoBox} ${s.motionVideoEditBox}` : ""}`} aria-label={motionSrc ? c("templates.motion.changeVideo") : c("templates.motion.addMotion")} onClick={() => setMotionPickerOpen(true)}>
               {motionSrc ? (
                 <span className={s.motionTilt}>
                   <video key={motionSrc} src={motionSrc} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
@@ -1536,7 +1571,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
         <div className={s.motionStack}>
           {/* As in a motion library: the motion to copy, then the character, each in its own box. */}
           <div className={s.motionBoxWrap}>
-            <button type="button" className={`${s.motionBox} ${motionSrc ? `${s.motionBoxFilled} ${s.motionVideoBox}` : ""}`} onClick={() => motionInputRef.current?.click()}>
+            <button type="button" className={`${s.motionBox} ${motionSrc ? `${s.motionBoxFilled} ${s.motionVideoBox}` : ""}`} onClick={() => setMotionPickerOpen(true)}>
               {motionSrc ? (
                 <span className={s.motionTilt}>
                   <video key={motionSrc} src={motionSrc} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
@@ -1557,7 +1592,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
             )}
           </div>
           <div className={s.motionBoxWrap}>
-            <button type="button" className={`${s.motionBox} ${images[0] ? s.motionBoxFilled : ""}`} onClick={() => inputRef.current?.click()}>
+            <button type="button" className={`${s.motionBox} ${images[0] ? s.motionBoxFilled : ""}`} onClick={() => setImagePickerOpen(true)}>
               {images[0] ? (
                 <Image src={images[0].url} alt={c("templates.motion.character")} fill unoptimized sizes="320px" className={s.motionBoxImage} />
               ) : (
@@ -1584,25 +1619,30 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
         onChange={(event) => {
           const file = event.currentTarget.files?.[0];
           event.currentTarget.value = "";
-          if (!file) return;
-          // The model takes a motion video of 3 to 30 seconds.
-          const url = URL.createObjectURL(file);
-          const probe = document.createElement("video");
-          probe.preload = "metadata";
-          probe.onloadedmetadata = () => {
-            if (probe.duration >= 3 && probe.duration <= 30) {
-              setOwnMotion({ file, url });
-              setSending({ state: "idle" });
-            } else {
-              URL.revokeObjectURL(url);
-              setSending({ state: "error", message: c("templates.motion.durationRange") });
-            }
-          };
-          probe.onerror = () => {
-            URL.revokeObjectURL(url);
-            setSending({ state: "error", message: c("templates.motion.referenceFailed") });
-          };
-          probe.src = url;
+          if (file) acceptMotion(file);
+        }}
+      />
+      <MediaPicker
+        open={motionPickerOpen}
+        kind="video"
+        remaining={1}
+        onClose={() => setMotionPickerOpen(false)}
+        onUploadFromDevice={() => motionInputRef.current?.click()}
+        onPick={(files) => {
+          if (files[0]) acceptMotion(files[0]);
+        }}
+      />
+      <MediaPicker
+        open={imagePickerOpen}
+        kind="image"
+        remaining={swapping ? Math.max(0, imageLimit - images.length) : 1}
+        onClose={() => setImagePickerOpen(false)}
+        onUploadFromDevice={() => inputRef.current?.click()}
+        onPick={(files) => {
+          const transfer = new DataTransfer();
+          files.forEach((file) => transfer.items.add(file));
+          attach(transfer.files);
+          setSending({ state: "idle" });
         }}
       />
       <input
@@ -1644,7 +1684,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
                   <button type="button" className={s.motionReferenceRemove} aria-label={c("templates.motion.removeReference", { number: (image.slot ?? index) + 1 })} onClick={() => detach(image.id)}><X size={12} aria-hidden="true" /></button>
                 </span>
               ))}
-              {images.length < imageLimit && <button type="button" className={s.motionReferenceAdd} disabled={imagesLoading} onClick={() => inputRef.current?.click()} aria-label={c("templates.attach.add")}><Plus size={18} aria-hidden="true" /><span>{c("templates.motion.addReference")}</span></button>}
+              {images.length < imageLimit && <button type="button" className={s.motionReferenceAdd} disabled={imagesLoading} onClick={() => setImagePickerOpen(true)} aria-label={c("templates.attach.add")}><Plus size={18} aria-hidden="true" /><span>{c("templates.motion.addReference")}</span></button>}
             </div>
           </>}
           <small className={attachError || firstOnly || tooManyForModel ? s.sendError : undefined} role={attachError || firstOnly || tooManyForModel ? "alert" : undefined}>
@@ -1904,6 +1944,8 @@ function Composer({
   // The images a template was made with start in it.
   const { images, attach: attachImages, detach, error: attachError } = useTemplateImages(t, 5, !isWorkflow);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The picker: images already uploaded, saved or generated, instead of a new upload.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const attach = (list: FileList | null) => {
     attachImages(list);
     setSending({ state: "idle" });
@@ -1920,7 +1962,12 @@ function Composer({
   const duration = picker.durationFor(quoteModel, wantedDuration);
   const modelRatios = picker.ratiosOf(quoteModel);
   const aspectRatio = modelRatios.length && !modelRatios.includes(wantedRatio) ? (modelRatios.includes("16:9") ? "16:9" : modelRatios[0]) : wantedRatio;
-  const credits = useCreditQuote({ feature: "text-to-video", model: mode === "create" ? quoteModel : "", resolution: quoteQuality, duration, aspectRatio });
+  // A clip longer than the model makes at once is made in two parts: its first 30 seconds, then the rest as an extension.
+  const firstPart = longClipModels.test(quoteModel) ? Math.min(duration, picker.onceOf(quoteModel) ?? duration) : duration;
+  const restPart = duration - firstPart;
+  const firstCredits = useCreditQuote({ feature: "text-to-video", model: mode === "create" ? quoteModel : "", resolution: quoteQuality, duration: firstPart, aspectRatio });
+  // The extension is billed for its new seconds only, at the model's rate per second, so the price shown is the first part's rate times the whole length.
+  const credits = restPart > 0 && firstCredits !== null ? (firstCredits * duration) / firstPart : firstCredits;
   const imageRatio = ["1:1", "16:9", "4:3", "3:4", "9:16"].includes(wantedRatio) ? wantedRatio : "16:9";
   const flowVideoRatios = videoPicker.ratiosOf(flowVideoModel);
   const videoRatio = flowVideoRatios.length && !flowVideoRatios.includes(imageRatio) ? (flowVideoRatios.includes("16:9") ? "16:9" : (flowVideoRatios[0] ?? imageRatio)) : imageRatio;
@@ -1956,9 +2003,10 @@ function Composer({
     setSending({ state: "busy" });
     emitGenerationSubmitting({ feature: "text-to-video", requestId });
     try {
-      const request: TextVideoGenerationInput = { prompt, model, resolution, duration, aspectRatio, templateSlug: template.slug };
+      const request: TextVideoGenerationInput = { prompt, model, resolution, duration: firstPart, aspectRatio, templateSlug: template.slug };
       if (images.length && reference) {
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
+        rememberUploads(urls);
         // The reference-to-video models follow the images the prompt names as "@Image 1"; say so when the prompt does not.
         if (model.endsWith("/reference-to-video") && !/@Image\s*\d/i.test(prompt)) {
           request.prompt = `${prompt}\n\nUse the reference images to keep the same subjects and look: ${urls.map((_, index) => `@Image ${index + 1}`).join(", ")}.`;
@@ -1974,6 +2022,7 @@ function Composer({
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) {
         emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
+        if (restPart > 0) queueExtension({ generationId, pollUrl, prompt: request.prompt, duration: restPart, resolution, aspectRatio, templateSlug: template.slug });
       }
       onUse(template);
       setSending({ state: "sent", message: c("templates.composer.sent") });
@@ -2250,7 +2299,7 @@ function Composer({
             }}
           />
           {images.length === 0 ? (
-            <button type="button" className={s.attachBox} onClick={() => fileInputRef.current?.click()}>
+            <button type="button" className={s.attachBox} onClick={() => setPickerOpen(true)}>
               <span className={s.attachIcons} aria-hidden="true">
                 <i><User size={13} /></i>
                 <i><Shirt size={13} /></i>
@@ -2270,12 +2319,23 @@ function Composer({
                 </span>
               ))}
               {images.length < 5 && (
-                <button type="button" className={s.slotAdd} onClick={() => fileInputRef.current?.click()} aria-label={c("templates.attach.add")}>
+                <button type="button" className={s.slotAdd} onClick={() => setPickerOpen(true)} aria-label={c("templates.attach.add")}>
                   <Plus size={18} aria-hidden="true" />
                 </button>
               )}
             </div>
           )}
+          <MediaPicker
+            open={pickerOpen}
+            remaining={Math.max(0, 5 - images.length)}
+            onClose={() => setPickerOpen(false)}
+            onUploadFromDevice={() => fileInputRef.current?.click()}
+            onPick={(files) => {
+              const transfer = new DataTransfer();
+              files.forEach((file) => transfer.items.add(file));
+              attach(transfer.files);
+            }}
+          />
           {(attachError || images.some((image) => image.fromTemplate)) && (
             <small className={attachError ? s.sendError : undefined} role={attachError ? "alert" : undefined}>{attachError ?? c("templates.attach.fromTemplate")}</small>
           )}
@@ -3433,6 +3493,7 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
 }
 export function TemplatesPageClient() {
   const { c } = useStudioCopy();
+  useExtensionQueue();
   const [items, setItems] = useState<Template[]>([]);
   const [addedImages, setAddedImages] = useState<{ key: number; templateId: string; files: File[] } | null>(null);
   const [recreating, setRecreating] = useState<Template | null>(null);

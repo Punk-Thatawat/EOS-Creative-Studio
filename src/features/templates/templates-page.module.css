@@ -3141,3 +3141,55 @@
 /* "Show more" under Your videos. */
 .showMore { display: block; margin: 14px auto 0; border: 1px solid #f26b38; border-radius: 999px; background: #fff; padding: 8px 22px; color: #f26b38; font-size: 13px; font-weight: 700; cursor: pointer; }
 .showMore:hover { background: #fff3ed; }
+
+/* The picker for images already uploaded, saved or generated. */
+.pickerOverlay { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: #000000a6; padding: 16px; }
+.mediaPicker { display: flex; width: min(760px, 100%); max-height: min(640px, 100%); flex-direction: column; gap: 12px; overflow: hidden; border-radius: 18px; background: #fff; padding: 14px 16px 16px; color: #171719; }
+.mediaPicker > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mediaPicker > header > div { display: flex; gap: 6px; overflow-x: auto; }
+.mediaPicker > header [role="tab"] { flex: none; border: 1px solid transparent; border-radius: 999px; background: none; padding: 7px 14px; color: #17171999; font-size: 13px; font-weight: 600; cursor: pointer; }
+.mediaPicker > header [role="tab"][aria-selected="true"] { border-color: #f26b38; color: #f26b38; background: #fff; }
+.pickerClose { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border: 0; border-radius: 999px; background: #f4f5f7; color: #3f444b; cursor: pointer; }
+.pickerGrid { display: grid; min-height: 160px; flex: 1; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; overflow-y: auto; align-content: start; }
+.pickerUpload { display: flex; aspect-ratio: 1; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed #c9cdd3; border-radius: 12px; background: #fff; color: #3f444b; font-size: 12px; font-weight: 650; cursor: pointer; }
+.pickerUpload:hover { border-color: #f26b38; color: #f26b38; }
+.pickerItem { position: relative; aspect-ratio: 1; overflow: hidden; border: 2px solid transparent; border-radius: 12px; background: #f4f5f7; padding: 0; cursor: pointer; }
+.pickerItem img { object-fit: cover; }
+.pickerItemOn { border-color: #f26b38; }
+.pickerItem i { position: absolute; top: 6px; right: 6px; display: grid; width: 22px; height: 22px; place-items: center; border-radius: 999px; background: #f26b38; color: #fff; }
+.pickerNote { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; color: #6b7280; font-size: 12px; }
+.mediaPicker > footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mediaPicker > footer small { color: #6b7280; font-size: 12px; }
+.pickerConfirm { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 12px; background: #f26b38; padding: 10px 18px; color: #fff; font-size: 13px; font-weight: 750; cursor: pointer; }
+.pickerConfirm:disabled { opacity: .45; cursor: default; }
+@media (max-width: 767.98px) { .mediaPicker { max-height: 100%; border-radius: 16px; } .pickerGrid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); } }
+
+.pickerSub { display: flex; gap: 6px; }
+.pickerSub [role="tab"] { border: 1px solid #e5e5e5; border-radius: 999px; background: #fff; padding: 5px 12px; color: #17171999; font-size: 12px; font-weight: 600; cursor: pointer; }
+.pickerSub [role="tab"][aria-selected="true"] { border-color: #f26b38; color: #f26b38; }
+.pickerItem video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pickerItem b { position: absolute; left: 50%; top: 50%; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 999px; background: #0008; color: #fff; transform: translate(-50%, -50%); }
+
+.pickerCell { position: relative; }
+.pickerCell > .pickerItem { width: 100%; }
+.pickerHeart { position: absolute; left: 6px; top: 6px; display: grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 999px; background: #0008; color: #fff; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
+.pickerCell:hover .pickerHeart, .pickerHeart:focus-visible, .pickerHeartOn { opacity: 1; }
+.pickerHeartOn { color: #ff5c8a; }
+@media (hover: none) { .pickerHeart { opacity: 1; } }
+.pickerSub { align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.pickerSub > div { display: flex; gap: 6px; }
+.pickerSort { display: inline-flex; align-items: center; gap: 6px; color: #6b7280; font-size: 12px; }
+.pickerSort select { border: 1px solid #e5e5e5; border-radius: 10px; background: #fff; padding: 5px 8px; color: #171719; font-size: 12px; }
+
+/* The "Sort by" menu: a button and a short list with a tick, not the browser's own select. */
+.pickerSort { position: relative; }
+.pickerSortButton { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e5e5e5; border-radius: 999px; background: #fff; padding: 6px 12px; color: #3f444b; font-size: 12px; font-weight: 650; cursor: pointer; }
+.pickerSortButton:hover { background: #f4f5f7; }
+.pickerSortBackdrop { position: fixed; inset: 0; z-index: 1; border: 0; background: transparent; cursor: default; }
+.pickerSortMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 2; display: grid; width: max-content; min-width: 0; gap: 2px; margin: 0; border: 1px solid #e5e5e5; border-radius: 14px; background: #fff; padding: 6px; list-style: none; }
+.pickerSortMenu li { margin: 0; }
+.pickerSortMenu li button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 10px; background: none; padding: 9px 10px; color: #171719; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.pickerSortMenu li button:hover { background: #f4f5f7; }
+.pickerSortMenu li[aria-selected="true"] button { color: #f26b38; }
+.pickerSortMenu li button span { flex: none; }
+.pickerSortMenu li button svg:last-child:not(:first-child) { margin-left: 4px; }
