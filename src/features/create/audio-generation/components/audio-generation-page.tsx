@@ -122,6 +122,11 @@ function getPodcastVoiceAvatar(voice: AudioVoice | null | undefined): string | n
 
 const visibleTabs: readonly AudioTab[] = [
   "Text to Speech",
+  "Podcast & Dialogue",
+  "Voice Clone",
+  "Sound Effects",
+  "Text to Music",
+  "Audio Cleanup",
 ];
 // The backend may list Eleven models under either their WaveSpeed-style keys or raw ElevenLabs ids.
 const ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS = [
