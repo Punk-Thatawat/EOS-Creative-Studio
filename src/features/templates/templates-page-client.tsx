@@ -197,8 +197,22 @@ const copy = (t: Template, locale: CopyLocale) => {
   );
   return locale === "th" && t.descriptionTh?.trim() ? { ...base, description: t.descriptionTh.trim() } : base;
 };
-const name = (t: Template, locale: CopyLocale) =>
-  (locale === "th" ? t.titleTh?.trim() || titles[t.title] : undefined) ?? copy(t, locale).title;
+/**
+ * A name made from a prompt: the first line only, with a {placeholder} read as plain words, kept to a short length at a word.
+ * A template saved from a clip used to take the start of the whole prompt as its name, line breaks and all.
+ */
+function tidyTitle(text: string, max = 60): string {
+  const line = text.split(/\r?\n/).find((part) => part.trim()) ?? "";
+  const plain = line.replace(/\{([^}]*)\}/g, (_, key: string) => key.replace(/_/g, " ")).replace(/\s+/g, " ").trim();
+  if (plain.length <= max) return plain;
+  const cut = plain.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 20)).trim()}…`;
+}
+const name = (t: Template, locale: CopyLocale) => {
+  const title = (locale === "th" ? t.titleTh?.trim() || titles[t.title] : undefined) ?? copy(t, locale).title;
+  // Only names that look like a prompt need tidying: a line break or a {placeholder} in them.
+  return /[\r\n]|\{[^}]*\}?/.test(title) ? tidyTitle(title) : title;
+};
 
 // Who liked what: the slugs this visitor liked, and the counts that changed after the page loaded.
 type LikesState = { liked: Set<string>; counts: Record<string, number>; toggle: (t: Template) => void };
@@ -2417,7 +2431,7 @@ type SavedTemplate = { slug: string; title: string; coverFailed?: boolean; asset
 function SaveTemplateDialog({ item, mode, onClose, onCreated }: { item: HistoryItem; mode: Mode; onClose: () => void; onCreated: (saved: SavedTemplate) => void }) {
   const { c } = useStudioCopy();
   const prompt = item.prompt?.trim() ?? "";
-  const [title, setTitle] = useState((prompt || item.title).slice(0, 80));
+  const [title, setTitle] = useState(tidyTitle(prompt || item.title, 80));
   const [description, setDescription] = useState(prompt.slice(0, 240));
   const [category, setCategory] = useState(modeCategory[mode]);
   const [state, setState] = useState<{ busy: boolean; error?: string }>({ busy: false });
@@ -2520,6 +2534,8 @@ function MyVideos({
   const { c } = useStudioCopy();
   const [justSaved, setJustSaved] = useState<SavedTemplate | null>(null);
   const [videos, setVideos] = useState<HistoryItem[]>([]);
+  // How many of the clips are on show; the rest open with "Show more" instead of being dropped.
+  const [shown, setShown] = useState(8);
   const [pending, setPending] = useState<HistoryItem[]>([]);
   const [runs, setRuns] = useState<TemplateWorkflowRun[]>([]);
   const [saving, setSaving] = useState<HistoryItem | null>(null);
@@ -2529,12 +2545,12 @@ function MyVideos({
     const load = () => {
       window.clearTimeout(timer);
       const workflows = mode === "create" ? listTemplateWorkflows(12, controller.signal).catch(() => [] as TemplateWorkflowRun[]) : Promise.resolve([] as TemplateWorkflowRun[]);
-      Promise.all([fetchHistory({ type: "video", fromTemplate: true, limit: 24, signal: controller.signal }), workflows])
+      Promise.all([fetchHistory({ type: "video", fromTemplate: true, limit: 50, signal: controller.signal }), workflows])
         .then(([result, flowRuns]) => {
           if (controller.signal.aborted) return;
           setRuns(flowRuns);
           const ofMode = result.items.filter((item) => modeFeatures[mode].includes(item.feature));
-          setVideos(ofMode.filter((item) => item.status === "completed" && item.outputUrl).slice(0, 8));
+          setVideos(ofMode.filter((item) => item.status === "completed" && item.outputUrl));
           const running = ofMode.filter((item) => item.status === "queued" || item.status === "processing");
           setPending(running);
           // Follow the clips and workflow runs still being made until they are done.
@@ -2647,7 +2663,7 @@ function MyVideos({
             <span>{item.prompt?.trim() || item.title}</span>
           </li>
         ))}
-        {videos.map((item) => tiles ? (
+        {videos.slice(0, shown).map((item) => tiles ? (
           <li key={item.id} className={s.workTile}>
             {/* The clip plays on its tile (muted, looping); a click opens its details, where the player has its controls. */}
             <button type="button" className={s.workOpen} onClick={() => onDetails(templateOfWork(item, savedSlugs.has(workSlug(item.id))))} aria-label={c("templates.card.previewAria", { name: item.title })} title={item.prompt?.trim() || item.title}>
@@ -2676,6 +2692,11 @@ function MyVideos({
           </li>
         ))}
       </ul>
+      {videos.length > shown && (
+        <button type="button" className={s.showMore} onClick={() => setShown((count) => count + 8)}>
+          {c("templates.history.more", { count: videos.length - shown })}
+        </button>
+      )}
       {saving && (
         <SaveTemplateDialog
           item={saving}

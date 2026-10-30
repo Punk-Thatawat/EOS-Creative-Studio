@@ -3108,3 +3108,7 @@
     .composerTabs, .toolbar { box-shadow: none; animation: barShadow linear both; animation-timeline: scroll(nearest block); animation-range: 0 48px; }
   }
 }
+
+/* "Show more" under Your videos. */
+.showMore { display: block; margin: 14px auto 0; border: 1px solid #f26b38; border-radius: 999px; background: #fff; padding: 8px 22px; color: #f26b38; font-size: 13px; font-weight: 700; cursor: pointer; }
+.showMore:hover { background: #fff3ed; }
