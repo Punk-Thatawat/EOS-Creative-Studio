@@ -70,6 +70,7 @@ import { createTextVideoGeneration, type TextVideoGenerationInput } from "@/lib/
 import { createMotionTransferGeneration, createVideoSwapGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
 import { MediaPicker, rememberUploads } from "./media-picker";
+import { longClipLengths, longClipModels, queueExtension, useExtensionQueue } from "./long-clip";
 import { listTemplateGenerationModels, loadTemplateModelSettings, type TemplateModelMode, type TemplateModelSetting } from "@/lib/api/template-model-settings";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
@@ -1206,12 +1207,19 @@ function useModelPicker(feature: string, enabled = true) {
   // The length to ask for: the wanted one when the model takes it, else the closest it allows (Omni only takes 3 to 10 seconds).
   const durationFor = (id: string, wanted: number): number => {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.duration;
+    if (longerThanOnce(id) && longClipLengths.includes(wanted)) return wanted;
     const allowed = Array.isArray(property?.enum) ? property.enum.filter((value): value is number => typeof value === "number") : [];
     if (allowed.length) return allowed.includes(wanted) ? wanted : allowed.reduce((best, value) => (Math.abs(value - wanted) < Math.abs(best - wanted) ? value : best));
     if (typeof property?.minimum === "number" && wanted < property.minimum) return property.minimum;
     if (typeof property?.maximum === "number" && wanted > property.maximum) return property.maximum;
     return wanted;
   };
+  // The most the model makes at once, and whether a longer clip can be had by extending it.
+  const onceOf = (id: string): number | undefined => {
+    const maximum = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.duration?.maximum;
+    return typeof maximum === "number" ? maximum : undefined;
+  };
+  const longerThanOnce = (id: string) => longClipModels.test(id) && onceOf(id) === 30;
   // Where the model takes reference images, if it does: the parameter name and whether it wants a list.
   const referenceOf = (id: string): { parameter: string; list: boolean } | null => {
     const capabilities = models.find((m) => m.model === id)?.capabilities;
@@ -1223,7 +1231,8 @@ function useModelPicker(feature: string, enabled = true) {
     return parameter ? { parameter, list: properties[parameter]?.type === "array" } : null;
   };
   // The lengths (in seconds) the model takes: its own list, or the usual steps between its shortest and longest.
-  const durationsOf = (id: string): number[] => {
+  const durationsOf = (id: string): number[] => [...ownDurationsOf(id), ...(longerThanOnce(id) ? longClipLengths : [])];
+  const ownDurationsOf = (id: string): number[] => {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.duration;
     const allowed = Array.isArray(property?.enum) ? property.enum.filter((value): value is number => typeof value === "number") : [];
     if (allowed.length) return allowed;
@@ -1239,7 +1248,7 @@ function useModelPicker(feature: string, enabled = true) {
     const property = models.find((m) => m.model === id)?.capabilities.apiSchema?.request_schema?.properties?.mode;
     return Array.isArray(property?.enum) ? property.enum.filter((value): value is string => value === "person" || value === "object" || value === "background") : [];
   };
-  return { options, ready, preferredModel, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, referenceOf, modesOf, labelOf };
+  return { options, ready, preferredModel, qualitiesOf, qualityKeyOf, ratiosOf, durationFor, durationsOf, onceOf, referenceOf, modesOf, labelOf };
 }
 
 /**
@@ -1849,7 +1858,12 @@ function Composer({
   const duration = picker.durationFor(quoteModel, wantedDuration);
   const modelRatios = picker.ratiosOf(quoteModel);
   const aspectRatio = modelRatios.length && !modelRatios.includes(wantedRatio) ? (modelRatios.includes("16:9") ? "16:9" : modelRatios[0]) : wantedRatio;
-  const credits = useCreditQuote({ feature: "text-to-video", model: mode === "create" ? quoteModel : "", resolution: quoteQuality, duration, aspectRatio });
+  // A clip longer than the model makes at once is made in two parts: its first 30 seconds, then the rest as an extension.
+  const firstPart = longClipModels.test(quoteModel) ? Math.min(duration, picker.onceOf(quoteModel) ?? duration) : duration;
+  const restPart = duration - firstPart;
+  const firstCredits = useCreditQuote({ feature: "text-to-video", model: mode === "create" ? quoteModel : "", resolution: quoteQuality, duration: firstPart, aspectRatio });
+  // The extension is billed for its new seconds only, at the model's rate per second, so the price shown is the first part's rate times the whole length.
+  const credits = restPart > 0 && firstCredits !== null ? (firstCredits * duration) / firstPart : firstCredits;
   const imageRatio = ["1:1", "16:9", "4:3", "3:4", "9:16"].includes(wantedRatio) ? wantedRatio : "16:9";
   const flowVideoRatios = videoPicker.ratiosOf(flowVideoModel);
   const videoRatio = flowVideoRatios.length && !flowVideoRatios.includes(imageRatio) ? (flowVideoRatios.includes("16:9") ? "16:9" : (flowVideoRatios[0] ?? imageRatio)) : imageRatio;
@@ -1885,7 +1899,7 @@ function Composer({
     setSending({ state: "busy" });
     emitGenerationSubmitting({ feature: "text-to-video", requestId });
     try {
-      const request: TextVideoGenerationInput = { prompt, model, resolution, duration, aspectRatio, templateSlug: template.slug };
+      const request: TextVideoGenerationInput = { prompt, model, resolution, duration: firstPart, aspectRatio, templateSlug: template.slug };
       if (images.length && reference) {
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
         rememberUploads(urls);
@@ -1904,6 +1918,7 @@ function Composer({
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) {
         emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
+        if (restPart > 0) queueExtension({ generationId, pollUrl, prompt: request.prompt, duration: restPart, resolution, aspectRatio, templateSlug: template.slug });
       }
       onUse(template);
       setSending({ state: "sent", message: c("templates.composer.sent") });
@@ -3369,6 +3384,7 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
 }
 export function TemplatesPageClient() {
   const { c } = useStudioCopy();
+  useExtensionQueue();
   const [items, setItems] = useState<Template[]>([]);
   const [addedImages, setAddedImages] = useState<{ key: number; files: File[] } | null>(null);
   const [recreating, setRecreating] = useState<Template | null>(null);
