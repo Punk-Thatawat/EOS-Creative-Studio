@@ -1975,7 +1975,17 @@
   height: 32px;
   font-size: 13px;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   pointer-events: auto;
+}
+.tileActions { gap: 8px; }
+.tileLike { flex: none; }
+.tileRecreate { min-width: 0; flex: 0 1 auto; justify-content: center; }
+.tileRecreate svg { flex: none; }
+@media (max-width: 767px) {
+  .tileActions { padding: 8px; gap: 6px; }
+  .tileLike, .tileRecreate { gap: 5px; padding: 0 8px; font-size: 12px; }
 }
 .tileLike {
   background: #171719b3;
