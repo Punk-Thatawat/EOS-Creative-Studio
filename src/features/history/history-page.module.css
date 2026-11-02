@@ -104,6 +104,7 @@
 }
 .typeFilters button[aria-pressed=true] { background: #171719; border-color: #171719; color: white; }
 .typeFilters button[aria-pressed=true] svg { color: #ff8048; }
+.typeFilters button svg { flex: 0 0 auto; }
 .search {
   display: flex;
   align-items: center;
@@ -297,8 +298,8 @@
 .video, .videoThumbnail { width: 100%; height: 100%; object-fit: contain; background: #171719; }
 .videoThumbnail { object-fit: cover; }
 .pagination {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 16px;
   padding-top: 25px;
@@ -307,7 +308,12 @@
   color: #776e76;
   font-size: 12px;
 }
-.pagination>div { display: flex; align-items: center; gap: 12px; }
+.pagination>div { display: flex; grid-column: 2; max-width: 100%; align-items: center; justify-content: center; gap: 7px; }
+.paginationPage { display: flex; align-items: center; gap: 7px; }
+.paginationEllipsis { color: #6b6e7c; }
+.pagination button { width: 34px; height: 34px; border-radius: 7px; color: #202236; cursor: pointer; font-size: 12px; }
+.pagination button:disabled { color: #b9bac2; cursor: not-allowed; }
+.pagination button.paginationActive { color: #ff5b14; border-color: #ff9d78; background: #fff1eb; }
 .empty {
   min-height: 280px;
   border: 1px dashed #e1d7d1;
@@ -442,7 +448,7 @@
   .skeleton { grid-template-columns: 112px minmax(0,1fr); min-height: 132px; }
   .skeleton>div { min-height: 132px; }
   .skeleton span { margin: 20px 12px 0; }
-  .pagination { flex-direction: column; align-items: center; }
+  .pagination { display: flex; flex-direction: column; align-items: center; }
   .dialog { width: calc(100vw - 24px); }
   .dialogLayout { grid-template-columns: 1fr; }
   .dialogMedia { min-height: 200px; }
@@ -521,7 +527,7 @@
   .stats>div:nth-child(3) { padding-left: 0; }
   .stats strong { font-size: 24px; }
   .typeFilters { width: 100%; gap: 5px; flex-wrap: wrap; }
-  .typeFilters button { flex: 1 1 0; min-width: 0; padding: 8px; font-size: 12px; justify-content: center; }
+  .typeFilters button { flex: 1 1 auto; min-width: max-content; padding: 8px; font-size: 12px; justify-content: center; }
   .toolbar { gap: 12px; }
   .resultBar h2 { font-size: 16px; }
   .resultBar>div:first-child { flex-direction: column; gap: 3px; }
@@ -547,7 +553,7 @@
   .skeleton { grid-template-columns: clamp(112px,32%,220px) minmax(0,1fr); min-height: 132px; }
   .skeleton>div { min-height: 132px; }
   .skeleton span { margin: 20px 12px 0; }
-  .pagination { flex-direction: column; align-items: center; }
+  .pagination { display: flex; flex-direction: column; align-items: center; }
   .dialog { width: calc(100vw - 24px); }
   .dialogLayout { grid-template-columns: 1fr; }
   .dialogMedia { min-height: 200px; }

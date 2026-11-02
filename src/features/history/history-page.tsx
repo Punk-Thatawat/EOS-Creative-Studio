@@ -517,6 +517,11 @@ export function HistoryPageClient() {
   const summary = data?.summary;
   const page = Math.floor(query.offset / PAGE_SIZE) + 1;
   const pageCount = Math.max(1, Math.ceil((data?.pagination.total ?? 0) / PAGE_SIZE));
+  const pageNumbers = pageCount <= 4
+    ? Array.from({ length: pageCount }, (_, index) => index + 1)
+    : page <= 2 ? [1, 2, 3, pageCount]
+      : page >= pageCount - 1 ? [1, pageCount - 2, pageCount - 1, pageCount]
+        : [1, page, page + 1, pageCount];
   const goPage = (offset: number) => {
     change({ offset });
     results.current?.focus();
@@ -697,9 +702,12 @@ export function HistoryPageClient() {
                   >
                     <ChevronLeft size={17} />
                   </button>
-                  <span>
-                    {c("history.page.pageOf", { page, pages: pageCount })}
-                  </span>
+                  {pageNumbers.map((number, index) => (
+                    <span key={number} className={s.paginationPage}>
+                      {index > 0 && number - pageNumbers[index - 1]! > 1 ? <span className={s.paginationEllipsis} aria-hidden="true">…</span> : null}
+                      <button type="button" className={number === page ? s.paginationActive : undefined} aria-current={number === page ? "page" : undefined} aria-label={c("history.page.pageOf", { page: number, pages: pageCount })} onClick={() => goPage((number - 1) * PAGE_SIZE)}>{number}</button>
+                    </span>
+                  ))}
                   <button
                     disabled={!data.pagination.hasMore}
                     onClick={() => goPage(query.offset + PAGE_SIZE)}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { Dropdown } from "@/components/ui/dropdown";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -1465,7 +1466,6 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
     };
     probe.src = url;
   };
-  const qualityOptions: FlyoutOption[] = qualityChoices.map((label) => ({ id: label, label }));
   // A model with a single image field uses the first image only.
   const firstOnly = swapping && images.length > 1 && !!model && !swapPicker.referenceOf(model)?.list;
   const modelImageLimit = swapping && model ? swapPicker.referenceOf(model)?.maxImages : undefined;
@@ -1695,8 +1695,14 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
       {!swapping && picker.ready && !model && <p className={s.sendError} role="alert">{c("templates.motion.modelUnavailable")}</p>}
       {configuredImages > 4 && <p className={s.sendError} role="alert">{c("templates.motion.referenceConfigurationInvalid")}</p>}
       {videoPrepareFailed && <p className={s.sendError} role="alert">{c("templates.motion.videoPrepareFailed")} <button type="button" onClick={() => { setPreparedVideo(null); setVideoRetry((value) => value + 1); }}>{c("templates.retry")}</button></p>}
-      <PickerRow label={c("templates.edit.setting.quality")} value={quality || c("templates.composer.pickQuality")} placeholder={!quality} heading={c("templates.edit.setting.quality")} empty={c("templates.composer.noModels")} options={qualityOptions} selectedId={quality} onPick={(id) => pick({ quality: id })} />
-      {isH3Reference && <PickerRow label={c("templates.composer.duration")} value={c("templates.preview.seconds", { value: duration ?? 6 })} heading={c("templates.composer.duration")} empty={c("templates.composer.noModels")} options={Array.from({ length: isH3Open ? 13 : 12 }, (_, index) => ({ id: String(index + (isH3Open ? 3 : 4)), label: c("templates.preview.seconds", { value: index + (isH3Open ? 3 : 4) }) }))} selectedId={String(duration)} onPick={(id) => pick({ duration: Number(id) })} />}
+      <div className={s.motionDropdownField}>
+        <span>{c("templates.edit.setting.quality")}</span>
+        <Dropdown ariaLabel={c("templates.edit.setting.quality")} value={quality} placeholder={c("templates.composer.pickQuality")} options={qualityChoices.map((label) => ({ value: label, label }))} onChange={(value) => pick({ quality: value })} menuPosition="fixed" />
+      </div>
+      {isH3Reference && <div className={s.motionDropdownField}>
+        <span>{c("templates.composer.duration")}</span>
+        <Dropdown ariaLabel={c("templates.composer.duration")} value={String(duration ?? 6)} options={Array.from({ length: isH3Open ? 13 : 12 }, (_, index) => ({ value: String(index + (isH3Open ? 3 : 4)), label: c("templates.preview.seconds", { value: index + (isH3Open ? 3 : 4) }) }))} onChange={(value) => pick({ duration: Number(value) })} menuPosition="fixed" />
+      </div>}
       {swapping ? (
         <>
           {swapModes.length > 0 && (

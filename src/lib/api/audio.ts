@@ -655,6 +655,15 @@ export async function listAudioHistory(input: { feature?: AudioHistoryFeature; l
   return [];
 }
 
+export async function listOwnedAudioAssets(input: { page: number; limit: number; search?: string; sort: "newest" | "oldest" }): Promise<{ items: AudioHistoryEntry[]; total: number }> {
+  const query = new URLSearchParams({ page: String(input.page), limit: String(input.limit), sort: input.sort });
+  if (input.search?.trim()) query.set("search", input.search.trim());
+  const response = await userAudioRequest(`/audio/history/assets?${query.toString()}`);
+  const payload = await response.json() as { data?: { items?: unknown[]; total?: number } };
+  if (!payload.data || !Array.isArray(payload.data.items) || typeof payload.data.total !== "number") throw new Error("โหลดประวัติเสียงไม่สำเร็จ");
+  return { items: payload.data.items.map(normalizeAudioHistoryEntry) as AudioHistoryEntry[], total: payload.data.total };
+}
+
 export async function saveAudioHistory(input: SaveAudioHistoryInput): Promise<AudioHistoryEntry> {
   const form = new FormData();
   form.append("audio", input.audio, `audio.${input.outputFormat}`);

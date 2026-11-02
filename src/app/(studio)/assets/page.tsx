@@ -8,6 +8,7 @@ import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
 import { SearchInput } from "@/components/ui/search-input";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
+import { fetchAudioHistoryAudio, listOwnedAudioAssets, type AudioHistoryEntry } from "@/lib/api/audio";
 import {
   AlertCircle,
   Archive,
@@ -245,6 +246,71 @@ function AudioAssetPreview() {
       </span>
     </div>
   );
+}
+
+function OwnedAudioHistory({ search, sort }: { search: string; sort: AssetSort }) {
+  const [items, setItems] = useState<AudioHistoryEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ title: string; url: string } | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const totalPages = Math.max(1, Math.ceil(total / 12));
+
+  useEffect(() => { return () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); }; }, []);
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      void listOwnedAudioAssets({ page, limit: 12, search, sort: sort === "Oldest" ? "oldest" : "newest" })
+        .then((result) => { if (active) { setItems(result.items); setTotal(result.total); } })
+        .catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "โหลดประวัติเสียงไม่สำเร็จ"); })
+        .finally(() => { if (active) setLoading(false); });
+    }, search.trim() ? 220 : 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [page, search, sort]);
+
+  const openAudio = async (item: AudioHistoryEntry, download: boolean) => {
+    if (busy) return;
+    setBusy(item.id);
+    setError(null);
+    try {
+      const { blob } = await fetchAudioHistoryAudio(item.id);
+      const url = URL.createObjectURL(blob);
+      if (download) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${(item.label || "audio").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").slice(0, 100)}.${item.outputFormat}`;
+        document.body.appendChild(link); link.click(); link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } else {
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = url;
+        setPreview({ title: item.label, url });
+      }
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "เปิดไฟล์เสียงไม่สำเร็จ"); }
+    finally { setBusy(null); }
+  };
+  const closePreview = () => { setPreview(null); if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; };
+  useEffect(() => {
+    if (!preview) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { setPreview(null); if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; } };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [preview]);
+
+  return <section className="owned-audio-history" aria-label="ประวัติเสียงของคุณ">
+    <div className="owned-audio-history-heading"><strong>ประวัติเสียงของคุณ</strong><span>แสดงเฉพาะคุณ · ไฟล์หมดอายุตามระยะเวลาเก็บประวัติ</span></div>
+    {loading ? <p>กำลังโหลดประวัติเสียง…</p> : error ? <p role="alert">{error}</p> : items.length ? <div className="assets-grid">{items.map((item) => <article key={item.id} className="asset-card">
+      <div className="asset-card-media"><AudioAssetPreview /><span className="asset-type-badge" style={{ backgroundColor: "#73768a" }}><AudioLines size={15} />เสียง</span><button type="button" className="asset-play" disabled={busy !== null} aria-label={`ฟัง ${item.label}`} onClick={() => void openAudio(item, false)}><Play size={20} fill="white" /></button></div>
+      <div className="asset-card-footer"><div><strong>{item.label}</strong><span>{new Date(item.createdAt).toLocaleDateString("th-TH")}</span></div><div className="asset-card-actions"><button type="button" disabled={busy !== null} aria-label={`ดาวน์โหลด ${item.label}`} onClick={() => void openAudio(item, true)}><Download size={17} /></button></div></div>
+    </article>)}</div> : <p>ไม่มีประวัติเสียงที่ตรงกัน</p>}
+    {total > 12 ? <div className="assets-pagination"><span>หน้า {page} / {totalPages} · {total} รายการ</span><div><button type="button" aria-label="หน้าก่อนหน้า" disabled={page <= 1} onClick={() => setPage((n) => n - 1)}><ChevronLeft size={18} /></button><button type="button" aria-label="หน้าถัดไป" disabled={page >= totalPages} onClick={() => setPage((n) => n + 1)}><ChevronRight size={18} /></button></div></div> : null}
+    {preview ? <div className="assets-preview-popup" role="dialog" aria-modal="true" aria-label={preview.title} onMouseDown={(event) => { if (event.target === event.currentTarget) closePreview(); }}><div className="assets-preview-popup-content"><button type="button" className="assets-preview-popup-close" onClick={closePreview} aria-label="ปิด"><X size={20} /></button><div className="assets-preview-popup-audio"><AudioLines size={34} /><strong>{preview.title}</strong><audio src={preview.url} controls autoPlay aria-label={preview.title} /></div></div></div> : null}
+  </section>;
 }
 
 function FilterSelect({
@@ -900,9 +966,10 @@ export default function AssetsPage() {
             onValueChange={setSearch}
             placeholder={c("assets.searchPlaceholder")}
           />
-          <span>{rangeLabel}</span>
+          <span>{activeType === "Audio" && !activeTag && assets.length === 0 ? "" : rangeLabel}</span>
         </div>
 
+        {activeTab === "My Assets" && activeType === "Audio" && !activeTag ? <OwnedAudioHistory key={`${search}:${activeSort}:${refreshKey}`} search={search} sort={activeSort} /> : null}
         <div className="assets-content-grid">
           <div
             className={`${view === "grid" ? "assets-grid" : "assets-list"} ${isRefreshing ? "is-refreshing" : ""}`}
@@ -1035,7 +1102,7 @@ export default function AssetsPage() {
                   </article>
                 ))
               : null}
-            {!loading && !error && assets.length === 0 ? (
+            {!loading && !error && assets.length === 0 && !(activeType === "Audio" && !activeTag) ? (
               <div className="assets-empty">
                 <Archive size={24} />
                 <strong>{c("assets.empty.title")}</strong>
@@ -1045,7 +1112,7 @@ export default function AssetsPage() {
           </div>
         </div>
 
-        <div className="assets-pagination">
+        {!(activeType === "Audio" && !activeTag && assets.length === 0) ? <div className="assets-pagination">
           <span>{rangeLabel}</span>
           <div>
             <button
@@ -1077,7 +1144,7 @@ export default function AssetsPage() {
               <ChevronRight size={18} />
             </button>
           </div>
-        </div>
+        </div> : null}
       </section>
 
       {groupDialog ? (

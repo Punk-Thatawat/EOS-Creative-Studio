@@ -34,6 +34,23 @@
   flex: 0 0 auto;
   color: #f06128;
 }
+
+.assets-page .assets-pagination {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.assets-page .assets-pagination > div {
+  grid-column: 2;
+  justify-content: center;
+}
+
+@media (max-width: 767.98px) {
+  .assets-page .assets-pagination {
+    display: flex;
+    align-items: center;
+  }
+}
 .assets-page .assets-toolbar {
   border: 0;
   align-items: center;
@@ -286,8 +303,48 @@
   }
 }
 @media (max-width: 767.98px) {
+  .assets-page .assets-universe-hero {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 1200 / 353;
+  }
+  .assets-page .assets-universe-hero picture,
+  .assets-page .assets-universe-hero picture img {
+    width: 100%;
+    height: 100%;
+  }
+  .assets-page .assets-universe-hero picture img {
+    object-fit: contain;
+  }
+  .assets-page .assets-toolbar {
+    width: 100%;
+    min-width: 0;
+    align-items: stretch;
+    gap: 12px;
+    overflow: visible;
+  }
+  .assets-page .assets-media-tabs,
+  .assets-page .assets-tag-strip,
+  .assets-page .assets-filters {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+  .assets-page .assets-tag-strip-divider {
+    display: none;
+  }
+  .assets-page .assets-filters {
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 0;
+  }
+  .assets-page .assets-view-toggle {
+    flex: 0 0 auto;
+  }
   .assets-page .assets-search-row {
     display: flex;
+    width: 100%;
+    min-width: 0;
     margin: 0 0 14px;
   }
   .assets-search-row > span {
@@ -297,8 +354,14 @@
     gap: 6px;
   }
   .assets-media-tabs button {
+    flex: 1 1 auto;
+    justify-content: center;
+    white-space: nowrap;
     font-size: 12px;
     padding: 8px 11px;
+  }
+  .assets-media-tabs button svg {
+    flex: 0 0 auto;
   }
   .assets-page .assets-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -360,3 +423,8 @@
     content: "";
   }
 }
+.owned-audio-history { margin: 0 0 20px; }
+.owned-audio-history-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 12px; }
+.owned-audio-history-heading strong { color: #1f2631; font-size: 15px; }
+.owned-audio-history-heading span, .owned-audio-history > p { color: #8b8c93; font-size: 12px; }
+.owned-audio-history > p[role="alert"] { color: #b33c2a; }

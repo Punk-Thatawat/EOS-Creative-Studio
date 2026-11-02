@@ -2844,6 +2844,8 @@
 .clipShared { margin: 8px 0 0; font-size: 12px; color: #d9541c; }
 /* Motion Control's advanced settings: the prompt for the scene and which source the character's orientation follows. */
 .motionAdvanced { padding-bottom: 10px; }
+.motionDropdownField { display: grid; gap: 7px; }
+.motionDropdownField > span { color: #171719a6; font-size: 12px; font-weight: 600; }
 .motionAdvancedLabel { display: grid; gap: 8px; margin: 4px 0 14px; font-size: 13px; font-weight: 700; color: #171719d0; }
 .motionAdvancedLabel textarea { min-height: 96px; }
 .motionAdvancedLabel p { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.55; color: #17171980; }

@@ -15,6 +15,7 @@ import {
   AudioWaveform,
   Check,
   Clapperboard,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CloudUpload,
@@ -31,6 +32,7 @@ import {
   RotateCcw,
   RotateCw,
   Settings2,
+  Search,
   SlidersHorizontal,
   Smile,
   Sparkles,
@@ -117,7 +119,71 @@ const podcastVoiceAvatarEntries = [
 function getPodcastVoiceAvatar(voice: AudioVoice | null | undefined): string | null {
   if (!voice) return null;
   const identity = `${voice.key} ${voice.name}`.toLowerCase();
-  return podcastVoiceAvatarEntries.find(([name]) => identity.includes(name))?.[1] ?? voice.imageUrl ?? null;
+  return voice.imageUrl || podcastVoiceAvatarEntries.find(([name]) => identity.includes(name))?.[1] || null;
+}
+
+function PodcastVoicePicker({ voices, value, onChange, loading, playingKey, loadingKey, onPreview, onClose }: {
+  voices: AudioVoice[];
+  value: string;
+  onChange: (value: string) => void;
+  loading: boolean;
+  playingKey: string | null;
+  loadingKey: string | null;
+  onPreview: (voice: AudioVoice) => void;
+  onClose: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const selected = voices.find((voice) => voice.key === value || voice.name === value);
+  const filtered = voices.filter((voice) => `${voice.name} ${voice.description ?? ""}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const close = useCallback(() => { setOpen(false); setSearch(""); onClose(); }, [onClose]);
+
+  useEffect(() => () => onClose(), [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node)) close(); };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape, true);
+    return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape, true); };
+  }, [open, close]);
+
+  const avatar = (voice: AudioVoice | undefined) => {
+    const image = getPodcastVoiceAvatar(voice);
+    return <span className={styles.podcastVoicePickerAvatar}>{image ? <Image src={image} alt="" fill unoptimized sizes="44px" /> : <AudioLines size={17} />}</span>;
+  };
+
+  return <div className={styles.podcastVoicePicker} ref={rootRef}>
+    <button ref={triggerRef} type="button" className={styles.podcastVoicePickerTrigger} disabled={loading || !voices.length} aria-label="เลือกเสียงผู้พูด" aria-haspopup="dialog" aria-expanded={open} onClick={() => open ? close() : setOpen(true)}>
+      {avatar(selected)}<strong>{loading ? "กำลังโหลดเสียง…" : selected?.name ?? "เลือกเสียงผู้พูด"}</strong><ChevronDown size={16} className={open ? styles.podcastVoicePickerChevronOpen : undefined} />
+    </button>
+    {open ? <div className={styles.podcastVoicePickerMenu} role="dialog" aria-label="เลือกเสียงผู้พูด">
+      <div className={styles.podcastVoicePickerSearch}><Search size={17} aria-hidden="true" /><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ค้นหาเสียง" aria-label="ค้นหาเสียง" /></div>
+      <div className={styles.podcastVoicePickerList}>
+        {filtered.length ? filtered.map((voice) => {
+          const chosen = voice.key === selected?.key;
+          const playing = playingKey === voice.key;
+          return <div key={voice.key} className={`${styles.podcastVoicePickerOption} ${chosen ? styles.podcastVoicePickerOptionSelected : ""}`}>
+            <button type="button" className={styles.podcastVoicePickerChoose} aria-pressed={chosen} onClick={() => { onChange(voice.key); close(); triggerRef.current?.focus(); }}>
+              {avatar(voice)}<span className={styles.podcastVoicePickerCopy}><strong>{voice.name}</strong><small>{voice.description || "เสียงพอดแคสต์"}</small></span>{chosen ? <Check size={16} aria-label="เลือกอยู่" /> : null}
+            </button>
+            <button type="button" className={styles.podcastVoicePickerPlay} disabled={loadingKey !== null} onClick={() => onPreview(voice)} aria-label={`${playing ? "หยุด" : "ฟัง"}ตัวอย่างเสียง ${voice.name}`}>
+              {loadingKey === voice.key ? <span className={styles.voicePreviewSpinner} /> : playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}
+            </button>
+          </div>;
+        }) : <p className={styles.podcastVoicePickerEmpty}>ไม่พบเสียงที่ค้นหา</p>}
+      </div>
+    </div> : null}
+  </div>;
 }
 
 const visibleTabs: readonly AudioTab[] = [
@@ -649,6 +715,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const previewAudioRef = useRef<HTMLAudioElement>(null);
   const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
   const voicePreviewObjectUrlsRef = useRef<string[]>([]);
+  const voicePreviewRequestRef = useRef(0);
   const podcastHistoryRef = useRef<AudioHistoryItem[]>([]);
   const pendingPodcastHistorySavesRef = useRef(new Map<string, SaveAudioHistoryInput>());
 
@@ -1043,6 +1110,12 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     });
   const removeLine = (id: string) =>
     setLines((current) => (current.length > 1 ? current.filter((line) => line.id !== id) : current));
+  const stopPodcastVoicePreview = useCallback(() => {
+    voicePreviewRequestRef.current += 1;
+    voicePreviewAudioRef.current?.pause();
+    setPreviewingVoiceKey(null);
+    setPreviewLoadingVoiceKey(null);
+  }, []);
   const toggleVoicePreview = async (voice: AudioVoice) => {
     const audio = voicePreviewAudioRef.current ?? new Audio();
     voicePreviewAudioRef.current = audio;
@@ -1052,6 +1125,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
       return;
     }
     audio.pause();
+    const request = ++voicePreviewRequestRef.current;
     setVoicePreviewError(null);
     setPreviewLoadingVoiceKey(voice.key);
     try {
@@ -1060,6 +1134,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
         const result = await previewAudioVoice(voice.key, {
           text: "สวัสดีค่ะ นี่คือตัวอย่างเสียงสำหรับพอดแคสต์ของ EOS Creative Studio",
         });
+        if (request !== voicePreviewRequestRef.current) return;
         previewUrl = URL.createObjectURL(result.blob);
         voicePreviewObjectUrlsRef.current.push(previewUrl);
         setAvailableVoices((current) =>
@@ -1074,16 +1149,13 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
       setPreviewingVoiceKey(voice.key);
       await audio.play();
     } catch (cause) {
+      if (request !== voicePreviewRequestRef.current) return;
       setPreviewingVoiceKey(null);
       setVoicePreviewError(cause instanceof Error ? cause.message : "ฟังตัวอย่างเสียงไม่สำเร็จ");
     } finally {
-      setPreviewLoadingVoiceKey(null);
+      if (request === voicePreviewRequestRef.current) setPreviewLoadingVoiceKey(null);
     }
   };
-  const draftVoice = availableVoices.find(
-    (voice) => voice.key === speakerDraft.voice || voice.name === speakerDraft.voice,
-  );
-  const draftVoiceAvatar = getPodcastVoiceAvatar(draftVoice);
   const togglePreview = async () => {
     if (!audioUrl) {
       await handleGenerate();
@@ -1684,7 +1756,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
         open={speakerDialogOpen}
         onOpenChange={(open) => {
           setSpeakerDialogOpen(open);
-          if (!open) setSpeakerFormError(null);
+          if (!open) { setSpeakerFormError(null); stopPodcastVoicePreview(); }
         }}
       >
         <DialogContent className={styles.podcastSpeakerDialog}>
@@ -1714,51 +1786,16 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
             </label>
             <div>
               <span>เสียง</span>
-              <Dropdown
+              <PodcastVoicePicker
                 value={speakerDraft.voice}
-                options={availableVoices.map((voice) => {
-                  const imageUrl = getPodcastVoiceAvatar(voice);
-                  return {
-                    value: voice.key,
-                    label: <span className={styles.podcastDropdownVoiceOption}>
-                      <span className={styles.podcastDropdownVoiceImage}>{imageUrl ? <Image src={imageUrl} alt="" fill unoptimized sizes="28px" /> : null}</span>
-                      <span className={styles.podcastDropdownVoiceCopy}><strong>{voice.name}</strong><small>{voice.description || "เสียงพอดแคสต์"}</small></span>
-                    </span>,
-                  };
-                })}
+                voices={availableVoices}
                 onChange={(value) => setSpeakerDraft((current) => ({ ...current, voice: value }))}
-                ariaLabel="เสียงผู้พูด"
-                disabled={voicesLoading || availableVoices.length === 0}
                 loading={voicesLoading}
-                placeholder={voicesLoading ? "กำลังโหลดเสียง…" : "ยังไม่มีเสียงให้เลือก"}
-                className={styles.podcastSpeakerDialogDropdown}
-                triggerClassName={styles.podcastSpeakerDialogDropdownTrigger}
-                menuClassName={styles.podcastDropdownMenu}
-                optionClassName={styles.podcastDropdownOption}
-                menuPosition="fixed"
+                playingKey={previewingVoiceKey}
+                loadingKey={previewLoadingVoiceKey}
+                onPreview={(voice) => void toggleVoicePreview(voice)}
+                onClose={stopPodcastVoicePreview}
               />
-            </div>
-            <div className={styles.podcastSpeakerDialogPreview}>
-              <span className={styles.podcastSpeakerDialogVoiceImage}>
-                {draftVoiceAvatar ? <Image src={draftVoiceAvatar} alt="" fill unoptimized sizes="34px" /> : null}
-              </span>
-              <span className={styles.podcastSpeakerDialogVoiceCopy}>
-                <strong>{draftVoice?.name ?? "ยังไม่ได้เลือกเสียง"}</strong>
-                <small>{draftVoice?.description || "เลือกเสียงเพื่อฟังตัวอย่าง"}</small>
-              </span>
-              <button
-                type="button"
-                className={styles.podcastVoicePreviewButton}
-                onClick={() => draftVoice && void toggleVoicePreview(draftVoice)}
-                disabled={!draftVoice || voicesLoading || previewLoadingVoiceKey === draftVoice?.key}
-              >
-                {previewingVoiceKey === draftVoice?.key ? <Pause size={14} /> : <Play size={14} fill="currentColor" />}
-                {previewLoadingVoiceKey === draftVoice?.key
-                  ? "กำลังโหลด"
-                  : previewingVoiceKey === draftVoice?.key
-                    ? "หยุด"
-                    : "Preview"}
-              </button>
             </div>
             {voicePreviewError ? (
               <p className={styles.podcastSpeakerFormError} role="alert">

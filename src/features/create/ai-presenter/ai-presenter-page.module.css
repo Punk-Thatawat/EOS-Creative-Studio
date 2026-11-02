@@ -5,90 +5,10 @@
   --presenter-line: #e9e2dc;
   display: grid;
   min-width: 0;
-  gap: 12px;
+  gap: 14px;
   color: var(--presenter-ink);
 }
 
-.hero {
-  position: relative;
-  min-height: 218px;
-  overflow: hidden;
-  border: 1px solid #f0e4dc;
-  border-radius: 18px;
-  background: #faf7f4;
-  isolation: isolate;
-}
-
-.heroArtwork {
-  position: absolute;
-  inset: 0 0 0 35%;
-  z-index: -2;
-}
-
-.heroArtwork img {
-  object-fit: cover;
-  object-position: 64% 40%;
-}
-
-.heroWash {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: linear-gradient(90deg, #faf7f4 0%, #faf7f4 29%, rgb(250 247 244 / 93%) 39%, rgb(250 247 244 / 25%) 62%, rgb(250 247 244 / 0%) 83%);
-}
-
-.heroCopy {
-  position: relative;
-  max-width: 580px;
-  padding: 23px 25px 20px;
-}
-
-.heroEyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 7px;
-  color: var(--presenter-orange);
-  font-size: 9px;
-  font-weight: 850;
-  letter-spacing: .16em;
-}
-
-.heroCopy h1 {
-  margin: 0;
-  font-size: clamp(37px, 4.1vw, 62px);
-  font-weight: 950;
-  letter-spacing: -.065em;
-  line-height: .83;
-}
-
-.heroCopy h1 span {
-  letter-spacing: -.055em;
-}
-
-.heroCopy p {
-  max-width: 320px;
-  margin: 10px 0 10px;
-  color: #5e5853;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.heroPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 999px;
-  background: #201d1b;
-  padding: 5px 9px;
-  color: white;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
-
-.heroPill > span,
 .previewBadge > span {
   width: 6px;
   height: 6px;
@@ -96,46 +16,35 @@
   background: var(--presenter-orange);
 }
 
-.heroCallout {
-  position: absolute;
-  top: 15%;
-  right: 27%;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  transform: rotate(-6deg);
-  background: #ff2b88;
-  padding: 9px 12px;
-  box-shadow: 0 7px 16px rgb(39 15 27 / 17%);
-  color: #171116;
-  font-size: 12px;
-  font-weight: 900;
-  line-height: 1.04;
-}
-
-.heroCallout strong {
-  font-size: 17px;
-}
-
 .workspace {
-  position: relative;
+  --creator-workspace-border: #e7e4e1;
+}
+
+.modeTabs {
+  display: flex;
   min-width: 0;
-  overflow: hidden;
-  border: 1px solid #eadfd8;
-  border-radius: 16px;
+  border-bottom: 1px solid var(--creator-workspace-border);
   background: #fff;
-  box-shadow: 0 5px 18px rgb(54 34 22 / 3%);
+}
+
+.modeTab {
+  display: inline-flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: -1px;
+  border-bottom: 3px solid var(--presenter-orange);
+  padding: 12px 24px;
+  color: var(--presenter-orange);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .presenterList::-webkit-scrollbar,
 .sceneTimeline::-webkit-scrollbar {
   display: none;
-}
-
-.workspaceGrid {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(250px, 1fr) minmax(380px, 1.35fr) minmax(270px, 1fr);
 }
 
 .scriptPanel,
@@ -145,16 +54,11 @@
   padding: 16px;
 }
 
-.scriptPanel {
-  border-right: 1px solid var(--presenter-line);
-}
-
 .previewPanel {
   min-width: 0;
 }
 
 .settingsPanel {
-  border-left: 1px solid var(--presenter-line);
   background: #fff;
 }
 
@@ -1748,17 +1652,10 @@ button.settingRow {
 }
 
 @media (max-width: 1279.98px) {
-  .workspaceGrid {
-    grid-template-columns: minmax(240px, .85fr) minmax(0, 1.25fr);
-  }
-
   .settingsPanel {
-    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: start;
-    border-top: 1px solid var(--presenter-line);
-    border-left: 0;
   }
 
   .settingsPanel > .panelTitle,
@@ -1775,60 +1672,8 @@ button.settingRow {
 }
 
 @media (max-width: 760px) {
-  .hero {
-    min-height: 188px;
-  }
-
-  .heroArtwork {
-    left: 24%;
-  }
-
-  .heroArtwork img {
-    object-position: 67% center;
-  }
-
-  .heroWash {
-    background: linear-gradient(90deg, #faf7f4 0%, rgb(250 247 244 / 94%) 30%, rgb(250 247 244 / 40%) 67%, rgb(250 247 244 / 12%) 100%);
-  }
-
-  .heroCopy {
-    max-width: 370px;
-    padding: 20px 16px;
-  }
-
-  .heroCopy h1 {
-    font-size: clamp(36px, 9vw, 54px);
-  }
-
-  .heroCopy p {
-    max-width: 245px;
-    font-size: 10px;
-  }
-
-  .heroCallout {
-    top: auto;
-    right: 13px;
-    bottom: 14px;
-    transform: rotate(-5deg) scale(.82);
-    transform-origin: bottom right;
-  }
-
-  .workspaceGrid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .scriptPanel,
-  .previewPanel,
-  .settingsPanel {
-    border: 0;
-  }
-
-  .scriptPanel {
-    border-bottom: 1px solid var(--presenter-line);
-  }
-
-  .previewPanel {
-    border-bottom: 1px solid var(--presenter-line);
+  .page {
+    gap: 9px;
   }
 
   .settingsPanel {

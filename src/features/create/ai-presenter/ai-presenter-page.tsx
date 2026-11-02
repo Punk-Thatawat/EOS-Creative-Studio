@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { createPortal } from "react-dom";
 import { ArrowRight, AudioLines, Check, ChevronDown, CloudUpload, GripVertical, LoaderCircle, LockKeyhole, Pause, Pencil, Play, Plus, Sparkles, Video, WandSparkles, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
+import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
 import { SearchInput } from "@/components/ui/search-input";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
@@ -1456,21 +1457,22 @@ export function AiPresenterPage() {
                   : "";
 
   return (
-    <div className={styles.page}>
-      <section className={styles.hero} aria-label="AI Presenter">
-        <div className={styles.heroArtwork}><Image src="/generated-icons-v2/projects/ai-presenter.png" alt="AI presenter in a modern studio" fill priority sizes="(max-width: 760px) 100vw, 65vw" /></div>
-        <div className={styles.heroWash} />
-        <div className={styles.heroCopy}>
-          <span className={styles.heroEyebrow}><Sparkles size={13} /> AI VIDEO STUDIO</span>
-          <h1>GEN AI<br /><span>PRESENTER</span></h1>
-          <p>{isThai ? "ใส่สคริปต์ เลือกเสียง แล้วสร้างวิดีโอพรีเซนเตอร์จากภาพของคุณ" : "Add a script, choose a voice, and make a presenter video from your image."}</p>
-          <span className={styles.heroPill}><span /> {isThai ? "เชื่อมต่อระบบสร้างจริง" : "Live generation"}</span>
-        </div>
-        <div className={styles.heroCallout}><AudioLines size={22} /><span>MAKE IT<br /><strong>SPEAK.</strong></span></div>
-      </section>
+    <div className={`${styles.page} ai-presenter-studio-page`}>
+      <header className="studio-hero-frame" aria-label="GEN AI PRESENTER">
+        <picture>
+          <source media="(max-width: 767.98px)" srcSet="/generated-assets/studio-heroes-v4/create-ai-presenter-mobile.webp" />
+          <Image src="/generated-assets/studio-heroes-v4/create-ai-presenter-desktop.webp" alt="GEN AI PRESENTER — Your presence, your story" width={2400} height={435} priority sizes="100vw" />
+        </picture>
+      </header>
 
-      <section className={styles.workspace} aria-label={isThai ? "พื้นที่สร้าง AI Presenter" : "AI Presenter workspace"}>
-        <div className={styles.workspaceGrid}>
+      <CreatorWorkspaceLayout
+        className={styles.workspace}
+        tabs={
+          <nav className={styles.modeTabs} aria-label={isThai ? "เครื่องมือ AI Presenter" : "AI Presenter tools"}>
+            <span className={styles.modeTab} aria-current="page"><Video size={16} aria-hidden="true" />Presenter Video</span>
+          </nav>
+        }
+        left={
           <section className={styles.scriptPanel} aria-labelledby="presenter-script-heading">
             <div className={styles.panelTitle}>
               <div><span className={styles.stepNumber}>1.</span><h2 id="presenter-script-heading">{isThai ? "บทพูดและซีน" : "SCRIPT & SCENES"}</h2></div>
@@ -1539,7 +1541,8 @@ export function AiPresenterPage() {
             </div>
 
           </section>
-
+        }
+        preview={
           <section className={styles.previewPanel} aria-labelledby="presenter-preview-heading">
             <div className={styles.panelTitle}>
               <div><span className={styles.stepNumber}>2.</span><h2 id="presenter-preview-heading">PREVIEW</h2></div>
@@ -1688,7 +1691,8 @@ export function AiPresenterPage() {
             </div>
             {generationError ? <div className={styles.errorCard} role="alert">{generationError}</div> : null}
           </section>
-
+        }
+        right={
           <aside className={styles.settingsPanel} aria-labelledby="presenter-settings-heading">
             <div className={styles.panelTitle}><div><span className={styles.stepNumber}>3.</span><h2 id="presenter-settings-heading">SETTINGS</h2></div><Sparkles size={15} className={styles.settingsSparkle} /></div>
 
@@ -1749,8 +1753,8 @@ export function AiPresenterPage() {
               <p className={styles.securityNote}><LockKeyhole size={12} /> {t("create.settings.privateSecure")}</p>
             </div>
           </aside>
-        </div>
-      </section>
+        }
+      />
 
       {isAddSceneOpen && typeof document !== "undefined" ? createPortal(
         <div className={styles.sceneModalBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeAddScene(); }}>
