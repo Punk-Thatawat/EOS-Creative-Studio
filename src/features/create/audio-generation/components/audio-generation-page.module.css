@@ -2942,16 +2942,21 @@
 }
 .podcastSpeakerDialog {
   max-width: 470px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 .podcastSpeakerDialogHeader {
   padding-bottom: 14px;
 }
 .podcastSpeakerForm {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 14px;
   padding: 0 20px 20px;
 }
-.podcastVoicePicker { position: relative; margin-top: 6px; }
+.podcastSpeakerForm > * { min-width: 0; }
+.podcastVoicePicker { position: relative; min-width: 0; max-width: 100%; margin-top: 6px; }
 .podcastVoicePickerTrigger {
   display: flex; width: 100%; min-height: 56px; align-items: center; gap: 10px;
   padding: 6px 10px; border: 1px solid #e6ded9; border-radius: 10px;
@@ -2959,23 +2964,24 @@
 }
 .podcastVoicePickerTrigger[aria-expanded="true"], .podcastVoicePickerTrigger:focus-visible { border-color: #ff6a32; outline: 2px solid #ffede5; }
 .podcastVoicePickerTrigger:disabled { opacity: .6; cursor: not-allowed; }
-.podcastVoicePickerTrigger strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.podcastVoicePickerTrigger strong { display: -webkit-box; flex: 1; min-width: 0; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 12px; }
+.podcastVoicePickerTrigger > svg { flex: 0 0 auto; }
 .podcastVoicePickerChevronOpen { transform: rotate(180deg); }
 .podcastVoicePickerAvatar {
   position: relative; display: grid; width: 44px; height: 44px; flex: none; place-items: center;
   overflow: hidden; border-radius: 10px; background: #f8ede6; color: #f26326;
 }
 .podcastVoicePickerAvatar img { object-fit: cover; }
-.podcastVoicePickerMenu { margin-top: 7px; padding: 10px; border: 1px solid #e9e1dc; border-radius: 12px; background: white; box-shadow: 0 12px 28px #251d171a; }
-.podcastVoicePickerSearch { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #e6ded9; border-radius: 10px; color: #9397a0; }
+.podcastVoicePickerMenu { min-width: 0; max-width: 100%; margin-top: 7px; padding: 10px; border: 1px solid #e9e1dc; border-radius: 12px; background: white; box-shadow: 0 12px 28px #251d171a; }
+.podcastVoicePickerSearch { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #e6ded9; border-radius: 10px; color: #9397a0; }
 .podcastSpeakerForm .podcastVoicePickerSearch input { height: 42px; border: 0; padding: 0; box-shadow: none; font-size: 12px; }
-.podcastVoicePickerList { display: grid; gap: 3px; max-height: min(300px, 36vh); margin-top: 8px; overflow-y: auto; }
-.podcastVoicePickerOption { display: flex; align-items: center; gap: 4px; border: 1px solid transparent; border-radius: 10px; }
+.podcastVoicePickerList { display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; max-height: min(300px, 36vh); margin-top: 8px; overflow-y: auto; }
+.podcastVoicePickerOption { display: flex; min-width: 0; align-items: center; gap: 4px; border: 1px solid transparent; border-radius: 10px; }
 .podcastVoicePickerOption:hover { background: #fff8f4; }
 .podcastVoicePickerOptionSelected { border-color: #ffd1bf; background: #fff5f0; }
 .podcastVoicePickerChoose { display: flex; flex: 1; min-width: 0; align-items: center; gap: 10px; padding: 7px; background: transparent; text-align: left; cursor: pointer; }
 .podcastVoicePickerChoose > svg { flex: none; color: #f15c24; }
-.podcastVoicePickerCopy { display: grid; flex: 1; min-width: 0; gap: 3px; }
+.podcastVoicePickerCopy { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-width: 0; gap: 3px; }
 .podcastVoicePickerCopy strong, .podcastVoicePickerCopy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .podcastVoicePickerCopy strong { color: #343338; font-size: 12px; }
 .podcastVoicePickerCopy small { color: #8b8581; font-size: 10px; }
@@ -2995,6 +3001,7 @@
 .podcastSpeakerForm input,
 .podcastSpeakerForm select {
   width: 100%;
+  min-width: 0;
   height: 38px;
   border: 1px solid #dfe2e7;
   border-radius: 8px;
