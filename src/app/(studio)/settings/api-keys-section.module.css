@@ -282,3 +282,17 @@
     font-size: 0.875rem;
   }
 }
+
+.docsLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+  color: #df602d;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.docsLink:hover {
+  text-decoration: underline;
+}
