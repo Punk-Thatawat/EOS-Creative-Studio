@@ -104,6 +104,8 @@
 }
 .typeFilters button[aria-pressed=true] { background: #171719; border-color: #171719; color: white; }
 .typeFilters button[aria-pressed=true] svg { color: #ff8048; }
+/* On a narrow screen the buttons squeeze; the icon must keep its size instead of shrinking to a dot. */
+.typeFilters button svg { flex: none; }
 .search {
   display: flex;
   align-items: center;
@@ -415,8 +417,10 @@
   .stats>div:nth-child(2) { border: 0; }
   .stats>div:nth-child(3) { padding-left: 0; }
   .stats strong { font-size: 24px; }
-  .typeFilters { width: 100%; gap: 5px; }
-  .typeFilters button { flex: 1; padding: 8px; font-size: 12px; justify-content: center; }
+  /* Five filters do not fit side by side on a phone: keep each at its own width and let the row scroll sideways. */
+  .typeFilters { width: 100%; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .typeFilters::-webkit-scrollbar { display: none; }
+  .typeFilters button { flex: none; padding: 8px 12px; font-size: 12px; justify-content: center; }
   .toolbar { gap: 12px; }
   .resultBar h2 { font-size: 16px; }
   .resultBar>div:first-child { flex-direction: column; gap: 3px; }
@@ -520,8 +524,10 @@
   .stats>div:nth-child(2) { border: 0; }
   .stats>div:nth-child(3) { padding-left: 0; }
   .stats strong { font-size: 24px; }
-  .typeFilters { width: 100%; gap: 5px; flex-wrap: wrap; }
-  .typeFilters button { flex: 1 1 0; min-width: 0; padding: 8px; font-size: 12px; justify-content: center; }
+  /* Five filters do not fit side by side on a phone: keep each at its own width and let the row scroll sideways. */
+  .typeFilters { width: 100%; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .typeFilters::-webkit-scrollbar { display: none; }
+  .typeFilters button { flex: none; padding: 8px 12px; font-size: 12px; justify-content: center; }
   .toolbar { gap: 12px; }
   .resultBar h2 { font-size: 16px; }
   .resultBar>div:first-child { flex-direction: column; gap: 3px; }
