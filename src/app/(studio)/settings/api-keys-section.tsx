@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Check, Copy, KeyRound, TriangleAlert } from "lucide-react";
+import { BookOpen, Check, Copy, ExternalLink, KeyRound, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DateField } from "@/components/ui/date-field";
@@ -17,6 +17,9 @@ import settingsStyles from "./settings-page.module.css";
 import styles from "./api-keys-section.module.css";
 
 export const API_KEYS_SECTION_ID = "settings-apikeys";
+
+/** The API reference (Scalar) the backend serves next to the API itself. */
+const API_DOCS_URL = `${(process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "")}/reference`;
 
 const MAX_NAME_LENGTH = 80;
 
@@ -167,6 +170,11 @@ export function ApiKeysSection({ api = workspaceApiKeysApi }: { api?: WorkspaceA
           <li>{t("settings.apiKeys.noteCredits")}</li>
           <li>{t("settings.apiKeys.noteServerOnly")}</li>
         </ul>
+        <a className={styles.docsLink} href={API_DOCS_URL} target="_blank" rel="noopener noreferrer">
+          <BookOpen size={15} aria-hidden="true" />
+          {t("settings.apiKeys.docs")}
+          <ExternalLink size={13} aria-hidden="true" />
+        </a>
 
         {createdKey ? (
           <div className={styles.created} role="status">
