@@ -1975,7 +1975,17 @@
   height: 32px;
   font-size: 13px;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
   pointer-events: auto;
+}
+.tileActions { gap: 8px; }
+.tileLike { flex: none; }
+.tileRecreate { min-width: 0; flex: 0 1 auto; justify-content: center; }
+.tileRecreate svg { flex: none; }
+@media (max-width: 767px) {
+  .tileActions { padding: 8px; gap: 6px; }
+  .tileLike, .tileRecreate { gap: 5px; padding: 0 8px; font-size: 12px; }
 }
 .tileLike {
   background: #171719b3;
@@ -2892,9 +2902,15 @@
 .myVideos ul.workGridWide { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .myVideos ul.workGridWide > li { aspect-ratio: 16 / 9; }
 /* The template, held in a box like the reference video box; the prompt is a row that opens; library tiles are rounded. */
-.composerStage { min-height: 170px; border: 1.5px dashed #1717192e; border-radius: 14px; background: #17171908; padding: 16px; }
+.composerStage { min-height: 170px; border: 1.5px dashed #1717192e; border-radius: 14px; background: #17171908; padding: 40px 16px 20px; }
+/* The card sits below the close button instead of under it. */
+.composerStage .cardClose { top: 8px; right: 8px; }
 .composerStage .cardClose { border-radius: 999px; }
-.composerCard { width: 62%; border-width: 0; border-radius: 12px; box-shadow: 0 10px 26px #000a; }
+.composerCard { width: 88%; border-width: 0; border-radius: 12px; box-shadow: 0 10px 26px #000a; }
+/* The cover is the point of the card, so its name and details stay in two short lines instead of covering it. */
+.composerCardInfo { padding: 22px 10px 8px; }
+.composerCardInfo strong { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.25; }
+.composerCardInfo small { display: block; overflow: hidden; margin-top: 2px; text-overflow: ellipsis; white-space: nowrap; }
 .composerBlock { background: #1717190a; }
 .tile, .skeleton { overflow: hidden; border-radius: 12px; }
 .masonry { column-gap: 14px; }
@@ -2952,8 +2968,8 @@
   .composer, .libraryPanel { overflow: visible; scrollbar-gutter: auto; }
   .composerTabs { position: static; margin: 0; }
   .composerBar, .motionGenerateDock { bottom: calc(66px + env(safe-area-inset-bottom, 0px)); z-index: 6; }
-  .composerCard { width: min(70%, 300px); }
-  .composerStage { min-height: 150px; padding: 14px; }
+  .composerCard { width: min(88%, 320px); }
+  .composerStage { min-height: 150px; padding: 40px 14px 18px; }
   .attachBox, .motionBox { min-height: 130px; }
   .attachBox strong { max-width: 100%; }
   .masonry > .tile { margin-bottom: 8px; }
