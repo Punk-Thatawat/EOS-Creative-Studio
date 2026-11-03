@@ -282,7 +282,9 @@ input:not([type]), input[type="text"], input[type="search"], input[type="email"]
 .assets-list { display: grid; gap: 8px; align-content: start; }
 .assets-list .asset-card { display: flex; align-items: center; }
 .assets-list .asset-card-media { width: 150px; height: 82px; flex: none; border-radius: 9px 0 0 9px; }
-.assets-list .asset-card-footer { min-height: 82px; flex: 1; align-items: center; padding: 0 15px; }
+/* min-width: 0 lets a long title shrink to an ellipsis instead of pushing the download and menu buttons out of the row. */
+.assets-list .asset-card { min-width: 0; }
+.assets-list .asset-card-footer { min-width: 0; min-height: 82px; flex: 1; align-items: center; padding: 0 15px; }
 .assets-empty { display: flex; grid-column: 1 / -1; min-height: 270px; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: #77798b; border: 1px dashed #d8d9df; border-radius: 10px; }
 .assets-empty strong { color: #1b1c2c; font-size: 14px; }
 .assets-empty span { font-size: 11px; }

@@ -63,7 +63,7 @@
   color: #fff;
   border-color: #111;
 }
-.assets-media-tabs button:hover {
+.assets-media-tabs button:not(.is-active):hover {
   border-color: #ff601f;
 }
 .assets-page .assets-filters {
