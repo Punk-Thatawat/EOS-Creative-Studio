@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { listGenerationHistory, type GenerationHistoryItem } from "@/lib/api/generations";
 import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
 import { GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
@@ -82,6 +82,7 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
   const [error, setError] = useState<string | null>(null);
   const [internalView, setInternalView] = useState<VideoPreviewView>("latest");
   const [externalRefreshKey, setExternalRefreshKey] = useState(0);
+  const [recentScrollState, setRecentScrollState] = useState({ canGoBack: false, canGoForward: false });
   const recentRowRef = useRef<HTMLDivElement | null>(null);
   const autoSelectedLatestRef = useRef<string | null>(null);
   const view = controlledView ?? internalView;
@@ -140,6 +141,30 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
   }, [externalRefreshKey, feature, refreshKey, t]);
 
   useEffect(() => {
+    const row = recentRowRef.current;
+    if (!row) return;
+
+    const updateScrollState = () => {
+      const next = {
+        canGoBack: row.scrollLeft > 1,
+        canGoForward: row.scrollLeft + row.clientWidth < row.scrollWidth - 1,
+      };
+      setRecentScrollState((current) => current.canGoBack === next.canGoBack && current.canGoForward === next.canGoForward ? current : next);
+    };
+    const frame = window.requestAnimationFrame(updateScrollState);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateScrollState);
+    observer?.observe(row);
+    row.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      row.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [items, loading, error]);
+
+  useEffect(() => {
     const latest = items[0];
     if (!latest || currentVideoUrl || selectedVideoUrl || view !== "latest") return;
     if (autoSelectedLatestRef.current === `${feature}:${latest.id}`) return;
@@ -195,7 +220,8 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
                 </button>
               )) : <div className={styles.videoGalleryEmpty}>{t("create.video.common.noVideos")}</div>}
             </div>
-            {items.length > 3 ? <button type="button" className={styles.videoGalleryNext} onClick={() => recentRowRef.current?.scrollBy({ left: 290, behavior: "smooth" })} aria-label={t("create.video.common.nextRecentVideos")}><ChevronRight size={18} /></button> : null}
+            {recentScrollState.canGoBack ? <button type="button" className={styles.videoGalleryPrev} onClick={() => recentRowRef.current?.scrollBy({ left: -290, behavior: "smooth" })} aria-label={t("create.video.common.previousRecentVideos")}><ChevronLeft size={18} /></button> : null}
+            {recentScrollState.canGoForward ? <button type="button" className={styles.videoGalleryNext} onClick={() => recentRowRef.current?.scrollBy({ left: 290, behavior: "smooth" })} aria-label={t("create.video.common.nextRecentVideos")}><ChevronRight size={18} /></button> : null}
           </div>
         </div>
       </div>

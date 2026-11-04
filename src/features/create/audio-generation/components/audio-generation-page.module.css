@@ -1621,6 +1621,10 @@
 .altFieldGroup {
   margin-top: 18px;
 }
+.cloneDropdownOption[role="option"],
+.cloneDropdownOption[role="option"]:hover {
+  color: #20252d;
+}
 .sfxSourceGroup {
   margin-bottom: 18px;
 }
@@ -1906,6 +1910,7 @@
   display: inline-flex;
   width: 33px;
   height: 18px;
+  flex: none;
   align-items: center;
   border: 0;
   border-radius: 999px;
@@ -1920,11 +1925,12 @@
   justify-content: flex-start;
   background: #c4c9d0;
 }
-.altToggleOn i,
-.altToggleOff i {
+.altToggleOn > span,
+.altToggleOff > span {
   display: block;
   width: 14px;
   height: 14px;
+  flex: none;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 2px #0002;
@@ -2562,6 +2568,7 @@
   justify-content: space-between;
   gap: 9px;
   margin-top: 15px;
+  margin-bottom: 12px;
   color: #3a414b;
   font-size: 9px;
   font-weight: 800;
@@ -3542,7 +3549,9 @@
   margin-top: 17px;
 }
 .podcastFieldLabel {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 8px;
   color: #313944;
   font-size: 9px;
@@ -3673,13 +3682,13 @@
   gap: 15px;
   margin-top: 21px;
 }
-.podcastToggleGroup label {
+.podcastToggleRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
-.podcastToggleGroup label > span {
+.podcastToggleRow > span {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -5261,8 +5270,8 @@
     display: flex;
     flex-direction: column;
     margin-top: auto;
-    border-top: 1px solid #e9e7e4;
-    padding-top: 16px;
+    border-top: 0;
+    padding-top: 0;
   }
 }
 

@@ -150,7 +150,7 @@ export function OcrHistoryPanel({ refreshKey, onOpen }: { refreshKey: number; on
 
       {page && page.items.length === 0 && !error && <p className={styles.ocrMissing}>{t(K("ocr.history.empty"))}</p>}
 
-      <ul className={styles.ocrHistoryList}>
+      <ul className={styles.ocrHistoryList} tabIndex={page && page.items.length > 0 ? 0 : undefined} aria-label={t(K("ocr.tab.history"))}>
         {page?.items.map((item) => {
           const Icon = OCR_DOCUMENT_TYPE_OPTIONS.find((option) => option.id === item.documentType)?.icon ?? Clock;
           const meta = [

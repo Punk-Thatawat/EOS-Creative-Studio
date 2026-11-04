@@ -2,6 +2,7 @@
 
 import { getApiAccessToken } from "@/lib/auth/access-token";
 import { generationErrorFromPayload } from "@/lib/api/generation-errors";
+import { isGenerationMediaAvailable } from "@/lib/generation-media-retention";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, "")}/api/v1`;
@@ -12,6 +13,7 @@ export type VideoGenerationSceneInput = {
   startFrameSource: "manual" | "previous_last_frame";
   prompt: string;
   negativePrompt?: string;
+  seed?: number;
   duration?: number;
   audioUrl?: string;
   /** Replace any generated model audio with this reference after composition. */
@@ -187,6 +189,7 @@ export type VideoStoryboardHistoryItem = {
   totalDuration?: number | null;
   finalVideoUrl: string;
   createdAt?: string;
+  expiresAt?: string | null;
 };
 
 export type VideoStoryboardSettings = {
@@ -314,5 +317,6 @@ export async function cancelVideoStoryboard(storyboardId: string): Promise<Video
 export async function listVideoStoryboardHistory(workspaceId?: string | null, limit = 12): Promise<VideoStoryboardHistoryItem[]> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (workspaceId) params.set("workspaceId", workspaceId);
-  return await authenticatedRequest(`/generations/video/image-to-video/history?${params.toString()}`) as VideoStoryboardHistoryItem[];
+  const items = await authenticatedRequest(`/generations/video/image-to-video/history?${params.toString()}`) as VideoStoryboardHistoryItem[];
+  return items.filter((item) => isGenerationMediaAvailable(item.createdAt, item.expiresAt));
 }

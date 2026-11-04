@@ -119,6 +119,7 @@ function MotionSchemaField({
   value,
   required,
   labelOverride,
+  info,
   onChange,
 }: {
   name: string;
@@ -126,6 +127,7 @@ function MotionSchemaField({
   value: unknown;
   required?: boolean;
   labelOverride?: string;
+  info?: string;
   onChange: (value: unknown) => void;
 }) {
   const { t } = useLocale();
@@ -134,8 +136,8 @@ function MotionSchemaField({
   const type = property.type ?? (property.enum ? "string" : typeof property.default === "boolean" ? "boolean" : typeof property.default === "number" ? "number" : "string");
   if (property.enum?.length) {
     return (
-      <label className={styles.dynamicField}>
-        <span>{label}{required ? <b>*</b> : null}</span>
+      <div className={styles.dynamicField}>
+        <span className={styles.fieldLabelWithInfo}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</span>
         <Dropdown
           value={value === undefined ? "" : String(value)}
           options={[
@@ -151,24 +153,18 @@ function MotionSchemaField({
           optionClassName={styles.dynamicDropdownOption}
         />
         {description ? <small>{description}</small> : null}
-      </label>
+      </div>
     );
   }
   if (type === "boolean") {
     const enabled = Boolean(value);
     return (
-      <button
-        type="button"
-        className={styles.motionSchemaToggleRow}
-        aria-label={label}
-        aria-pressed={enabled}
-        onClick={() => onChange(!enabled)}
-      >
-        <span>{label}{required ? <b>*</b> : null}</span>
-        <span className={`${styles.motionSchemaToggleTrack} ${enabled ? styles.motionSchemaToggleOn : styles.motionSchemaToggleOff}`} aria-hidden="true">
+      <div className={styles.motionSchemaToggleRow}>
+        <span className={styles.fieldLabelWithInfo}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</span>
+        <button type="button" className={`${styles.motionSchemaToggleTrack} ${enabled ? styles.motionSchemaToggleOn : styles.motionSchemaToggleOff}`} aria-label={label} aria-pressed={enabled} onClick={() => onChange(!enabled)}>
           <i />
-        </span>
-      </button>
+        </button>
+      </div>
     );
   }
   if (type === "array") {
@@ -180,9 +176,9 @@ function MotionSchemaField({
   }
   const numeric = type === "integer" || type === "number";
   if (numeric && property.minimum !== undefined && property.maximum !== undefined) {
-    return <div className={styles.settingBlock}><div className={styles.settingLabel}>{label}{required ? <b>*</b> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div><input type="range" min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : 0.01)} value={typeof value === "number" ? value : property.minimum} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-label={label} /><div className={styles.rangeLabels}><span>{property.minimum}</span><span>{property.maximum}</span></div>{description ? <small>{description}</small> : null}</div>;
+    return <div className={styles.settingBlock}><div className={styles.settingLabel}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div><input type="range" min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : 0.01)} value={typeof value === "number" ? value : property.minimum} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-label={label} /><div className={styles.rangeLabels}><span>{property.minimum}</span><span>{property.maximum}</span></div>{description ? <small>{description}</small> : null}</div>;
   }
-  return <label className={styles.dynamicField}><span>{label}{required ? <b>*</b> : null}</span><input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : "any")} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-required={required} />{description ? <small>{description}</small> : null}</label>;
+  return <div className={styles.dynamicField}><span className={styles.fieldLabelWithInfo}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</span><input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : "any")} onChange={(event) => onChange(parseMotionValue(event.target.value, property))} aria-label={label} aria-required={required} />{description ? <small>{description}</small> : null}</div>;
 }
 
 function MotionSectionTitle({ number, children }: { number?: string; children: string }) {
@@ -573,9 +569,9 @@ export function MotionTransferWorkspace() {
         />
          <p className={styles.selectedModelRole}>{t(motionModelRoleKey(selectedModelOption))}</p>
         {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
-         {qualityProperty ? <MotionSchemaField name={qualityProperty[0]} property={qualityProperty[1]} value={qualityValue} required={requiredProperties.has(qualityProperty[0])} labelOverride={t("create.video.common.quality")} onChange={setQualityValue} /> : null}
-         {orientationProperty ? <MotionSchemaField name={orientationProperty[0]} property={orientationProperty[1]} value={orientationValue} required={requiredProperties.has(orientationProperty[0])} labelOverride={t("create.video.common.characterOrientation")} onChange={setOrientationValue} /> : null}
-         {keepSoundProperty ? <MotionSchemaField name={keepSoundProperty[0]} property={keepSoundProperty[1]} value={keepOriginalSound} required={requiredProperties.has(keepSoundProperty[0])} labelOverride={t("create.video.common.keepOriginalSound")} onChange={setKeepOriginalSound} /> : null}
+         {qualityProperty ? <MotionSchemaField name={qualityProperty[0]} property={qualityProperty[1]} value={qualityValue} required={requiredProperties.has(qualityProperty[0])} labelOverride={t("create.video.common.quality")} info={t("create.video.common.info.quality")} onChange={setQualityValue} /> : null}
+         {orientationProperty ? <MotionSchemaField name={orientationProperty[0]} property={orientationProperty[1]} value={orientationValue} required={requiredProperties.has(orientationProperty[0])} labelOverride={t("create.video.common.characterOrientation")} info={t("create.video.common.info.characterOrientation")} onChange={setOrientationValue} /> : null}
+         {keepSoundProperty ? <MotionSchemaField name={keepSoundProperty[0]} property={keepSoundProperty[1]} value={keepOriginalSound} required={requiredProperties.has(keepSoundProperty[0])} labelOverride={t("create.video.common.keepOriginalSound")} info={t("create.video.common.info.keepOriginalSound")} onChange={setKeepOriginalSound} /> : null}
          {modelParameterEntries.length ? <div className={styles.sceneModelParams}><div className={styles.sceneModelParamsTitle}>{t("create.video.common.modelParameters")}</div>{modelParameterEntries.map(([name, property]) => <MotionSchemaField key={name} name={name} property={property} value={modelParams[name]} required={requiredProperties.has(name)} onChange={(value) => setModelParams((current) => ({ ...current, [name]: value }))} />)}</div> : null}
          <VideoCreditEstimate featureLabel={t("create.video.tabs.motionTransfer")} estimate={videoCreditEstimate}>
            {!isComplete ? <p className={styles.settingsError} role="status">{modelsLoading ? t("create.video.common.loadingModels", { feature: t("create.video.tabs.motionTransfer") }) : validationMessage}</p> : null}

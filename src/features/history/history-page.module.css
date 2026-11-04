@@ -126,7 +126,7 @@
 .resultBar>div:first-child { display: flex; align-items: baseline; gap: 10px; }
 .resultBar h2 { font-size: 18px; font-weight: 650; margin: 0; }
 .resultBar span { font-size: 12px; color: #766f76; }
-.controls { display: flex; gap: 8px; }
+.controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .statusFilter { display: flex; align-items: center; gap: 6px; color: #746b70; }
 .statusDropdown { width: 180px; max-width: 100%; }
 .controls>button, .pagination button {
@@ -139,25 +139,15 @@
   height: 40px;
   color: #625b63;
 }
-.filterNotice {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 16px;
-  padding: 10px 13px;
-  background: #fff5ef;
-  border-radius: 10px;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-.filterNotice button {
-  flex-shrink: 0;
-  display: flex;
+.controls > .clearFilters {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
+  width: auto;
+  padding: 0 10px;
   color: #b84916;
-  border: 0;
-  background: none;
+  font-size: 12px;
   font-weight: 600;
 }
 .actionError {

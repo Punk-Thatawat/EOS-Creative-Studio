@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { InfoTooltip } from "./info-tooltip";
 import styles from "../video-generation-page.module.css";
 
 export type DurationProperty = {
@@ -28,12 +29,14 @@ export function DurationControl({
   required = false,
   onChange,
   variant = "settings",
+  info,
 }: {
   property: DurationProperty;
   value: unknown;
   required?: boolean;
   onChange: (value: number) => void;
   variant?: "settings" | "scene";
+  info?: string;
 }) {
   const { t } = useLocale();
   const enumValues = (property.enum ?? []).map(toNumber).filter((item): item is number => item !== undefined);
@@ -52,7 +55,7 @@ export function DurationControl({
   return (
     <div className={containerClass}>
       <div className={labelClass}>
-        {label}{required ? <b>*</b> : null}
+        <span className={styles.fieldLabelWithInfo}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</span>
         <strong>{formatDuration(currentValue)} {t("create.video.common.seconds")}</strong>
       </div>
       {hasEnum ? (

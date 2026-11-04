@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, Maximize2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ExtendAmount, ExtendDirection } from "../config";
 import { extendAmounts, extendDirections } from "../config";
@@ -168,7 +168,7 @@ export function ExtendPanel({
       <details className={cx("gen-advanced")}>
         <summary>
           <span>{t("create.image.advanced")}</span>
-          <span aria-hidden="true">⌄</span>
+          <ChevronDown size={15} aria-hidden="true" />
         </summary>
         <div className={cx("gen-advanced-body")}>
           <div className={cx("gen-advanced-field")}>

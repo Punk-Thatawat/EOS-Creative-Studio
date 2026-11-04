@@ -144,7 +144,7 @@ export function FormHistoryPanel({ refreshKey, onOpen }: { refreshKey: number; o
 
       {page && page.items.length === 0 && !error && <p className={styles.ocrMissing}>{t(K("form.history.empty"))}</p>}
 
-      <ul className={styles.ocrHistoryList}>
+      <ul className={styles.ocrHistoryList} tabIndex={page && page.items.length > 0 ? 0 : undefined} aria-label={t(K("form.tab.history"))}>
         {page?.items.map((item) => {
           const meta = [
             t(K("ocr.history.pages"), { n: item.pages }),

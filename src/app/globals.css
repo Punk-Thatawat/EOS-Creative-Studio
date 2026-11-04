@@ -616,6 +616,7 @@ body:has([data-page="gen-video"]) header { position: sticky; top: 0; z-index: 70
 body:has([data-page="templates"]) .page-gutter > aside { display:none; }
 body:has([data-page="templates"]) .page-gutter > main { width:100%; }
 body:has([data-page="templates"]) .page-gutter { max-width:none; }
+body:has([data-page="history"]) .page-gutter { max-width: none; }
 body:has([data-page="usage"]) .page-gutter > aside { display: none; }
 body:has([data-page="usage"]) .page-gutter > main { width: 100%; }
 body:has([data-page="usage"]) .page-gutter { --page-gutter: 24px; padding-top: 0; padding-right: 24px; padding-bottom: 0; padding-left: 24px; }

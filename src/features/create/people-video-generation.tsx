@@ -202,15 +202,18 @@ function PeopleSchemaField({
   const { t } = useLocale();
   const label = labelOverride ?? translateVideoSchemaLabel(name, property.title, t);
   const description = translateVideoSchemaDescription(property.description, t);
-  const info = isSyncModeParameter(name, property.title) ? t("create.video.common.info.syncMode") : undefined;
+  const info = isSyncModeParameter(name, property.title) ? t("create.video.common.info.syncMode")
+    : name === "resolution" ? t("create.video.common.info.resolution")
+      : ["aspectRatio", "aspect_ratio"].includes(name) ? t("create.video.common.info.aspectRatio")
+        : undefined;
   const type = property.type ?? (property.enum ? "string" : typeof property.default === "boolean" ? "boolean" : typeof property.default === "number" ? "number" : "string");
   if (["duration", "duration_seconds", "durationSeconds"].includes(name)) {
-    return <DurationControl property={property} value={value} required={required} onChange={(nextValue) => onChange(nextValue)} />;
+    return <DurationControl property={property} value={value} required={required} info={t("create.video.common.info.duration")} onChange={(nextValue) => onChange(nextValue)} />;
   }
   if (property.enum?.length) {
     return (
-      <label className={styles.dynamicField}>
-        <span>{label}{info ? <InfoTooltip content={info} size={11} /> : null}{required ? <b>*</b> : null}</span>
+      <div className={styles.dynamicField}>
+        <span className={styles.fieldLabelWithInfo}>{label}{info ? <InfoTooltip content={info} size={11} /> : null}{required ? <b>*</b> : null}</span>
         <Dropdown
           value={value === undefined ? "" : String(value)}
           options={[
@@ -226,7 +229,7 @@ function PeopleSchemaField({
           optionClassName={styles.dynamicDropdownOption}
         />
         {description ? <small>{description}</small> : null}
-      </label>
+      </div>
     );
   }
   if (type === "boolean") {
@@ -255,18 +258,18 @@ function PeopleSchemaField({
   if (numeric && property.minimum !== undefined && property.maximum !== undefined) {
     return (
       <div className={styles.settingBlock}>
-        <div className={styles.settingLabel}>{label}{required ? <b>*</b> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div>
+        <div className={styles.settingLabel}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div>
         <input type="range" min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : 0.01)} value={typeof value === "number" ? value : property.minimum} onChange={(event) => onChange(parsePeopleValue(event.target.value, property))} aria-label={label} />
         <div className={styles.rangeLabels}><span>{property.minimum}</span><span>{property.maximum}</span></div>
       </div>
     );
   }
   return (
-    <label className={styles.dynamicField}>
-      <span>{label}{info ? <InfoTooltip content={info} size={11} /> : null}{required ? <b>*</b> : null}</span>
-      <input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : "any")} onChange={(event) => onChange(parsePeopleValue(event.target.value, property))} aria-required={required} />
+    <div className={styles.dynamicField}>
+      <span className={styles.fieldLabelWithInfo}>{label}{info ? <InfoTooltip content={info} size={11} /> : null}{required ? <b>*</b> : null}</span>
+      <input className={styles.dynamicInput} type={numeric ? "number" : "text"} value={value === undefined ? "" : String(value)} min={property.minimum} max={property.maximum} step={property.step ?? (type === "integer" ? 1 : "any")} onChange={(event) => onChange(parsePeopleValue(event.target.value, property))} aria-label={label} aria-required={required} />
       {description ? <small>{description}</small> : null}
-    </label>
+    </div>
   );
 }
 

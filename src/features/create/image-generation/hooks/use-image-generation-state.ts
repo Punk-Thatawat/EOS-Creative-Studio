@@ -115,6 +115,9 @@ function readPendingGeneration(feature = "text-to-image"): PendingGeneration | n
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PendingGeneration>;
     if (typeof parsed.generationId !== "string" || typeof parsed.pollUrl !== "string" || typeof parsed.workspaceId !== "string" || typeof parsed.provider !== "string" || typeof parsed.model !== "string" || (parsed.status !== "queued" && parsed.status !== "processing" && parsed.status !== "completed") || !Array.isArray(parsed.output)) return null;
+    // Completed snapshots do not include creation/expiry dates. Reload completed
+    // results from the dated history instead of resurrecting an expired URL.
+    if (parsed.status === "completed") return null;
     return { generationId: parsed.generationId, pollUrl: parsed.pollUrl, workspaceId: parsed.workspaceId, provider: parsed.provider, model: parsed.model, status: parsed.status, totalCount: typeof parsed.totalCount === "number" ? parsed.totalCount : 1, completedCount: typeof parsed.completedCount === "number" ? parsed.completedCount : parsed.output.length, output: parsed.output as PendingGeneration["output"] };
   } catch {
     window.sessionStorage.removeItem(pendingGenerationStorageKeyForFeature(feature));

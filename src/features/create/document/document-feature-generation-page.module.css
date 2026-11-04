@@ -1196,7 +1196,9 @@
 .secureNote {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
+  text-align: center;
   margin-top: 12px;
   color: #969ca2;
   font-size: 10px;
@@ -1209,7 +1211,7 @@
   grid-template-columns: 1.75fr 1fr;
   gap: 18px;
   border: 1px solid var(--doc-line);
-  border-radius: 12px;
+  border-radius: 0;
   background: #fff;
   padding: 16px;
 }
@@ -1394,7 +1396,8 @@
   .settingsPanel .estimate {
     max-width: 300px;
   }
-  .settingsPanel .generateButton {
+  .settingsPanel .generateButton,
+  .settingsPanel .secureNote {
     max-width: 300px;
   }
   .resourceShelf {
@@ -1513,7 +1516,8 @@
     margin-right: 0;
   }
   .settingsPanel .estimate,
-  .settingsPanel .generateButton {
+  .settingsPanel .generateButton,
+  .settingsPanel .secureNote {
     max-width: none;
   }
   .settingsPanel .generateButton {
@@ -2000,7 +2004,8 @@
 .selectFieldDisabled {
   opacity: 0.5;
 }
-.selectFieldDisabled .selectValue {
+.selectFieldDisabled .selectValue,
+.selectValue.selectFieldDisabled {
   background: #f7f6f5;
 }
 .controlSelect:disabled {
@@ -2599,7 +2604,12 @@
 }
 .ocrHistoryList {
   display: grid;
+  align-content: start;
   gap: 8px;
+  max-height: min(380px, 55vh);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
   margin: 0;
   padding: 0;
   list-style: none;
