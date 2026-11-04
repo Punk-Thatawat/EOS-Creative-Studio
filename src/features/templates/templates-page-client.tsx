@@ -1794,6 +1794,7 @@ function PickerRow({
   onPick: (id: string) => void;
 }) {
   const rowRef = useRef<HTMLButtonElement>(null);
+  const flyRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const [query, setQuery] = useState("");
   useEffect(() => {
@@ -1802,21 +1803,55 @@ function PickerRow({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
     };
+    // The list is fixed on the screen, so when the page scrolls under it, it is put back beside its row.
+    const follow = (event: Event) => {
+      if (flyRef.current?.contains(event.target as Node)) return;
+      const next = place();
+      if (next) setAnchor(next);
+    };
     document.addEventListener("keydown", onKey);
     window.addEventListener("resize", close);
+    window.addEventListener("scroll", follow, true);
     return () => {
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", follow, true);
     };
-  }, [anchor]);
-  const open = () => {
+    // `place` only reads the row and the window.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchor !== null]);
+  const place = () => {
     const rect = rowRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const maxHeight = Math.min(460, window.innerHeight - 24);
+    if (!rect) return null;
+    // On a phone the sticky header and the tab bar stay visible, so the list sits between them.
+    const phone = window.innerWidth < 768;
+    const topEdge = phone ? 76 : 12;
+    const bottomEdge = phone ? 84 : 12;
+    let maxHeight = Math.min(460, window.innerHeight - topEdge - bottomEdge);
     // To the right of the panel, level with the row but kept inside the window.
-    const top = Math.max(12, Math.min(rect.top - (searchPlaceholder ? 120 : 40), window.innerHeight - maxHeight - 12));
+    let top = Math.max(topEdge, Math.min(rect.top - (searchPlaceholder ? 120 : 40), window.innerHeight - maxHeight - bottomEdge));
+    if (phone) {
+      // Under the row it belongs to, so the row stays visible; above it when there is more room there.
+      const below = window.innerHeight - bottomEdge - rect.bottom - 6;
+      const above = rect.top - topEdge - 6;
+      if (below >= Math.min(300, above)) {
+        maxHeight = Math.min(maxHeight, below);
+        top = rect.bottom + 6;
+      } else {
+        maxHeight = Math.min(maxHeight, above);
+        top = rect.top - 6 - maxHeight;
+      }
+    }
+    // On a phone there is no room beside the panel, so the list is kept inside the window instead.
+    const width = Math.min(340, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(rect.right + 10, window.innerWidth - width - 12));
+    return { top, left, maxHeight };
+  };
+  const open = () => {
+    const next = place();
+    if (!next) return;
     setQuery("");
-    setAnchor({ top, left: rect.right + 10, maxHeight });
+    setAnchor(next);
   };
   const needle = query.trim().toLowerCase();
   const listed = options.filter((o) => !needle || o.label.toLowerCase().includes(needle));
@@ -1873,7 +1908,7 @@ function PickerRow({
         createPortal(
           <>
             <button type="button" className={s.flyBackdrop} aria-label={heading} onClick={() => setAnchor(null)} />
-            <div className={s.flyout} style={{ top: anchor.top, left: anchor.left, maxHeight: anchor.maxHeight }}>
+            <div ref={flyRef} className={s.flyout} style={{ top: anchor.top, left: anchor.left, maxHeight: anchor.maxHeight }}>
               {searchPlaceholder && (
                 <label className={s.flySearch}>
                   <Search size={16} aria-hidden="true" />
