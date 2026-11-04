@@ -102,7 +102,7 @@ function isHistoryResponse(value: unknown): value is HistoryResponse {
     && ["total", "inProgress", "completed", "failed", "images", "videos", "audio", "documents"].every((key) => isCount(summary[key]));
 }
 
-export async function fetchHistory(input: { search?: string; type?: HistoryType; status?: HistoryStatus; offset?: number; limit?: number; fromTemplate?: boolean; signal?: AbortSignal } = {}): Promise<HistoryResponse> {
+export async function fetchHistory(input: { search?: string; type?: HistoryType; status?: HistoryStatus; offset?: number; limit?: number; fromTemplate?: boolean; recentOnly?: boolean; signal?: AbortSignal } = {}): Promise<HistoryResponse> {
   input.signal?.throwIfAborted();
   const accessToken = await getApiAccessToken();
   input.signal?.throwIfAborted();
@@ -112,6 +112,7 @@ export async function fetchHistory(input: { search?: string; type?: HistoryType;
   if (input.type && input.type !== "all") params.set("type", input.type);
   if (input.status && input.status !== "all") params.set("status", input.status);
   if (input.fromTemplate) params.set("fromTemplate", "true");
+  if (input.recentOnly) params.set("recentOnly", "true");
   params.set("offset", String(input.offset ?? 0));
   params.set("limit", String(input.limit ?? 24));
   const response = await fetch(`${backendApiUrl}/history?${params.toString()}`, {

@@ -464,7 +464,7 @@ export function HistoryPageClient() {
       () => {
         setLoading(true);
         setError(null);
-        fetchHistory({ ...query, limit: PAGE_SIZE, signal: controller.signal })
+        fetchHistory({ ...query, limit: PAGE_SIZE, recentOnly: true, signal: controller.signal })
           .then((next) => {
             if (controller.signal.aborted) return;
             if (query.offset > 0 && next.items.length === 0) {

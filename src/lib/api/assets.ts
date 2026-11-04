@@ -138,6 +138,7 @@ export type FetchAssetsInput = {
   limit?: number;
   workspaceId?: string;
   signal?: AbortSignal;
+  recentOnly?: boolean;
 };
 
 export async function fetchAssets(input: FetchAssetsInput): Promise<AssetsApiListData> {
@@ -152,6 +153,7 @@ export async function fetchAssets(input: FetchAssetsInput): Promise<AssetsApiLis
   if (input.tag) query.set("tag", input.tag);
   if (input.sort) query.set("sort", input.sort);
   if (input.workspaceId) query.set("workspaceId", input.workspaceId);
+  if (input.recentOnly) query.set("recentOnly", "true");
   return request<AssetsApiListData>(`/assets?${query.toString()}`, { signal: input.signal });
 }
 

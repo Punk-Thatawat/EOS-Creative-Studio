@@ -639,6 +639,7 @@ export default function AssetsPage() {
       try {
         const nextData = await fetchAssets({
           tab: apiTabByLabel[activeTab],
+          recentOnly: true,
           type: apiTypeByFilter[activeType],
           search: search.trim(),
           tag: activeTag ?? undefined,
@@ -729,6 +730,7 @@ export default function AssetsPage() {
     assetsCacheRef.current.clear();
     const nextMineData = await fetchAssets({
       tab: "mine",
+      recentOnly: true,
       type: apiTypeByFilter[activeType],
       search,
       tag: activeTag ?? undefined,
