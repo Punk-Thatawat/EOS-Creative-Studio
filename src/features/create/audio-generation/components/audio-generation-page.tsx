@@ -522,8 +522,9 @@ function PreviewWaveform({
   );
 }
 
-function CleanupAudioPlayer({ src, label }: { src: string | null; label: string }) {
+function CleanupAudioPlayer({ src, label, playRequest = 0 }: { src: string | null; label: string; playRequest?: number }) {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const lastPlayRequestRef = useRef(playRequest);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -540,6 +541,12 @@ function CleanupAudioPlayer({ src, label }: { src: string | null; label: string 
     }, 0);
     return () => window.clearTimeout(timer);
   }, [src]);
+
+  useEffect(() => {
+    if (!src || playRequest === lastPlayRequestRef.current) return;
+    lastPlayRequestRef.current = playRequest;
+    void audioRef.current?.play().catch(() => undefined);
+  }, [src, playRequest]);
 
   const togglePlayback = async () => {
     if (!audioRef.current || !src) return;
@@ -755,10 +762,12 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const [speakerDraft, setSpeakerDraft] = useState<PodcastSpeakerDraft>({ role: "", name: "", voice: "" });
   const [speakerFormError, setSpeakerFormError] = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement>(null);
+  const pendingPodcastHistoryPlaybackRef = useRef(false);
   const voicePreviewAudioRef = useRef<HTMLAudioElement | null>(null);
   const voicePreviewObjectUrlsRef = useRef<string[]>([]);
   const voicePreviewRequestRef = useRef(0);
   const podcastHistoryRef = useRef<AudioHistoryItem[]>([]);
+  const podcastHistoryPlaybackRequestRef = useRef(0);
   const pendingPodcastHistorySavesRef = useRef(new Map<string, SaveAudioHistoryInput>());
 
   const totalDuration = lines.reduce((total, line) => total + estimatePodcastLineSeconds(line.text), 0);
@@ -774,6 +783,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   useEffect(
     () => () => {
       voicePreviewAudioRef.current?.pause();
+      podcastHistoryPlaybackRequestRef.current += 1;
       podcastHistoryRef.current
         .filter((item) => item.localUrl && item.url)
         .forEach((item) => URL.revokeObjectURL(item.url));
@@ -1216,9 +1226,17 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     link.click();
   };
 
+  useEffect(() => {
+    if (!audioUrl || status !== "ready" || !pendingPodcastHistoryPlaybackRef.current) return;
+    pendingPodcastHistoryPlaybackRef.current = false;
+    void previewAudioRef.current?.play().catch(() => setIsPlaying(false));
+  }, [audioUrl, status]);
+
   const playPodcastHistory = async (item: AudioHistoryItem) => {
+    const requestId = ++podcastHistoryPlaybackRequestRef.current;
     const audio = previewAudioRef.current;
     if (item.url && item.url === audioUrl && audio) {
+      setPodcastHistoryLoadingId(null);
       if (audio.paused) await audio.play().catch(() => undefined);
       else audio.pause();
       return;
@@ -1227,8 +1245,9 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
     setError(null);
     try {
       let nextUrl = item.url;
-      if (!nextUrl) {
+      if (!nextUrl || (item.persisted && !item.localUrl)) {
         const result = await fetchAudioHistoryAudio(item.id);
+        if (requestId !== podcastHistoryPlaybackRequestRef.current) return;
         nextUrl = URL.createObjectURL(result.blob);
         const nextHistory = podcastHistoryRef.current.map((historyItem) =>
           historyItem.id === item.id ? { ...historyItem, url: nextUrl, localUrl: true } : historyItem,
@@ -1236,15 +1255,16 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
         podcastHistoryRef.current = nextHistory;
         setPodcastHistory(nextHistory);
       }
+      pendingPodcastHistoryPlaybackRef.current = true;
       setAudioUrl(nextUrl);
       setPreviewProgress(0);
       setPreviewCurrentTime(0);
       setPreviewDuration(0);
       setStatus("ready");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load saved podcast");
+      if (requestId === podcastHistoryPlaybackRequestRef.current) setError(cause instanceof Error ? cause.message : "Unable to load saved podcast");
     } finally {
-      setPodcastHistoryLoadingId(null);
+      if (requestId === podcastHistoryPlaybackRequestRef.current) setPodcastHistoryLoadingId(null);
     }
   };
 
@@ -3632,8 +3652,10 @@ function AudioCleanupLayout() {
   const [creditEstimateError, setCreditEstimateError] = useState<string | null>(null);
   const [cleanupHistory, setCleanupHistory] = useState<AudioHistoryItem[]>([]);
   const [cleanupHistoryLoadingId, setCleanupHistoryLoadingId] = useState<string | null>(null);
+  const [cleanupHistoryPlayRequest, setCleanupHistoryPlayRequest] = useState(0);
   const [pendingCleanupHistoryDelete, setPendingCleanupHistoryDelete] = useState<AudioHistoryItem | null>(null);
   const cleanupHistoryRef = useRef<AudioHistoryItem[]>([]);
+  const cleanupHistoryPlaybackRequestRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -3662,6 +3684,7 @@ function AudioCleanupLayout() {
 
   useEffect(
     () => () => {
+      cleanupHistoryPlaybackRequestRef.current += 1;
       cleanupHistoryRef.current
         .filter((item) => item.localUrl && item.url)
         .forEach((item) => URL.revokeObjectURL(item.url));
@@ -3746,12 +3769,14 @@ function AudioCleanupLayout() {
   };
 
   const playCleanupHistory = async (item: AudioHistoryItem) => {
+    const requestId = ++cleanupHistoryPlaybackRequestRef.current;
     setCleanupHistoryLoadingId(item.id);
     setError(null);
     try {
       let nextUrl = item.url;
-      if (!nextUrl) {
+      if (!nextUrl || (item.persisted && !item.localUrl)) {
         const result = await fetchAudioHistoryAudio(item.id);
+        if (requestId !== cleanupHistoryPlaybackRequestRef.current) return;
         nextUrl = URL.createObjectURL(result.blob);
         const nextHistory = cleanupHistoryRef.current.map((historyItem) =>
           historyItem.id === item.id ? { ...historyItem, url: nextUrl, localUrl: true } : historyItem,
@@ -3761,10 +3786,11 @@ function AudioCleanupLayout() {
       }
       setCleanedUrl(nextUrl);
       setStatus("done");
+      setCleanupHistoryPlayRequest((current) => current + 1);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load saved audio cleanup");
+      if (requestId === cleanupHistoryPlaybackRequestRef.current) setError(cause instanceof Error ? cause.message : "Unable to load saved audio cleanup");
     } finally {
-      setCleanupHistoryLoadingId(null);
+      if (requestId === cleanupHistoryPlaybackRequestRef.current) setCleanupHistoryLoadingId(null);
     }
   };
 
@@ -3979,7 +4005,7 @@ function AudioCleanupLayout() {
                 ) : null}
               </span>
             </div>
-            <CleanupAudioPlayer src={cleanedUrl} label={t("create.audio.cleanup.cleaned")} />
+            <CleanupAudioPlayer src={cleanedUrl} label={t("create.audio.cleanup.cleaned")} playRequest={cleanupHistoryPlayRequest} />
           </div>
         </div>
         {!cleanedUrl ? (
@@ -4213,6 +4239,8 @@ export function AudioGenerationPage() {
   const voiceScrollUserMovedRef = useRef(false);
   const audioHistoryRef = useRef<AudioHistoryItem[]>([]);
   const historySequenceRef = useRef(0);
+  const historyPlaybackRequestRef = useRef(0);
+  const pendingHistoryPlaybackUrlRef = useRef<string | null>(null);
   // Mirrors savedVoices so loadVoices (deps: []) can tell a cloned voice_id
   // apart from a stale preset selection without re-running on every refresh.
   const savedVoicesRef = useRef<VoiceCloneListItem[]>([]);
@@ -4278,9 +4306,24 @@ export function AudioGenerationPage() {
 
   useEffect(() => {
     return () => {
+      historyPlaybackRequestRef.current += 1;
       audioHistoryRef.current.filter((item) => item.localUrl).forEach((item) => URL.revokeObjectURL(item.url));
     };
   }, []);
+
+  useEffect(() => {
+    if (!audioUrl || pendingHistoryPlaybackUrlRef.current !== audioUrl) return;
+    pendingHistoryPlaybackUrlRef.current = null;
+    const audio = audioRef.current;
+    if (!audio) { setHistoryLoadingId(null); return; }
+    let active = true;
+    void audio.play().then(() => {
+      if (active) { setIsPlaying(true); setHistoryLoadingId(null); }
+    }).catch(() => {
+      if (active) { setIsPlaying(false); setHistoryLoadingId(null); }
+    });
+    return () => { active = false; };
+  }, [audioUrl]);
 
   useEffect(() => {
     if (activeTab !== "Text to Speech") return undefined;
@@ -4948,28 +4991,13 @@ export function AudioGenerationPage() {
   };
 
   const playHistoryUrl = (nextUrl: string) => {
+    pendingHistoryPlaybackUrlRef.current = nextUrl;
     setAudioUrl(nextUrl);
-    const audio = audioRef.current;
-    if (!audio) {
-      setHistoryLoadingId(null);
-      return;
-    }
-    audio.src = nextUrl;
-    audio.load();
-    void audio
-      .play()
-      .then(() => {
-        setIsPlaying(true);
-        setHistoryLoadingId(null);
-      })
-      .catch(() => {
-        setIsPlaying(false);
-        setHistoryLoadingId(null);
-      });
   };
 
   const selectHistoryItem = (item: AudioHistoryItem) => {
     if (!item.id) return;
+    const requestId = ++historyPlaybackRequestRef.current;
     const audio = audioRef.current;
     const isCurrentItem = Boolean(item.url && item.url === audioUrl);
     if (isCurrentItem && audio) {
@@ -4994,12 +5022,13 @@ export function AudioGenerationPage() {
     setProgress(0);
     setIsPlaying(false);
     setErrorMessage(null);
-    if (item.url) {
+    if (item.url && (item.localUrl || !item.persisted)) {
       playHistoryUrl(item.url);
       return;
     }
     void fetchAudioHistoryAudio(item.id)
       .then((result) => {
+        if (requestId !== historyPlaybackRequestRef.current) return;
         const nextUrl = URL.createObjectURL(result.blob);
         const nextHistory = audioHistoryRef.current.map((historyItem) =>
           historyItem.id === item.id ? { ...historyItem, url: nextUrl, localUrl: true } : historyItem,
@@ -5009,6 +5038,7 @@ export function AudioGenerationPage() {
         playHistoryUrl(nextUrl);
       })
       .catch((error) => {
+        if (requestId !== historyPlaybackRequestRef.current) return;
         setHistoryLoadingId(null);
         setErrorMessage(error instanceof Error ? error.message : "Unable to load saved audio");
       });

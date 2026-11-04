@@ -1979,16 +1979,18 @@ function PresenterVoicePicker({ voices, value, onChange, disabled, loading, isTh
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
       audioRef.current?.pause();
       setPlayingVoiceKey(null);
       setOpen(false);
       triggerRef.current?.focus();
     };
     document.addEventListener("pointerdown", closeOnOutsideClick);
-    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", closeOnEscape, true);
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsideClick);
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open]);
 
