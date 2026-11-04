@@ -853,10 +853,10 @@ function isSeedParameter(name: string, title?: string): boolean {
 
 function modelParamsForGeneration(
   params: Record<string, unknown>,
-  options?: { omitSeed?: boolean },
+  schema: Record<string, SchemaProperty>,
 ): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(params).filter(([name]) => !isCameraFixedParameter(name) && !(options?.omitSeed && isSeedParameter(name))),
+    Object.entries(params).filter(([name]) => !isCameraFixedParameter(name) && !isSeedParameter(name, schema[name]?.title)),
   );
 }
 
@@ -1228,11 +1228,10 @@ export function VideoGenerationPage() {
       && name !== referenceVideosParameter
       && name !== lastImageParameter
       && name !== capabilities?.negativePromptParameter
-      && !isCameraFixedParameter(name, properties[name]?.title);
+      && !isCameraFixedParameter(name, properties[name]?.title)
+      && !isSeedParameter(name, properties[name]?.title);
   });
-  const settingsModelParameterEntries = modelParameterEntries.filter(([name, property]) =>
-    !(generationMode === "single-image" && isSeedParameter(name, property.title))
-  );
+  const settingsModelParameterEntries = modelParameterEntries;
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
@@ -1348,7 +1347,9 @@ export function VideoGenerationPage() {
           output?: unknown;
         };
         if ((item.feature !== undefined && item.feature !== "image-to-video")
-          || (pending.status !== "queued" && pending.status !== "processing" && pending.status !== "completed")
+          // Completed progress snapshots have no expiry metadata. Restore only
+          // active work here; completed videos come from the dated history API.
+          || (pending.status !== "queued" && pending.status !== "processing")
           || typeof pending.generationId !== "string"
           || typeof pending.pollUrl !== "string"
           || !pending.pollUrl.includes("/generations/video/image-to-video/")) return null;
@@ -2075,7 +2076,7 @@ export function VideoGenerationPage() {
   // video generation. This is intentional even when the source image is
   // already large enough, so every panel gets the same quality treatment.
   const shouldAutoUpscaleStoryboard = generationMode === "single-image" && generationScenes.length > 0;
-  const requestModelParams = modelParamsForGeneration(modelParams, { omitSeed: true });
+  const requestModelParams = modelParamsForGeneration(modelParams, properties);
   const creditQuoteInput: Omit<VideoGenerationInput, "idempotencyKey"> | null = (() => {
     if (activeVideoTab !== "image-to-video" || !selectedModelOption || generationScenes.length === 0) return null;
     const scenes = generationScenes.map((scene, index) => {
@@ -2087,6 +2088,7 @@ export function VideoGenerationPage() {
       const sceneInput: VideoGenerationInput["scenes"][number] = {
         startFrameSource,
         prompt: promptForSceneGeneration(scene.prompt.trim() || prompt.trim() || "Video generation"),
+        seed: -1,
       };
       if (startFrameSource === "manual" && scene.image && !scene.image.startsWith("blob:")) sceneInput.storyboardImage = scene.image;
       if ((generationMode === "reference-to-video" || generationMode === "single-image") && referenceImageUrls.length > 0) {
@@ -2095,7 +2097,7 @@ export function VideoGenerationPage() {
       if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
       if (durationProperty) sceneInput.duration = scene.duration;
       if (scene.aspectRatio) sceneInput.aspectRatio = scene.aspectRatio;
-      const sceneModelParams = modelParamsForGeneration(scene.modelParams);
+      const sceneModelParams = modelParamsForGeneration(scene.modelParams, properties);
       if (Object.keys(sceneModelParams).length) sceneInput.modelParams = sceneModelParams;
       return sceneInput;
     });
@@ -2427,7 +2429,9 @@ export function VideoGenerationPage() {
     : previewView === "model"
       ? null
       : latestVideoUrl;
-  const previewMediaKey = displayedVideoUrl ?? selectedModelOption?.previewUrl ?? null;
+  const previewMediaKey = previewView === "model"
+    ? selectedModelOption?.previewUrl ?? null
+    : displayedVideoUrl;
   const detectedPreviewMediaAspectRatio = previewMediaAspectRatioState.mediaKey === previewMediaKey
     ? previewMediaAspectRatioState.ratio
     : null;
@@ -2562,6 +2566,7 @@ export function VideoGenerationPage() {
         const sceneInput: VideoGenerationInput["scenes"][number] = {
           startFrameSource: sceneSources[index],
           prompt: promptForSceneGeneration(scene.prompt.trim()),
+          seed: -1,
         };
         if (sceneSources[index] === "manual" && uploadedImages[index]) sceneInput.storyboardImage = uploadedImages[index];
         if (generationMode === "reference-to-video") {
@@ -2573,7 +2578,7 @@ export function VideoGenerationPage() {
         if (negativePrompt.trim()) sceneInput.negativePrompt = negativePrompt.trim();
         if (durationProperty) sceneInput.duration = scene.duration;
         if (scene.aspectRatio) sceneInput.aspectRatio = scene.aspectRatio;
-        const sceneModelParams = modelParamsForGeneration(scene.modelParams);
+        const sceneModelParams = modelParamsForGeneration(scene.modelParams, properties);
         if (Object.keys(sceneModelParams).length) sceneInput.modelParams = sceneModelParams;
         return sceneInput;
       });
@@ -3058,16 +3063,16 @@ export function VideoGenerationPage() {
                     </div>
                   </div>
                 ) : previewView === "model" && selectedModelOption?.previewUrl ? (
-                  <div className={styles.videoPreviewMediaFrame} style={{ aspectRatio: previewMediaAspectRatio }}>
-                    <ModelPreviewMedia
-                      url={selectedModelOption.previewUrl}
-                      type={selectedModelOption.previewType}
-                      autoPlay={selectedModelOption.previewType === "video"}
-                      alt={`${selectedModelOption.displayName} model preview`}
-                      className={styles.generatedVideoPlayer}
-                      onAspectRatioChange={handlePreviewAspectRatioChange}
-                    />
-                  </div>
+                  <ModelPreviewMedia
+                    url={selectedModelOption.previewUrl}
+                    type={selectedModelOption.previewType}
+                    autoPlay={selectedModelOption.previewType === "video"}
+                    alt={`${selectedModelOption.displayName} model preview`}
+                    className={styles.generatedVideoPlayer}
+                    frameClassName={styles.videoPreviewMediaFrame}
+                    frameStyle={{ aspectRatio: previewMediaAspectRatio }}
+                    onAspectRatioChange={handlePreviewAspectRatioChange}
+                  />
                 ) : displayedVideoUrl ? (
                   <EosVideoPlayer
                     key={displayedVideoUrl}
@@ -3180,9 +3185,7 @@ export function VideoGenerationPage() {
                           </div>
                         ) : videoHistory.length > 0 ? (
                           videoHistory.map((item, itemIndex) => {
-                            const selected = previewView === "library"
-                              ? safeVideoLibraryIndex === itemIndex
-                              : finalVideoUrl === item.finalVideoUrl;
+                            const selected = previewView === "library" && safeVideoLibraryIndex === itemIndex;
                             return (
                               <button
                                 key={item.storyboardId}
@@ -3469,6 +3472,7 @@ export function VideoGenerationPage() {
                 property={durationProperty[1]}
                 value={duration}
                 required={requiredProperties.has(durationProperty[0])}
+                info={t("create.video.common.info.duration")}
                 onChange={updateDuration}
               />
             ) : null}
@@ -3526,7 +3530,7 @@ export function VideoGenerationPage() {
             ) : null}
             {audioProperty && !audioInputMode ? (
               <div className={styles.toggleRow}>
-                 {t("create.video.common.audio")}{" "}
+                 <span className={styles.fieldLabelWithInfo}>{t("create.video.common.audio")} <InfoTooltip content={t("create.video.common.info.generateAudio")} size={11} /></span>
                 <button
                   type="button"
                   className={styles.toggle}
@@ -3549,7 +3553,7 @@ export function VideoGenerationPage() {
                  <div className={styles.settingLabel}><span>{t("create.video.common.addAudioAfterVideo")}</span><small>{t("create.video.common.optional")}</small></div>
                  <div className={styles.postAudioOptions} role="group" aria-label={t("create.video.common.addAudioAfterVideo")}>
                   {supportsPostAudioSfx ? <div className={styles.toggleRow}>
-                     <span>{t("create.video.common.videoToSfx")}</span>
+                     <span className={styles.fieldLabelWithInfo}>{t("create.video.common.videoToSfx")} <InfoTooltip content={t("create.video.common.info.videoToSfx")} size={11} /></span>
                     <button
                       type="button"
                       className={`${styles.toggle} ${postAudioSfxEnabled ? "" : styles.toggleOff}`}
@@ -3561,7 +3565,7 @@ export function VideoGenerationPage() {
                     </button>
                   </div> : null}
                   {supportsPostAudioMusic ? <div className={styles.toggleRow}>
-                     <span>{t("create.video.common.videoToMusic")}</span>
+                     <span className={styles.fieldLabelWithInfo}>{t("create.video.common.videoToMusic")} <InfoTooltip content={t("create.video.common.info.videoToMusic")} size={11} /></span>
                     <button
                       type="button"
                       className={`${styles.toggle} ${postAudioMusicEnabled ? "" : styles.toggleOff}`}
@@ -3869,6 +3873,7 @@ export function VideoGenerationPage() {
                 property={durationProperty[1]}
                 value={sceneDuration}
                 required={requiredProperties.has(durationProperty[0])}
+                info={t("create.video.common.info.duration")}
                 onChange={setSceneDuration}
                 variant="scene"
               />

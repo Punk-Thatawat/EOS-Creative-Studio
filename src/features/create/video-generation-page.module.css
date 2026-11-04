@@ -521,6 +521,11 @@
 .settingLabel strong {
   margin-left: auto;
 }
+.fieldLabelWithInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 .settingBlock input[type="range"] {
   width: 100%;
   accent-color: #f26b38;
@@ -596,16 +601,24 @@
   font-weight: 800;
 }
 .toggle {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-shrink: 0;
   width: 38px;
   height: 20px;
   padding: 2px;
+  border: 0;
   border-radius: 99px;
+  background: #d9d9d9;
+}
+.toggle[aria-pressed="true"] {
+  justify-content: flex-end;
   background: #ff620b;
-  text-align: right;
 }
 .toggle i {
-  display: inline-block;
+  display: block;
+  flex: 0 0 16px;
   width: 16px;
   height: 16px;
   border-radius: 50%;
@@ -643,8 +656,14 @@
   height: 20px;
   align-items: center;
   padding: 2px;
+  border: 0;
   border-radius: 99px;
+  cursor: pointer;
   transition: background-color 140ms ease;
+}
+.motionSchemaToggleTrack:focus-visible {
+  outline: 2px solid #ff620b;
+  outline-offset: 3px;
 }
 .motionSchemaToggleOn {
   justify-content: flex-end;
@@ -1232,9 +1251,17 @@
   cursor: pointer;
   scroll-snap-align: start;
 }
-.videoRecentCard:hover,
 .videoRecentCardSelected {
   border-color: #f26b38;
+}
+@media (hover: hover) {
+  .videoRecentCard:not(.videoRecentCardSelected):hover {
+    border-color: #b8b8b8;
+  }
+}
+.videoRecentCard:focus-visible {
+  outline: 2px solid #f26b38;
+  outline-offset: 2px;
 }
 .videoRecentCard .videoGalleryThumb {
   width: 100%;
@@ -1280,10 +1307,7 @@
 }
 .promptPanel {
   margin: 0;
-  border: 1px solid #eee9e5;
-  border-radius: 12px;
   background: #fff;
-  box-shadow: 0 2px 8px #3b2b1a08;
 }
 .promptPanel .sectionTitle {
   margin-bottom: 10px;

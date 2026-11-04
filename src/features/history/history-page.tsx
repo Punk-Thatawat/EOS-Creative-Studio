@@ -413,7 +413,7 @@ function WorkCard({
 }
 type Query = { type: HistoryType; status: HistoryStatus; search: string; offset: number };
 export function HistoryPageClient() {
-  const { c, status, title } = useHistoryText();
+  const { c, title } = useHistoryText();
   const [query, setQuery] = useState<Query>({ type: "all", status: "all", search: "", offset: 0 });
   const [data, setData] = useState<HistoryResponse | null>(null);
   const [loadedQuery, setLoadedQuery] = useState<Query | null>(null);
@@ -620,6 +620,11 @@ export function HistoryPageClient() {
             </span>
           </div>
           <div className={s.controls}>
+            {hasFilters && (
+              <button type="button" className={s.clearFilters} onClick={reset}>
+                {c("history.page.clearFilters")} <X size={13} aria-hidden="true" />
+              </button>
+            )}
             <span className={s.statusFilter}>
               <SlidersHorizontal size={15} aria-hidden="true" />
               <Dropdown
@@ -635,18 +640,6 @@ export function HistoryPageClient() {
             </button>
           </div>
         </div>
-        {hasFilters && (
-          <div className={s.filterNotice}>
-            <span>
-              {c("history.page.filtering")}{query.type !== "all" ? ` · ${c(typeKeys[query.type])}` : ""}
-              {query.status !== "all" ? ` · ${status(query.status)}` : ""}
-              {query.search.trim() ? ` · “${query.search.trim()}”` : ""}
-            </span>
-            <button onClick={reset}>
-              {c("history.page.clearFilters")} <X size={13} />
-            </button>
-          </div>
-        )}
         {actionError && (
           <div className={s.actionError} role="alert">
             <AlertCircle size={15} />

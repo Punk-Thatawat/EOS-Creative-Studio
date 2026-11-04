@@ -41,7 +41,7 @@ export function VideoPreviewOverlayActions({ videoUrl }: VideoPreviewOverlayActi
       <button type="button" onClick={() => void downloadVideo()} disabled={!videoUrl} aria-label={t("create.video.common.downloadVideo")} title={t("create.video.common.downloadVideo")}>
         <Download size={16} />
       </button>
-      <button type="button" onClick={() => setIsFavorite((favorite) => !favorite)} disabled={!videoUrl} aria-label={t("create.video.common.favoriteVideo")} title={t("create.video.common.favoriteVideo")} className={isFavorite ? styles.videoFavoriteActive : undefined}>
+      <button type="button" onClick={() => setIsFavorite((favorite) => !favorite)} disabled={!videoUrl} aria-pressed={isFavorite} aria-label={t("create.video.common.favoriteVideo")} title={t("create.video.common.favoriteVideo")} className={isFavorite ? styles.videoFavoriteActive : undefined}>
         <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
       </button>
     </div>

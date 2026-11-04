@@ -1,5 +1,6 @@
 import { getApiAccessToken } from "@/lib/auth/access-token";
 import { requestCreditBalanceSync } from "@/lib/credits/credit-events";
+import { isGenerationMediaAvailable } from "@/lib/generation-media-retention";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
 const backendOrigin = configuredBackendUrl.replace(/\/api\/v1$/, "");
@@ -180,6 +181,7 @@ export type AudioHistoryEntry = {
   historyItemId?: string | null;
   history_item_id?: string | null;
   createdAt: string;
+  expiresAt?: string | null;
   metadata?: Record<string, unknown> | null;
   voice?: string | null;
   durationSeconds?: number | null;
@@ -649,10 +651,8 @@ export async function listAudioHistory(input: { feature?: AudioHistoryFeature; l
   const response = await userAudioRequest(`/audio/history?${search.toString()}`);
   const payload = await response.json().catch(() => null);
   const data = unwrapAudioHistoryPayload(payload);
-  if (Array.isArray(data)) return data.map(normalizeAudioHistoryEntry) as AudioHistoryEntry[];
-  if (data && typeof data === "object" && "items" in data && Array.isArray(data.items)) return data.items.map(normalizeAudioHistoryEntry) as AudioHistoryEntry[];
-  if (data && typeof data === "object" && "history" in data && Array.isArray(data.history)) return data.history.map(normalizeAudioHistoryEntry) as AudioHistoryEntry[];
-  return [];
+  const items = Array.isArray(data) ? data : data && typeof data === "object" && "items" in data && Array.isArray(data.items) ? data.items : data && typeof data === "object" && "history" in data && Array.isArray(data.history) ? data.history : [];
+  return items.map(normalizeAudioHistoryEntry).filter((item) => isGenerationMediaAvailable(item.createdAt, item.expiresAt));
 }
 
 export async function listOwnedAudioAssets(input: { page: number; limit: number; search?: string; sort: "newest" | "oldest" }): Promise<{ items: AudioHistoryEntry[]; total: number }> {

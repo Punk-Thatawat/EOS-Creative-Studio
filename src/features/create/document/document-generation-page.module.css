@@ -670,7 +670,7 @@
 .historyActions button, .historyActions a { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 6px; border: 1px solid #e7e4e1; border-radius: 8px; background: #fff; padding: 0 10px; color: #5d6670; font: inherit; font-size: 10px; font-weight: 750; text-decoration: none; cursor: pointer; }
 .historyActions button:disabled { cursor: wait; opacity: 0.6; }
 .historyActions a { border-color: #f3c0a9; color: #bb4f1e; }
-.historyGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.historyGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 10px; max-height: min(440px, 60vh); overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
 .historyCard { display: flex; min-width: 0; min-height: 142px; flex-direction: column; align-items: stretch; gap: 10px; border: 1px solid #e9e5e2; border-radius: 10px; background: #fff; padding: 12px; text-align: left; cursor: pointer; transition: border-color .16s, background .16s, box-shadow .16s; }
 .historyCard:hover { border-color: #f2a17f; background: #fffdfa; }
 .historyCard:focus-visible { outline: 2px solid #f36c35; outline-offset: 2px; }
@@ -729,10 +729,10 @@
 .mobileActionDock { display: contents; }
 .generateButton { display: flex; width: 100%; min-height: 48px; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; border: 0; border-radius: 8px; background: #ff620b url("/generated-assets/generate-button-bg.png") center / 100% 100% no-repeat; color: #fff; font: inherit; font-size: 11px; font-weight: 900; letter-spacing: 0.04em; box-shadow: 0 5px 12px rgba(241, 87, 14, 0.16); }
 .generateButton:disabled { cursor: not-allowed; opacity: 0.58; }
-.secureNote { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: #969ca2; font-size: 10px; }
+.secureNote { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; color: #969ca2; font-size: 10px; text-align: center; }
 .secureNote > svg { flex: none; color: #969ca2; }
 
-.resourceShelf { display: grid; min-width: 0; grid-template-columns: 1.75fr 1fr; gap: 18px; border: 1px solid var(--doc-line); border-radius: 12px; background: #fff; padding: 16px; }
+.resourceShelf { display: grid; min-width: 0; grid-template-columns: 1.75fr 1fr; gap: 18px; border: 1px solid var(--doc-line); border-radius: 0; background: #fff; padding: 16px; }
 .learnArea,
 .toolsArea { min-width: 0; }
 .toolsArea { border-left: 1px solid #eeece9; padding-left: 18px; }
@@ -768,7 +768,7 @@
   .settingsPanel .formatCards { max-width: 380px; }
   .settingsPanel > .selectField { display: inline-grid; width: calc(25% - 8px); margin-right: 8px; vertical-align: top; }
   .settingsPanel .estimate { max-width: 300px; }
-  .settingsPanel .generateButton { max-width: 300px; }
+  .settingsPanel .generateButton, .settingsPanel .secureNote { max-width: 300px; }
   .resourceShelf { grid-template-columns: 1fr; }
   .historyGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .toolsArea { border-top: 1px solid #eeece9; border-left: 0; padding: 11px 0 0; }
@@ -871,7 +871,7 @@
   .historyGrid { grid-template-columns: 1fr; }
   .settingsPanel > .selectField { display: grid; width: auto; margin-right: 0; }
   .settingsPanel .estimate,
-  .settingsPanel .generateButton { max-width: none; }
+  .settingsPanel .generateButton, .settingsPanel .secureNote { max-width: none; }
   .resourceShelf { gap: 11px; padding: 10px; }
   .guideCards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .guideThumb { min-height: 74px; }

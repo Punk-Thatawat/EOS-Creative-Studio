@@ -1697,7 +1697,7 @@ export function AiPresenterPage() {
             <div className={styles.panelTitle}><div><span className={styles.stepNumber}>3.</span><h2 id="presenter-settings-heading">SETTINGS</h2></div><Sparkles size={15} className={styles.settingsSparkle} /></div>
 
             <div className={styles.settingCard}>
-              <span className={styles.settingLabel}>{isThai ? "โมเดลสร้างวิดีโอ" : "Presenter video model"}</span>
+              <span className={styles.settingLabel}>{isThai ? "โมเดลสร้างวิดีโอ" : "Presenter video model"} <InfoTooltip content={t("create.video.common.info.model")} size={12} /></span>
               <Dropdown
                 value={selectedReferenceVideoModel}
                 options={availableReferenceVideoModels.map((model) => ({ value: model.model, label: model.displayName, preserveLabel: true }))}
@@ -1728,7 +1728,7 @@ export function AiPresenterPage() {
               />
             ) : null}
             <div className={styles.settingCard}>
-              <div className={styles.settingLabel}>{isThai ? "สัดส่วนวิดีโอ" : "Video format"}</div>
+              <div className={styles.settingLabel}>{isThai ? "สัดส่วนวิดีโอ" : "Video format"} <InfoTooltip content={t("create.video.common.info.aspectRatio")} size={12} /></div>
               <div className={styles.formatChoices}>{(supportedRatios.length ? supportedRatios : aspectOptions).map((value) => <button key={value} type="button" className={`${styles.formatOption} ${aspect === value ? styles.formatOptionActive : ""}`} onClick={() => setAspect(value as (typeof aspectOptions)[number])} disabled={isLocked}><span className={`${styles.formatShape} ${value === "9:16" ? styles.formatPortrait : value === "1:1" ? styles.formatSquare : ""}`} /><strong>{value}</strong><small>{value === "16:9" ? "Landscape" : value === "9:16" ? "Portrait" : "Square"}</small></button>)}</div>
             </div>
 

@@ -27,6 +27,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
+import { InfoTooltip } from "@/features/create/components/info-tooltip";
+import { DocumentSettingLabel } from "./document-setting-label";
 import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { VideoModelDropdown } from "../video-model-dropdown";
@@ -116,20 +118,21 @@ const documentTools = [
 const MODE_PARAM = "tab";
 const modeFromId = (value: string | null) => visibleModes.find((mode) => mode.id === value && mode.available)?.id;
 
-function PanelHeading({ step, children }: { step: string; children: string }) {
+function PanelHeading({ step, children, info }: { step: string; children: string; info?: string }) {
   return (
     <div className={styles.panelHeading}>
       <span>{step}.</span>
       <h2>{children}</h2>
+      {info ? <InfoTooltip content={info} size={11} /> : null}
     </div>
   );
 }
 
 function SelectPlaceholder({ label, value, disabled, title }: { label: string; value: string; disabled?: boolean; title?: string }) {
   return (
-    <div className={`${styles.selectField} ${disabled ? styles.selectFieldDisabled : ""}`} aria-disabled={disabled || undefined} title={title}>
-      <span>{label}</span>
-      <div className={styles.selectValue}>
+    <div className={styles.selectField} title={title}>
+      <DocumentSettingLabel label={label} />
+      <div className={`${styles.selectValue} ${disabled ? styles.selectFieldDisabled : ""}`} aria-disabled={disabled || undefined}>
         {value}
         <ChevronDown size={14} aria-hidden="true" />
       </div>
@@ -139,9 +142,9 @@ function SelectPlaceholder({ label, value, disabled, title }: { label: string; v
 
 function SelectControl({ label, value, options, onChange, disabled, title }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void; disabled?: boolean; title?: string }) {
   return (
-    <div className={`${styles.selectField} ${disabled ? styles.selectFieldDisabled : ""}`} title={title}>
-      <span>{label}</span>
-      <Dropdown
+    <div className={styles.selectField} title={title}>
+      <DocumentSettingLabel label={label} />
+      <div className={disabled ? styles.selectFieldDisabled : undefined}><Dropdown
         value={value}
         options={options}
         onChange={onChange}
@@ -150,7 +153,7 @@ function SelectControl({ label, value, options, onChange, disabled, title }: { l
         menuPosition="fixed"
         triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
         optionClassName="px-2.5 py-2 text-[11px]"
-      />
+      /></div>
     </div>
   );
 }
@@ -918,7 +921,7 @@ export function DocumentFeatureGenerationPage() {
         left={
           <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
             <div className={styles.tutorialTop}><ImageTutorialButton feature={documentTutorialFeatureByMode[activeMode]} featureName={t(K(`mode.${activeMode}`))} /></div>
-            <PanelHeading step="1">{t(K("source.heading"))}</PanelHeading>
+            <PanelHeading step="1" info={t("create.document.info.source")}>{t(K("source.heading"))}</PanelHeading>
             <div
               className={styles.dropzone}
               role="button"
@@ -941,7 +944,7 @@ export function DocumentFeatureGenerationPage() {
             </div>
             {!isOcr && !isContract && !isForm && <SelectPlaceholder label={t(K("source.pages"))} value={t(K("source.allPages"))} />}
             <div className={styles.sectionRule} />
-            <PanelHeading step="2">{isOcr ? t(K("ocr.typeHeading")) : isContract ? t(K("contract.typeHeading")) : isForm ? t(K("form.howHeading")) : isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
+            <PanelHeading step="2" info={isOcr || isContract ? t("create.document.info.documentType") : undefined}>{isOcr ? t(K("ocr.typeHeading")) : isContract ? t(K("contract.typeHeading")) : isForm ? t(K("form.howHeading")) : isSummarize ? t(K("summary.goal")) : t(K("instructions.heading"))}</PanelHeading>
             {isOcr ? (
               <Dropdown
                 value={ocrType}
@@ -1452,7 +1455,7 @@ export function DocumentFeatureGenerationPage() {
           <aside className={styles.settingsPanel} aria-label={t(K("a11y.settings"))}>
             <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
             <div className={styles.settingGroup}>
-              <div className={styles.settingLabel}>{t(K("settings.model"))} <span>ⓘ</span></div>
+              <div className={styles.settingLabel}>{t(K("settings.model"))} <InfoTooltip content={t("create.document.info.model")} size={11} /></div>
               {isContract ? <>
                 <VideoModelDropdown
                   models={contractModels}
@@ -1487,7 +1490,7 @@ export function DocumentFeatureGenerationPage() {
             {/* Gen Document picks its file format from the Export button instead of here. */}
             {!isOcr && !isContract && !isForm && (
               <div className={styles.settingGroup}>
-                <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
+                <div className={styles.settingLabel}><DocumentSettingLabel label={t(K("settings.outputFormat"))} /></div>
                 <div className={styles.formatCards}>
                   {["DOCX", "PDF", "TXT", "JSON"].map((format, index) => (
                     <div key={format} className={`${styles.formatCard} ${index === 0 ? styles.formatCardActive : ""}`}>
@@ -1581,7 +1584,7 @@ export function DocumentFeatureGenerationPage() {
                 <SelectPlaceholder label={t(K("settings.tone"))} value={t(K("settings.toneValue"))} />
               </>
             )}
-            <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isForm ? t(K("form.credits"), { value: formOptions.credits }) : isContract ? t(K("contract.credits"), { value: contractCredits }) : isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
+            <div className={styles.estimate}><span>{t(K("settings.estimate"))} <InfoTooltip content={t("create.document.info.estimatedCredits")} size={11} /></span><strong>{isForm ? t(K("form.credits"), { value: formOptions.credits }) : isContract ? t(K("contract.credits"), { value: contractCredits }) : isSummarize ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : isOcr ? t(K("ocr.creditsPerPage"), { value: ocrCreditsPerPage ?? "—" }) : t(K("settings.credits"))}</strong></div>
             {isOcr && showStyleCredits && <div className={styles.summaryFocusNote}>{t(K("ocr.styleCreditsNote"), { value: ocrTypeInfo?.styleCredits ?? 0 })}</div>}
             <button className={styles.generateButton} type="button" disabled={(!isSummarize && !isOcr && !isContract && !isForm) || !selectedFile || (isOcr && !ocrType) || (isContract && !contractType) || isSummarizing || isOcrRunning || isContractRunning || isFormRunning} title={!selectedFile ? (isForm ? t(K("form.needFile")) : isContract ? t(K("contract.needFile")) : undefined) : undefined} onClick={() => void (isOcr ? runOcr() : isContract ? runContract() : isForm ? runForm() : generateSummary())}>
               <span>{isOcrRunning ? t(K("ocr.running")) : isFormRunning ? t(K("form.running")) : isContractRunning ? t(K("contract.running")) : isSummarizing ? t(K("summary.generating")) : isOcr ? t(K("ocr.run")) : isContract ? t(K("contract.run")) : isForm ? t(K("form.run")) : isSummarize ? t(K("summary.generate")) : t(K("settings.generate"))}</span>

@@ -33,6 +33,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { Dropdown } from "@/components/ui/dropdown";
+import { InfoTooltip } from "@/features/create/components/info-tooltip";
+import { DocumentSettingLabel } from "./document-setting-label";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
 import { translateDocument, type DocumentTranslation, type TranslationLanguage, type TranslationOutputFormat } from "@/lib/api/document-translate";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
@@ -113,11 +115,12 @@ const outputs = [
   { key: K("output.notes"), icon: Sparkles },
 ];
 
-function PanelHeading({ step, children }: { step: string; children: string }) {
+function PanelHeading({ step, children, info }: { step: string; children: string; info?: string }) {
   return (
     <div className={styles.panelHeading}>
       <span>{step}.</span>
       <h2>{children}</h2>
+      {info ? <InfoTooltip content={info} size={11} /> : null}
     </div>
   );
 }
@@ -125,7 +128,7 @@ function PanelHeading({ step, children }: { step: string; children: string }) {
 function SelectPlaceholder({ label, value }: { label: string; value: string }) {
   return (
     <div className={styles.selectField}>
-      <span>{label}</span>
+      <DocumentSettingLabel label={label} />
       <div className={styles.selectValue}>
         {value}
         <ChevronDown size={14} aria-hidden="true" />
@@ -137,7 +140,7 @@ function SelectPlaceholder({ label, value }: { label: string; value: string }) {
 function SelectControl({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
   return (
     <div className={styles.selectField}>
-      <span>{label}</span>
+      <DocumentSettingLabel label={label} />
       <Dropdown
         className={styles.controlDropdown}
         triggerClassName={styles.controlDropdownTrigger}
@@ -1012,7 +1015,7 @@ function SummaryTranslationPage() {
       {historyError ? <p className={styles.historyMessage} role="alert">{historyError}</p> : historyLoading ? (
         <div className={styles.historyMessage} role="status"><LoaderCircle size={16} className={styles.historySpin} /> {t(K("summary.historyLoading"))}</div>
       ) : documentHistory.length ? (
-        <div className={styles.historyGrid}>
+        <div className={styles.historyGrid} role="region" aria-labelledby={headingId} tabIndex={0}>
           {documentHistory.map((item) => {
             const saved = item.documentSummary;
             if (!saved) return null;
@@ -1058,7 +1061,7 @@ function SummaryTranslationPage() {
       {historyError ? <p className={styles.historyMessage} role="alert">{historyError}</p> : historyLoading ? (
         <div className={styles.historyMessage} role="status"><LoaderCircle size={16} className={styles.historySpin} /> {t(K("summary.historyLoading"))}</div>
       ) : documentHistory.length ? (
-        <div className={styles.historyGrid}>
+        <div className={styles.historyGrid} role="region" aria-labelledby={headingId} tabIndex={0}>
           {documentHistory.map((item) => {
             const saved = item.documentTranslation;
             if (!saved) return null;
@@ -1159,7 +1162,7 @@ function SummaryTranslationPage() {
         left={
           <aside className={styles.sourcePanel} aria-label={t(K("a11y.source"))}>
           <div className={styles.tutorialTop}><ImageTutorialButton feature={documentTutorialFeatureByMode[activeMode]} featureName={t(K(`mode.${activeMode}`))} /></div>
-          <PanelHeading step="1">{t(K("source.heading"))}</PanelHeading>
+          <PanelHeading step="1" info={t("create.document.info.source")}>{t(K("source.heading"))}</PanelHeading>
           <div
             className={styles.dropzone}
             role="button"
@@ -1526,7 +1529,7 @@ function SummaryTranslationPage() {
           <aside className={styles.settingsPanel} aria-label={t(K("a11y.settings"))}>
           <PanelHeading step="3">{t(K("settings.heading"))}</PanelHeading>
           <div className={styles.settingGroup}>
-            <div className={styles.settingLabel}>{isTranslate ? t(K("translate.serviceLabel")) : t(K("settings.model"))} <span>ⓘ</span></div>
+            <div className={styles.settingLabel}>{isTranslate ? t(K("translate.serviceLabel")) : t(K("settings.model"))} <InfoTooltip content={t("create.document.info.model")} size={11} /></div>
             {isSummaryLike || isTranslate || activeMode === "ocr" ? <>
               <VideoModelDropdown
                 models={documentModels}
@@ -1549,7 +1552,7 @@ function SummaryTranslationPage() {
             </div>}
           </div>
           {!isTranslate && !isSummaryLike ? <div className={styles.settingGroup}>
-            <div className={styles.settingLabel}>{t(K("settings.outputFormat"))}</div>
+            <div className={styles.settingLabel}><DocumentSettingLabel label={t(K("settings.outputFormat"))} /></div>
             <div className={styles.formatCards}>
               {documentOutputFormats.map((format) => {
                 const selected = outputFormat === format;
@@ -1590,7 +1593,7 @@ function SummaryTranslationPage() {
             </>
           )}
           <div className={styles.mobileActionDock}>
-            <div className={styles.estimate}><span>{t(K("settings.estimate"))}</span><strong>{isSummaryLike || isTranslate ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : t(K("settings.credits"))}</strong></div>
+            <div className={styles.estimate}><span>{t(K("settings.estimate"))} <InfoTooltip content={t("create.document.info.estimatedCredits")} size={11} /></span><strong>{isSummaryLike || isTranslate ? t(K(summaryOptions.credits === 1 ? "summary.creditsSingular" : "summary.creditsPlural"), { value: summaryOptions.credits }) : t(K("settings.credits"))}</strong></div>
             {summaryError && <div className={styles.summaryError} role="alert">{summaryError}</div>}
             <button className={styles.generateButton} type="button" disabled={isTranslate ? (!selectedFile || isTranslating) : isSummaryLike ? (!selectedFile || isSummarizing) : true} onClick={() => { if (isSummaryLike) void generateSummary(); else if (isTranslate) void generateTranslation(); }}>
               <span>{isSummarizing ? t(K(isReport ? "report.generating" : "summary.generating")) : isTranslating ? t(K("translate.translating")) : isReport ? t(K("report.generate")) : isSummarize ? t(K("summary.generate")) : isTranslate ? t(K("translate.generate")) : t(K("settings.generate"))}</span>

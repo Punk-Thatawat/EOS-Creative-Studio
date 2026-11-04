@@ -153,6 +153,7 @@ function TextSchemaField({
   required,
   onChange,
   labelOverride,
+  info,
   choices = false,
 }: {
   name: string;
@@ -161,6 +162,7 @@ function TextSchemaField({
   required?: boolean;
   onChange: (value: unknown) => void;
   labelOverride?: string;
+  info?: string;
   choices?: boolean;
 }) {
   const { t } = useLocale();
@@ -168,12 +170,12 @@ function TextSchemaField({
   const description = translateVideoSchemaDescription(property.description, t);
   const type = property.type ?? (property.enum ? "string" : typeof property.default === "boolean" ? "boolean" : typeof property.default === "number" ? "number" : "string");
   if (["duration", "duration_seconds", "durationSeconds"].includes(name)) {
-    return <DurationControl property={property} value={value} required={required} onChange={(nextValue) => onChange(nextValue)} />;
+    return <DurationControl property={property} value={value} required={required} info={info} onChange={(nextValue) => onChange(nextValue)} />;
   }
   if (choices && property.enum?.length) {
     return (
       <div className={styles.settingBlock}>
-        <div className={styles.settingLabel}>{label} {required ? <b>*</b> : null}</div>
+        <div className={styles.settingLabel}>{label} {required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</div>
         <div className={styles.ratios}>
           {property.enum.map((option) => (
             <button
@@ -191,8 +193,8 @@ function TextSchemaField({
   }
   if (property.enum?.length) {
     return (
-      <label className={styles.dynamicField}>
-        <span>{label}{required ? <b>*</b> : null}</span>
+      <div className={styles.dynamicField}>
+        <span className={styles.fieldLabelWithInfo}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</span>
         <Dropdown
           value={value === undefined ? "" : String(value)}
           options={[
@@ -208,36 +210,37 @@ function TextSchemaField({
           optionClassName={styles.dynamicDropdownOption}
         />
         {description ? <small>{description}</small> : null}
-      </label>
+      </div>
     );
   }
   if (type === "boolean") {
     return (
       <div className={styles.toggleRow}>
-        {label}{required ? <b>*</b> : null}
-        <button type="button" className={styles.toggle} aria-pressed={Boolean(value)} onClick={() => onChange(!Boolean(value))}><i /></button>
+        <span className={styles.fieldLabelWithInfo}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</span>
+        <button type="button" className={styles.toggle} aria-label={label} aria-pressed={Boolean(value)} onClick={() => onChange(!Boolean(value))}><i /></button>
       </div>
     );
   }
   if (type === "array" || type === "object") {
     return (
-      <label className={styles.dynamicField}>
-        <span>{label}{required ? <b>*</b> : null}</span>
+      <div className={styles.dynamicField}>
+        <span className={styles.fieldLabelWithInfo}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</span>
         <textarea
           className={styles.dynamicInput}
           value={value === undefined ? "" : Array.isArray(value) ? value.join(", ") : typeof value === "object" ? JSON.stringify(value) : String(value)}
            placeholder={type === "array" ? t("create.video.common.addValues") : "{}"}
           onChange={(event) => onChange(type === "array" ? event.target.value.split(",").map((item) => item.trim()).filter(Boolean) : event.target.value)}
+          aria-label={label}
           aria-required={required}
         />
-      </label>
+      </div>
     );
   }
   const isNumber = type === "number" || type === "integer";
   if (isNumber && property.minimum !== undefined && property.maximum !== undefined) {
     return (
       <div className={styles.settingBlock}>
-        <div className={styles.settingLabel}>{label} {required ? <b>*</b> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div>
+        <div className={styles.settingLabel}>{label} {required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}<strong>{value === undefined ? t("create.video.common.auto") : String(value)}</strong></div>
         <input
           type="range"
           min={property.minimum}
@@ -252,8 +255,8 @@ function TextSchemaField({
     );
   }
   return (
-    <label className={styles.dynamicField}>
-      <span>{label}{required ? <b>*</b> : null}</span>
+    <div className={styles.dynamicField}>
+      <span className={styles.fieldLabelWithInfo}>{label}{required ? <b>*</b> : null}{info ? <InfoTooltip content={info} size={11} /> : null}</span>
       <input
         className={styles.dynamicInput}
         type={isNumber ? "number" : "text"}
@@ -262,10 +265,11 @@ function TextSchemaField({
         max={property.maximum}
         step={property.step ?? (type === "integer" ? 1 : "any")}
         onChange={(event) => onChange(parseSchemaValue(event.target.value, property))}
+        aria-label={label}
         aria-required={required}
       />
       {description ? <small>{description}</small> : null}
-    </label>
+    </div>
   );
 }
 
@@ -672,6 +676,9 @@ export function TextToVideoWorkspace() {
 
   const displayedVideoUrl = previewVideoUrl ?? finalVideoUrl;
   const previewVideoUrlForView = previewView === "model" ? null : displayedVideoUrl;
+  const previewActionUrl = previewView === "model"
+    ? selectedModelOption?.previewType === "video" ? selectedModelOption.previewUrl ?? null : null
+    : previewVideoUrlForView;
 
   const clearValues = () => {
     if (isGenerating) return;
@@ -791,7 +798,7 @@ export function TextToVideoWorkspace() {
             ) : (
               <VideoPreviewPlaceholder showActions={false} />
             )}
-            {previewVideoUrlForView ? <VideoPreviewOverlayActions videoUrl={previewVideoUrlForView} /> : null}
+            {!isGenerating && previewActionUrl ? <VideoPreviewOverlayActions key={previewActionUrl} videoUrl={previewActionUrl} /> : null}
           </div>
         </section>
         <VideoResultLibrary
@@ -807,7 +814,7 @@ export function TextToVideoWorkspace() {
       </div>
       <aside className={styles.settings}>
          <div className={styles.sectionTitle}><h2>3. {t("create.video.common.settings")}</h2></div>
-         <label className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} /></label>
+         <div className="mb-2 flex items-center gap-1 text-[10px] font-bold">{t("create.video.common.model")} <InfoTooltip content={t("create.video.common.info.model")} size={11} /></div>
         <VideoModelDropdown
           models={models}
           value={selectedModel}
@@ -817,12 +824,12 @@ export function TextToVideoWorkspace() {
           onChange={setSelectedModel}
         />
         {modelsError ? <p className={styles.settingsError}>{modelsError}</p> : null}
-         {durationProperty ? <TextSchemaField name={durationProperty[0]} property={durationProperty[1]} value={durationValue} required={requiredProperties.has(durationProperty[0])} labelOverride={t("create.video.common.duration")} onChange={setDurationValue} /> : null}
-         {resolutionProperty ? <TextSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride={t("create.video.common.resolution")} onChange={setResolutionValue} /> : null}
-         {aspectRatioProperty ? <TextSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride={t("create.video.common.aspectRatio")} choices onChange={setAspectRatioValue} /> : null}
-         {fpsProperty ? <TextSchemaField name={fpsProperty[0]} property={fpsProperty[1]} value={fpsValue} required={requiredProperties.has(fpsProperty[0])} labelOverride={t("create.video.common.fps")} onChange={setFpsValue} /> : null}
-         {cameraMotionProperty ? <TextSchemaField name={cameraMotionProperty[0]} property={cameraMotionProperty[1]} value={cameraMotionValue} required={requiredProperties.has(cameraMotionProperty[0])} labelOverride={t("create.video.common.cameraMotion")} onChange={setCameraMotionValue} /> : null}
-         {audioProperty && !audioInputMode ? <TextSchemaField name={audioProperty[0]} property={audioProperty[1]} value={audioValue} required={requiredProperties.has(audioProperty[0])} labelOverride={t("create.video.common.generateAudio")} onChange={setAudioValue} /> : null}
+         {durationProperty ? <TextSchemaField name={durationProperty[0]} property={durationProperty[1]} value={durationValue} required={requiredProperties.has(durationProperty[0])} labelOverride={t("create.video.common.duration")} info={t("create.video.common.info.duration")} onChange={setDurationValue} /> : null}
+         {resolutionProperty ? <TextSchemaField name={resolutionProperty[0]} property={resolutionProperty[1]} value={resolutionValue} required={requiredProperties.has(resolutionProperty[0])} labelOverride={t("create.video.common.resolution")} info={t("create.video.common.info.resolution")} onChange={setResolutionValue} /> : null}
+         {aspectRatioProperty ? <TextSchemaField name={aspectRatioProperty[0]} property={aspectRatioProperty[1]} value={aspectRatioValue} required={requiredProperties.has(aspectRatioProperty[0])} labelOverride={t("create.video.common.aspectRatio")} info={t("create.video.common.info.aspectRatio")} choices onChange={setAspectRatioValue} /> : null}
+         {fpsProperty ? <TextSchemaField name={fpsProperty[0]} property={fpsProperty[1]} value={fpsValue} required={requiredProperties.has(fpsProperty[0])} labelOverride={t("create.video.common.fps")} info={t("create.video.common.info.fps")} onChange={setFpsValue} /> : null}
+         {cameraMotionProperty ? <TextSchemaField name={cameraMotionProperty[0]} property={cameraMotionProperty[1]} value={cameraMotionValue} required={requiredProperties.has(cameraMotionProperty[0])} labelOverride={t("create.video.common.cameraMotion")} info={t("create.video.common.info.cameraMotion")} onChange={setCameraMotionValue} /> : null}
+         {audioProperty && !audioInputMode ? <TextSchemaField name={audioProperty[0]} property={audioProperty[1]} value={audioValue} required={requiredProperties.has(audioProperty[0])} labelOverride={t("create.video.common.generateAudio")} info={t("create.video.common.info.generateAudio")} onChange={setAudioValue} /> : null}
         {audioInputMode ? (
           <section className={styles.audioReferenceField}>
              <div className={styles.settingLabel}><span>{t("create.video.common.audioReference")}</span><small>{t("create.video.common.optional")}</small></div>
@@ -834,8 +841,8 @@ export function TextToVideoWorkspace() {
           <div className={styles.postAudioCard}>
             <div className={styles.settingLabel}><span>{t("create.video.common.addAudioAfterVideo")}</span><small>{t("create.video.common.optional")}</small></div>
             <div className={styles.postAudioOptions} role="group" aria-label={t("create.video.common.addAudioAfterVideo")}>
-              {supportsPostAudioSfx ? <div className={styles.toggleRow}><span>{t("create.video.common.videoToSfx")}</span><button type="button" className={`${styles.toggle} ${postAudioSfxEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioSfxEnabled((value) => !value)} aria-pressed={postAudioSfxEnabled} aria-label={t("create.video.common.enableVideoToSfx")}><i /></button></div> : null}
-              {supportsPostAudioMusic ? <div className={styles.toggleRow}><span>{t("create.video.common.videoToMusic")}</span><button type="button" className={`${styles.toggle} ${postAudioMusicEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioMusicEnabled((value) => !value)} aria-pressed={postAudioMusicEnabled} aria-label={t("create.video.common.enableVideoToMusic")}><i /></button></div> : null}
+              {supportsPostAudioSfx ? <div className={styles.toggleRow}><span className={styles.fieldLabelWithInfo}>{t("create.video.common.videoToSfx")} <InfoTooltip content={t("create.video.common.info.videoToSfx")} size={11} /></span><button type="button" className={`${styles.toggle} ${postAudioSfxEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioSfxEnabled((value) => !value)} aria-pressed={postAudioSfxEnabled} aria-label={t("create.video.common.enableVideoToSfx")}><i /></button></div> : null}
+              {supportsPostAudioMusic ? <div className={styles.toggleRow}><span className={styles.fieldLabelWithInfo}>{t("create.video.common.videoToMusic")} <InfoTooltip content={t("create.video.common.info.videoToMusic")} size={11} /></span><button type="button" className={`${styles.toggle} ${postAudioMusicEnabled ? "" : styles.toggleOff}`} onClick={() => setPostAudioMusicEnabled((value) => !value)} aria-pressed={postAudioMusicEnabled} aria-label={t("create.video.common.enableVideoToMusic")}><i /></button></div> : null}
             </div>
             {postAudioMode !== "none" ? <small className={styles.postAudioHint}>{t("create.video.common.postAudioHint")}</small> : null}
           </div>

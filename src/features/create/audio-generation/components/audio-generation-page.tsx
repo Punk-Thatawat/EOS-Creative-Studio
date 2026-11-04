@@ -51,6 +51,7 @@ import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-la
 import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { ImageTutorialButton } from "@/features/create/image-generation/components/image-tutorial-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { Dropdown, type DropdownOption } from "@/components/ui/dropdown";
 import { Button } from "@/components/ui/button";
 import {
@@ -369,10 +370,49 @@ function failAudioProgress(feature: string, requestId: string): void {
   emitGenerationRequestFailed({ feature, requestId });
 }
 
+const audioSettingInfo: ReadonlyArray<readonly [TranslationKey, TranslationKey]> = [
+  ["create.audio.voiceModel", "create.audio.info.model"],
+  ["create.audio.clone.model", "create.audio.info.model"],
+  ["create.audio.outputFormat", "create.audio.info.format"],
+  ["create.audio.podcast.outputFormat", "create.audio.info.format"],
+  ["create.audio.cleanup.outputFormat", "create.audio.info.format"],
+  ["create.audio.clone.outputFormat", "create.audio.info.format"],
+  ["create.audio.sfx.outputFormat", "create.audio.info.format"],
+  ["create.audio.speechSpeed", "create.audio.info.speed"],
+  ["create.audio.clone.speed", "create.audio.info.speed"],
+  ["create.audio.podcast.pacing", "create.audio.info.speed"],
+  ["create.audio.pitch", "create.audio.info.pitch"],
+  ["create.audio.synthVolume", "create.audio.info.volume"],
+  ["create.audio.clone.accuracy", "create.audio.info.accuracy"],
+  ["create.audio.clone.noiseReduction", "create.audio.info.noiseReduction"],
+  ["create.audio.clone.volumeNormalization", "create.audio.info.volumeNormalization"],
+  ["create.audio.clone.emotion", "create.audio.info.emotion"],
+  ["create.audio.language", "create.audio.info.language"],
+  ["create.audio.pronunciationHints", "create.audio.info.pronunciation"],
+  ["create.audio.podcast.language", "create.audio.info.language"],
+  ["create.audio.music.model", "create.audio.info.model"],
+  ["create.audio.clone.sampleRate", "create.audio.info.sampleRate"],
+  ["create.audio.clone.bitrate", "create.audio.info.bitrate"],
+  ["create.audio.clone.channel", "create.audio.info.channel"],
+  ["create.audio.clone.englishNormalization", "create.audio.info.normalization"],
+  ["create.audio.podcast.speakingStyle", "create.audio.info.speakingStyle"],
+  ["create.audio.clone.voiceCharacter", "create.audio.info.voiceCharacter"],
+  ["create.audio.sfx.source", "create.audio.info.sfxSource"],
+  ["create.audio.sfx.effectCategory", "create.audio.info.sfxCategory"],
+  ["create.audio.sfx.duration", "create.audio.info.sfxDuration"],
+  ["create.audio.sfx.variations", "create.audio.info.sfxVariations"],
+];
+
+function AudioSettingLabel({ label }: { label: string }) {
+  const { t } = useLocale();
+  const entry = audioSettingInfo.find(([key]) => t(key) === label);
+  return <>{label}{entry ? <> <InfoTooltip content={t(entry[1])} size={11} /></> : null}</>;
+}
+
 function FieldLabel({ children, hint }: { children: ReactNode; hint?: string }) {
   return (
     <div className={styles.fieldLabel}>
-      <span>{children}</span>
+      <span>{typeof children === "string" ? <AudioSettingLabel label={children} /> : children}</span>
       {hint ? <small>{hint}</small> : null}
     </div>
   );
@@ -394,7 +434,7 @@ function SelectField({
   loading?: boolean;
 }) {
   return (
-    <label className={styles.selectField}>
+    <div className={styles.selectField}>
       <FieldLabel>{label}</FieldLabel>
       <Dropdown
         value={value}
@@ -405,7 +445,7 @@ function SelectField({
         ariaLabel={label}
         triggerClassName="h-[38px] min-h-0 rounded-lg border-[#dfe2e7] px-[11px] text-[11px] font-normal"
       />
-    </label>
+    </div>
   );
 }
 
@@ -422,6 +462,7 @@ function PodcastConfirmationDialog({
   description: string;
   onConfirm: () => void;
 }) {
+  const { t } = useLocale();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={styles.podcastConfirmDialog}>
@@ -431,10 +472,10 @@ function PodcastConfirmationDialog({
         </DialogHeader>
         <DialogFooter className={styles.podcastConfirmFooter}>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
-            ยกเลิก
+            {t("create.audio.podcast.confirm.cancel")}
           </Button>
           <Button type="button" variant="destructive" className={styles.podcastConfirmDeleteButton} onClick={onConfirm}>
-            ลบ
+            {t("create.audio.podcast.confirm.delete")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -709,6 +750,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
   const [voicePreviewError, setVoicePreviewError] = useState<string | null>(null);
   const [speakerDialogOpen, setSpeakerDialogOpen] = useState(false);
   const [speakerDeleteConfirmOpen, setSpeakerDeleteConfirmOpen] = useState(false);
+  const [pendingLineDeleteId, setPendingLineDeleteId] = useState<string | null>(null);
   const [editingSpeakerId, setEditingSpeakerId] = useState<string | null>(null);
   const [speakerDraft, setSpeakerDraft] = useState<PodcastSpeakerDraft>({ role: "", name: "", voice: "" });
   const [speakerFormError, setSpeakerFormError] = useState<string | null>(null);
@@ -1408,7 +1450,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
                   <button
                     type="button"
                     className={styles.podcastLineActionDanger}
-                    onClick={() => removeLine(line.id)}
+                    onClick={() => setPendingLineDeleteId(line.id)}
                     disabled={lines.length <= 1}
                     aria-label={t("create.audio.podcast.a11y.deleteLine", { index: index + 1 })}
                   >
@@ -1611,7 +1653,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           <AudioWaveform size={18} />
         </div>
         <div className={styles.podcastSettingGroup}>
-          <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.outputFormat")}</span>
+          <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.outputFormat")} <InfoTooltip content={t("create.audio.info.format")} size={11} /></span>
           <div className={styles.podcastFormatRow}>
             {(["mp3", "wav", "ogg"] as const).map((format) => (
               <button
@@ -1626,7 +1668,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           </div>
         </div>
         <div className={styles.podcastSelectField}>
-          <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.language")}</span>
+          <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.language")} <InfoTooltip content={t("create.audio.info.language")} size={11} /></span>
           <Dropdown
             value={language}
             options={[
@@ -1643,7 +1685,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           />
         </div>
         <div className={styles.podcastSelectField}>
-          <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.speakingStyle")}</span>
+          <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.speakingStyle")} <InfoTooltip content={t("create.audio.info.speakingStyle")} size={11} /></span>
           <Dropdown
             value={speakingStyle}
             options={[
@@ -1661,7 +1703,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
         </div>
         <div className={styles.podcastSettingGroup}>
           <div className={styles.podcastSpeedHeader}>
-            <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.pacing")}</span>
+            <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.pacing")} <InfoTooltip content={t("create.audio.info.speed")} size={11} /></span>
             <b>{speed.toFixed(2)}x</b>
           </div>
           <input
@@ -1672,6 +1714,7 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
             step="0.05"
             value={speed}
             onChange={(event) => setSpeed(Number(event.target.value))}
+            aria-label={t("create.audio.podcast.pacing")}
           />
           <div className={styles.podcastSpeedLabels}>
             <span>0.5x</span>
@@ -1681,24 +1724,25 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           </div>
         </div>
         <div className={styles.podcastToggleGroup}>
-          <label>
+          <div className={styles.podcastToggleRow}>
             <span>
-              <strong>{t("create.audio.podcast.backgroundMusic")}</strong>
+              <strong>{t("create.audio.podcast.backgroundMusic")} <InfoTooltip content={t("create.audio.info.podcastBackgroundMusic")} size={11} /></strong>
               <small>เพิ่มเพลงประกอบระหว่างบทพูด</small>
             </span>
             <button
               type="button"
               className={backgroundMusic ? styles.podcastToggleOn : styles.podcastToggleOff}
               onClick={() => setBackgroundMusic((current) => !current)}
+              aria-label={t("create.audio.podcast.backgroundMusic")}
               aria-pressed={backgroundMusic}
               disabled={backgroundMusicLoading || backgroundMusicPresets.length === 0}
             >
               <i />
             </button>
-          </label>
+          </div>
           {backgroundMusic ? (
             <div className={styles.podcastMusicSelectField}>
-              <span className={styles.podcastFieldLabel}>เพลงประกอบ</span>
+              <span className={styles.podcastFieldLabel}>{t("create.audio.podcast.backgroundMusic")} <InfoTooltip content={t("create.audio.info.podcastMusicPreset")} size={11} /></span>
               <Dropdown
                 value={backgroundMusicPreset}
                 options={backgroundMusicPresets.map((preset) => ({ value: preset.key, label: preset.name }))}
@@ -1829,6 +1873,18 @@ function PodcastDialogueLayout({ onHistorySaved }: { onHistorySaved?: SaveHistor
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <PodcastConfirmationDialog
+        open={pendingLineDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingLineDeleteId(null);
+        }}
+        title={t("create.audio.podcast.deleteLine.title")}
+        description={t("create.audio.podcast.deleteLine.description")}
+        onConfirm={() => {
+          if (pendingLineDeleteId !== null) removeLine(pendingLineDeleteId);
+          setPendingLineDeleteId(null);
+        }}
+      />
       <PodcastConfirmationDialog
         open={speakerDeleteConfirmOpen}
         onOpenChange={setSpeakerDeleteConfirmOpen}
@@ -2263,7 +2319,7 @@ function VoiceCloneLayout({
           <input value={voiceName} onChange={(event) => setVoiceName(event.target.value)} />
         </label>
         <div className={styles.altFieldGroup}>
-          <span className={styles.altFieldLabel}>{t("create.audio.clone.voiceCharacter")}</span>
+          <span className={styles.altFieldLabel}><AudioSettingLabel label={t("create.audio.clone.voiceCharacter")} /></span>
           <div className={styles.altChoiceRow}>
             {(
               [
@@ -2559,19 +2615,20 @@ function VoiceCloneLayout({
           <h2>{t("create.audio.clone.settings")}</h2>
           <Settings2 size={20} />
         </div>
-        <label className={styles.altField}>
-          <span>{t("create.audio.clone.model")}</span>
+        <div className={styles.altField}>
+          <span><AudioSettingLabel label={t("create.audio.clone.model")} /></span>
           <Dropdown
             value={previewModel}
             options={VOICE_CLONE_MODEL_OPTIONS}
             onChange={setPreviewModel}
             ariaLabel={t("create.audio.clone.model")}
+            optionClassName={styles.cloneDropdownOption}
             menuPosition="fixed"
           />
-        </label>
+        </div>
         <div className={styles.altSettingBlock}>
           <div className={styles.altSettingHeading}>
-            <span>{t("create.audio.clone.speed")}</span>
+            <span><AudioSettingLabel label={t("create.audio.clone.speed")} /></span>
             <b>{speed.toFixed(2)}x</b>
           </div>
           <input
@@ -2588,7 +2645,7 @@ function VoiceCloneLayout({
           <>
             <div className={styles.altSettingBlock}>
               <div className={styles.altSettingHeading}>
-                <span>{t("create.audio.clone.accuracy")}</span>
+                <span><AudioSettingLabel label={t("create.audio.clone.accuracy")} /></span>
                 <b>{accuracy.toFixed(2)}</b>
               </div>
               <input
@@ -2601,45 +2658,48 @@ function VoiceCloneLayout({
                 onChange={(event) => setAccuracy(Number(event.target.value))}
               />
             </div>
-            <label className={styles.altToggleRow}>
-              <span>{t("create.audio.clone.noiseReduction")}</span>
+            <div className={styles.altToggleRow}>
+              <span><AudioSettingLabel label={t("create.audio.clone.noiseReduction")} /></span>
               <button
                 type="button"
                 className={needNoiseReduction ? styles.altToggleOn : styles.altToggleOff}
                 onClick={() => setNeedNoiseReduction((current) => !current)}
+                aria-label={t("create.audio.clone.noiseReduction")}
                 aria-pressed={needNoiseReduction}
               >
                 <span />
               </button>
-            </label>
-            <label className={styles.altToggleRow}>
-              <span>{t("create.audio.clone.volumeNormalization")}</span>
+            </div>
+            <div className={styles.altToggleRow}>
+              <span><AudioSettingLabel label={t("create.audio.clone.volumeNormalization")} /></span>
               <button
                 type="button"
                 className={needVolumeNormalization ? styles.altToggleOn : styles.altToggleOff}
                 onClick={() => setNeedVolumeNormalization((current) => !current)}
+                aria-label={t("create.audio.clone.volumeNormalization")}
                 aria-pressed={needVolumeNormalization}
               >
                 <span />
               </button>
-            </label>
-            <label className={styles.altField}>
-              <span>{t("create.audio.language")}</span>
+            </div>
+            <div className={styles.altField}>
+              <span><AudioSettingLabel label={t("create.audio.language")} /></span>
               <Dropdown
                 value={language}
                 options={MINIMAX_LANGUAGE_BOOST_OPTIONS}
                 onChange={setLanguage}
                 ariaLabel={t("create.audio.language")}
+                optionClassName={styles.cloneDropdownOption}
                 menuPosition="fixed"
               />
-            </label>
+            </div>
           </>
         ) : null}
         {previewModel === "minimax/speech-2.8-hd" ? (
           <>
             <div className={styles.altSettingBlock}>
               <div className={styles.altSettingHeading}>
-                <span>{t("create.audio.pitch")}</span>
+                <span><AudioSettingLabel label={t("create.audio.pitch")} /></span>
                 <b>{pitch}</b>
               </div>
               <input
@@ -2654,7 +2714,7 @@ function VoiceCloneLayout({
             </div>
             <div className={styles.altSettingBlock}>
               <div className={styles.altSettingHeading}>
-                <span>{t("create.audio.synthVolume")}</span>
+                <span><AudioSettingLabel label={t("create.audio.synthVolume")} /></span>
                 <b>{synthVolume.toFixed(1)}x</b>
               </div>
               <input
@@ -2667,8 +2727,8 @@ function VoiceCloneLayout({
                 onChange={(event) => setSynthVolume(Number(event.target.value))}
               />
             </div>
-            <label className={styles.altField}>
-              <span>{t("create.audio.clone.emotion")}</span>
+            <div className={styles.altField}>
+              <span><AudioSettingLabel label={t("create.audio.clone.emotion")} /></span>
               <Dropdown
                 value={emotion}
                 options={[
@@ -2682,19 +2742,21 @@ function VoiceCloneLayout({
                 ]}
                 onChange={setEmotion}
                 ariaLabel={t("create.audio.clone.emotion")}
+                optionClassName={styles.cloneDropdownOption}
                 menuPosition="fixed"
               />
-            </label>
-            <label className={styles.altField}>
-              <span>{t("create.audio.language")}</span>
+            </div>
+            <div className={styles.altField}>
+              <span><AudioSettingLabel label={t("create.audio.language")} /></span>
               <Dropdown
                 value={language}
                 options={MINIMAX_LANGUAGE_BOOST_OPTIONS}
                 onChange={setLanguage}
                 ariaLabel={t("create.audio.language")}
+                optionClassName={styles.cloneDropdownOption}
                 menuPosition="fixed"
               />
-            </label>
+            </div>
             <label className={styles.altField}>
               <span>{t("create.audio.pronunciationHints")}</span>
               <input
@@ -2703,19 +2765,20 @@ function VoiceCloneLayout({
                 placeholder={"e.g. EOS as “อี-โอ-เอส”"}
               />
             </label>
-            <label className={styles.altToggleRow}>
-              <span>{t("create.audio.clone.englishNormalization")}</span>
+            <div className={styles.altToggleRow}>
+              <span><AudioSettingLabel label={t("create.audio.clone.englishNormalization")} /></span>
               <button
                 type="button"
                 className={englishNormalization ? styles.altToggleOn : styles.altToggleOff}
                 onClick={() => setEnglishNormalization((current) => !current)}
+                aria-label={t("create.audio.clone.englishNormalization")}
                 aria-pressed={englishNormalization}
               >
                 <span />
               </button>
-            </label>
-            <label className={styles.altField}>
-              <span>{t("create.audio.clone.sampleRate")}</span>
+            </div>
+            <div className={styles.altField}>
+              <span><AudioSettingLabel label={t("create.audio.clone.sampleRate")} /></span>
               <Dropdown
                 value={sampleRate}
                 options={["8000", "16000", "22050", "24000", "32000", "44100"].map((value) => ({
@@ -2724,11 +2787,12 @@ function VoiceCloneLayout({
                 }))}
                 onChange={setSampleRate}
                 ariaLabel={t("create.audio.clone.sampleRate")}
+                optionClassName={styles.cloneDropdownOption}
                 menuPosition="fixed"
               />
-            </label>
-            <label className={styles.altField}>
-              <span>{t("create.audio.clone.bitrate")}</span>
+            </div>
+            <div className={styles.altField}>
+              <span><AudioSettingLabel label={t("create.audio.clone.bitrate")} /></span>
               <Dropdown
                 value={bitrate}
                 options={["32000", "64000", "128000", "256000"].map((value) => ({
@@ -2737,11 +2801,12 @@ function VoiceCloneLayout({
                 }))}
                 onChange={setBitrate}
                 ariaLabel={t("create.audio.clone.bitrate")}
+                optionClassName={styles.cloneDropdownOption}
                 menuPosition="fixed"
               />
-            </label>
-            <label className={styles.altField}>
-              <span>{t("create.audio.clone.channel")}</span>
+            </div>
+            <div className={styles.altField}>
+              <span><AudioSettingLabel label={t("create.audio.clone.channel")} /></span>
               <Dropdown
                 value={channel}
                 options={[
@@ -2750,13 +2815,14 @@ function VoiceCloneLayout({
                 ]}
                 onChange={setChannel}
                 ariaLabel={t("create.audio.clone.channel")}
+                optionClassName={styles.cloneDropdownOption}
                 menuPosition="fixed"
               />
-            </label>
+            </div>
           </>
         ) : null}
         <div className={styles.altSettingBlock}>
-          <span className={styles.altFieldLabel}>{t("create.audio.clone.outputFormat")}</span>
+          <span className={styles.altFieldLabel}><AudioSettingLabel label={t("create.audio.clone.outputFormat")} /></span>
           <div className={styles.altFormatGrid}>
             {(["mp3", "wav", "ogg"] as const).map((format) => (
               <button
@@ -3048,7 +3114,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
           icon={<AudioLines size={24} />}
         />
         <div className={`${styles.altFieldGroup} ${styles.sfxSourceGroup}`}>
-          <span className={styles.altFieldLabel}>{t("create.audio.sfx.source")}</span>
+          <span className={styles.altFieldLabel}><AudioSettingLabel label={t("create.audio.sfx.source")} /></span>
           <div className={styles.altChoiceRow}>
             <button
               type="button"
@@ -3073,7 +3139,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
               <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2000} />
             </label>
             <div className={styles.altFieldGroup}>
-              <span className={styles.altFieldLabel}>{t("create.audio.sfx.effectCategory")}</span>
+              <span className={styles.altFieldLabel}><AudioSettingLabel label={t("create.audio.sfx.effectCategory")} /></span>
               <div className={styles.altChoiceRow}>
                 {(
                   [
@@ -3095,8 +3161,8 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
               </div>
             </div>
             <div className={styles.altTwoFields}>
-              <label className={styles.altField}>
-                <span>{t("create.audio.sfx.duration")}</span>
+              <div className={styles.altField}>
+                <span><AudioSettingLabel label={t("create.audio.sfx.duration")} /></span>
                 <Dropdown
                   value={String(effectDuration)}
                   onChange={(value) => setEffectDuration(Number(value))}
@@ -3107,9 +3173,9 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
                     label: t("create.audio.sfx.seconds", { count: String(seconds).padStart(2, "0") }),
                   }))}
                 />
-              </label>
-              <label className={styles.altField}>
-                <span>{t("create.audio.sfx.variations")}</span>
+              </div>
+              <div className={styles.altField}>
+                <span><AudioSettingLabel label={t("create.audio.sfx.variations")} /></span>
                 <Dropdown
                   value={String(variationCount)}
                   onChange={(value) => setVariationCount(Number(value))}
@@ -3120,7 +3186,7 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
                     label: t("create.audio.sfx.variationOptions", { count: amount }),
                   }))}
                 />
-              </label>
+              </div>
             </div>
           </>
         ) : (
@@ -3322,8 +3388,8 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
           <h2>{t("create.audio.sfx.settings")}</h2>
           <Settings2 size={20} />
         </div>
-        <label className={styles.altField}>
-          <span>{t("create.audio.sfx.model")}</span>
+        <div className={styles.altField}>
+          <span>{t("create.audio.sfx.model")} <InfoTooltip content={t("create.audio.info.sfxSource")} size={11} /></span>
           <Dropdown
             value={sourceMode}
             options={SFX_MODEL_OPTIONS}
@@ -3331,9 +3397,9 @@ function SoundEffectsLayout({ onHistorySaved }: { onHistorySaved?: SaveHistoryCa
             ariaLabel={t("create.audio.sfx.model")}
             menuPosition="fixed"
           />
-        </label>
+        </div>
         <div className={styles.altSettingBlock}>
-          <span className={styles.altFieldLabel}>{t("create.audio.sfx.outputFormat")}</span>
+          <span className={styles.altFieldLabel}><AudioSettingLabel label={t("create.audio.sfx.outputFormat")} /></span>
           <div className={styles.altFormatGrid}>
             {(["mp3", "wav", "ogg"] as const).map((format) => (
               <button
@@ -3525,7 +3591,7 @@ function TextToMusicLayout() {
       </section>
       <aside className={styles.alternateSettings}>
         <div className={styles.altPanelHeader}><h2>{t("create.audio.settings")}</h2><Settings2 size={20} /></div>
-        <div className={`${styles.altField} ${styles.musicModelField}`}><span>{t("create.audio.music.model")}</span><div className={styles.musicModel}>Sonilo Text-to-Music</div></div>
+        <div className={`${styles.altField} ${styles.musicModelField}`}><span><AudioSettingLabel label={t("create.audio.music.model")} /></span><div className={styles.musicModel}>Sonilo Text-to-Music</div></div>
         <label className={styles.altField}><span>{t("create.audio.music.duration")}</span><input className={styles.musicDurationInput} type="number" min="10" max="360" step="1" value={durationInput} disabled={status === "generating"} onChange={(event) => setDurationInput(event.target.value)} aria-invalid={!validDuration} /></label>
         <p className={validDuration ? styles.musicHint : styles.podcastError}>{t(validDuration ? "create.audio.music.durationHint" : "create.audio.music.invalidDuration")}</p>
         <div data-mobile-action-dock className={styles.mobileActionDock}>
@@ -4008,7 +4074,7 @@ function AudioCleanupLayout() {
           <span className={styles.cleanupToolSwitch} aria-hidden="true"><span /></span>
         </label>
         <div className={styles.cleanupFormatField}>
-          <span>{t("create.audio.cleanup.outputFormat")}</span>
+          <span><AudioSettingLabel label={t("create.audio.cleanup.outputFormat")} /></span>
           <Dropdown
             value={outputFormat}
             options={[
@@ -4481,11 +4547,17 @@ export function AudioGenerationPage() {
     (event: MouseEvent<HTMLButtonElement>) => {
       const voiceKey = event.currentTarget.dataset.voiceKey;
       if (voiceMode === "cloned") {
-        if (voiceKey) void toggleClonePreview(voiceKey);
+        if (voiceKey) {
+          setSelectedVoice(voiceKey);
+          void toggleClonePreview(voiceKey);
+        }
         return;
       }
       const voice = availableVoices.find((item) => item.key === voiceKey);
-      if (voice) toggleVoicePreview(voice);
+      if (voice) {
+        setSelectedVoice(voice.key);
+        toggleVoicePreview(voice);
+      }
     },
     [availableVoices, toggleVoicePreview, toggleClonePreview, voiceMode],
   );
@@ -5185,21 +5257,22 @@ export function AudioGenerationPage() {
                         { value: "English (US)", label: "English (US)" },
                       ]}
                     />
-                    <label className={styles.selectField}>
+                    <div className={styles.selectField}>
                       <FieldLabel>{t("create.audio.pronunciationHints")}</FieldLabel>
                       <input
                         value={pronunciation}
                         onChange={(event) => setPronunciation(event.target.value)}
                         placeholder={"e.g. EOS as “อี-โอ-เอส”"}
+                        aria-label={t("create.audio.pronunciationHints")}
                       />
-                    </label>
+                    </div>
                   </div>
                 </section>
 
                 <section className={styles.centerColumn} aria-label={t("create.audio.a11y.centerColumn")}>
                   <div className={`${styles.sectionBlock} ${styles.voiceSection}`}>
                     <div className={styles.sectionHeading}>
-                      <h2>{voiceMode === "cloned" ? t("create.audio.clone.savedVoices") : t("create.audio.voiceSpeaker")}</h2>
+                      <h2>{voiceMode === "cloned" ? t("create.audio.clone.savedVoices") : t("create.audio.voiceSpeaker")} <InfoTooltip content={t("create.audio.info.voiceSpeaker")} size={11} /></h2>
                     </div>
                     <div className={styles.voiceCarousel}>
                       {canScrollVoicesLeft ? (
@@ -5687,6 +5760,7 @@ export function AudioGenerationPage() {
                             type="button"
                             className={englishNormalization ? styles.toggleOn : styles.toggleOff}
                             onClick={() => setEnglishNormalization((current) => !current)}
+                            aria-label={t("create.audio.clone.englishNormalization")}
                             aria-pressed={englishNormalization}
                           >
                             <span />

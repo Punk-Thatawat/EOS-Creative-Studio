@@ -28,6 +28,7 @@ const schemaLabelKeys: Record<string, TranslationKey> = {
 const schemaDescriptionKeys: Array<{ match: string; key: TranslationKey }> = [
   { match: "the resolution of the output video", key: "create.video.common.outputResolutionDescription" },
   { match: "the output video resolution", key: "create.video.common.outputResolutionDescription" },
+  { match: "resolution of the generated video", key: "create.video.common.outputResolutionDescription" },
   { match: "video resolution", key: "create.video.common.resolutionDescription" },
   { match: "the random seed to use for the generation", key: "create.video.common.seedDescription" },
   { match: "optional mask image to specify the person", key: "create.video.common.maskImageDescription" },

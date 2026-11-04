@@ -2,6 +2,7 @@
 
 import { getApiAccessToken } from "@/lib/auth/access-token";
 import { generationErrorFromPayload, generationErrorFromStatus } from "@/lib/api/generation-errors";
+import { isGenerationMediaAvailable } from "@/lib/generation-media-retention";
 import type { BackgroundMode, ExtendAmount, ExtendDirection, ImageCount, ImageQuality, ImageRatio, MaskTool, StylePreset, StyleTransferPreset } from "@/features/create/image-generation/config";
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "");
@@ -571,6 +572,7 @@ export type GenerationHistoryItem = {
   errorCode?: string;
   errorSource?: "system" | "provider";
   createdAt?: string;
+  expiresAt?: string | null;
   updatedAt?: string;
 };
 
@@ -596,7 +598,8 @@ export async function listGenerationHistory(workspaceId?: string | null, feature
   const payload = await response.json().catch(() => null) as { data?: GenerationHistoryItem[] } | null;
   if (!response.ok) throw generationErrorFromPayload(payload, "Image generation request failed");
 
-  return payload?.data ?? [];
+  // Do not suppress queued/processing jobs: those are also used to resume work.
+  return (payload?.data ?? []).filter((item) => item.status !== "completed" || isGenerationMediaAvailable(item.createdAt, item.expiresAt));
 }
 
 export async function listCompletedGenerationImages(workspaceId: string, feature?: string): Promise<string[]> {

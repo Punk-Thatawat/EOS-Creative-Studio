@@ -2967,14 +2967,22 @@ function HistoryPanel({
   return (
     <>
     <MyVideos mode={mode} savedSlugs={savedSlugs} onTemplateCreated={onTemplateCreated} onUseSaved={onUseSaved} onOpenLibrary={mode === "edit" ? undefined : onOpenSaved} onDetails={onExpand} />
-    <section className={s.invite}>
+    <section className={`${s.invite} ${mode === "motion" ? s.motionInvite : ""}`}>
       <h2>{c("templates.history.heading")}</h2>
       <p>{c("templates.history.body")}</p>
       <ol className={s.inviteSteps}>
         {steps.map(([title, body], i) => (
           <li key={title}>
-            <div className={`${s.inviteArt} ${s[`inviteArt${i + 1}`]}`}>
-              {i === 0 ? (
+            <div className={`${s.inviteArt} ${s[`inviteArt${i + 1}`]}`} aria-hidden="true">
+              {mode === "motion" ? (
+                i === 1 && covers[0] ? (
+                  <span className={s.motionInviteImage} style={{ backgroundImage: `url("${covers[0].thumbnailUrl}")` }} />
+                ) : (
+                  <span className={s.motionInviteIcon}>
+                    {i === 0 ? <Video size={28} /> : i === 1 ? <ImagePlus size={28} /> : <Sparkles size={28} />}
+                  </span>
+                )
+              ) : i === 0 ? (
                 <div className={s.uploadDemo}>
                   <Upload size={28} aria-hidden="true" />
                   <strong>{c(title).toUpperCase()}</strong>

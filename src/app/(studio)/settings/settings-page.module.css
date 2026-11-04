@@ -7,6 +7,11 @@
   padding-bottom: 2.5rem;
 }
 
+.settingsPage button:not(:disabled):not([aria-disabled="true"]),
+.settingsPage a[href]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
 .pageIntro {
   display: flex;
   align-items: flex-end;

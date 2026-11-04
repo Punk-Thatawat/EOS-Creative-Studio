@@ -145,7 +145,7 @@ export function ContractHistoryPanel({ refreshKey, onOpen }: { refreshKey: numbe
 
       {page && page.items.length === 0 && !error && <p className={styles.ocrMissing}>{t(K("contract.history.empty"))}</p>}
 
-      <ul className={styles.ocrHistoryList}>
+      <ul className={styles.ocrHistoryList} tabIndex={page && page.items.length > 0 ? 0 : undefined} aria-label={t(K("contract.tab.history"))}>
         {page?.items.map((item) => {
           const Icon = CONTRACT_TYPE_OPTIONS.find((option) => option.id === item.contractType)?.icon ?? Clock;
           const meta = [
