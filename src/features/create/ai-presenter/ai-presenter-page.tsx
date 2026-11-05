@@ -3,22 +3,27 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, AudioLines, Check, ChevronDown, CloudUpload, GripVertical, LoaderCircle, LockKeyhole, Pause, Pencil, Play, Plus, Sparkles, Video, WandSparkles, X } from "lucide-react";
+import { ArrowRight, AudioLines, Check, ChevronDown, ChevronLeft, ChevronRight, CloudUpload, GripVertical, LoaderCircle, LockKeyhole, Pause, Pencil, Play, Plus, Sparkles, Video, WandSparkles, X } from "lucide-react";
+import Link from "next/link";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { Dropdown } from "@/components/ui/dropdown";
 import { SearchInput } from "@/components/ui/search-input";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
+import { ImageTutorialButton } from "@/features/create/image-generation/components/image-tutorial-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { getAccountScopedStorageKey } from "@/lib/generation-progress-storage";
 import { createTextToSpeech, getAudioCreditBalance, listAudioModels, listAudioVoices, quoteTextToSpeechScenes, type AudioCreditQuote, type AudioModel, type AudioVoice } from "@/lib/api/audio";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { uploadPeopleMedia } from "@/lib/api/people-video-generations";
-import { composePresenterVideo, createVideoStoryboard, getVideoStoryboardStatus, quoteVideoStoryboard, splitPresenterScript, type VideoStoryboardResponse, type VideoStoryboardStatus } from "@/lib/api/video-generations";
+import { analyzePresenterVisualDirections, composePresenterVideo, createVideoStoryboard, getVideoStoryboardStatus, quoteVideoStoryboard, type VideoStoryboardResponse, type VideoStoryboardStatus } from "@/lib/api/video-generations";
 import { emitGenerationCompleted, emitGenerationRequestFailed, emitGenerationRequestFinished, emitGenerationStarted, emitGenerationSubmitting } from "@/lib/generation-progress-events";
 import { formatGenerationError, generationErrorFromStatus } from "@/lib/api/generation-errors";
 import { emitCreditBalanceChanged, requestCreditBalanceSync } from "@/lib/credits/credit-events";
 import { VideoPreviewLiveBadge, VideoPreviewOverlayActions, VideoPreviewPlaceholder } from "../video-preview-placeholder";
+import { presenterDirectionForChunk } from "./presenter-visual-plan";
+import { loadPresenterHistory, presenterHistoryKey, presenterPreviewUrl } from "./presenter-history";
+import { fetchHistory, type HistoryItem } from "@/lib/api/history";
 import videoPreviewStyles from "../video-generation-page.module.css";
 import styles from "./ai-presenter-page.module.css";
 
@@ -28,7 +33,7 @@ const voicePreviewScripts = {
   th: "นี่คือตัวอย่างเสียงภาษาไทยสำหรับตรวจสอบโทนเสียงและคุณภาพการพูด",
 } as const;
 const supportedPresenterImageTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
-const supportedSceneMediaTypes = new Set(["image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]);
+const supportedSceneMediaTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 const maxSceneMediaTotalBytes = 60 * 1024 * 1024;
 const maxSceneDurationSeconds = 15;
 const maxPresenterOptions = 8;
@@ -37,17 +42,18 @@ const sceneTemplateOptions = ["Intro", "Key Message", "Product Highlight", "CTA"
 const aiPresenterDraftStorageKey = "eos.generation.ai-presenter-draft.v1";
 const aiPresenterDraftMediaDatabase = "eos.generation.ai-presenter-media.v1";
 const toneOptions = [
-  { label: "Corporate", value: "Premium" },
-  { label: "Friendly", value: "Friendly" },
-  { label: "Confident", value: "Dramatic" },
-  { label: "Energetic", value: "Energetic" },
+  { label: "Corporate", thaiLabel: "ทางการ", value: "Premium" },
+  { label: "Friendly", thaiLabel: "เป็นมิตร", value: "Friendly" },
+  { label: "Confident", thaiLabel: "มั่นใจ", value: "Dramatic" },
+  { label: "Energetic", thaiLabel: "มีพลัง", value: "Energetic" },
 ] as const;
 const aspectOptions = ["16:9", "9:16", "1:1"] as const;
 
 type SourceMedia = { id: string; file?: File; fileName: string; previewUrl: string; kind: "image" | "video"; remoteUrl?: string; uploading: boolean; error?: string };
 type SceneMedia = { file?: File; fileName: string; previewUrl: string; kind: "image" | "video"; remoteUrl?: string };
 type AudioSceneSegment = { file: File; startSeconds: number; endSeconds: number; durationSeconds: number };
-type SpeechPreview = { key: string; blob: Blob; url: string; durationSeconds: number; sceneAudio: AudioSceneSegment[]; remoteUrl?: string };
+type AudioVideoChunk = AudioSceneSegment & { sceneIndex: number };
+type SpeechPreview = { key: string; blob: Blob; url: string; durationSeconds: number; sceneAudio: AudioSceneSegment[]; videoChunks: AudioVideoChunk[]; remoteUrl?: string };
 type PresenterVisualMode = "presenter" | "scene-only";
 type PresenterScene = { id: string; title: string; script: string; direction: string; visualMode?: PresenterVisualMode; durationSeconds?: number; presenterId?: string; voiceId?: string; media?: SceneMedia; mediaError?: string };
 type SavedAiPresenterScene = Omit<PresenterScene, "media" | "mediaError"> & { media?: { fileName: string; kind: SceneMedia["kind"]; remoteUrl?: string; hasFile: boolean } | null };
@@ -143,32 +149,11 @@ function baselineDuration(script: string, language: string): number {
   if (!text) return 3;
   const effectiveLanguage = /[\u0e00-\u0e7f]/.test(text) ? "th" : language;
   const spokenUnits = effectiveLanguage === "th" ? text.replace(/\s/g, "").length / 12 : effectiveLanguage === "ja" ? text.replace(/\s/g, "").length / 6 * 2.45 : text.split(/\s+/).length;
-  return Math.max(3, Math.min(60, Math.ceil(spokenUnits / (effectiveLanguage === "th" ? 1 : 2.45))));
+  return Math.max(3, Math.ceil(spokenUnits / (effectiveLanguage === "th" ? 1 : 2.45)));
 }
 
 function estimatedDuration(script: string, language: string, voicePace = 1): number {
-  return Math.max(3, Math.min(60, Math.ceil(baselineDuration(script, language) * voicePace)));
-}
-
-function splitScriptIntoScenes(text: string, language: string, pace: number): string[] {
-  const input = text.trim();
-  if (!input) return [];
-  const effectiveLanguage = /[\u0e00-\u0e7f]/.test(input) ? "th" : language;
-  const sentenceSegmenter = new Intl.Segmenter(effectiveLanguage, { granularity: "sentence" });
-  const wordSegmenter = new Intl.Segmenter(effectiveLanguage, { granularity: "word" });
-  const units = Array.from(sentenceSegmenter.segment(input)).flatMap(({ segment }) =>
-    estimatedDuration(segment, language, pace) <= 12 ? [segment] : Array.from(wordSegmenter.segment(segment), (item) => item.segment));
-  const parts: string[] = [];
-  let current = "";
-  for (const unit of units) {
-    if (current.trim() && estimatedDuration(current + unit, language, pace) > 12) {
-      parts.push(current.trim());
-      current = "";
-    }
-    current += unit;
-  }
-  if (current.trim()) parts.push(current.trim());
-  return parts;
+  return Math.max(3, Math.ceil(baselineDuration(script, language) * voicePace));
 }
 
 function voicePaceForSample(sampleDuration: number | undefined, voiceId: string, language: string): number {
@@ -211,11 +196,6 @@ function sceneScriptPlaceholder(title: string, isThai: boolean): string {
   return isThai ? "พิมพ์เฉพาะประโยคที่ต้องการให้อ่านออกเสียง…" : "Write only the words that should be spoken…";
 }
 
-function formatTimelineTime(seconds: number): string {
-  const safeSeconds = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(safeSeconds / 60).toString().padStart(2, "0")}:${(safeSeconds % 60).toString().padStart(2, "0")}`;
-}
-
 function outputVideoUrl(status: VideoStoryboardResponse | VideoStoryboardStatus): string | undefined {
   if ("finalVideoUrl" in status && typeof status.finalVideoUrl === "string") return status.finalVideoUrl;
   if ("videoUrl" in status && typeof status.videoUrl === "string") return status.videoUrl;
@@ -249,37 +229,51 @@ function encodeMonoWav(audio: AudioBuffer): Blob {
   return new Blob([wav], { type: "audio/wav" });
 }
 
-function trimQuietAudioOverhang(context: BaseAudioContext, audio: AudioBuffer, maxDurationSeconds: number): AudioBuffer {
-  const maxSamples = Math.floor(maxDurationSeconds * audio.sampleRate);
-  const overhangSeconds = (audio.length - maxSamples) / audio.sampleRate;
-  if (audio.length <= maxSamples || overhangSeconds > 0.12) return audio;
-
-  const channels = Array.from({ length: audio.numberOfChannels }, (_, channel) => audio.getChannelData(channel));
-  const quietTailPeak = channels.reduce((peak, channel) => {
-    for (let sampleIndex = maxSamples; sampleIndex < audio.length; sampleIndex += 1) {
-      peak = Math.max(peak, Math.abs(channel[sampleIndex] ?? 0));
+function splitAudioForVideo(context: BaseAudioContext, audio: AudioBuffer, sceneIndex: number, sceneStart: number): AudioVideoChunk[] {
+  const rate = audio.sampleRate;
+  const chunks: AudioVideoChunk[] = [];
+  let start = 0;
+  while (start < audio.length) {
+    const remaining = audio.length - start;
+    let end = audio.length;
+    if (remaining > maxSceneDurationSeconds * rate) {
+      // Keep cuts below the provider limit and avoid a very short final part.
+      const partsLeft = Math.ceil(remaining / (14 * rate));
+      const target = start + Math.floor(remaining / partsLeft);
+      const radius = Math.floor(rate);
+      const windowSize = Math.max(1, Math.floor(rate * 0.02));
+      const channels = Array.from({ length: audio.numberOfChannels }, (_, index) => audio.getChannelData(index));
+      let best = target;
+      let bestEnergy = Infinity;
+      for (let position = Math.max(start + 4 * rate, target - radius); position <= Math.min(target + radius, start + maxSceneDurationSeconds * rate, audio.length - 4 * rate); position += windowSize) {
+        let energy = 0;
+        for (const channel of channels) for (let i = position; i < Math.min(position + windowSize, channel.length); i += 1) energy += (channel[i] ?? 0) ** 2;
+        if (energy < bestEnergy) { bestEnergy = energy; best = position; }
+      }
+      end = Math.min(audio.length, Math.floor(best));
     }
-    return peak;
-  }, 0);
-  if (quietTailPeak > 0.0025) return audio;
-
-  const trimmed = context.createBuffer(audio.numberOfChannels, maxSamples, audio.sampleRate);
-  channels.forEach((channel, index) => trimmed.copyToChannel(channel.subarray(0, maxSamples), index));
-  return trimmed;
+    const piece = context.createBuffer(audio.numberOfChannels, end - start, rate);
+    for (let channel = 0; channel < audio.numberOfChannels; channel += 1) piece.copyToChannel(audio.getChannelData(channel).subarray(start, end), channel);
+    chunks.push({ sceneIndex, file: new File([encodeMonoWav(piece)], `presenter-${sceneIndex + 1}-${chunks.length + 1}.wav`, { type: "audio/wav" }), startSeconds: sceneStart + start / rate, endSeconds: sceneStart + end / rate, durationSeconds: (end - start) / rate });
+    start = end;
+  }
+  return chunks;
 }
 
-async function combineSceneAudio(blobs: Blob[]): Promise<{ blob: Blob; segments: AudioSceneSegment[]; durationSeconds: number }> {
+async function combineSceneAudio(blobs: Blob[]): Promise<{ blob: Blob; segments: AudioSceneSegment[]; videoChunks: AudioVideoChunk[]; durationSeconds: number }> {
   if (blobs.length === 0) throw new Error("Every scene needs its own generated voice track");
   const audioContext = new AudioContext();
   try {
     const decodedAudio = await Promise.all(blobs.map((blob) => blob.arrayBuffer().then((data) => audioContext.decodeAudioData(data))));
-    const audioBuffers = decodedAudio.map((audio) => trimQuietAudioOverhang(audioContext, audio, maxSceneDurationSeconds));
+    const audioBuffers = decodedAudio;
     const sampleRate = audioContext.sampleRate;
     const segments: AudioSceneSegment[] = [];
+    const videoChunks: AudioVideoChunk[] = [];
     let cursorSeconds = 0;
     for (const [index, audio] of audioBuffers.entries()) {
       const durationSeconds = audio.duration;
       const endSeconds = cursorSeconds + durationSeconds;
+      videoChunks.push(...splitAudioForVideo(audioContext, audio, index, cursorSeconds));
       const wav = encodeMonoWav(audio);
       segments.push({
         file: new File([wav], `presenter-scene-${index + 1}.wav`, { type: "audio/wav" }),
@@ -300,7 +294,7 @@ async function combineSceneAudio(blobs: Blob[]): Promise<{ blob: Blob; segments:
       startSeconds += audio.duration;
     }
     const combined = await offlineContext.startRendering();
-    return { blob: encodeMonoWav(combined), segments, durationSeconds: cursorSeconds };
+    return { blob: encodeMonoWav(combined), segments, videoChunks, durationSeconds: cursorSeconds };
   } finally {
     await audioContext.close().catch(() => undefined);
   }
@@ -336,8 +330,12 @@ function modelSupports(model: GenerationModelOption, kind: SourceMedia["kind"] |
   return Boolean(capabilities.promptParameter && hasAudioInput && hasPresenterReference && hasSceneImageInput);
 }
 
-function presenterPrompt(script: string, direction: string, hasSceneBackground = false, visualMode: PresenterVisualMode = "presenter"): string {
-  const sceneDirection = visualMode === "scene-only"
+function presenterPrompt(script: string, direction: string, hasSceneBackground = false, visualMode: PresenterVisualMode = "presenter", partialAudio = false, continueFromFrame = false): string {
+  const sceneDirection = continueFromFrame
+    ? visualMode === "scene-only"
+      ? "Continue the scene visible in the supplied starting frame without adding the separately selected presenter."
+      : "Continue the presenter and setting visible in the supplied starting frame; keep the reference person's identity and do not restart an earlier action."
+    : visualMode === "scene-only"
     ? "Use the supplied scene, product, or B-roll image as the visual source. Preserve any people or characters already present in it, but do not add the separately selected presenter. Keep the scene or product as the focus."
     : hasSceneBackground
       ? "Use the scene image as the background and preserve its setting, composition, and visible product. Add the person from the separate presenter reference image naturally into this scene; do not replace the scene image with the presenter reference."
@@ -350,23 +348,27 @@ function presenterPrompt(script: string, direction: string, hasSceneBackground =
   const performanceDirection = visualMode === "scene-only"
     ? "Keep the supplied narration as off-camera voiceover; do not lip-sync any person in the scene."
     : "A professional on-camera presenter speaks naturally to the viewer. Match facial expression, mouth movement, and timing to the provided reference audio.";
-  return `${performanceDirection} ${sceneDirection} Use only the provided narration and speak only these words: "${script.trim()}" ${visualDirection}`;
+  const speechDirection = partialAudio
+    ? "Use only the words spoken in the provided reference audio for this segment. Do not repeat or invent any other words."
+    : `Use only the provided narration and speak only these words: "${script.trim()}"`;
+  const continuity = continueFromFrame ? "Continue directly from the supplied starting frame, preserving the presenter's position, appearance, background, lighting, and camera framing." : "";
+  return `${performanceDirection} ${sceneDirection} ${continuity} ${speechDirection} ${visualDirection}`;
 }
 
-function presenterSceneVisualInput(scene: PresenterScene, presenterImageUrl: string, sceneImageUrl?: string) {
+function presenterSceneVisualInput(scene: PresenterScene, presenterImageUrl: string, sceneImageUrl?: string, partialAudio = false, continueFromFrame = false) {
   const visualMode = scene.visualMode ?? "presenter";
   if (visualMode === "scene-only") {
     const image = sceneImageUrl ?? presenterImageUrl;
     return {
       storyboardImage: image,
       referenceImages: image ? [image] : [],
-      prompt: presenterPrompt(scene.script, scene.direction, Boolean(sceneImageUrl), visualMode),
+      prompt: presenterPrompt(scene.script, scene.direction, Boolean(sceneImageUrl), visualMode, partialAudio, continueFromFrame),
     };
   }
   return {
     storyboardImage: sceneImageUrl ?? presenterImageUrl,
     referenceImages: presenterImageUrl ? [presenterImageUrl] : [],
-    prompt: presenterPrompt(scene.script, scene.direction, Boolean(sceneImageUrl), visualMode),
+    prompt: presenterPrompt(scene.script, scene.direction, Boolean(sceneImageUrl), visualMode, partialAudio, continueFromFrame),
   };
 }
 
@@ -393,18 +395,13 @@ export function AiPresenterPage() {
   const generationControllerRef = useRef<AbortController | null>(null);
   const [draftRestoreComplete, setDraftRestoreComplete] = useState(false);
   const [scenes, setScenes] = useState<PresenterScene[]>([{ id: "scene-1", title: "Intro", script: sampleScript, direction: "" }]);
-  const scenesRef = useRef(scenes);
-  useEffect(() => { scenesRef.current = scenes; }, [scenes]);
   const [fullScript, setFullScript] = useState("");
   const [fullScriptPending, setFullScriptPending] = useState(false);
-  const [isSplittingScript, setIsSplittingScript] = useState(false);
   const [splitError, setSplitError] = useState("");
-  const splitRequestVersion = useRef(0);
   const [activeSceneId, setActiveSceneId] = useState("scene-1");
   const [isAddSceneOpen, setIsAddSceneOpen] = useState(false);
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
   const [confirmSceneDelete, setConfirmSceneDelete] = useState(false);
-  const [confirmLongScene, setConfirmLongScene] = useState(false);
   const [newSceneTitle, setNewSceneTitle] = useState("");
   const [newSceneVisualMode, setNewSceneVisualMode] = useState<PresenterVisualMode>("presenter");
   const [newSceneScript, setNewSceneScript] = useState("");
@@ -439,8 +436,54 @@ export function AiPresenterPage() {
   const [generationStatus, setGenerationStatus] = useState<"idle" | "uploading" | "processing" | "completed" | "failed">("idle");
   const [generationProgress, setGenerationProgress] = useState(0);
   const [finalVideoUrl, setFinalVideoUrl] = useState("");
+  const [presenterHistory, setPresenterHistory] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(false);
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const [previewView, setPreviewView] = useState<"scene" | "latest" | "library">("scene");
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const historyRowRef = useRef<HTMLDivElement>(null);
+  const [historyScroll, setHistoryScroll] = useState({ left: false, right: false });
   const [generationError, setGenerationError] = useState("");
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadHistory() {
+      setHistoryLoading(true);
+      setHistoryError(false);
+      try {
+        const found = await loadPresenterHistory(fetchHistory, controller.signal);
+        if (!controller.signal.aborted) setPresenterHistory(found);
+      } catch {
+        if (!controller.signal.aborted) setHistoryError(true);
+      } finally {
+        if (!controller.signal.aborted) setHistoryLoading(false);
+      }
+    }
+    void loadHistory();
+    return () => controller.abort();
+  }, [historyRevision]);
+
+  useEffect(() => {
+    const refreshOnFocus = () => { if (document.visibilityState === "visible") setHistoryRevision((value) => value + 1); };
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => document.removeEventListener("visibilitychange", refreshOnFocus);
+  }, []);
+
+  const updateHistoryScroll = useCallback(() => {
+    const row = historyRowRef.current;
+    if (!row) return;
+    setHistoryScroll({ left: row.scrollLeft > 1, right: row.scrollLeft + row.clientWidth < row.scrollWidth - 1 });
+  }, []);
+  useEffect(() => {
+    const row = historyRowRef.current;
+    if (!row) return;
+    updateHistoryScroll();
+    const observer = new ResizeObserver(updateHistoryScroll);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [presenterHistory.length, historyLoading, historyError, updateHistoryScroll]);
 
   const script = useMemo(() => scenes.map((scene) => scene.script).join("\n\n").trim(), [scenes]);
   const activeScene = scenes.find((scene) => scene.id === activeSceneId) ?? scenes[0];
@@ -453,12 +496,14 @@ export function AiPresenterPage() {
   const allScenesHaveVoice = sceneVoiceIds.length === scenes.length && sceneVoiceIds.every((voiceId) => Boolean(voiceId) && voices.some((voice) => voice.key === voiceId));
   const allSceneVisualsReady = scenePresenters.length === scenes.length && scenes.every((scene, index) => {
     const presenter = scenePresenters[index];
+    if (scene.media?.kind === "video") return false;
     if (scene.visualMode === "scene-only" && scene.media?.kind === "image") {
       return Boolean(scene.media.remoteUrl) && !scene.mediaError;
     }
     return Boolean(presenter?.remoteUrl) && !presenter?.uploading && !presenter?.error;
   });
   const missingSceneVisual = scenes.find((scene) => scene.visualMode === "scene-only" && !scene.media);
+  const unsupportedSceneVideo = scenes.find((scene) => scene.media?.kind === "video");
   const activeSceneVoiceId = activeSceneIndex >= 0 ? sceneVoiceIds[activeSceneIndex] ?? selectedVoice : selectedVoice;
   const selectedVoiceInfo = voices.find((voice) => voice.key === activeSceneVoiceId);
   const voiceSampleKey = JSON.stringify([selectedAudioModel, activeSceneVoiceId]);
@@ -482,8 +527,6 @@ export function AiPresenterPage() {
     });
   }, [currentSpeech, language, scenes, sceneVoiceIds, selectedAudioModel, selectedVoice, voiceSampleDurations]);
   const sceneTimelineDuration = sceneTimeline.at(-1)?.end ?? 0;
-  const overlongSceneAudioIndex = currentSpeech?.sceneAudio.findIndex((segment) => segment.durationSeconds > maxSceneDurationSeconds) ?? -1;
-  const sceneReferenceAudioTooLong = overlongSceneAudioIndex >= 0 || sceneTimeline.some(({ start, end }) => end - start > maxSceneDurationSeconds);
   const otherSceneTextLength = scenes.reduce((length, scene) => scene.id === activeScene?.id ? length : length + scene.script.length, 0) + Math.max(0, scenes.length - 1) * 2;
   const activeSceneMaxLength = Math.max(activeScene?.script.length ?? 0, 5000 - otherSceneTextLength);
   const canAddScene = script.length + 2 <= 5000;
@@ -809,25 +852,30 @@ export function AiPresenterPage() {
   }, [speechKey, selectedReferenceVideoModel, aspect, sourceMedia?.id, sourceMedia?.remoteUrl, presenterRoutingKey]);
 
   const videoQuoteInput = useMemo(() => {
-    if (!allSceneVisualsReady || missingSceneVisual || !selectedVideoModel || !script.trim() || sceneReferenceAudioTooLong) return null;
+    if (!allSceneVisualsReady || missingSceneVisual || !selectedVideoModel || !script.trim()) return null;
+    const estimatedChunks = sceneTimeline.flatMap(({ scene, start, end }, index) => {
+      const duration = end - start;
+      const count = Math.max(1, Math.ceil(duration / 14));
+      return Array.from({ length: count }, (_, partIndex) => ({ scene, index, partIndex, count, duration: Math.min(maxSceneDurationSeconds, generatedClipDuration(duration / count)) }));
+    });
     return {
       model: selectedVideoModel.model,
-      mode: "storyboard" as const,
+      mode: "flexible" as const,
       generationMode: "ai-presenter" as const,
       audioMode: "none" as const,
-      duration: sceneTimeline.reduce((total, { start, end }) => total + generatedClipDuration(end - start), 0),
+      duration: estimatedChunks.reduce((total, chunk) => total + chunk.duration, 0),
       aspectRatio: aspect,
-      scenes: sceneTimeline.map(({ scene, start, end }, index) => {
+      scenes: estimatedChunks.map(({ scene, index, partIndex, count, duration }) => {
         const presenterImageUrl = scenePresenters[index]?.remoteUrl ?? "";
         const sceneImageUrl = scene.media?.kind === "image" ? scene.media.remoteUrl : undefined;
         return {
-          ...presenterSceneVisualInput(scene, presenterImageUrl, sceneImageUrl),
-          startFrameSource: "manual" as const,
-          duration: Math.min(maxSceneDurationSeconds, generatedClipDuration(end - start)),
+          ...presenterSceneVisualInput(scene, presenterImageUrl, sceneImageUrl, count > 1, partIndex > 0),
+          startFrameSource: partIndex === 0 ? "manual" as const : "previous_last_frame" as const,
+          duration,
         };
       }),
     };
-  }, [allSceneVisualsReady, missingSceneVisual, scenePresenters, selectedVideoModel, script, sceneTimeline, sceneReferenceAudioTooLong, aspect]);
+  }, [allSceneVisualsReady, missingSceneVisual, scenePresenters, selectedVideoModel, script, sceneTimeline, aspect]);
   const [videoCreditCost, setVideoCreditCost] = useState<number | null>(null);
   const [videoQuoteLoading, setVideoQuoteLoading] = useState(false);
   const estimatedCredits = speechQuote && videoCreditCost !== null
@@ -896,6 +944,7 @@ export function AiPresenterPage() {
     });
     setPresenterOptions((current) => [...current, ...additions]);
     if (!sourceMedia) setSourceMedia(additions[0] ?? null);
+    setPreviewView("scene");
     setFinalVideoUrl("");
     await Promise.all(additions.map(async (presenter) => {
       try {
@@ -915,6 +964,7 @@ export function AiPresenterPage() {
 
   const handleSelectPresenter = (presenter: SourceMedia) => {
     setSourceMedia(presenter);
+    setPreviewView("scene");
     setFinalVideoUrl("");
     setGenerationError("");
   };
@@ -958,18 +1008,17 @@ export function AiPresenterPage() {
     event.target.value = "";
     if (!file || !activeScene) return;
     if (!supportedSceneMediaTypes.has(file.type)) {
-      updateActiveScene({ mediaError: isThai ? "เลือกไฟล์ภาพหรือวิดีโอที่รองรับ" : "Choose a supported image or video file." });
+      updateActiveScene({ mediaError: isThai ? "เลือกไฟล์ภาพ PNG, JPG หรือ WEBP" : "Choose a PNG, JPG, or WEBP image." });
       return;
     }
-    const isVideo = file.type.startsWith("video/");
-    const maxMegabytes = isVideo ? 25 : 10;
+    const maxMegabytes = 10;
     const maxBytes = maxMegabytes * 1024 * 1024;
     if (!file.size) {
       updateActiveScene({ mediaError: isThai ? "ไฟล์ว่างเปล่า เลือกไฟล์ใหม่อีกครั้ง" : "This file is empty. Choose another file." });
       return;
     }
     if (file.size > maxBytes) {
-      updateActiveScene({ mediaError: isThai ? `ไฟล์${isVideo ? "วิดีโอ" : "ภาพ"}ต้องมีขนาดไม่เกิน ${maxMegabytes} MB` : `The ${isVideo ? "video" : "image"} must be ${maxMegabytes} MB or smaller.` });
+      updateActiveScene({ mediaError: isThai ? `ไฟล์ภาพต้องมีขนาดไม่เกิน ${maxMegabytes} MB` : `The image must be ${maxMegabytes} MB or smaller.` });
       return;
     }
     const otherSceneMediaBytes = scenes.reduce((total, scene) => total + (scene.id === activeScene.id ? 0 : scene.media?.file?.size ?? 0), 0);
@@ -982,10 +1031,10 @@ export function AiPresenterPage() {
     const previewUrl = URL.createObjectURL(file);
     sceneMediaUrlsRef.current.set(activeScene.id, previewUrl);
     updateActiveScene({
-      media: { file, fileName: file.name, previewUrl, kind: isVideo ? "video" : "image" },
+      media: { file, fileName: file.name, previewUrl, kind: "image" },
       mediaError: undefined,
     });
-    if (!isVideo && activeScene.visualMode === "scene-only") uploadSceneImage(activeScene.id, file);
+    if (activeScene.visualMode === "scene-only") uploadSceneImage(activeScene.id, file);
   };
 
   const handleRemoveSceneMedia = () => {
@@ -1008,7 +1057,6 @@ export function AiPresenterPage() {
   const openAddScene = () => {
     if (!canAddScene || isLocked) return;
     setConfirmSceneDelete(false);
-    setConfirmLongScene(false);
     setEditingSceneId(null);
     setNewSceneTitle(`Scene ${scenes.length + 1}`);
     setNewSceneVisualMode("presenter");
@@ -1025,7 +1073,7 @@ export function AiPresenterPage() {
   const openEditScene = (scene: PresenterScene) => {
     if (isLocked) return;
     setConfirmSceneDelete(false);
-    setConfirmLongScene(false);
+    setPreviewView("scene");
     setActiveSceneId(scene.id);
     setEditingSceneId(scene.id);
     setNewSceneTitle(scene.title);
@@ -1044,7 +1092,6 @@ export function AiPresenterPage() {
     if (newSceneMedia?.previewUrl.startsWith("blob:") && !scenes.some((scene) => scene.media?.previewUrl === newSceneMedia.previewUrl)) URL.revokeObjectURL(newSceneMedia.previewUrl);
     setIsAddSceneOpen(false);
     setConfirmSceneDelete(false);
-    setConfirmLongScene(false);
     setNewSceneMedia(null);
     setNewSceneMediaError("");
     setNewSceneError("");
@@ -1070,17 +1117,16 @@ export function AiPresenterPage() {
     event.target.value = "";
     if (!file) return;
     if (!supportedSceneMediaTypes.has(file.type)) {
-      setNewSceneMediaError(isThai ? "เลือกไฟล์ภาพหรือวิดีโอที่รองรับ" : "Choose a supported image or video file.");
+      setNewSceneMediaError(isThai ? "เลือกไฟล์ภาพ PNG, JPG หรือ WEBP" : "Choose a PNG, JPG, or WEBP image.");
       return;
     }
-    const isVideo = file.type.startsWith("video/");
-    const maxMegabytes = isVideo ? 25 : 10;
+    const maxMegabytes = 10;
     if (!file.size) {
       setNewSceneMediaError(isThai ? "ไฟล์ว่างเปล่า เลือกไฟล์ใหม่อีกครั้ง" : "This file is empty. Choose another file.");
       return;
     }
     if (file.size > maxMegabytes * 1024 * 1024) {
-      setNewSceneMediaError(isThai ? `ไฟล์${isVideo ? "วิดีโอ" : "ภาพ"}ต้องมีขนาดไม่เกิน ${maxMegabytes} MB` : `The ${isVideo ? "video" : "image"} must be ${maxMegabytes} MB or smaller.`);
+      setNewSceneMediaError(isThai ? `ไฟล์ภาพต้องมีขนาดไม่เกิน ${maxMegabytes} MB` : `The image must be ${maxMegabytes} MB or smaller.`);
       return;
     }
     const otherSceneMediaBytes = scenes.reduce((total, scene) => total + (scene.id === editingSceneId ? 0 : scene.media?.file?.size ?? 0), 0);
@@ -1089,7 +1135,7 @@ export function AiPresenterPage() {
       return;
     }
     if (newSceneMedia?.previewUrl.startsWith("blob:") && !scenes.some((scene) => scene.media?.previewUrl === newSceneMedia.previewUrl)) URL.revokeObjectURL(newSceneMedia.previewUrl);
-    setNewSceneMedia({ file, fileName: file.name, previewUrl: URL.createObjectURL(file), kind: isVideo ? "video" : "image" });
+    setNewSceneMedia({ file, fileName: file.name, previewUrl: URL.createObjectURL(file), kind: "image" });
     setNewSceneMediaError("");
   };
 
@@ -1098,8 +1144,12 @@ export function AiPresenterPage() {
     if ((!editingSceneId && !canAddScene) || isLocked) return;
     const cleanTitle = newSceneTitle.trim();
     const cleanScript = newSceneScript.trim();
+    if (newSceneMedia?.kind === "video") {
+      setNewSceneError(isThai ? "ซีนนี้มีวิดีโอจากแบบร่างเดิม กรุณาเปลี่ยนเป็นรูปภาพหรือนำออก" : "This scene contains a video from an older draft. Replace it with an image or remove it.");
+      return;
+    }
     if (newSceneVisualMode === "scene-only" && !newSceneMedia) {
-      setNewSceneError(isThai ? "ซีนที่ไม่ใช้พรีเซนเตอร์ต้องมีภาพฉาก สินค้า หรือวิดีโอประกอบ" : "A scene without the selected presenter needs a scene, product, or video asset.");
+      setNewSceneError(isThai ? "ซีนที่ไม่ใช้พรีเซนเตอร์ต้องมีภาพฉากหรือสินค้า" : "A scene without a presenter needs a scene or product image.");
       return;
     }
     if (!cleanTitle || !cleanScript) {
@@ -1110,12 +1160,6 @@ export function AiPresenterPage() {
     const totalScriptLength = [...otherScripts, cleanScript].join("\n\n").trim().length;
     if (totalScriptLength > 5000) {
       setNewSceneError(isThai ? `บทพูดรวมได้ไม่เกิน 5,000 ตัวอักษร (เหลือ ${Math.max(0, 5000 - script.length - (script ? 2 : 0))})` : `All scene scripts are limited to 5,000 characters (${Math.max(0, 5000 - script.length - (script ? 2 : 0))} remaining).`);
-      return;
-    }
-    const voiceId = newSceneVoiceId || selectedVoice;
-    const estimate = estimatedDuration(cleanScript, language, voicePaceForSample(voiceSampleDurations[JSON.stringify([selectedAudioModel, voiceId])], voiceId, language));
-    if (estimate > maxSceneDurationSeconds && !confirmLongScene) {
-      setConfirmLongScene(true);
       return;
     }
     const id = editingSceneId ?? crypto.randomUUID();
@@ -1140,6 +1184,7 @@ export function AiPresenterPage() {
     setScenes((current) => editingSceneId ? current.map((item) => item.id === id ? { ...item, ...scene, media: newSceneMedia ?? undefined, mediaError: undefined } : item) : [...current, scene]);
     if (newSceneVisualMode === "scene-only" && newSceneMedia?.kind === "image" && newSceneMedia.file && !newSceneMedia.remoteUrl) uploadSceneImage(id, newSceneMedia.file);
     setActiveSceneId(id);
+    setPreviewView("scene");
     setIsAddSceneOpen(false);
     setNewSceneMedia(null);
     setNewSceneMediaError("");
@@ -1200,7 +1245,7 @@ export function AiPresenterPage() {
       }
       const combined = await combineSceneAudio(sceneBlobs);
       const url = URL.createObjectURL(combined.blob);
-      const next: SpeechPreview = { key: speechKey, blob: combined.blob, url, durationSeconds: combined.durationSeconds, sceneAudio: combined.segments };
+      const next: SpeechPreview = { key: speechKey, blob: combined.blob, url, durationSeconds: combined.durationSeconds, sceneAudio: combined.segments, videoChunks: combined.videoChunks };
       setSpeech((current) => { if (current) URL.revokeObjectURL(current.url); return next; });
       return next;
     } finally {
@@ -1212,8 +1257,8 @@ export function AiPresenterPage() {
     if (fullScriptPending || !allSceneVisualsReady || !script.trim() || !allScenesHaveScript || !allScenesHaveVoice || !selectedVideoModel || isGenerating || creditPreflightBusy) return;
     if (missingSceneVisual) {
       setGenerationError(isThai
-        ? `${missingSceneVisual.title} ตั้งเป็นซีนไม่ใช้พรีเซนเตอร์ กรุณาเพิ่มภาพฉาก สินค้า หรือวิดีโอประกอบ`
-        : `${missingSceneVisual.title} is set to use scene media without the selected presenter. Add a scene image, product image, or video first.`);
+        ? `${missingSceneVisual.title} ตั้งเป็นซีนไม่ใช้พรีเซนเตอร์ กรุณาเพิ่มภาพฉากหรือสินค้า`
+        : `${missingSceneVisual.title} is set to use scene media without the selected presenter. Add a scene or product image first.`);
       return;
     }
     const missingSceneVideo = scenes.find((scene) => scene.media?.kind === "video" && !scene.media.file);
@@ -1221,10 +1266,8 @@ export function AiPresenterPage() {
       setGenerationError(isThai ? `ไม่พบไฟล์วิดีโอของ ${missingSceneVideo.title} กรุณาอัปโหลดซีนนี้อีกครั้ง` : `The video file for ${missingSceneVideo.title} is missing. Upload it again.`);
       return;
     }
-    if (sceneReferenceAudioTooLong) {
-      setGenerationError(isThai
-        ? "เสียงอ้างอิงของแต่ละซีนต้องไม่เกิน 15 วินาที กรุณาแบ่งบทพูดออกเป็นซีนเพิ่ม"
-        : "Reference audio for each scene must be 15 seconds or less. Split longer scripts into more scenes.");
+    if (scenes.some((scene, index) => index >= 6 && scene.media?.kind === "video")) {
+      setGenerationError(isThai ? "วิดีโอประกอบรองรับเฉพาะ 6 ซีนแรก กรุณาเปลี่ยนสื่อก่อนสร้าง" : "Video cutaways are supported only in the first six scenes. Change the scene media before generating.");
       return;
     }
     if (!videoQuoteInput) {
@@ -1232,6 +1275,7 @@ export function AiPresenterPage() {
       return;
     }
     let hasEnoughCredits = false;
+    let preflightVideoCost = 0;
     setCreditPreflightBusy(true);
     setGenerationError("");
     setNotice(isThai ? "กำลังตรวจเครดิตเสียงและวิดีโอรวม…" : "Checking the combined speech and video credits…");
@@ -1252,6 +1296,7 @@ export function AiPresenterPage() {
       ]);
       const speechCost = Number(freshSpeechQuote.creditCost);
       const freshVideoCost = Number(freshVideoQuote.totalCreditCost);
+      preflightVideoCost = freshVideoCost;
       if (!Number.isFinite(speechCost) || speechCost < 0 || !Number.isFinite(freshVideoCost) || freshVideoCost < 0) {
         throw new Error(isThai ? "ประเมินเครดิตรวมไม่ได้ กรุณาลองใหม่" : "Could not calculate the full credit cost. Try again.");
       }
@@ -1285,6 +1330,18 @@ export function AiPresenterPage() {
     setGenerationStatus("uploading");
     setNotice(isThai ? "เตรียมไฟล์และเสียงพูด…" : "Preparing your media and voice track…");
     try {
+      const directionsToAnalyze = scenes.filter((scene) => scene.direction.trim()).map((scene) => ({ id: scene.id, direction: scene.direction.trim() }));
+      const directionPlans = new Map<string, { opening: string; continuation: string }>();
+      if (directionsToAnalyze.length) {
+        setNotice(isThai ? "AI กำลังวิเคราะห์รายละเอียดภาพของแต่ละซีน…" : "AI is planning the visual direction for each scene…");
+        const analysis = await analyzePresenterVisualDirections(directionsToAnalyze, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!Array.isArray(analysis.scenes) || analysis.scenes.length !== directionsToAnalyze.length) throw new Error(isThai ? "วิเคราะห์รายละเอียดภาพไม่ครบ กรุณาลองใหม่" : "Scene direction analysis is incomplete. Please try again.");
+        for (const plan of analysis.scenes) {
+          if (!directionsToAnalyze.some((scene) => scene.id === plan.id) || directionPlans.has(plan.id) || !plan.opening?.trim() || !plan.continuation?.trim()) throw new Error(isThai ? "ผลวิเคราะห์รายละเอียดภาพไม่ถูกต้อง กรุณาลองใหม่" : "Scene direction analysis is invalid. Please try again.");
+          directionPlans.set(plan.id, plan);
+        }
+      }
       const sceneBackgroundUrls = new Map<string, string>();
       for (const [index, { scene }] of sceneTimeline.entries()) {
         if (scene.media?.kind !== "image") continue;
@@ -1311,22 +1368,25 @@ export function AiPresenterPage() {
       setNotice(isThai ? "กำลังอัปโหลดเสียงอ้างอิงแยกแต่ละซีน…" : "Uploading each scene's separate audio reference…");
       const audioSegments = current.sceneAudio;
       if (audioSegments.length !== sceneTimeline.length) throw new Error("The generated ElevenLabs tracks do not match the scene list. Generate the speech preview again.");
-      const tooLongSegment = audioSegments.find((segment) => segment.durationSeconds > maxSceneDurationSeconds);
-      if (tooLongSegment) {
-        const index = audioSegments.indexOf(tooLongSegment) + 1;
-        throw new Error(isThai
-          ? `ซีน ${index} มีเสียงอ้างอิง ${tooLongSegment.durationSeconds.toFixed(2)} วินาที เกิน 15 วินาที กรุณาแบ่งบทเป็นซีนเพิ่ม`
-          : `Scene ${index} has ${tooLongSegment.durationSeconds.toFixed(2)} seconds of reference audio. Split it into more scenes so each is 15 seconds or less.`);
-      }
-      const requestedSceneDurations = audioSegments.map((segment) => generatedClipDuration(segment.durationSeconds));
+      const videoChunks = current.videoChunks;
+      if (!videoChunks.length || videoChunks.some((chunk) => chunk.durationSeconds > maxSceneDurationSeconds)) throw new Error("Invalid presenter audio segments");
+      const requestedSceneDurations = videoChunks.map((segment) => generatedClipDuration(segment.durationSeconds));
+      const plannedScenes = videoChunks.map(({ sceneIndex }, index) => {
+        const scene = sceneTimeline[sceneIndex]!.scene;
+        const partialAudio = videoChunks.filter((chunk) => chunk.sceneIndex === sceneIndex).length > 1;
+        const continuation = index > 0 && videoChunks[index - 1]?.sceneIndex === sceneIndex;
+        const visualPlan = directionPlans.get(scene.id);
+        const direction = presenterDirectionForChunk(scene.direction, visualPlan, continuation);
+        return {
+          ...presenterSceneVisualInput({ ...scene, direction }, scenePresenters[sceneIndex]?.remoteUrl ?? "", sceneBackgroundUrls.get(scene.id), partialAudio, continuation),
+          startFrameSource: continuation ? "previous_last_frame" as const : "manual" as const,
+          duration: requestedSceneDurations[index],
+        };
+      });
       const actualVideoQuoteInput = {
         ...videoQuoteInput,
         duration: requestedSceneDurations.reduce((total, item) => total + item, 0),
-        scenes: sceneTimeline.map(({ scene }, index) => ({
-          ...videoQuoteInput.scenes[index],
-          ...presenterSceneVisualInput(scene, scenePresenters[index]?.remoteUrl ?? "", sceneBackgroundUrls.get(scene.id)),
-          duration: requestedSceneDurations[index],
-        })),
+        scenes: plannedScenes,
       };
       const [actualVideoQuote, postSpeechBalance] = await Promise.all([
         quoteVideoStoryboard(actualVideoQuoteInput, controller.signal),
@@ -1343,8 +1403,9 @@ export function AiPresenterPage() {
           : `The remaining balance cannot cover the video. It needs ${format(actualVideoCost)} credits, but only ${format(postSpeechBalance.balance)} remain.`);
       }
       const audioUrls: string[] = [];
-      for (const [index, segment] of audioSegments.entries()) {
-        setNotice(isThai ? `กำลังอัปโหลดเสียงอ้างอิงซีน ${index + 1}/${audioSegments.length}…` : `Uploading scene ${index + 1}/${audioSegments.length} audio reference…`);
+      if (actualVideoCost > preflightVideoCost && !window.confirm(isThai ? `เสียงที่สร้างแล้วอาจถูกหักเครดิตไปแล้ว ราคาวิดีโอจากเสียงจริงคือ ${actualVideoCost.toLocaleString()} เครดิต มากกว่าที่ประเมิน ${preflightVideoCost.toLocaleString()} เครดิต ต้องการสร้างวิดีโอต่อหรือไม่?` : `Speech may already have been charged. Video costs ${actualVideoCost.toLocaleString()} credits instead of the estimated ${preflightVideoCost.toLocaleString()}. Continue?`)) { setGenerationStatus("idle"); setNotice(""); return; }
+      for (const [index, segment] of videoChunks.entries()) {
+        setNotice(isThai ? `กำลังเตรียมเสียงช่วงที่ ${index + 1}/${videoChunks.length}…` : `Preparing audio segment ${index + 1}/${videoChunks.length}…`);
         audioUrls.push(await uploadPeopleMedia(segment.file, controller.signal));
         if (controller.signal.aborted) return;
       }
@@ -1352,16 +1413,15 @@ export function AiPresenterPage() {
       setNotice(isThai ? "กำลังสร้างวิดีโอ…" : "Generating video…");
       const created = await createVideoStoryboard({
         model: selectedVideoModel.model,
-        mode: "storyboard",
+        mode: "flexible",
         generationMode: "ai-presenter",
         duration: requestedSceneDurations.reduce((total, item) => total + item, 0),
         aspectRatio: aspect,
         audioMode: "none",
-        scenes: sceneTimeline.map(({ scene }, index) => ({
-          ...presenterSceneVisualInput(scene, scenePresenters[index]?.remoteUrl ?? "", sceneBackgroundUrls.get(scene.id)),
-          startFrameSource: "manual" as const,
-          duration: requestedSceneDurations[index],
+        scenes: plannedScenes.map((scene, index) => ({
+          ...scene,
           audioUrl: audioUrls[index],
+          referenceAudioDuration: videoChunks[index]!.durationSeconds,
           useReferenceAudio: true,
         })),
         idempotencyKey: requestId,
@@ -1384,18 +1444,17 @@ export function AiPresenterPage() {
       const videoUrl = outputVideoUrl(status);
       if (!videoUrl) throw new Error("Presenter video completed without an output URL");
 
-      const scenesWithMedia = audioSegments.flatMap((segment, sceneIndex) => sceneTimeline[sceneIndex]?.scene.media?.kind === "video" && sceneTimeline[sceneIndex]?.scene.media?.file ? [{
-        sceneIndex,
-        startSeconds: segment.startSeconds,
-        endSeconds: segment.endSeconds,
-        file: sceneTimeline[sceneIndex]!.scene.media!.file!,
-      }] : []);
+      const scenesWithMedia = sceneTimeline.flatMap(({ scene }, sceneIndex) => {
+        const { startSeconds, endSeconds } = audioSegments[sceneIndex]!;
+        const media = scene.media;
+        return media?.kind === "video" && media.file ? [{ sceneIndex, startSeconds, endSeconds, file: media.file }] : [];
+      });
       let resultVideoUrl = videoUrl;
-      if (scenesWithMedia.length > 0) {
+      {
         try {
           setGenerationProgress(98);
-          setNotice(isThai ? "กำลังรวมภาพฉากและคงเสียงที่สร้างมาพร้อมวิดีโอ…" : "Joining scene visuals while preserving the audio generated with the video…");
-          const composed = await composePresenterVideo(storyboardId, scenesWithMedia, controller.signal);
+          setNotice(isThai ? "กำลังต่อวิดีโอและจัดเสียงต้นฉบับให้ตรงแต่ละช่วง…" : "Joining video segments and aligning the original narration…");
+          const composed = await composePresenterVideo(storyboardId, scenesWithMedia, current.blob, videoChunks.map((chunk) => chunk.durationSeconds), controller.signal);
           resultVideoUrl = composed.url;
         } catch (error) {
           if (controller.signal.aborted) throw error;
@@ -1406,9 +1465,12 @@ export function AiPresenterPage() {
       }
 
       setFinalVideoUrl(resultVideoUrl);
+      setPreviewView("latest");
+      setSelectedHistoryId(null);
+      setHistoryRevision((value) => value + 1);
       setGenerationProgress(100);
       setGenerationStatus("completed");
-      setNotice(isThai ? "วิดีโอพร้อมแล้ว ใช้เสียงที่สร้างมาพร้อมวิดีโอ" : "Your presenter video is ready with the audio generated with the video.");
+      setNotice(isThai ? "วิดีโอพร้อมแล้ว พร้อมเสียงบรรยายต้นฉบับ" : "Your presenter video is ready with the original narration.");
       emitGenerationCompleted({ feature: "image-to-video", generationId: storyboardId });
     } catch (error) {
       emitGenerationRequestFailed({ feature: "image-to-video", requestId });
@@ -1424,7 +1486,10 @@ export function AiPresenterPage() {
 
   const supportedRatios = selectedVideoModel?.capabilities.supportedRatios?.filter((value) => aspectOptions.some((ratio) => ratio === value)) ?? [];
   const activeScenePresenter = scenePresenters[activeSceneIndex] ?? null;
-  const canGenerate = Boolean(!fullScriptPending && allSceneVisualsReady && !missingSceneVisual && script.trim() && allScenesHaveScript && allScenesHaveVoice && !sceneReferenceAudioTooLong && selectedVideoModel && !isGenerating && !creditPreflightBusy && !catalogLoading && !voiceLoading);
+  const selectedHistoryVideo = selectedHistoryId ? presenterHistory.find((item) => presenterHistoryKey(item) === selectedHistoryId) : presenterHistory[0];
+  const latestVideoUrl = finalVideoUrl || presenterHistory[0]?.outputUrl || "";
+  const displayedVideoUrl = presenterPreviewUrl(previewView, finalVideoUrl, presenterHistory, selectedHistoryId);
+  const canGenerate = Boolean(!fullScriptPending && allSceneVisualsReady && !missingSceneVisual && script.trim() && allScenesHaveScript && allScenesHaveVoice && selectedVideoModel && !isGenerating && !creditPreflightBusy && !catalogLoading && !voiceLoading);
   const sceneDurationsForEstimate = sceneTimeline.map(({ start, end }) => Math.max(1, Math.ceil(end - start)));
   const hasUniformSceneDurations = sceneDurationsForEstimate.every((sceneDuration) => sceneDuration === sceneDurationsForEstimate[0]);
   const estimateDescription = hasUniformSceneDurations
@@ -1433,15 +1498,13 @@ export function AiPresenterPage() {
   const generationHint = catalogLoading || voiceLoading || creditBalanceLoading || speechQuoteLoading || videoQuoteLoading
     ? (isThai ? "กำลังตรวจโมเดล เสียง และเครดิต…" : "Checking models, voice, and credits…")
     : fullScriptPending
-      ? (isThai ? "แบ่งบททั้งหมดและกดใช้บทที่แบ่งแล้วก่อนสร้าง" : "Split and apply the full script before generating")
-    : sceneReferenceAudioTooLong
-      ? (overlongSceneAudioIndex >= 0 && currentSpeech
-        ? (isThai ? `เสียงซีน ${overlongSceneAudioIndex + 1} เกิน 15 วินาที · แบ่งบทพูดซีนนี้ก่อนสร้าง` : `Scene ${overlongSceneAudioIndex + 1} exceeds 15 seconds · split its script before generating`)
-        : (isThai ? "เสียงแต่ละซีนต้องไม่เกิน 15 วินาที · แบ่งบทพูดก่อนสร้าง" : "Each scene's audio must be 15 seconds or less · split the script before generating"))
-      : !selectedVideoModel
+      ? (isThai ? "นำบทที่ค้างไว้ไปใช้กับซีนก่อนสร้าง" : "Apply the saved script to a scene before generating")
+    : !selectedVideoModel
         ? (isThai ? "เลือกโมเดลวิดีโอก่อนสร้าง" : "Choose a video model before generating")
+        : unsupportedSceneVideo
+          ? (isThai ? `${unsupportedSceneVideo.title}: เปลี่ยนวิดีโอประกอบเดิมเป็นรูปภาพหรือนำออก` : `${unsupportedSceneVideo.title}: replace the old scene video with an image or remove it`)
         : missingSceneVisual
-          ? (isThai ? `${missingSceneVisual.title}: เพิ่มภาพฉาก สินค้า หรือวิดีโอประกอบ` : `${missingSceneVisual.title}: add a scene, product, or video asset`)
+          ? (isThai ? `${missingSceneVisual.title}: เพิ่มภาพฉากหรือสินค้า` : `${missingSceneVisual.title}: add a scene or product image`)
         : !allSceneVisualsReady
           ? (presenterOptions.some((presenter) => presenter.uploading)
             ? (isThai ? "กำลังอัปโหลดพรีเซนเตอร์…" : "Uploading presenter…")
@@ -1474,135 +1537,18 @@ export function AiPresenterPage() {
         }
         left={
           <section className={styles.scriptPanel} aria-labelledby="presenter-script-heading">
+            <div className={styles.tutorialTop}><ImageTutorialButton feature="ai-presenter" featureName={isThai ? "พรีเซนเตอร์ AI" : "AI Presenter"} /></div>
             <div className={styles.panelTitle}>
-              <div><span className={styles.stepNumber}>1.</span><h2 id="presenter-script-heading">{isThai ? "บทพูดและซีน" : "SCRIPT & SCENES"}</h2></div>
+              <div><span className={styles.stepNumber}>1.</span><h2 id="presenter-script-heading">{isThai ? "พรีเซนเตอร์และบทพูด" : "PRESENTER & SCRIPT"}</h2></div>
             </div>
-            <div className={styles.fullScriptPanel}>
-              <label htmlFor="presenter-full-script" className={styles.formLabel}>{isThai ? "บทพูดทั้งหมด" : "Full script"}</label>
-              <textarea id="presenter-full-script" className={styles.fullScriptInput} value={fullScript} onChange={(event) => { splitRequestVersion.current += 1; setIsSplittingScript(false); setSplitError(""); setFullScript(event.target.value); setFullScriptPending(Boolean(event.target.value.trim())); }} maxLength={5000} disabled={isLocked} placeholder={isThai ? "วางบทพูดทั้งหมดที่นี่" : "Paste the full spoken script here"} />
-              <div className={styles.fullScriptMeta}><span>{isThai ? "แบ่งตามเวลาประเมินของเสียงเริ่มต้น" : "Split using the default voice estimate"}</span><span>{fullScript.length.toLocaleString()} / 5,000</span></div>
-              <button type="button" className={styles.splitButton} disabled={!fullScript.trim() || isLocked || isSplittingScript} onClick={async () => {
-                const requestVersion = ++splitRequestVersion.current;
-                const hasExistingWork = scenes.length > 1 || scenes.some((scene) => (scene.script.trim() && scene.script !== sampleScript) || scene.direction.trim() || scene.media);
-                if (hasExistingWork && !window.confirm(isThai ? "การแบ่งบทใหม่จะแทนบทในซีนเดิม และอาจลบซีนส่วนเกินพร้อมสื่อ ต้องการดำเนินการต่อไหม?" : "Splitting will replace existing scripts and may remove extra scenes and their media. Continue?")) return;
-                setIsSplittingScript(true); setSplitError("");
-                try {
-                  const result = await splitPresenterScript(fullScript);
-                  if (requestVersion !== splitRequestVersion.current) return;
-                  if (scenesRef.current !== scenes) {
-                    setSplitError(isThai ? "ซีนเปลี่ยนระหว่างแบ่งบท กรุณาลองแบ่งอีกครั้ง" : "Scenes changed while splitting. Please try again.");
-                    return;
-                  }
-                  const pace = voicePaceForSample(voiceSampleDurations[JSON.stringify([selectedAudioModel, selectedVoice])], selectedVoice, language);
-                  const parts = result.scenes.flatMap((part) => splitScriptIntoScenes(part, language, pace));
-                  if (!parts.length || parts.join("\n\n").length > 5000 || parts.some((part) => estimatedDuration(part, language, pace) > 15)) {
-                    setSplitError(isThai ? "บทนี้เกินขีดจำกัดของงาน หรือมีข้อความที่ยาวเกินไป กรุณาย่อบทหรือแบ่งงานเป็นหลายวิดีโอ" : "This script exceeds the project limit or contains a segment that is too long. Shorten it or split it into multiple videos.");
-                    return;
-                  }
-                  const next = parts.map((part, index) => ({ ...(scenes[index] ?? { id: crypto.randomUUID(), title: index === 0 ? "Intro" : `${isThai ? "ซีน" : "Scene"} ${index + 1}`, direction: "", voiceId: activeSceneVoiceId === selectedVoice ? undefined : activeSceneVoiceId }), script: part, durationSeconds: undefined }));
-                  setScenes(next); setActiveSceneId(next[0]!.id); setFullScriptPending(false);
-                } catch {
-                  if (requestVersion === splitRequestVersion.current) setSplitError(isThai ? "แบ่งบทด้วย AI ไม่สำเร็จ กรุณาลองอีกครั้ง" : "AI could not split the script. Please try again.");
-                } finally {
-                  if (requestVersion === splitRequestVersion.current) setIsSplittingScript(false);
-                }
-              }}>{isSplittingScript ? (isThai ? "กำลังแบ่งบท..." : "Splitting...") : (isThai ? "ให้ AI ช่วยแบ่งซีน" : "Split scenes with AI")}</button>
-              {splitError ? <p className={styles.splitWarning} role="alert">{splitError}</p> : null}
-            </div>
-            <div className={styles.formGroup}>
-              <div className={styles.formLabel}><span>{isThai ? "โทนเสียง" : "Speech tone"}</span></div>
-              <div className={styles.chipRow}>{toneOptions.map((option) => <button type="button" key={option.value} className={`${styles.toneChip} ${tone === option.value ? styles.toneChipActive : ""}`} onClick={() => setTone(option.value)} disabled={isLocked} aria-pressed={tone === option.value}>{option.label}</button>)}</div>
-            </div>
-
-            <div className={styles.twoFields}>
-              <div className={styles.formGroup}>
-                <span className={styles.formLabel}>{isThai ? "ภาษา" : "Language"}</span>
-                <Dropdown
-                  value={language}
-                  options={[
-                    { value: "en", label: "English" },
-                    { value: "th", label: "ไทย" },
-                    { value: "ja", label: "日本語" },
-                  ]}
-                  onChange={setLanguage}
-                  ariaLabel={isThai ? "เลือกภาษา" : "Choose language"}
-                  disabled={isLocked}
-                  className={styles.presenterDropdown}
-                  triggerClassName={styles.presenterDropdownTrigger}
-                  menuClassName={styles.presenterDropdownMenu}
-                  optionClassName={styles.presenterDropdownOption}
-                  menuPosition="fixed"
-                />
-              </div>
-              <label className={styles.formGroup}>
-                <span className={styles.formLabel}>{isThai ? "คำอ่านเพิ่มเติม" : "Pronunciation hints"}</span>
-                <input className={styles.textInput} value={pronunciation} onChange={(event) => setPronunciation(event.target.value)} placeholder={isThai ? "ชื่อแบรนด์หรือคำย่อ" : "Brand names, acronyms"} disabled={isLocked} />
-              </label>
-            </div>
-
-          </section>
-        }
-        preview={
-          <section className={styles.previewPanel} aria-labelledby="presenter-preview-heading">
-            <div className={styles.panelTitle}>
-              <div><span className={styles.stepNumber}>2.</span><h2 id="presenter-preview-heading">PREVIEW</h2></div>
-              {finalVideoUrl || !activeScene?.media ? (
-                <span className={`${styles.previewBadge} ${finalVideoUrl ? styles.previewReady : ""}`}>
-                  <span />{finalVideoUrl ? (isThai ? "วิดีโอที่สร้างแล้ว" : "GENERATED") : activeScene?.visualMode === "scene-only" ? (isThai ? "ใช้สื่อของซีน" : "SCENE MEDIA") : (isThai ? "ตัวอย่างพรีเซนเตอร์" : "PRESENTER SOURCE")}
-                </span>
-              ) : null}
-            </div>
-            <div className={styles.videoFrame}>
-              <VideoPreviewLiveBadge />
-              {isGenerating ? (
-                <div className={videoPreviewStyles.videoGeneratingPreview} aria-busy="true">
-                  <WandSparkles size={26} />
-                  <strong>{generationStatus === "uploading" ? (isThai ? "กำลังเตรียมไฟล์" : "Preparing files") : (isThai ? "กำลังสร้างวิดีโอ" : "Generating video")}</strong>
-                  <span>{notice ?? (isThai ? "กำลังส่งภาพและเสียงอ้างอิงให้ MiniMax" : "Sending the image and audio reference to MiniMax.")}</span>
-                  <div className={videoPreviewStyles.videoGenerationProgress}><i style={{ width: `${Math.max(8, generationProgress)}%` }} /></div>
-                  <small>{isThai ? `เสร็จแล้ว ${generationProgress}%` : `${generationProgress}% complete`}</small>
-                </div>
-              ) : finalVideoUrl ? (
-                <EosVideoPlayer
-                  key={finalVideoUrl}
-                  src={finalVideoUrl}
-                  className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
-                  mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
-                  ariaLabel={isThai ? "วิดีโอพรีเซนเตอร์ที่สร้างแล้ว" : "Generated presenter video"}
-                />
-              ) : activeScene?.media?.kind === "video" ? (
-                <EosVideoPlayer
-                  key={activeScene.media.previewUrl}
-                  src={activeScene.media.previewUrl}
-                  muted
-                  className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
-                  mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
-                  ariaLabel={isThai ? `ตัวอย่างวิดีโอของซีน ${activeScene.title}` : `Scene visual preview for ${activeScene.title}`}
-                />
-              ) : activeScene?.media?.kind === "image" ? (
-                <Image src={activeScene.media.previewUrl} alt={isThai ? `ภาพประกอบซีน ${activeScene.title}` : `Visual for ${activeScene.title}`} fill unoptimized sizes="(max-width: 760px) 100vw, 60vw" className={styles.sourcePreviewImage} />
-              ) : activeScene?.visualMode !== "scene-only" && activeScenePresenter?.kind === "video" ? (
-                <EosVideoPlayer
-                  key={activeScenePresenter.previewUrl}
-                  src={activeScenePresenter.previewUrl}
-                  muted
-                  className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
-                  mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
-                  ariaLabel={isThai ? "วิดีโอต้นแบบ" : "Presenter source video"}
-                />
-              ) : activeScene?.visualMode !== "scene-only" && activeScenePresenter?.kind === "image" ? (
-                <Image src={activeScenePresenter.previewUrl} alt={isThai ? `ภาพพรีเซนเตอร์ของซีน ${activeScene?.title ?? ""}` : `Presenter image for ${activeScene?.title ?? "this scene"}`} fill unoptimized sizes="(max-width: 760px) 100vw, 60vw" className={styles.sourcePreviewImage} />
-              ) : (
-                <VideoPreviewPlaceholder showActions={false} />
-              )}
-              {finalVideoUrl && !isGenerating ? <VideoPreviewOverlayActions videoUrl={finalVideoUrl} /> : null}
-            </div>
+            <p className={styles.panelDescription}>{isThai ? "เพิ่มพรีเซนเตอร์ แล้วเขียนบทพูดของแต่ละซีน" : "Add a presenter and write the script for each scene."}</p>
             <div className={styles.presenterPicker}>
               <input ref={sourceInputRef} className={styles.hiddenInput} type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(event) => void handleSourceChange(event)} disabled={isLocked || presenterOptions.length >= maxPresenterOptions || presenterOptions.some((presenter) => presenter.uploading)} />
               <div className={styles.sectionHeading}>
                 <h3>{isThai ? "พรีเซนเตอร์ของคุณ" : "Your Presenter"}</h3>
                 <span className={styles.presenterCount}>{presenterOptions.length} / {maxPresenterOptions}</span>
               </div>
+              <p className={styles.fieldDescription}>{isThai ? "เพิ่มภาพ แล้วเลือกพรีเซนเตอร์หลักสำหรับวิดีโอ" : "Add images, then choose the default presenter for your video."}</p>
               <div className={styles.presenterList}>
                 {presenterOptions.map((presenter, index) => (
                     <div className={styles.presenterOption} key={presenter.id}>
@@ -1639,62 +1585,188 @@ export function AiPresenterPage() {
                 </button>
               </div>
             </div>
-            <div className={styles.timelineHeader}>
-              <div className={styles.sectionHeading}>
-                <h3>{isThai ? "ไทม์ไลน์ฉาก" : "Scene Timeline"}</h3>
-                <span className={styles.sceneCount}>{scenes.length} {isThai ? "ซีน" : "scenes"} · ~{sceneTimelineDuration}s</span>
+            {fullScriptPending && fullScript.trim() ? <div className={styles.fullScriptPanel}>
+              <label htmlFor="presenter-saved-script" className={styles.formLabel}>{isThai ? "บทที่ค้างไว้จากแบบเดิม" : "Saved script from the previous editor"}</label>
+              <p className={styles.fieldDescription}>{isThai ? "คัดลอกบทนี้ไปยังซีนที่ต้องการก่อนสร้าง" : "Copy this script into the desired scene before generating."}</p>
+              <textarea id="presenter-saved-script" className={styles.fullScriptInput} value={fullScript} onChange={(event) => setFullScript(event.target.value)} maxLength={5000} />
+              <button type="button" className={styles.splitButton} onClick={() => { if (!activeScene || !window.confirm(isThai ? "แทนบทในซีนที่เลือกด้วยบทที่ค้างไว้?" : "Replace the selected scene's script with the saved script?")) return; if (fullScript.length > activeSceneMaxLength) { setSplitError(isThai ? "บทพูดรวมทุกซีนต้องไม่เกิน 5,000 ตัวอักษร" : "The combined scene scripts cannot exceed 5,000 characters."); return; } setScenes((current) => current.map((scene) => scene.id === activeScene.id ? { ...scene, script: fullScript } : scene)); setFullScriptPending(false); setSplitError(""); }}>{isThai ? "ใช้บทนี้กับซีนที่เลือก" : "Use this script in the selected scene"}</button>
+              {splitError ? <p className={styles.splitWarning} role="alert">{splitError}</p> : null}
+            </div> : null}
+            {activeScene ? <div className={styles.fullScriptPanel}>
+              <label htmlFor="presenter-scene-script" className={styles.formLabel}>{isThai ? `บทพูด · ${activeScene.title}` : `Script · ${activeScene.title}`}</label>
+              <p className={styles.fieldDescription}>{isThai ? "พิมพ์บทพูดของซีนนี้ ระบบจะจัดการเสียงช่วงยาวให้เบื้องหลัง" : "Enter this scene's script. Longer audio is handled automatically."}</p>
+              <textarea id="presenter-scene-script" className={styles.fullScriptInput} value={activeScene.script} onChange={(event) => setScenes((current) => current.map((scene) => scene.id === activeScene.id ? { ...scene, script: event.target.value } : scene))} maxLength={activeSceneMaxLength} disabled={isLocked} placeholder={isThai ? "พิมพ์บทพูดของซีนนี้" : "Enter this scene's spoken script"} />
+              <div className={styles.fullScriptMeta}><span>{isThai ? "บทพูดรวมทุกซีน" : "All scenes"}</span><span>{script.length.toLocaleString()} / 5,000</span></div>
+            </div> : null}
+            {scenes.length === 1 && scenes[0]?.script === sampleScript ? <p className={styles.sampleNotice}>{isThai ? "Intro มีบทตัวอย่างอยู่ เปลี่ยนข้อความด้านบนได้เลย" : "Intro contains sample text. You can edit it above."}</p> : null}
+            <div className={styles.formGroup}>
+              <div className={styles.formLabel}><span>{isThai ? "โทนเสียง" : "Speech tone"}</span></div>
+              <div className={styles.chipRow}>{toneOptions.map((option) => <button type="button" key={option.value} className={`${styles.toneChip} ${tone === option.value ? styles.toneChipActive : ""}`} onClick={() => setTone(option.value)} disabled={isLocked} aria-pressed={tone === option.value}>{isThai ? option.thaiLabel : option.label}</button>)}</div>
+            </div>
+
+            <div className={styles.twoFields}>
+              <div className={styles.formGroup}>
+                <span className={styles.formLabel}>{isThai ? "ภาษา" : "Language"}</span>
+                <Dropdown
+                  value={language}
+                  options={[
+                    { value: "en", label: "English" },
+                    { value: "th", label: "ไทย" },
+                    { value: "ja", label: "日本語" },
+                  ]}
+                  onChange={setLanguage}
+                  ariaLabel={isThai ? "เลือกภาษา" : "Choose language"}
+                  disabled={isLocked}
+                  className={styles.presenterDropdown}
+                  triggerClassName={styles.presenterDropdownTrigger}
+                  menuClassName={styles.presenterDropdownMenu}
+                  optionClassName={styles.presenterDropdownOption}
+                  menuPosition="fixed"
+                />
               </div>
-              <button type="button" className={styles.textButton} onClick={() => setIsReorderingScenes((current) => !current)} disabled={isLocked || scenes.length < 2} aria-pressed={isReorderingScenes}>
-                {isReorderingScenes ? (isThai ? "เสร็จสิ้น" : "Done") : (isThai ? "เรียงฉากใหม่" : "Reorder Scenes")}
-              </button>
+              <label className={styles.formGroup}>
+                <span className={styles.formLabel}>{isThai ? "คำอ่านเพิ่มเติม" : "Pronunciation hints"}</span>
+                <input className={styles.textInput} value={pronunciation} onChange={(event) => setPronunciation(event.target.value)} placeholder={isThai ? "ชื่อแบรนด์หรือคำย่อ" : "Brand names, acronyms"} disabled={isLocked} />
+              </label>
             </div>
-            {isReorderingScenes ? <p className={styles.timelineNote}>{isThai ? "ลากฉากเพื่อเปลี่ยนลำดับ" : "Drag scenes to change their order."}</p> : null}
-            <div className={styles.sceneTimeline} aria-label={isThai ? "ไทม์ไลน์ฉาก" : "Scene timeline"}>
-              {sceneTimeline.map(({ scene, start, end }, index) => {
-                return (
-                <div
-                  key={scene.id}
-                  className={styles.sceneItem}
-                  draggable={isReorderingScenes}
-                  onDragStart={(event) => {
-                    if (!isReorderingScenes) return;
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData("text/plain", scene.id);
-                  }}
-                  onDragOver={(event) => { if (isReorderingScenes) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
-                  onDrop={(event) => {
-                    if (!isReorderingScenes) return;
-                    event.preventDefault();
-                    reorderScenes(event.dataTransfer.getData("text/plain"), scene.id);
-                  }}
-                >
-                  <div className={`${styles.sceneCard} ${activeSceneId === scene.id ? styles.sceneCardActive : ""}`}>
-                    <button type="button" className={styles.sceneSelect} onClick={() => openEditScene(scene)} aria-pressed={activeSceneId === scene.id} disabled={isLocked}>
-                      <span className={styles.sceneImage}>
-                        {scene.media?.previewUrl && scene.media.kind === "image" ? <Image src={scene.media.previewUrl} alt="" fill unoptimized sizes="46px" /> : scene.media?.previewUrl && scene.media.kind === "video" ? <video src={scene.media.previewUrl} muted playsInline autoPlay loop /> : <Video size={16} />}
-                        <span className={styles.sceneTime}>{formatTimelineTime(start)} – {formatTimelineTime(end)}</span>
-                      </span>
-                      <span className={styles.sceneCopy}>
-                        <span className={styles.sceneTitleRow}><strong>{scene.title || `${isThai ? "ฉาก" : "Scene"} ${index + 1}`}</strong></span>
-                      </span>
-                    </button>
-                    {isReorderingScenes ? <span className={styles.sceneMore}><GripVertical size={13} /></span> : <button type="button" className={styles.sceneMore} onClick={() => openEditScene(scene)} aria-label={isThai ? `แก้ไขซีน ${index + 1}` : `Edit scene ${index + 1}`} title={isThai ? "แก้ไขซีน" : "Edit scene"} disabled={isLocked}><Pencil size={12} /></button>}
-                  </div>
-                  {index < scenes.length - 1 ? <ArrowRight className={styles.sceneArrow} size={13} /> : null}
+
+          </section>
+        }
+        preview={
+          <section className={styles.previewPanel} aria-labelledby="presenter-preview-heading">
+            <div className={styles.panelTitle}>
+              <div><span className={styles.stepNumber}>2.</span><h2 id="presenter-preview-heading">{isThai ? "ตัวอย่างวิดีโอ" : "VIDEO PREVIEW"}</h2></div>
+              {finalVideoUrl || !activeScene?.media ? (
+                <span className={`${styles.previewBadge} ${finalVideoUrl ? styles.previewReady : ""}`}>
+                  <span />{finalVideoUrl ? (isThai ? "วิดีโอที่สร้างแล้ว" : "GENERATED") : activeScene?.visualMode === "scene-only" ? (isThai ? "ใช้สื่อของซีน" : "SCENE MEDIA") : (isThai ? "ตัวอย่างพรีเซนเตอร์" : "PRESENTER SOURCE")}
+                </span>
+              ) : null}
+            </div>
+            <div className={styles.previewSectionHeading}><strong>{isThai ? "ตัวอย่าง" : "Preview"}</strong><span>{previewView === "scene" ? (isThai ? "แสดงภาพของซีนที่เลือก" : "Shows the selected scene") : (isThai ? "วิดีโอที่สร้างแล้ว" : "Generated video")}</span></div>
+            <div className={`${styles.videoFrame} ${!isGenerating && !displayedVideoUrl && (previewView !== "scene" || (!activeScene?.media && (activeScene?.visualMode === "scene-only" || !activeScenePresenter))) ? styles.videoFrameEmpty : ""}`}>
+              <VideoPreviewLiveBadge />
+              {isGenerating ? (
+                <div className={videoPreviewStyles.videoGeneratingPreview} aria-busy="true">
+                  <WandSparkles size={26} />
+                  <strong>{generationStatus === "uploading" ? (isThai ? "กำลังเตรียมไฟล์" : "Preparing files") : (isThai ? "กำลังสร้างวิดีโอ" : "Generating video")}</strong>
+                  <span>{notice ?? (isThai ? "กำลังส่งภาพและเสียงอ้างอิงให้ MiniMax" : "Sending the image and audio reference to MiniMax.")}</span>
+                  <div className={videoPreviewStyles.videoGenerationProgress}><i style={{ width: `${Math.max(8, generationProgress)}%` }} /></div>
+                  <small>{isThai ? `เสร็จแล้ว ${generationProgress}%` : `${generationProgress}% complete`}</small>
                 </div>
-                );
-              })}
-              <button ref={addSceneButtonRef} type="button" className={styles.addScene} onClick={openAddScene} disabled={!canAddScene || isLocked}>
-                <Plus size={18} />
-                <span>{isThai ? "เพิ่มฉาก" : "Add Scene"}</span>
-              </button>
+              ) : displayedVideoUrl ? (
+                <EosVideoPlayer
+                  key={`player:${displayedVideoUrl}`}
+                  src={displayedVideoUrl}
+                  className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
+                  mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
+                  ariaLabel={isThai ? "วิดีโอพรีเซนเตอร์ที่สร้างแล้ว" : "Generated presenter video"}
+                />
+              ) : previewView !== "scene" ? (
+                <VideoPreviewPlaceholder showActions={false} />
+              ) : activeScene?.media?.kind === "video" ? (
+                <EosVideoPlayer
+                  key={activeScene.media.previewUrl}
+                  src={activeScene.media.previewUrl}
+                  muted
+                  className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
+                  mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
+                  ariaLabel={isThai ? `ตัวอย่างวิดีโอของซีน ${activeScene.title}` : `Scene visual preview for ${activeScene.title}`}
+                />
+              ) : activeScene?.media?.kind === "image" ? (
+                <Image src={activeScene.media.previewUrl} alt={isThai ? `ภาพประกอบซีน ${activeScene.title}` : `Visual for ${activeScene.title}`} fill unoptimized sizes="(max-width: 760px) 100vw, 60vw" className={styles.sourcePreviewImage} />
+              ) : activeScene?.visualMode !== "scene-only" && activeScenePresenter?.kind === "video" ? (
+                <EosVideoPlayer
+                  key={activeScenePresenter.previewUrl}
+                  src={activeScenePresenter.previewUrl}
+                  muted
+                  className={`${videoPreviewStyles.generatedVideoPlayer} ${videoPreviewStyles.peopleGeneratedVideoPlayer}`}
+                  mediaFrameClassName={videoPreviewStyles.videoPreviewMediaFrame}
+                  ariaLabel={isThai ? "วิดีโอต้นแบบ" : "Presenter source video"}
+                />
+              ) : activeScene?.visualMode !== "scene-only" && activeScenePresenter?.kind === "image" ? (
+                <Image src={activeScenePresenter.previewUrl} alt={isThai ? `ภาพพรีเซนเตอร์ของซีน ${activeScene?.title ?? ""}` : `Presenter image for ${activeScene?.title ?? "this scene"}`} fill unoptimized sizes="(max-width: 760px) 100vw, 60vw" className={styles.sourcePreviewImage} />
+              ) : (
+                <VideoPreviewPlaceholder showActions={false} />
+              )}
+              {displayedVideoUrl && !isGenerating ? <VideoPreviewOverlayActions key={`actions:${displayedVideoUrl}`} videoUrl={displayedVideoUrl} /> : null}
             </div>
+            <section className={styles.presenterHistory} aria-label={isThai ? "ประวัติวิดีโอพรีเซนเตอร์" : "Presenter video history"}>
+              <div className={videoPreviewStyles.previewViewTabs} role="tablist" aria-label={isThai ? "มุมมองตัวอย่างวิดีโอ" : "Video preview views"}>
+                <button type="button" role="tab" aria-selected={previewView === "scene"} className={previewView === "scene" ? videoPreviewStyles.previewViewTabActive : undefined} onClick={() => setPreviewView("scene")} disabled={isGenerating}>{isThai ? "ซีนปัจจุบัน" : "Current scene"}</button>
+                <button type="button" role="tab" aria-selected={previewView === "latest"} className={previewView === "latest" ? videoPreviewStyles.previewViewTabActive : undefined} onClick={() => setPreviewView("latest")} disabled={isGenerating}>{isThai ? "ผลลัพธ์ล่าสุด" : "Latest result"}</button>
+                <button type="button" role="tab" aria-selected={previewView === "library"} className={previewView === "library" ? videoPreviewStyles.previewViewTabActive : undefined} onClick={() => setPreviewView("library")} disabled={isGenerating}>{isThai ? "คลังวิดีโอ" : "Video library"}</button>
+              </div>
+              <div className={videoPreviewStyles.videoGalleryGrid}>
+                <div className={videoPreviewStyles.videoGalleryColumn}>
+                  <div className={videoPreviewStyles.videoGalleryHeading}><h3>{isThai ? "วิดีโอล่าสุด" : "Latest video"}</h3></div>
+                  <div className={videoPreviewStyles.videoCurrentGallery}>
+                    {latestVideoUrl ? <button type="button" className={videoPreviewStyles.videoCurrentCard} onClick={() => setPreviewView("latest")} aria-pressed={previewView === "latest"} disabled={isGenerating}>
+                      <span className={videoPreviewStyles.videoGalleryThumb}><video src={latestVideoUrl} muted playsInline preload="metadata" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} aria-hidden="true" /><span className={videoPreviewStyles.videoGalleryPlay}><Play size={14} fill="currentColor" /></span></span>
+                      <span className={videoPreviewStyles.videoGalleryStatus}>{isThai ? "วิดีโอที่สร้างล่าสุด" : "Latest generated video"}</span>
+                    </button> : <div className={videoPreviewStyles.videoGalleryEmpty}>{historyLoading ? (isThai ? "กำลังโหลดประวัติ…" : "Loading history…") : (isThai ? "ยังไม่มีวิดีโอที่สร้าง" : "No generated videos yet")}</div>}
+                  </div>
+                </div>
+                <div className={`${videoPreviewStyles.videoGalleryColumn} ${videoPreviewStyles.videoRecentColumn}`}>
+                  <div className={videoPreviewStyles.videoGalleryHeading}><h3>{isThai ? "วิดีโอล่าสุด" : "Recent videos"}</h3><Link href="/history?type=video" className={styles.historyLink}>{isThai ? "ดูประวัติ" : "View history"}</Link></div>
+                  <div className={videoPreviewStyles.videoRecentGallery}>
+                    <div className={videoPreviewStyles.videoRecentRow} ref={historyRowRef} onScroll={updateHistoryScroll}>
+                      {historyLoading && !presenterHistory.length ? <div className={videoPreviewStyles.videoGalleryEmpty}>{isThai ? "กำลังโหลดประวัติ…" : "Loading history…"}</div> : historyError ? <div className={`${videoPreviewStyles.videoGalleryEmpty} ${videoPreviewStyles.videoGalleryError}`} role="alert">{isThai ? "โหลดประวัติไม่สำเร็จ" : "Could not load history"} <button type="button" onClick={() => setHistoryRevision((value) => value + 1)}>{isThai ? "ลองอีกครั้ง" : "Retry"}</button></div> : presenterHistory.length ? presenterHistory.map((item) => {
+                        const selected = previewView === "library" && selectedHistoryVideo !== undefined && presenterHistoryKey(selectedHistoryVideo) === presenterHistoryKey(item);
+                        const date = new Date(item.createdAt).toLocaleString(isThai ? "th-TH" : "en-US");
+                        return <button key={presenterHistoryKey(item)} type="button" className={`${videoPreviewStyles.videoRecentCard} ${selected ? videoPreviewStyles.videoRecentCardSelected : ""}`} onClick={() => { setSelectedHistoryId(presenterHistoryKey(item)); setPreviewView("library"); }} aria-label={isThai ? `เปิดวิดีโอพรีเซนเตอร์ ${date}` : `Open presenter video ${date}`} aria-pressed={selected} disabled={isGenerating}>
+                          <span className={videoPreviewStyles.videoGalleryThumb}><video src={item.outputUrl} muted playsInline preload="metadata" controls={false} disablePictureInPicture disableRemotePlayback tabIndex={-1} aria-hidden="true" /><span className={videoPreviewStyles.videoGalleryPlay}><Play size={13} fill="currentColor" /></span></span>
+                        </button>;
+                      }) : <div className={videoPreviewStyles.videoGalleryEmpty}>{isThai ? "ยังไม่มีประวัติวิดีโอพรีเซนเตอร์" : "No presenter videos yet"}</div>}
+                    </div>
+                    {historyScroll.left || historyScroll.right ? <>
+                      <button type="button" className={videoPreviewStyles.videoGalleryPrev} onClick={() => historyRowRef.current?.scrollBy({ left: -290, behavior: "smooth" })} aria-label={isThai ? "เลื่อนประวัติกลับ" : "Previous videos"} disabled={!historyScroll.left}><ChevronLeft size={18} /></button>
+                      <button type="button" className={videoPreviewStyles.videoGalleryNext} onClick={() => historyRowRef.current?.scrollBy({ left: 290, behavior: "smooth" })} aria-label={isThai ? "เลื่อนประวัติต่อ" : "Next videos"} disabled={!historyScroll.right}><ChevronRight size={18} /></button>
+                    </> : null}
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className={styles.presenterTimeline} aria-label={isThai ? "ไทม์ไลน์ฉาก" : "Scene timeline"}>
+              <div className={styles.timelineHeader}>
+                <div className={styles.sectionHeading}>
+                  <h3>{isThai ? "ไทม์ไลน์ฉาก" : "Scene Timeline"}</h3>
+                  <span className={styles.sceneCount}>{scenes.length} {isThai ? "ซีน" : "scenes"}</span>
+                </div>
+                <button type="button" className={styles.textButton} onClick={() => setIsReorderingScenes((current) => !current)} disabled={isLocked || scenes.length < 2} aria-pressed={isReorderingScenes}>
+                  {isReorderingScenes ? (isThai ? "เสร็จสิ้น" : "Done") : (isThai ? "เรียงฉากใหม่" : "Reorder Scenes")}
+                </button>
+              </div>
+              {isReorderingScenes ? <p className={styles.timelineNote}>{isThai ? "ลากฉากเพื่อเปลี่ยนลำดับ" : "Drag scenes to change their order."}</p> : null}
+              <div className={styles.sceneTimeline}>
+                {sceneTimeline.map(({ scene }, index) => (
+                  <div key={scene.id} className={styles.sceneItem} draggable={isReorderingScenes}
+                    onDragStart={(event) => { if (!isReorderingScenes) return; event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", scene.id); }}
+                    onDragOver={(event) => { if (isReorderingScenes) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; } }}
+                    onDrop={(event) => { if (!isReorderingScenes) return; event.preventDefault(); reorderScenes(event.dataTransfer.getData("text/plain"), scene.id); }}>
+                    <div className={`${styles.sceneCard} ${activeSceneId === scene.id ? styles.sceneCardActive : ""}`}>
+                      <button type="button" className={styles.sceneSelect} onClick={() => { setActiveSceneId(scene.id); setPreviewView("scene"); }} aria-pressed={activeSceneId === scene.id} disabled={isLocked}>
+                        <span className={styles.sceneImage}>
+                          {scene.media?.previewUrl && scene.media.kind === "image" ? <Image src={scene.media.previewUrl} alt="" fill unoptimized sizes="46px" /> : scene.media?.previewUrl && scene.media.kind === "video" ? <video src={scene.media.previewUrl} muted playsInline autoPlay loop /> : <Video size={16} />}
+                        </span>
+                        <span className={styles.sceneCopy}><span className={styles.sceneTitleRow}><strong>{scene.title || `${isThai ? "ฉาก" : "Scene"} ${index + 1}`}</strong></span></span>
+                      </button>
+                      {isReorderingScenes ? <span className={styles.sceneMore}><GripVertical size={13} /></span> : <button type="button" className={styles.sceneMore} onClick={() => openEditScene(scene)} aria-label={isThai ? `แก้ไขซีน ${index + 1}` : `Edit scene ${index + 1}`} title={isThai ? "แก้ไขซีน" : "Edit scene"} disabled={isLocked}><Pencil size={12} /></button>}
+                    </div>
+                    {index < scenes.length - 1 ? <ArrowRight className={styles.sceneArrow} size={13} /> : null}
+                  </div>
+                ))}
+                <button ref={addSceneButtonRef} type="button" className={styles.addScene} onClick={openAddScene} disabled={!canAddScene || isLocked}>
+                  <Plus size={18} /><span>{isThai ? "เพิ่มฉาก" : "Add Scene"}</span>
+                </button>
+              </div>
+            </section>
             {generationError ? <div className={styles.errorCard} role="alert">{generationError}</div> : null}
           </section>
         }
         right={
           <aside className={styles.settingsPanel} aria-labelledby="presenter-settings-heading">
-            <div className={styles.panelTitle}><div><span className={styles.stepNumber}>3.</span><h2 id="presenter-settings-heading">SETTINGS</h2></div><Sparkles size={15} className={styles.settingsSparkle} /></div>
+            <div className={styles.panelTitle}><div><span className={styles.stepNumber}>3.</span><h2 id="presenter-settings-heading">{isThai ? "ตั้งค่าและสร้าง" : "SETTINGS & CREATE"}</h2></div><Sparkles size={15} className={styles.settingsSparkle} /></div>
+            <p className={styles.panelDescription}>{isThai ? "เลือกเสียงและรูปแบบ ก่อนตรวจเครดิต" : "Choose the voice and format, then review the credit estimate."}</p>
 
             <div className={styles.settingCard}>
               <span className={styles.settingLabel}>{isThai ? "โมเดลสร้างวิดีโอ" : "Presenter video model"} <InfoTooltip content={t("create.video.common.info.model")} size={12} /></span>
@@ -1713,6 +1785,20 @@ export function AiPresenterPage() {
                 menuPosition="fixed"
               />
             </div>
+
+            <div className={styles.settingCard}>
+              <span className={styles.settingLabel}>{isThai ? "เสียงเริ่มต้น" : "Default voice"}</span>
+              <PresenterVoicePicker
+                key={`default:${selectedAudioModel}`}
+                voices={voices}
+                value={selectedVoice}
+                onChange={setSelectedVoice}
+                disabled={voiceLoading || !voices.length || isLocked}
+                loading={voiceLoading}
+                isThai={isThai}
+              />
+              <p className={styles.fieldDescription}>{isThai ? "ใช้กับทุกซีนที่ไม่ได้เลือกเสียงเฉพาะ" : "Used for scenes without their own voice selection."}</p>
+            </div>
             {selectedVoiceInfo?.previewUrl ? (
               <audio
                 key={`${selectedAudioModel}:${selectedVoiceInfo.key}`}
@@ -1729,7 +1815,7 @@ export function AiPresenterPage() {
             ) : null}
             <div className={styles.settingCard}>
               <div className={styles.settingLabel}>{isThai ? "สัดส่วนวิดีโอ" : "Video format"} <InfoTooltip content={t("create.video.common.info.aspectRatio")} size={12} /></div>
-              <div className={styles.formatChoices}>{(supportedRatios.length ? supportedRatios : aspectOptions).map((value) => <button key={value} type="button" className={`${styles.formatOption} ${aspect === value ? styles.formatOptionActive : ""}`} onClick={() => setAspect(value as (typeof aspectOptions)[number])} disabled={isLocked}><span className={`${styles.formatShape} ${value === "9:16" ? styles.formatPortrait : value === "1:1" ? styles.formatSquare : ""}`} /><strong>{value}</strong><small>{value === "16:9" ? "Landscape" : value === "9:16" ? "Portrait" : "Square"}</small></button>)}</div>
+              <div className={styles.formatChoices}>{(supportedRatios.length ? supportedRatios : aspectOptions).map((value) => <button key={value} type="button" className={`${styles.formatOption} ${aspect === value ? styles.formatOptionActive : ""}`} onClick={() => setAspect(value as (typeof aspectOptions)[number])} aria-pressed={aspect === value} disabled={isLocked}><span className={`${styles.formatShape} ${value === "9:16" ? styles.formatPortrait : value === "1:1" ? styles.formatSquare : ""}`} /><strong>{value}</strong><small>{value === "16:9" ? (isThai ? "แนวนอน" : "Landscape") : value === "9:16" ? (isThai ? "แนวตั้ง" : "Portrait") : (isThai ? "จัตุรัส" : "Square")}</small></button>)}</div>
             </div>
 
             <div className={styles.estimateBlock}>
@@ -1795,9 +1881,23 @@ export function AiPresenterPage() {
 
                 <label className={styles.sceneModalField}>
                   <span>{isThai ? "บทพูด" : "Spoken lines"}<small>{isThai ? "เสียงของซีนนี้จะอ่านข้อความนี้" : "This scene’s voice will speak this text"}</small></span>
-                  <textarea value={newSceneScript} onChange={(event) => { setNewSceneScript(event.target.value); setNewSceneError(""); setConfirmLongScene(false); }} maxLength={Math.max(0, 5000 - scenes.filter((scene) => scene.id !== editingSceneId).map((scene) => scene.script).join("\n\n").length - (scenes.length > (editingSceneId ? 1 : 0) ? 2 : 0))} rows={4} placeholder={sceneScriptPlaceholder(newSceneTitle, isThai)} required />
+                  <textarea value={newSceneScript} onChange={(event) => { setNewSceneScript(event.target.value); setNewSceneError(""); }} maxLength={Math.max(0, 5000 - scenes.filter((scene) => scene.id !== editingSceneId).map((scene) => scene.script).join("\n\n").length - (scenes.length > (editingSceneId ? 1 : 0) ? 2 : 0))} rows={4} placeholder={sceneScriptPlaceholder(newSceneTitle, isThai)} required />
                   <small className={styles.sceneModalCounter}>{isThai ? "เวลาประมาณ" : "Estimated"} {estimatedDuration(newSceneScript, language, voicePaceForSample(voiceSampleDurations[JSON.stringify([selectedAudioModel, newSceneVoiceId || selectedVoice])], newSceneVoiceId || selectedVoice, language))} {isThai ? "วินาที · ตรวจเสียงจริงอีกครั้งหลังสร้าง" : "seconds · checked again after generating audio"}</small>
                 </label>
+
+                <div className={styles.sceneModalField}>
+                  <span id="scene-visual-mode-label">{isThai ? "รูปแบบซีน" : "Scene type"}<small>{isThai ? "เลือกภาพที่จะแสดงในซีนนี้" : "Choose what to show in this scene"}</small></span>
+                  <div className={styles.sceneVisualModes} role="group" aria-labelledby="scene-visual-mode-label">
+                    <button type="button" className={`${styles.sceneVisualMode} ${newSceneVisualMode === "presenter" ? styles.sceneVisualModeActive : ""}`} aria-pressed={newSceneVisualMode === "presenter"} onClick={() => { setNewSceneVisualMode("presenter"); setNewSceneError(""); }} disabled={isLocked}>
+                      <strong>{isThai ? "พรีเซนเตอร์" : "Presenter"}</strong>
+                      <small>{isThai ? "แสดงพรีเซนเตอร์พูด" : "Show the presenter speaking"}</small>
+                    </button>
+                    <button type="button" className={`${styles.sceneVisualMode} ${newSceneVisualMode === "scene-only" ? styles.sceneVisualModeActive : ""}`} aria-pressed={newSceneVisualMode === "scene-only"} onClick={() => { setNewSceneVisualMode("scene-only"); setNewSceneError(""); }} disabled={isLocked}>
+                      <strong>{isThai ? "สินค้า" : "Product"}</strong>
+                      <small>{isThai ? "แสดงภาพพร้อมเสียงบรรยาย" : "Show an image with narration"}</small>
+                    </button>
+                  </div>
+                </div>
 
                 <div className={styles.sceneModalField}>
                   <span>{isThai ? "พรีเซนเตอร์ของซีนนี้" : "Presenter for this scene"}<small>{isThai ? "เลือกเฉพาะซีนนี้ หรือใช้ค่าเริ่มต้น" : "Choose for this scene or use the default"}</small></span>
@@ -1813,16 +1913,18 @@ export function AiPresenterPage() {
                         disabled={isLocked || !presenterOptions.length}
                         isThai={isThai}
                       />
+                      {!presenterOptions.length ? <button type="button" className={styles.sceneAddPresenter} onClick={() => sourceInputRef.current?.click()} disabled={isLocked}><Plus size={14} />{isThai ? "เพิ่มรูปพรีเซนเตอร์" : "Add a presenter image"}</button> : null}
                     </>
                   )}
                 </div>
 
                 <div className={styles.sceneModalField}>
+                  <span>{isThai ? "เสียงของซีนนี้" : "Voice for this scene"}<small>{isThai ? "เปลี่ยนเฉพาะซีนนี้ได้" : "Override the default for this scene"}</small></span>
                   <PresenterVoicePicker
                     key={`new-scene:${selectedAudioModel}`}
                     voices={voices}
                     value={newSceneVoiceId || selectedVoice}
-                    onChange={(voiceId) => { setNewSceneVoiceId(voiceId === selectedVoice ? "" : voiceId); setConfirmLongScene(false); }}
+                    onChange={(voiceId) => setNewSceneVoiceId(voiceId === selectedVoice ? "" : voiceId)}
                     disabled={voiceLoading || !voices.length || isLocked}
                     loading={voiceLoading}
                     isThai={isThai}
@@ -1832,14 +1934,14 @@ export function AiPresenterPage() {
                 <details className={styles.advancedSettings}>
                 <summary>{isThai ? "รายละเอียดภาพเพิ่มเติม" : "Additional visual direction"}</summary>
                 <label className={styles.sceneModalField}>
-                  <span>{isThai ? "รายละเอียดภาพ / คำสั่งฉาก" : "Visual direction"}<small>{isThai ? "ไม่บังคับ · จะไม่ถูกอ่านออกเสียง" : "Optional · not spoken aloud"}</small></span>
+                  <span>{isThai ? "รายละเอียดภาพ / คำสั่งฉาก" : "Visual direction"}<small>{isThai ? "ไม่บังคับ · ไม่อ่านออกเสียง · AI ช่วยวางแผนภาพช่วงต่อเนื่อง รวมในราคาวิดีโอ" : "Optional · not spoken · AI plans continuity as part of the video price"}</small></span>
                   <textarea value={newSceneDirection} onChange={(event) => setNewSceneDirection(event.target.value.slice(0, maxSceneDirectionLength))} maxLength={maxSceneDirectionLength} rows={2} placeholder={isThai ? "เช่น ภาพระยะใกล้สินค้า ฉากสว่าง โทนอุ่น" : "e.g. Close-up product shot, bright warm setting"} />
                 </label>
                 </details>
 
                 <div className={styles.sceneModalField}>
-                  <span>{isThai ? "รูป / วิดีโอประกอบฉาก" : "Scene image or video"}<small>{newSceneVisualMode === "scene-only" ? (isThai ? "จำเป็นเมื่อไม่ใช้พรีเซนเตอร์ที่เลือก" : "Required when the selected presenter is not used") : (isThai ? "ไม่บังคับ · เพิ่มหรือเปลี่ยนภายหลังได้" : "Optional · you can add or replace it later")}</small></span>
-                  <input ref={addSceneMediaInputRef} className={styles.hiddenInput} type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" onChange={handleNewSceneMediaChange} />
+                  <span>{isThai ? "ภาพประกอบฉาก" : "Scene image"}<small>{newSceneVisualMode === "scene-only" ? (isThai ? "จำเป็นเมื่อไม่ใช้พรีเซนเตอร์ที่เลือก" : "Required when the selected presenter is not used") : (isThai ? "ไม่บังคับ · เพิ่มหรือเปลี่ยนภายหลังได้" : "Optional · you can add or replace it later")}</small></span>
+                  <input ref={addSceneMediaInputRef} className={styles.hiddenInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleNewSceneMediaChange} />
                   {newSceneMedia ? (
                     <div className={styles.newSceneMediaCard}>
                       <span className={styles.newSceneMediaPreview}>{newSceneMedia.kind === "image" ? <Image src={newSceneMedia.previewUrl} alt="" fill unoptimized sizes="72px" /> : <video src={newSceneMedia.previewUrl} muted playsInline autoPlay loop />}</span>
@@ -1850,8 +1952,8 @@ export function AiPresenterPage() {
                   ) : (
                     <button type="button" className={styles.newSceneMediaUpload} onClick={() => addSceneMediaInputRef.current?.click()}>
                       <CloudUpload size={19} />
-                      <strong>{isThai ? "เลือกรูปหรือวิดีโอ" : "Choose an image or video"}</strong>
-                      <small>{isThai ? "PNG, JPG, WEBP · MP4/WEBM · ภาพไม่เกิน 10 MB · วิดีโอไม่เกิน 25 MB" : "PNG, JPG, WEBP · MP4/WEBM · images up to 10 MB · videos up to 25 MB"}</small>
+                      <strong>{isThai ? "เลือกรูปภาพ" : "Choose an image"}</strong>
+                      <small>{isThai ? "PNG, JPG, WEBP · ไม่เกิน 10 MB" : "PNG, JPG, WEBP · up to 10 MB"}</small>
                     </button>
                   )}
                   {newSceneMediaError ? <p className={styles.sceneModalError} role="alert">{newSceneMediaError}</p> : null}
@@ -1861,11 +1963,10 @@ export function AiPresenterPage() {
 
               <footer className={styles.sceneModalFooter}>
                 {confirmSceneDelete ? <div className={styles.sceneDeleteConfirm} role="alert"><span>{isThai ? "ลบซีนนี้พร้อมบทและสื่อ?" : "Delete this scene and its media?"}</span><button type="button" onClick={() => setConfirmSceneDelete(false)}>{isThai ? "กลับ" : "Back"}</button><button type="button" onClick={() => { if (editingSceneId) { removeScene(editingSceneId); closeAddScene(); } }} disabled={isLocked}>{isThai ? "ยืนยันลบ" : "Confirm delete"}</button></div> : <>
-                {confirmLongScene ? <div className={styles.sceneDurationWarning} role="alert"><strong>{isThai ? "บทนี้อาจเกิน 15 วินาที" : "This scene may exceed 15 seconds"}</strong><span>{isThai ? "ซีนละไม่ควรเกิน 15 วินาที แนะนำให้ย่อบทหรือแบ่งซีน เวลานี้เป็นค่าประเมิน เสียงจริงจะตรวจอีกครั้งหลังสร้าง" : "Shorten or split this script. This is an estimate; actual audio will be checked after generation."}</span></div> : null}
                 {editingSceneId && scenes.length > 1 ? <button type="button" className={styles.sceneModalDelete} onClick={() => setConfirmSceneDelete(true)} disabled={isLocked}>{isThai ? "ลบซีน" : "Delete scene"}</button> : null}
                 <button type="button" className={styles.sceneModalCancel} onClick={closeAddScene}>{isThai ? "ยกเลิก" : "Cancel"}</button>
                 <button type="submit" className={styles.sceneModalSubmit} disabled={!newSceneTitle.trim() || !newSceneScript.trim() || (newSceneVisualMode === "scene-only" && !newSceneMedia) || (!editingSceneId && !canAddScene) || isLocked}>
-                  {confirmLongScene ? (isThai ? "บันทึกต่อ" : "Save anyway") : editingSceneId ? (isThai ? "บันทึกซีน" : "Save scene") : <><Plus size={16} />{isThai ? "เพิ่มฉากเข้าไทม์ไลน์" : "Add scene to timeline"}</>}
+                  {editingSceneId ? (isThai ? "บันทึกซีน" : "Save scene") : <><Plus size={16} />{isThai ? "เพิ่มฉากเข้าไทม์ไลน์" : "Add scene to timeline"}</>}
                 </button>
                 </>}
               </footer>
