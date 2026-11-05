@@ -2371,6 +2371,9 @@
 }
 
 .toolbarZoomValue {
+  /* A fixed width, so the buttons beside it stay put while the number changes between 25% and 300%. */
+  box-sizing: border-box;
+  width: 6ch;
   min-width: 43px;
   font-variant-numeric: tabular-nums;
 }

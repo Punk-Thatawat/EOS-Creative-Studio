@@ -488,7 +488,8 @@
 .previewExportTrigger { width: auto; min-width: 90px; border-color: transparent; background: transparent; color: #59626b; }
 .previewExportTrigger:hover:not(:disabled) { border-color: #eee5df; background: #fff8f4; color: #e65e2e; }
 .previewExportMenu { min-width: 160px; }
-.previewZoomValue { min-width: 43px; font-variant-numeric: tabular-nums; }
+/* A fixed width, so the buttons beside it stay put while the number changes. */
+.previewZoomValue { box-sizing: border-box; width: 6ch; min-width: 43px; font-variant-numeric: tabular-nums; }
 .toolbarDivider { width: 1px; height: 17px; background: #e5e3e0; }
 
 .previewStage {
