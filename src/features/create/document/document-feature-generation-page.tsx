@@ -1109,6 +1109,8 @@ export function DocumentFeatureGenerationPage() {
                     <ExportMenu
                       formats={FORM_EXPORT_FORMATS}
                       hasResult={formFields.length > 0}
+                      // Nothing to export until a form is attached or a reading (new or from history) is on show.
+                      disabled={!selectedFile && !formResult && formFields.length === 0}
                       busy={isFormExporting}
                       isUnavailable={() => formFields.length === 0}
                       hint={t(K("form.exportNeedResult"))}
@@ -1118,7 +1120,8 @@ export function DocumentFeatureGenerationPage() {
                     <ExportMenu
                       hasResult={isContract ? !!contractResult : !!ocrResult}
                       // OCR has nothing to export until a document has been read, so the button stays disabled until then.
-                      disabled={isOcr && !ocrResult}
+                      // A contract review needs a file attached or a review on show.
+                      disabled={isContract ? !selectedFile && !contractResult : isOcr && !ocrResult}
                       busy={isContract ? isContractExporting : isToolbarExporting}
                       {...(isOcr ? { active: ocrFormat } : {})}
                       // Before a document is read, an OCR card sets the format the next run will produce instead.
