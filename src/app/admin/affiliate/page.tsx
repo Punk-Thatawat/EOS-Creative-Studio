@@ -304,7 +304,17 @@ function AdminAffiliateContent() {
                   </div>
 
                   <div className="mt-3 overflow-x-auto">
-                    <table className="w-full min-w-[720px] text-left text-xs">
+                    <table className="w-full min-w-[820px] table-fixed text-left text-xs">
+                      <colgroup>
+                        <col className="w-[25%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[15%]" />
+                        <col className="w-[13%]" />
+                        <col className="w-[11%]" />
+                        <col className="w-[9%]" />
+                        <col className="w-[6%]" />
+                      </colgroup>
                       <thead className="text-[11px] text-muted-foreground">
                         <tr className="border-b border-border">
                           {columns.map((column) => {
@@ -327,13 +337,13 @@ function AdminAffiliateContent() {
                         </tr>
                       </thead>
                       <tbody>
-                        {loading ? (
+                        {loading && affiliates.length === 0 ? (
                           <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">Loading…</td></tr>
                         ) : affiliates.length === 0 ? (
                           <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">No affiliates found.</td></tr>
                         ) : (
                           affiliates.map((item) => (
-                            <tr key={item.id} className="border-b border-border/60 last:border-0">
+                            <tr key={item.id} className={`border-b border-border/60 transition-opacity last:border-0 ${loading ? "opacity-50" : ""}`}>
                               <td className="py-2.5 pr-3">
                                 <div className="font-semibold">{item.displayName || item.email || "—"}</div>
                                 {item.displayName && item.email ? <div className="text-[11px] text-muted-foreground">{item.email}</div> : null}
