@@ -608,9 +608,11 @@
 .previewHeader {
   display: flex;
   min-height: 52px;
+  /* On a narrow column the toolbar drops under the title instead of running over it. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px 6px;
   border-bottom: 1px solid #efedeb;
 }
 
@@ -635,6 +637,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
+  margin-left: auto;
   gap: 4px;
   color: #59626b;
   font-size: 10px;
