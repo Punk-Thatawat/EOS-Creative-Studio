@@ -17,6 +17,7 @@ import {
   Mail,
   Monitor,
   Save,
+  Share2,
   ShieldCheck,
   Sparkles,
   X,
@@ -30,6 +31,7 @@ import { changePasswordWithBackend, getStoredBackendSession } from "@/lib/auth/b
 import { getApiAccessToken } from "@/lib/auth/access-token";
 import { fetchBackendAuthProvider, fetchBackendAuthSessions, type BackendSessionSummary } from "@/lib/auth/backend-session";
 import { useLocale, type Locale, type TranslationKey } from "@/lib/i18n/locale-provider";
+import { AffiliateSection } from "./affiliate-section";
 import { ApiKeysSection } from "./api-keys-section";
 import styles from "./settings-page.module.css";
 
@@ -54,6 +56,7 @@ const settingsKeys = {
   fontHint: "settings.fontHint",
   security: "settings.security",
   apiKeysNav: "settings.apiKeys.nav",
+  affiliateNav: "settings.affiliate.nav",
   securityDescription: "settings.securityDescription",
   authentication: "settings.authentication",
   authenticationValue: "settings.authenticationValue",
@@ -108,7 +111,7 @@ const settingsKeys = {
 
 type Copy = { [Key in keyof typeof settingsKeys]: string };
 
-const sectionIds = ["legal", "language", "security", "apikeys"] as const;
+const sectionIds = ["legal", "language", "security", "apikeys", "affiliate"] as const;
 const showNotificationSettings = false;
 const SETTINGS_CACHE_TTL_MS = 60_000;
 let cachedAuthProvider: { value: "email" | "google" | "unknown"; cachedAt: number } | null = null;
@@ -375,8 +378,8 @@ export function SettingsPageClient() {
         <aside className={styles.sectionNav} aria-label={t.overview}>
           <p className={styles.navLabel}>{t.overview}</p>
           {sectionIds.map((id) => {
-            const labels = { legal: t.legal, language: t.language, security: t.security, apikeys: t.apiKeysNav };
-            const icons = { legal: FileText, language: Languages, security: LockKeyhole, apikeys: KeyRound };
+            const labels = { legal: t.legal, language: t.language, security: t.security, apikeys: t.apiKeysNav, affiliate: t.affiliateNav };
+            const icons = { legal: FileText, language: Languages, security: LockKeyhole, apikeys: KeyRound, affiliate: Share2 };
             const Icon = icons[id];
             return (
               <button key={id} type="button" className={`${styles.navItem} ${activeSection === id ? styles.navItemActive : ""}`} onClick={() => scrollToSection(id)}>
@@ -454,6 +457,8 @@ export function SettingsPageClient() {
           </Card>
 
           <ApiKeysSection />
+
+          <AffiliateSection />
 
           {showNotificationSettings && <Card className={styles.settingsCard} id="settings-notifications">
             <SectionHeading icon={Bell} title={t.notifications} description={t.notificationsDescription} tone="yellow" />
