@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, LoaderCircle, Save, Search } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, Save, Search } from "lucide-react";
 import { SidebarNavigation } from "@/components/app-shell/navigation";
 import { StudioHeader } from "@/components/app-shell/studio-header";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -12,14 +12,39 @@ import {
   updateAdminAffiliateSettings,
   updateAdminAffiliateStatus,
   type AdminAffiliate,
+  type AffiliateSort,
   type AffiliateStatus,
 } from "@/lib/api/affiliate";
 
-const PAGE_SIZE = 25;
+const PAGE_SIZES = [10, 25, 50, 100];
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const dateFormat = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
 
 type StatusFilter = AffiliateStatus | "all";
+type SortOrder = "asc" | "desc";
+
+/** The column headings, left to right: what each is called, what the server sorts it by, and which side its numbers sit on. */
+const columns: { sort: AffiliateSort; label: string; right?: boolean }[] = [
+  { sort: "member", label: "Member" },
+  { sort: "code", label: "Code" },
+  { sort: "invited", label: "Invited", right: true },
+  { sort: "topups", label: "Their top-ups (฿)", right: true },
+  { sort: "commission", label: "Credits earned", right: true },
+  { sort: "joined", label: "Joined" },
+  { sort: "status", label: "Status" },
+];
+
+/** The page numbers to show: the first, the last and the ones around the current page, with gaps marked. */
+function pageNumbers(current: number, last: number): (number | "gap")[] {
+  const wanted = new Set([1, last, current - 1, current, current + 1]);
+  const sorted = [...wanted].filter((value) => value >= 1 && value <= last).sort((a, b) => a - b);
+  const result: (number | "gap")[] = [];
+  sorted.forEach((value, index) => {
+    if (index > 0 && value - sorted[index - 1] > 1) result.push("gap");
+    result.push(value);
+  });
+  return result;
+}
 
 function AdminAffiliateContent() {
   const [enabled, setEnabled] = useState(true);
@@ -37,6 +62,9 @@ function AdminAffiliateContent() {
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [pageSize, setPageSize] = useState(25);
+  const [sort, setSort] = useState<AffiliateSort>("joined");
+  const [order, setOrder] = useState<SortOrder>("desc");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -62,7 +90,7 @@ function AdminAffiliateContent() {
 
   useEffect(() => {
     let active = true;
-    void listAdminAffiliates({ q: appliedQuery, status, page, limit: PAGE_SIZE })
+    void listAdminAffiliates({ q: appliedQuery, status, page, limit: pageSize, sort, order })
       .then((result) => {
         if (!active) return;
         setAffiliates(result.affiliates);
@@ -77,7 +105,7 @@ function AdminAffiliateContent() {
     return () => {
       active = false;
     };
-  }, [appliedQuery, status, page]);
+  }, [appliedQuery, status, page, pageSize, sort, order]);
 
   const percentValue = Number(percent);
   const percentValid = percent.trim() !== "" && Number.isFinite(percentValue) && percentValue >= 0 && percentValue <= 100;
@@ -124,7 +152,26 @@ function AdminAffiliateContent() {
     }
   }
 
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const firstShown = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastShown = Math.min(total, page * pageSize);
+
+  // A click sorts by that column (text from A, numbers from the most, dates from the newest); a second click turns it round.
+  function sortBy(column: AffiliateSort) {
+    setLoading(true);
+    setPage(1);
+    if (column === sort) {
+      setOrder((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSort(column);
+    setOrder(column === "member" || column === "code" || column === "status" ? "asc" : "desc");
+  }
+  function goTo(next: number) {
+    if (next < 1 || next > pages || next === page) return;
+    setLoading(true);
+    setPage(next);
+  }
 
   return (
     <SidebarProvider>
@@ -260,13 +307,22 @@ function AdminAffiliateContent() {
                     <table className="w-full min-w-[720px] text-left text-xs">
                       <thead className="text-[11px] text-muted-foreground">
                         <tr className="border-b border-border">
-                          <th className="py-2 pr-3 font-semibold">Member</th>
-                          <th className="py-2 pr-3 font-semibold">Code</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Invited</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Their top-ups (฿)</th>
-                          <th className="py-2 pr-3 text-right font-semibold">Credits earned</th>
-                          <th className="py-2 pr-3 font-semibold">Joined</th>
-                          <th className="py-2 pr-3 font-semibold">Status</th>
+                          {columns.map((column) => {
+                            const active = sort === column.sort;
+                            const Arrow = !active ? ArrowUpDown : order === "asc" ? ArrowUp : ArrowDown;
+                            return (
+                              <th key={column.sort} className={`py-2 pr-3 font-semibold ${column.right ? "text-right" : ""}`} aria-sort={active ? (order === "asc" ? "ascending" : "descending") : "none"}>
+                                <button
+                                  type="button"
+                                  className={`inline-flex items-center gap-1 rounded-md font-semibold transition-colors hover:text-foreground ${active ? "text-foreground" : ""}`}
+                                  onClick={() => sortBy(column.sort)}
+                                >
+                                  {column.label}
+                                  <Arrow size={12} className={active ? "text-[#f26b38]" : "opacity-50"} aria-hidden="true" />
+                                </button>
+                              </th>
+                            );
+                          })}
                           <th className="py-2 text-right font-semibold"><span className="sr-only">Action</span></th>
                         </tr>
                       </thead>
@@ -304,13 +360,51 @@ function AdminAffiliateContent() {
                     </table>
                   </div>
 
-                  {pages > 1 ? (
-                    <div className="mt-3 flex items-center justify-end gap-2 text-xs">
-                      <Button type="button" variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => { setLoading(true); setPage((value) => Math.max(1, value - 1)); }}>Previous</Button>
-                      <span>Page {page} of {pages}</span>
-                      <Button type="button" variant="outline" size="sm" disabled={page >= pages || loading} onClick={() => { setLoading(true); setPage((value) => Math.min(pages, value + 1)); }}>Next</Button>
+                  <nav className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs" aria-label="Affiliate pages">
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                      <span>Showing {numberFormat.format(firstShown)}–{numberFormat.format(lastShown)} of {numberFormat.format(total)}</span>
+                      <label className="flex items-center gap-1.5">
+                        Rows
+                        <select
+                          className="h-8 rounded-lg border border-border bg-white px-1.5 text-xs text-foreground"
+                          value={pageSize}
+                          onChange={(event) => {
+                            setLoading(true);
+                            setPage(1);
+                            setPageSize(Number(event.target.value));
+                          }}
+                        >
+                          {PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+                        </select>
+                      </label>
                     </div>
-                  ) : null}
+                    <div className="flex items-center gap-1">
+                      <Button type="button" variant="outline" size="sm" aria-label="Previous page" disabled={page <= 1 || loading} onClick={() => goTo(page - 1)}>
+                        <ChevronLeft size={14} />
+                      </Button>
+                      {pageNumbers(page, pages).map((entry, index) =>
+                        entry === "gap" ? (
+                          <span key={`gap-${index}`} className="px-1 text-muted-foreground">…</span>
+                        ) : (
+                          <Button
+                            key={entry}
+                            type="button"
+                            size="sm"
+                            variant={entry === page ? "default" : "outline"}
+                            aria-label={`Page ${entry}`}
+                            aria-current={entry === page ? "page" : undefined}
+                            disabled={loading && entry !== page}
+                            onClick={() => goTo(entry)}
+                          >
+                            {entry}
+                          </Button>
+                        ),
+                      )}
+                      <Button type="button" variant="outline" size="sm" aria-label="Next page" disabled={page >= pages || loading} onClick={() => goTo(page + 1)}>
+                        <ChevronRight size={14} />
+                      </Button>
+                    </div>
+                  </nav>
                 </section>
               </div>
             </div>
