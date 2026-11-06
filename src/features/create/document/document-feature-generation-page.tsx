@@ -1071,27 +1071,12 @@ export function DocumentFeatureGenerationPage() {
               <div><span>{t(K("preview.heading"))}</span><small>{isSummarize ? t(K("summary.workspace")) : isOcr ? t(K("ocr.workspace")) : isContract ? t(K("contract.workspace")) : isForm ? t(K("form.workspace")) : t(K("preview.canvas"))}</small></div>
               {isOcr || isContract || isForm ? (
                 <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
-                  {showPreviewTools && (
-                    <>
-                      <DocumentZoomControl value={ocrZoom} onChange={setOcrZoom} disabled={!hasPreview} />
-                      <button type="button" className={`${styles.toolbarButton} ${ocrPan ? styles.toolbarButtonActive : ""}`} aria-label={t(K("ocr.tool.pan"))} aria-pressed={ocrPan} title={hasPreview ? t(K("ocr.tool.pan")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrPan((value) => !value); setOcrAnnotate(false); setFormDraw(false); }}>
-                        <Hand size={14} aria-hidden="true" />
-                      </button>
-                      <span className={styles.toolbarDivider} />
-                      {!isForm && (
-                        <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !compareReady ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !compareReady} onClick={() => setOcrCompare((value) => !value)}>
-                          <Columns2 size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.compare"))}</span>
-                        </button>
-                      )}
-                      <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); setFormDraw(false); }}>
-                        <MessageSquarePlus size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.annotate"))}</span>
-                      </button>
-                    </>
-                  )}
                   {isForm ? (
                     <ExportMenu
                       formats={FORM_EXPORT_FORMATS}
                       hasResult={formFields.length > 0}
+                      // Nothing to export until a form is attached or a reading (new or from history) is on show.
+                      disabled={!selectedFile && !formResult && formFields.length === 0}
                       busy={isFormExporting}
                       isUnavailable={() => formFields.length === 0}
                       hint={t(K("form.exportNeedResult"))}
@@ -1101,7 +1086,8 @@ export function DocumentFeatureGenerationPage() {
                     <ExportMenu
                       hasResult={isContract ? !!contractResult : !!ocrResult}
                       // OCR has nothing to export until a document has been read, so the button stays disabled until then.
-                      disabled={isOcr && !ocrResult}
+                      // A contract review needs a file attached or a review on show.
+                      disabled={isContract ? !selectedFile && !contractResult : isOcr && !ocrResult}
                       busy={isContract ? isContractExporting : isToolbarExporting}
                       {...(isOcr ? { active: ocrFormat } : {})}
                       // Before a document is read, an OCR card sets the format the next run will produce instead.
@@ -1124,6 +1110,24 @@ export function DocumentFeatureGenerationPage() {
                 </div>
               )}
             </div>
+            {/* The tools sit in their own row under the title, as on the form tab; the header keeps the title and Export. */}
+            {showPreviewTools && (
+              <div className={styles.previewTools} role="toolbar" aria-label={t(K("preview.controls"))}>
+                <DocumentZoomControl value={ocrZoom} onChange={setOcrZoom} disabled={!hasPreview} />
+                <button type="button" className={`${styles.toolbarButton} ${ocrPan ? styles.toolbarButtonActive : ""}`} aria-label={t(K("ocr.tool.pan"))} aria-pressed={ocrPan} title={hasPreview ? t(K("ocr.tool.pan")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrPan((value) => !value); setOcrAnnotate(false); setFormDraw(false); }}>
+                  <Hand size={14} aria-hidden="true" />
+                </button>
+                <span className={styles.toolbarDivider} />
+                {!isForm && (
+                  <button type="button" className={`${styles.toolbarButton} ${ocrCompare ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.compare"))} aria-pressed={ocrCompare} title={!hasPreview ? t(K("ocr.tool.needFile")) : !compareReady ? t(K("ocr.tool.needResult")) : t(K("ocr.tool.compareHint"))} disabled={!hasPreview || !compareReady} onClick={() => setOcrCompare((value) => !value)}>
+                    <Columns2 size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.compare"))}</span>
+                  </button>
+                )}
+                <button type="button" className={`${styles.toolbarButton} ${ocrAnnotate ? styles.toolbarButtonActive : ""}`} aria-label={t(K("preview.annotate"))} aria-pressed={ocrAnnotate} title={hasPreview ? t(K("ocr.tool.annotateHint")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrAnnotate((value) => !value); setOcrPan(false); setFormDraw(false); }}>
+                  <MessageSquarePlus size={13} aria-hidden="true" /><span className={styles.toolbarLabel}>{t(K("preview.annotate"))}</span>
+                </button>
+              </div>
+            )}
 
 
             {isContract && (
