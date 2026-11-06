@@ -29,6 +29,7 @@ import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-la
 import { Dropdown } from "@/components/ui/dropdown";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
 import { DocumentSettingLabel } from "./document-setting-label";
+import { DocumentZoomControl } from "./document-zoom-control";
 import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { VideoModelDropdown } from "../video-model-dropdown";
@@ -1072,25 +1073,7 @@ export function DocumentFeatureGenerationPage() {
                 <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
                   {showPreviewTools && (
                     <>
-                      <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomIn"))} title={hasPreview ? t(K("ocr.tool.zoomIn")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom >= 300} onClick={() => setOcrZoom((zoom) => Math.min(300, zoom + 25))}>
-                        <ZoomIn size={14} aria-hidden="true" />
-                      </button>
-                      <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomOut"))} title={hasPreview ? t(K("ocr.tool.zoomOut")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview || ocrZoom <= 25} onClick={() => setOcrZoom((zoom) => Math.max(25, zoom - 25))}>
-                        <ZoomOut size={14} aria-hidden="true" />
-                      </button>
-                      <span className={styles.zoomDropdown} title={hasPreview ? undefined : t(K("ocr.tool.needFile"))}>
-                        <Dropdown
-                          value={String(ocrZoom)}
-                          options={Array.from({ length: 12 }, (_, index) => ({ value: String((index + 1) * 25), label: `${(index + 1) * 25}%` }))}
-                          onChange={(value) => setOcrZoom(Number(value))}
-                          ariaLabel={t(K("ocr.tool.zoom"))}
-                          disabled={!hasPreview}
-                          menuPosition="fixed"
-                          triggerClassName="h-[26px] min-h-0 w-[68px] gap-1 rounded-md border-transparent bg-transparent px-2 text-[10px] font-medium text-[#59626b] hover:bg-[#fff2ea]"
-                          menuClassName="min-w-[96px]"
-                          optionClassName="px-2.5 py-1.5 text-[11px]"
-                        />
-                      </span>
+                      <DocumentZoomControl value={ocrZoom} onChange={setOcrZoom} disabled={!hasPreview} />
                       <button type="button" className={`${styles.toolbarButton} ${ocrPan ? styles.toolbarButtonActive : ""}`} aria-label={t(K("ocr.tool.pan"))} aria-pressed={ocrPan} title={hasPreview ? t(K("ocr.tool.pan")) : t(K("ocr.tool.needFile"))} disabled={!hasPreview} onClick={() => { setOcrPan((value) => !value); setOcrAnnotate(false); setFormDraw(false); }}>
                         <Hand size={14} aria-hidden="true" />
                       </button>

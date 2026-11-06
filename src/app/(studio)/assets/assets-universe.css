@@ -1,3 +1,7 @@
+/* Keep the hero and toolbar fixed when filtered results change page height. */
+html:has(.assets-page) {
+  scrollbar-gutter: stable;
+}
 .page-gutter:has(.assets-page) {
   margin-top: 0;
   padding-top: 0;
@@ -91,6 +95,12 @@
   flex-direction: column;
   margin-top: 0;
   gap: 12px;
+}
+.assets-page .assets-folder-note {
+  margin: 0 0 12px;
+  color: #6e727c;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .assets-page .assets-tag-strip {
   position: relative;

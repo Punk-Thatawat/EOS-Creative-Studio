@@ -3822,17 +3822,18 @@ export function TemplatesPageClient() {
               <LibraryHero mode={mode} items={visible} />
               {laneToolbar}
               {libraryBody}
-              {!loading && !error && pagination.totalPages > 1 && (
+              {!loading && !error && pagination.totalPages >= 1 && (
                 <nav className={s.pagination} aria-label={c("templates.paginationAria")}>
                   <button
                     type="button"
                     disabled={pagination.page === 1}
+                    aria-label={c("templates.prev")}
                     onClick={() => {
                       setPage(pagination.page - 1);
                       setLoading(true);
                     }}
                   >
-                    {c("templates.prev")}
+                    <ChevronLeft size={18} aria-hidden="true" />
                   </button>
                   {pages.map((n, i) => (
                     <span key={n}>
@@ -3853,12 +3854,13 @@ export function TemplatesPageClient() {
                   <button
                     type="button"
                     disabled={pagination.page === pagination.totalPages}
+                    aria-label={c("templates.next")}
                     onClick={() => {
                       setPage(pagination.page + 1);
                       setLoading(true);
                     }}
                   >
-                    {c("templates.next")}
+                    <ChevronRight size={18} aria-hidden="true" />
                   </button>
                 </nav>
               )}

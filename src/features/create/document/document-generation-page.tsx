@@ -23,8 +23,6 @@ import {
   Minus,
   ShieldAlert,
   Lightbulb,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -33,6 +31,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CreatorWorkspaceLayout } from "@/components/create/creator-workspace-layout";
 import { MobileModeDropdown } from "@/features/create/components/mobile-mode-dropdown";
 import { Dropdown } from "@/components/ui/dropdown";
+import { DocumentZoomControl } from "./document-zoom-control";
 import { InfoTooltip } from "@/features/create/components/info-tooltip";
 import { DocumentSettingLabel } from "./document-setting-label";
 import { getDocumentSummaryOptions, summarizeDocument, type DocumentSummary } from "@/lib/api/document-summarize";
@@ -1270,9 +1269,7 @@ function SummaryTranslationPage() {
             <div><span>{isSummaryLike && displayedSummary ? t(K(isReport ? "report.generated" : "summary.generated")) : isTranslate && translationWorkspaceTab === "source" ? t(K("translate.sourceDocument")) : isTranslate && translationResult ? t(K("translate.translatedDocument")) : t(K("preview.heading"))}</span><small>{isSummaryLike ? t(K("summary.workspace")) : isTranslate ? t(K("translate.workspace")) : t(K("preview.canvas"))}</small></div>
             <div className={styles.previewToolbar} aria-label={t(K("preview.controls"))}>
               {isReport ? <>
-                <button type="button" className={styles.previewToolButton} onClick={() => setSummaryZoom((zoom) => Math.max(60, zoom - 10))} disabled={summaryZoom <= 60} aria-label={t(K("preview.zoomOut"))} title={t(K("preview.zoomOut"))}><ZoomOut size={14} aria-hidden="true" /></button>
-                <button type="button" className={`${styles.previewToolButton} ${styles.previewZoomValue}`} onClick={() => setSummaryZoom(100)} aria-label={t(K("preview.zoomReset"))} title={t(K("preview.zoomReset"))}>{summaryZoom}%</button>
-                <button type="button" className={styles.previewToolButton} onClick={() => setSummaryZoom((zoom) => Math.min(160, zoom + 10))} disabled={summaryZoom >= 160} aria-label={t(K("preview.zoomIn"))} title={t(K("preview.zoomIn"))}><ZoomIn size={14} aria-hidden="true" /></button>
+                <DocumentZoomControl value={summaryZoom} onChange={setSummaryZoom} />
                 <span className={styles.toolbarDivider} />
                 <Dropdown
                   value={reportExportFormat}
@@ -1291,9 +1288,7 @@ function SummaryTranslationPage() {
                   menuPosition="fixed"
                 />
               </> : isSummarize ? <>
-                <button type="button" className={styles.previewToolButton} onClick={() => setSummaryZoom((zoom) => Math.max(60, zoom - 10))} disabled={summaryZoom <= 60} aria-label={t(K("preview.zoomOut"))} title={t(K("preview.zoomOut"))}><ZoomOut size={14} aria-hidden="true" /></button>
-                <button type="button" className={`${styles.previewToolButton} ${styles.previewZoomValue}`} onClick={() => setSummaryZoom(100)} aria-label={t(K("preview.zoomReset"))} title={t(K("preview.zoomReset"))}>{summaryZoom}%</button>
-                <button type="button" className={styles.previewToolButton} onClick={() => setSummaryZoom((zoom) => Math.min(160, zoom + 10))} disabled={summaryZoom >= 160} aria-label={t(K("preview.zoomIn"))} title={t(K("preview.zoomIn"))}><ZoomIn size={14} aria-hidden="true" /></button>
+                <DocumentZoomControl value={summaryZoom} onChange={setSummaryZoom} />
                 <span className={styles.toolbarDivider} />
                 <Dropdown
                   value={summaryExportFormat}
@@ -1313,9 +1308,7 @@ function SummaryTranslationPage() {
                   menuPosition="fixed"
                 />
               </> : isTranslate ? <>
-                <button type="button" className={styles.previewToolButton} onClick={() => setTranslationZoom((zoom) => Math.max(60, zoom - 10))} disabled={translationZoom <= 60} aria-label={t(K("preview.zoomOut"))} title={t(K("preview.zoomOut"))}><ZoomOut size={14} aria-hidden="true" /></button>
-                <button type="button" className={`${styles.previewToolButton} ${styles.previewZoomValue}`} onClick={() => setTranslationZoom(100)} aria-label={t(K("preview.zoomReset"))} title={t(K("preview.zoomReset"))}>{translationZoom}%</button>
-                <button type="button" className={styles.previewToolButton} onClick={() => setTranslationZoom((zoom) => Math.min(160, zoom + 10))} disabled={translationZoom >= 160} aria-label={t(K("preview.zoomIn"))} title={t(K("preview.zoomIn"))}><ZoomIn size={14} aria-hidden="true" /></button>
+                <DocumentZoomControl value={translationZoom} onChange={setTranslationZoom} />
                 <span className={styles.toolbarDivider} />
                 <Dropdown
                   value={translationExportSelection}

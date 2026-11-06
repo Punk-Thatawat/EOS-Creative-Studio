@@ -132,6 +132,7 @@ export type FetchAssetsInput = {
   type?: AssetsApiType;
   search?: string;
   folder?: string;
+  unassigned?: boolean;
   tag?: string;
   sort?: "newest" | "oldest";
   page?: number;
@@ -150,6 +151,7 @@ export async function fetchAssets(input: FetchAssetsInput): Promise<AssetsApiLis
   if (input.type) query.set("type", input.type);
   if (input.search?.trim()) query.set("search", input.search.trim());
   if (input.folder) query.set("folder", input.folder);
+  if (input.unassigned) query.set("unassigned", "true");
   if (input.tag) query.set("tag", input.tag);
   if (input.sort) query.set("sort", input.sort);
   if (input.workspaceId) query.set("workspaceId", input.workspaceId);
@@ -170,6 +172,15 @@ export async function downloadAsset(assetId: string, workspaceId?: string): Prom
 export async function createAssetTag(name: string, workspaceId?: string): Promise<AssetsApiFilter> {
   const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
   return request<AssetsApiFilter>(`/assets/tags${query}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+export async function createAssetFolder(name: string, workspaceId?: string): Promise<AssetsApiFilter> {
+  const query = workspaceId ? `?workspaceId=${encodeURIComponent(workspaceId)}` : "";
+  return request<AssetsApiFilter>(`/assets/folders${query}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),

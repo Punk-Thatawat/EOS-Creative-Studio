@@ -2033,8 +2033,7 @@
   font-size: 20px;
   color: #171719;
 }
-.empty button,
-.pagination button {
+.empty button {
   min-height: 40px;
   border: 0;
   border-radius: 0;
@@ -2046,14 +2045,35 @@
 .pagination {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   margin-top: 22px;
-  color: #17171980;
+  color: #525466;
 }
+.pagination > span { display: inline-flex; align-items: center; gap: 7px; }
+.pagination button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+  color: #202236;
+  border: 1px solid #e5e6ec;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+.pagination button:disabled { color: #b9bac2; cursor: not-allowed; }
+.pagination button:focus-visible { outline: 2px solid #f26b38; outline-offset: 2px; }
 .pagination button[aria-current] {
-  border-color: #f26b38;
-  background: #f26b38;
+  color: #ff5b14;
+  border-color: #ff9d78;
+  background: #fff1eb;
+}
+@media (max-width: 1023.98px), (pointer: coarse) {
+  .pagination button { width: auto; min-width: 40px; height: auto; min-height: 40px; }
 }
 
 /* History: the invitation shown before anything has been opened. */
@@ -3093,7 +3113,6 @@
   .videoPreviewInfo { box-shadow: inset 0 1px 0 #e8eaee; }
 }
 
-.pagination button[aria-current] { color: #fff; }
 .composerBar .use, .motionGenerateDock button, .editGenerateDock button { color: #fff; }
 
 /* A grey divider between the create panel and the library, the same hairline the Images page uses. */

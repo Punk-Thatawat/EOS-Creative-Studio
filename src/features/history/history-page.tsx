@@ -45,6 +45,7 @@ import {
 } from "@/lib/api/history";
 import { templateCopy } from "@/features/templates/template-copy";
 import { useStudioCopy, type StudioCopyKey } from "@/lib/i18n/studio-copy";
+import { pauseOtherHistoryAudio } from "./exclusive-audio-playback";
 import s from "./history-page.module.css";
 
 const PAGE_SIZE = 24;
@@ -220,8 +221,12 @@ function Media({ item, large = false }: { item: HistoryItem; large?: boolean }) 
       <audio
         key={attempt}
         src={item.outputUrl}
+        data-history-audio
         controls
         preload="none"
+        onPlay={(event) => {
+          pauseOtherHistoryAudio(document.querySelectorAll<HTMLAudioElement>("audio[data-history-audio]"), event.currentTarget);
+        }}
         onError={() => setFailed(true)}
         aria-label={c("history.media.audioAria", { title: title(item) })}
       />
