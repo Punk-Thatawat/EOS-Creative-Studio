@@ -18,6 +18,7 @@ import {
   MessageSquareText,
   Palette,
   Settings,
+  Share2,
   Settings2,
   ShieldCheck,
   UsersRound,
@@ -429,6 +430,7 @@ function AdminSidebarNavigation({ pathname, hydrated }: { pathname: string; hydr
   const operations = [
     { label: "Members & roles", href: "/admin/members", icon: UsersRound },
     { label: "Credits & billing", href: "/admin/credits", icon: BarChart3 },
+    { label: "Affiliate", href: "/admin/affiliate", icon: Share2 },
     { label: "Legal policies", href: "/admin/legal", icon: FileText },
     { label: "System settings", href: "/admin/settings", icon: Settings, disabled: true },
   ] satisfies Array<NavigationItem & { disabled?: boolean }>;

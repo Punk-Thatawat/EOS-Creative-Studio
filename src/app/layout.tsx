@@ -4,6 +4,7 @@ import { Kanit, Noto_Sans_Thai } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { LocaleProvider } from "@/lib/i18n/locale-provider";
 import { CookieConsentBanner } from "@/components/privacy/cookie-consent-banner";
+import { ReferralCapture } from "@/components/affiliate/referral-capture";
 
 const kanit = Kanit({
   subsets: ["thai", "latin"],
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <LocaleProvider>
           {children}
+          <ReferralCapture />
           <CookieConsentBanner />
         </LocaleProvider>
       </body>

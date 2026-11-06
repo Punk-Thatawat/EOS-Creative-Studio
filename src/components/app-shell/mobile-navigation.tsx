@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Activity, AudioLines, BarChart3, Boxes, ChevronDown, Clapperboard, FileText, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Palette, Settings, Settings2, ShieldCheck, UsersRound, Video, X } from "lucide-react";
+import { Activity, AudioLines, BarChart3, Boxes, ChevronDown, Clapperboard, FileText, Home, ImageIcon, LayoutTemplate, Menu, MessageSquareText, Palette, Settings, Settings2, Share2, ShieldCheck, UsersRound, Video, X } from "lucide-react";
 import { EosLogo } from "@/components/brand/eos-logo";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { WorkspaceNavigation } from "./workspace-navigation";
@@ -23,6 +23,7 @@ const adminItems = [
 const adminOperations = [
   { label: "Members & roles", href: "/admin/members", icon: UsersRound },
   { label: "Credits & billing", href: "/admin/credits", icon: BarChart3 },
+  { label: "Affiliate", href: "/admin/affiliate", icon: Share2 },
   { label: "Legal policies", href: "/admin/legal", icon: FileText },
   { label: "System settings", href: "/admin/settings", icon: Settings, disabled: true },
 ];
