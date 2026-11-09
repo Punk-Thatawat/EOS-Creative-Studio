@@ -132,6 +132,84 @@
   font-size: 0.82rem;
   font-weight: 800;
 }
+.walletStats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.exchange {
+  margin-top: 1rem;
+  border: 1px solid #efe9e4;
+  border-radius: 0.8rem;
+  background: #fffdfb;
+  padding: 0.85rem 0.9rem;
+}
+.exchangeHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.exchangeHead > div {
+  display: grid;
+  gap: 0.15rem;
+}
+.exchangeHead strong {
+  color: #171412;
+  font-size: 0.8rem;
+}
+.exchangeHead span {
+  color: #736b65;
+  font-size: 0.7rem;
+}
+.exchangePanel {
+  margin-top: 0.8rem;
+  border-top: 1px solid #f1ece8;
+  padding-top: 0.8rem;
+}
+.amountRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.45rem;
+}
+.amountField {
+  width: 12rem;
+  max-width: 100%;
+  height: 2.35rem;
+  border: 1px solid #e9e3df;
+  border-radius: 0.65rem;
+  background: #fff;
+  padding: 0 0.7rem;
+  color: #171412;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.amountField:focus {
+  border-color: #f26b38;
+  outline: none;
+}
+.amountField[aria-invalid="true"] {
+  border-color: #d9633f;
+}
+.preview {
+  margin-top: 0.5rem;
+  color: #171412;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.success {
+  color: #2f7d46;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.exchangeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
 .listTitle {
   margin-top: 1.2rem;
   color: #3b3531;
@@ -182,6 +260,9 @@
 @media (max-width: 720px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .walletStats {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
   }
   .linkRow {
     flex-wrap: wrap;

@@ -10,26 +10,41 @@ const REQUEST_TIMEOUT_MS = 15000;
 export type AffiliateStatus = "active" | "suspended";
 
 export type AffiliateSettings = {
-  /** The whole program: off means no new links and no new commissions of either kind. */
+  /** The whole program: off means no new links, no new commissions and no new exchanges. */
   enabled: boolean;
-  /** The percent of the credits an invited member tops up. */
-  commissionPercent: number;
   topupEnabled: boolean;
+  /** The percent of what an invited member pays (before VAT) when they top up. */
+  commissionPercent: number;
   /** Whether successful creations earn a commission (only after the member has topped up at least once). */
   usageEnabled: boolean;
   /** The percent of the credits an invited member spends on a creation that succeeds. */
   usageCommissionPercent: number;
+  /** What one credit is worth in baht, to value the credits spent on a creation. */
+  bahtPerCredit: number;
+  /** The exchange rate: credits received for each baht exchanged. */
+  creditsPerBaht: number;
+  /** Days a new earning waits before it can be exchanged. */
+  holdDays: number;
+  /** The smallest amount, in baht, that can be exchanged at once. */
+  minExchangeBaht: number;
+};
+
+export type AffiliateWallet = {
+  /** Earned, past the hold, not exchanged yet: what can be exchanged now. */
+  availableBaht: number;
+  /** Earned but still inside the hold. */
+  pendingBaht: number;
+  /** Already exchanged for credits. */
+  redeemedBaht: number;
+  earnedBaht: number;
+  topupEarnedBaht: number;
+  usageEarnedBaht: number;
 };
 
 export type AffiliateStats = {
   invitedCount: number;
   topupCount: number;
   topupAmountThb: number;
-  topupCredits: number;
-  /** Everything earned, from top-ups and from usage together. */
-  commissionCredits: number;
-  topupCommissionCredits: number;
-  usageCommissionCredits: number;
 };
 
 export type AffiliateReferral = {
@@ -38,15 +53,43 @@ export type AffiliateReferral = {
   joinedAt: string;
   topupCount: number;
   topupAmountThb: number;
-  commissionCredits: number;
+  earnedBaht: number;
+};
+
+export type AffiliateRedemption = {
+  id: string;
+  amountBaht: number;
+  creditsGranted: number;
+  status: "pending" | "completed" | "failed";
+  createdAt: string;
 };
 
 export type AffiliateOverview = {
   settings: AffiliateSettings;
   affiliate: { id: string; code: string; status: AffiliateStatus; createdAt: string } | null;
+  wallet: AffiliateWallet;
   stats: AffiliateStats;
   referrals: AffiliateReferral[];
+  redemptions: AffiliateRedemption[];
 };
+
+export type RedeemResult = {
+  redemptionId: string;
+  amountBaht: number;
+  creditsGranted: number;
+  wallet: AffiliateWallet;
+};
+
+/** The short codes the server answers an exchange with when it refuses. Anything else is shown as a general failure. */
+export type RedeemErrorCode =
+  | "below_minimum"
+  | "exceeds_balance"
+  | "invalid_amount"
+  | "program_off"
+  | "suspended"
+  | "affiliate_not_found"
+  | "previous_attempt_failed"
+  | "exchange_failed";
 
 export type ClaimReferralResult = {
   claimed: boolean;
@@ -63,7 +106,8 @@ export type AdminAffiliate = {
   createdAt: string;
   invitedCount: number;
   topupAmountThb: number;
-  commissionCredits: number;
+  earnedBaht: number;
+  redeemedBaht: number;
 };
 
 export type AdminAffiliateList = { affiliates: AdminAffiliate[]; total: number; page: number; limit: number };
@@ -71,6 +115,8 @@ export type AdminAffiliateList = { affiliates: AdminAffiliate[]; total: number; 
 export type AffiliateApi = {
   load(): Promise<AffiliateOverview>;
   create(): Promise<NonNullable<AffiliateOverview["affiliate"]>>;
+  /** Exchanges baht for credits. `requestId` is one per press of the button, so a double press is one exchange. */
+  redeem(amountBaht: number, requestId: string): Promise<RedeemResult>;
 };
 
 type ErrorPayload = { message?: unknown; errorMessage?: unknown } | null;
@@ -106,6 +152,7 @@ async function request<T>(path: string, init: { method?: string; body?: unknown 
 export const affiliateApi: AffiliateApi = {
   load: () => request<AffiliateOverview>("/affiliate"),
   create: () => request<NonNullable<AffiliateOverview["affiliate"]>>("/affiliate", { method: "POST", body: {} }),
+  redeem: (amountBaht, requestId) => request<RedeemResult>("/affiliate/redeem", { method: "POST", body: { amountBaht, requestId } }),
 };
 
 export function claimAffiliateReferral(code: string): Promise<ClaimReferralResult> {
