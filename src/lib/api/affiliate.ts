@@ -120,12 +120,16 @@ export function updateAdminAffiliateSettings(input: Partial<AffiliateSettings>):
   return request<AffiliateSettings>("/admin/affiliate/settings", { method: "PATCH", body: input });
 }
 
-export function listAdminAffiliates(input: { q?: string; status?: AffiliateStatus | "all"; page?: number; limit?: number } = {}): Promise<AdminAffiliateList> {
+export type AffiliateSort = "member" | "code" | "invited" | "topups" | "commission" | "joined" | "status";
+
+export function listAdminAffiliates(input: { q?: string; status?: AffiliateStatus | "all"; page?: number; limit?: number; sort?: AffiliateSort; order?: "asc" | "desc" } = {}): Promise<AdminAffiliateList> {
   const params = new URLSearchParams();
   if (input.q?.trim()) params.set("q", input.q.trim());
   if (input.status && input.status !== "all") params.set("status", input.status);
   params.set("page", String(input.page ?? 1));
   params.set("limit", String(input.limit ?? 25));
+  if (input.sort) params.set("sort", input.sort);
+  if (input.order) params.set("order", input.order);
   return request<AdminAffiliateList>(`/admin/affiliate/affiliates?${params.toString()}`);
 }
 
