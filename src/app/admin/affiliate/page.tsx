@@ -29,7 +29,7 @@ const columns: { sort: AffiliateSort; label: string; right?: boolean }[] = [
   { sort: "code", label: "Code" },
   { sort: "invited", label: "Invited", right: true },
   { sort: "topups", label: "Their top-ups (฿)", right: true },
-  { sort: "commission", label: "Credits earned", right: true },
+  { sort: "commission", label: "Earned (฿)", right: true },
   { sort: "joined", label: "Joined" },
   { sort: "status", label: "Status" },
 ];
@@ -46,12 +46,42 @@ function pageNumbers(current: number, last: number): (number | "gap")[] {
   return result;
 }
 
+/** A number box for the exchange settings, with its label above it. */
+function NumberField({ label, value, onChange, disabled, invalid, min, max, step }: { label: string; value: string; onChange: (value: string) => void; disabled: boolean; invalid: boolean; min: number; max: number; step: number }) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold">
+      {label}
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        inputMode="decimal"
+        className="h-9 w-40 rounded-lg border border-border bg-white px-3 text-sm"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        aria-invalid={invalid}
+      />
+    </label>
+  );
+}
+
+const inRange = (text: string, min: number, max: number) => {
+  const value = Number(text);
+  return text.trim() !== "" && Number.isFinite(value) && value >= min && value <= max;
+};
+
 function AdminAffiliateContent() {
   const [enabled, setEnabled] = useState(true);
   const [percent, setPercent] = useState("10");
   const [topupEnabled, setTopupEnabled] = useState(true);
   const [usageEnabled, setUsageEnabled] = useState(false);
   const [usagePercent, setUsagePercent] = useState("3");
+  const [bahtPerCredit, setBahtPerCredit] = useState("0.1");
+  const [creditsPerBaht, setCreditsPerBaht] = useState("10");
+  const [holdDays, setHoldDays] = useState("7");
+  const [minExchangeBaht, setMinExchangeBaht] = useState("100");
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -78,6 +108,10 @@ function AdminAffiliateContent() {
         setTopupEnabled(settings.topupEnabled);
         setUsageEnabled(settings.usageEnabled);
         setUsagePercent(String(settings.usageCommissionPercent));
+        setBahtPerCredit(String(settings.bahtPerCredit));
+        setCreditsPerBaht(String(settings.creditsPerBaht));
+        setHoldDays(String(settings.holdDays));
+        setMinExchangeBaht(String(settings.minExchangeBaht));
         setSettingsLoaded(true);
       })
       .catch((error: unknown) => {
@@ -111,7 +145,11 @@ function AdminAffiliateContent() {
   const percentValid = percent.trim() !== "" && Number.isFinite(percentValue) && percentValue >= 0 && percentValue <= 100;
   const usagePercentValue = Number(usagePercent);
   const usagePercentValid = usagePercent.trim() !== "" && Number.isFinite(usagePercentValue) && usagePercentValue >= 0 && usagePercentValue <= 100;
-  const settingsValid = percentValid && usagePercentValid;
+  const bahtPerCreditValid = inRange(bahtPerCredit, 0.000001, 1000);
+  const creditsPerBahtValid = inRange(creditsPerBaht, 0.0001, 100000);
+  const holdDaysValid = inRange(holdDays, 0, 365) && Number.isInteger(Number(holdDays));
+  const minExchangeValid = inRange(minExchangeBaht, 0.01, 10000000);
+  const settingsValid = percentValid && usagePercentValid && bahtPerCreditValid && creditsPerBahtValid && holdDaysValid && minExchangeValid;
 
   async function saveSettings() {
     if (!settingsValid) return;
@@ -124,12 +162,20 @@ function AdminAffiliateContent() {
         commissionPercent: percentValue,
         usageEnabled,
         usageCommissionPercent: usagePercentValue,
+        bahtPerCredit: Number(bahtPerCredit),
+        creditsPerBaht: Number(creditsPerBaht),
+        holdDays: Number(holdDays),
+        minExchangeBaht: Number(minExchangeBaht),
       });
       setEnabled(saved.enabled);
       setPercent(String(saved.commissionPercent));
       setTopupEnabled(saved.topupEnabled);
       setUsageEnabled(saved.usageEnabled);
       setUsagePercent(String(saved.usageCommissionPercent));
+      setBahtPerCredit(String(saved.bahtPerCredit));
+      setCreditsPerBaht(String(saved.creditsPerBaht));
+      setHoldDays(String(saved.holdDays));
+      setMinExchangeBaht(String(saved.minExchangeBaht));
       setMessage({ tone: "ok", text: "Saved. The new settings apply from now on." });
     } catch (error: unknown) {
       setMessage({ tone: "error", text: error instanceof Error ? error.message : "Could not save the settings" });
@@ -184,7 +230,7 @@ function AdminAffiliateContent() {
               <div className="mx-auto max-w-5xl">
                 <h1 className="text-xl font-extrabold">Affiliate</h1>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Members share a link; when someone who signed up through it tops up, the member is credited a percent of the credits they bought.
+                  Members share a link. When someone who signed up through it tops up or creates something, the member earns a percent in baht. After a short hold, they can exchange the baht for credits.
                 </p>
 
                 {message ? (
@@ -212,7 +258,7 @@ function AdminAffiliateContent() {
                         Pay a commission when an invited member tops up
                       </label>
                       <label className="mt-2 grid gap-1 text-xs font-semibold">
-                        Commission (% of the credits topped up)
+                        Commission (% of what the member pays, before VAT)
                         <input
                           type="number"
                           min={0}
@@ -235,7 +281,7 @@ function AdminAffiliateContent() {
                         Pay a commission when an invited member creates something successfully
                       </label>
                       <label className="mt-2 grid gap-1 text-xs font-semibold">
-                        Commission (% of the credits the creation cost)
+                        Commission (% of the credits the creation cost, valued at the price per credit below)
                         <input
                           type="number"
                           min={0}
@@ -252,15 +298,25 @@ function AdminAffiliateContent() {
                     </fieldset>
                   </div>
 
+                  <fieldset className="mt-3 rounded-xl border border-border p-3">
+                    <legend className="px-1 text-xs font-bold">Exchange for credits</legend>
+                    <div className="flex flex-wrap items-end gap-4">
+                      <NumberField label="Credits per ฿1 exchanged" value={creditsPerBaht} onChange={setCreditsPerBaht} disabled={!settingsLoaded} invalid={!creditsPerBahtValid} min={0.0001} max={100000} step={0.0001} />
+                      <NumberField label="Minimum per exchange (฿)" value={minExchangeBaht} onChange={setMinExchangeBaht} disabled={!settingsLoaded} invalid={!minExchangeValid} min={0.01} max={10000000} step={0.01} />
+                      <NumberField label="Hold before exchange (days)" value={holdDays} onChange={setHoldDays} disabled={!settingsLoaded} invalid={!holdDaysValid} min={0} max={365} step={1} />
+                      <NumberField label="Price per credit (฿), for usage" value={bahtPerCredit} onChange={setBahtPerCredit} disabled={!settingsLoaded} invalid={!bahtPerCreditValid} min={0.000001} max={1000} step={0.000001} />
+                    </div>
+                  </fieldset>
+
                   <div className="mt-4">
                     <Button type="button" size="sm" disabled={!settingsLoaded || !settingsValid || savingSettings} onClick={() => { void saveSettings(); }}>
                       {savingSettings ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />}
                       Save
                     </Button>
                   </div>
-                  {!settingsValid ? <p className="mt-2 text-xs text-[#b8481f]">Enter a number from 0 to 100 in each percent field.</p> : null}
+                  {!settingsValid ? <p className="mt-2 text-xs text-[#b8481f]">Check the highlighted fields: percents are 0 to 100, the other numbers must be above 0 (hold days can be 0, whole days only).</p> : null}
                   <p className="mt-3 text-[11px] text-muted-foreground">
-                    A new rate only applies from the next top-up or creation after you save; what was earned before keeps the rate it was earned at. Usage commissions only count after the invited member has topped up at least once, so free sign-up credits never pay anyone. They are paid on the credits actually spent, net of any refund. Turning the program off stops new links and new commissions of both kinds.
+                    A new rate only applies from the next top-up or creation after you save; what was earned before keeps the rate it was earned at. Earnings wait for the hold before they can be exchanged, which covers refunds and chargebacks. The exchange rate and minimum apply at the moment a member exchanges. Usage commissions only count after the invited member has topped up at least once, so free sign-up credits never pay anyone. They are paid on the credits actually spent, net of any refund. Turning the program off stops new links and new commissions of both kinds.
                   </p>
                 </section>
 
@@ -351,7 +407,10 @@ function AdminAffiliateContent() {
                               <td className="py-2.5 pr-3 font-mono">{item.code}</td>
                               <td className="py-2.5 pr-3 text-right tabular-nums">{numberFormat.format(item.invitedCount)}</td>
                               <td className="py-2.5 pr-3 text-right tabular-nums">{numberFormat.format(item.topupAmountThb)}</td>
-                              <td className="py-2.5 pr-3 text-right tabular-nums">{numberFormat.format(item.commissionCredits)}</td>
+                              <td className="py-2.5 pr-3 text-right tabular-nums">
+                                {numberFormat.format(item.earnedBaht)}
+                                {item.redeemedBaht > 0 ? <div className="text-[11px] text-muted-foreground">exchanged {numberFormat.format(item.redeemedBaht)}</div> : null}
+                              </td>
                               <td className="py-2.5 pr-3">{dateFormat.format(new Date(item.createdAt))}</td>
                               <td className="py-2.5 pr-3">
                                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.status === "active" ? "bg-[#eaf5ec] text-[#2f7d46]" : "bg-[#fff0e9] text-[#b8481f]"}`}>
