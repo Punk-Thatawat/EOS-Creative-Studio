@@ -15,6 +15,7 @@ import {
   type AffiliateSort,
   type AffiliateStatus,
 } from "@/lib/api/affiliate";
+import { WithdrawalsSection } from "./withdrawals-section";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
@@ -82,6 +83,8 @@ function AdminAffiliateContent() {
   const [creditsPerBaht, setCreditsPerBaht] = useState("10");
   const [holdDays, setHoldDays] = useState("7");
   const [minExchangeBaht, setMinExchangeBaht] = useState("100");
+  const [withdrawEnabled, setWithdrawEnabled] = useState(false);
+  const [minWithdrawBaht, setMinWithdrawBaht] = useState("500");
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -112,6 +115,8 @@ function AdminAffiliateContent() {
         setCreditsPerBaht(String(settings.creditsPerBaht));
         setHoldDays(String(settings.holdDays));
         setMinExchangeBaht(String(settings.minExchangeBaht));
+        setWithdrawEnabled(settings.withdrawEnabled ?? false);
+        setMinWithdrawBaht(String(settings.minWithdrawBaht ?? 500));
         setSettingsLoaded(true);
       })
       .catch((error: unknown) => {
@@ -149,7 +154,8 @@ function AdminAffiliateContent() {
   const creditsPerBahtValid = inRange(creditsPerBaht, 0.0001, 100000);
   const holdDaysValid = inRange(holdDays, 0, 365) && Number.isInteger(Number(holdDays));
   const minExchangeValid = inRange(minExchangeBaht, 0.01, 10000000);
-  const settingsValid = percentValid && usagePercentValid && bahtPerCreditValid && creditsPerBahtValid && holdDaysValid && minExchangeValid;
+  const minWithdrawValid = inRange(minWithdrawBaht, 0.01, 10000000);
+  const settingsValid = percentValid && usagePercentValid && bahtPerCreditValid && creditsPerBahtValid && holdDaysValid && minExchangeValid && minWithdrawValid;
 
   async function saveSettings() {
     if (!settingsValid) return;
@@ -166,6 +172,8 @@ function AdminAffiliateContent() {
         creditsPerBaht: Number(creditsPerBaht),
         holdDays: Number(holdDays),
         minExchangeBaht: Number(minExchangeBaht),
+        withdrawEnabled,
+        minWithdrawBaht: Number(minWithdrawBaht),
       });
       setEnabled(saved.enabled);
       setPercent(String(saved.commissionPercent));
@@ -176,6 +184,8 @@ function AdminAffiliateContent() {
       setCreditsPerBaht(String(saved.creditsPerBaht));
       setHoldDays(String(saved.holdDays));
       setMinExchangeBaht(String(saved.minExchangeBaht));
+      setWithdrawEnabled(saved.withdrawEnabled ?? false);
+      setMinWithdrawBaht(String(saved.minWithdrawBaht ?? 500));
       setMessage({ tone: "ok", text: "Saved. The new settings apply from now on." });
     } catch (error: unknown) {
       setMessage({ tone: "error", text: error instanceof Error ? error.message : "Could not save the settings" });
@@ -308,6 +318,18 @@ function AdminAffiliateContent() {
                     </div>
                   </fieldset>
 
+                  <fieldset className="mt-3 rounded-xl border border-border p-3">
+                    <legend className="px-1 text-xs font-bold">Withdraw as money</legend>
+                    <label className="flex items-center gap-2 text-xs font-semibold">
+                      <input type="checkbox" checked={withdrawEnabled} disabled={!settingsLoaded} onChange={(event) => setWithdrawEnabled(event.target.checked)} />
+                      Let members ask to withdraw their baht (you transfer it by hand, then mark it paid below)
+                    </label>
+                    <div className="mt-2">
+                      <NumberField label="Minimum per withdrawal (฿)" value={minWithdrawBaht} onChange={setMinWithdrawBaht} disabled={!settingsLoaded || !withdrawEnabled} invalid={!minWithdrawValid} min={0.01} max={10000000} step={0.01} />
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">Tax withholding and bank fees are handled outside this system: the amount a member asks for is the amount to transfer. Off by default, because it pays out real money.</p>
+                  </fieldset>
+
                   <div className="mt-4">
                     <Button type="button" size="sm" disabled={!settingsLoaded || !settingsValid || savingSettings} onClick={() => { void saveSettings(); }}>
                       {savingSettings ? <LoaderCircle size={14} className="animate-spin" /> : <Save size={14} />}
@@ -319,6 +341,8 @@ function AdminAffiliateContent() {
                     A new rate only applies from the next top-up or creation after you save; what was earned before keeps the rate it was earned at. Earnings wait for the hold before they can be exchanged, which covers refunds and chargebacks. The exchange rate and minimum apply at the moment a member exchanges. Usage commissions only count after the invited member has topped up at least once, so free sign-up credits never pay anyone. They are paid on the credits actually spent, net of any refund. Turning the program off stops new links and new commissions of both kinds.
                   </p>
                 </section>
+
+                <WithdrawalsSection />
 
                 <section className="mt-5 rounded-2xl border border-border bg-white p-4 sm:p-5" aria-labelledby="affiliate-list-heading">
                   <div className="flex flex-wrap items-center justify-between gap-3">
