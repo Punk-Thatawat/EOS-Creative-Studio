@@ -2,6 +2,7 @@
 
 import type { AffiliateDailyPoint } from "@/lib/api/affiliate";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { EmptyChartArt } from "./affiliate-art";
 import { formatDay, formatNumber } from "./format";
 import styles from "./affiliate-page.module.css";
 
@@ -16,7 +17,12 @@ export function EarningsChart({ points }: { points: AffiliateDailyPoint[] }) {
   const amount = `฿${formatNumber(total, locale)}`;
 
   if (points.length === 0 || total <= 0) {
-    return <p className={styles.muted}>{t("affiliate.page.chartEmpty")}</p>;
+    return (
+      <div className={styles.chartEmpty}>
+        <EmptyChartArt className={styles.chartEmptyArt} />
+        <strong>{t("affiliate.page.noData")}</strong>
+      </div>
+    );
   }
 
   const first = points[0];
@@ -24,7 +30,7 @@ export function EarningsChart({ points }: { points: AffiliateDailyPoint[] }) {
   const last = points[points.length - 1];
 
   return (
-    <div>
+    <div className={styles.chartRoot}>
       <div className={styles.chartTotal}>
         <strong>{amount}</strong>
         <span className={styles.legend}>

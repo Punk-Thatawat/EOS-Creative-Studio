@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ArrowLeftRight, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AffiliateApi, AffiliateOverview, AffiliateWallet, RedeemErrorCode } from "@/lib/api/affiliate";
 import { requestCreditBalanceSync } from "@/lib/credits/credit-events";
@@ -33,7 +33,9 @@ export function ExchangeCard({
   api,
   onWallet,
   onReload,
+  icon,
 }: {
+  icon?: ReactNode;
   overview: AffiliateOverview;
   api: Pick<AffiliateApi, "redeem">;
   onWallet: (wallet: AffiliateWallet) => void;
@@ -99,20 +101,22 @@ export function ExchangeCard({
 
   return (
     <div className={styles.exchange}>
-      <div className={styles.exchangeHead}>
-        <div>
+      <div className={styles.actionHead}>
+        {icon ? <span className={styles.actionIcon} aria-hidden="true">{icon}</span> : null}
+        <div className={styles.actionText}>
           <strong>{t("settings.affiliate.exchangeTitle")}</strong>
           <span>{t("settings.affiliate.exchangeRate", { rate: formatNumber(creditsPerBaht, locale, 4), min: formatNumber(minimum, locale) })}</span>
+          {step === "closed" && !canExchange && active ? (
+            <span className={styles.actionHint}>{t("settings.affiliate.exchangeNotReady", { min: formatNumber(minimum, locale) })}</span>
+          ) : null}
         </div>
         {step === "closed" ? (
-          <Button type="button" size="sm" disabled={!canExchange} onClick={openExchange}>
+          <Button type="button" size="sm" className={styles.actionPrimary} disabled={!canExchange} onClick={openExchange}>
+            <ArrowLeftRight size={15} aria-hidden="true" />
             {t("settings.affiliate.exchangeButton")}
           </Button>
         ) : null}
       </div>
-      {step === "closed" && !canExchange && active ? (
-        <p className={styles.hint}>{t("settings.affiliate.exchangeNotReady", { min: formatNumber(minimum, locale) })}</p>
-      ) : null}
 
       {step === "entering" ? (
         <div className={styles.exchangePanel}>
