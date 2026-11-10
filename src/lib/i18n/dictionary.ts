@@ -337,6 +337,11 @@ const en = {
   "affiliate.withdraw.contactEmailHint": "Our team writes here if there is a question about the transfer. Filled in from your account; change it if you prefer another.",
   "affiliate.withdraw.errContactEmail": "Enter an email address, for example name@example.com.",
   "affiliate.withdraw.colEmail": "Email",
+  "affiliate.page.heroSubtitleRate": "Invite friends to use EOS and earn {percent}% commission",
+  "affiliate.page.heroSubtitleNone": "Invite friends to use EOS and earn commission",
+  "affiliate.page.noData": "No data yet",
+  "affiliate.page.showAll": "Show all {count}",
+  "affiliate.page.showLess": "Show only the latest",
 
   "create.newGeneration": "New generation",
   "create.smartEnhance": "Smart Enhance",
@@ -2539,6 +2544,11 @@ const th: Record<keyof typeof en, string> = {
   "affiliate.withdraw.contactEmailHint": "ทีมงานจะติดต่อทางอีเมลนี้หากมีข้อสงสัยเรื่องการโอน ใส่ให้จากบัญชีของคุณ แก้เป็นอีเมลอื่นได้",
   "affiliate.withdraw.errContactEmail": "กรอกอีเมลให้ถูกต้อง เช่น name@example.com",
   "affiliate.withdraw.colEmail": "อีเมล",
+  "affiliate.page.heroSubtitleRate": "ชวนเพื่อนมาใช้งาน รับค่าคอม {percent}%",
+  "affiliate.page.heroSubtitleNone": "ชวนเพื่อนมาใช้งาน รับค่าคอม",
+  "affiliate.page.noData": "ยังไม่มีข้อมูล",
+  "affiliate.page.showAll": "ดูทั้งหมด {count} รายการ",
+  "affiliate.page.showLess": "แสดงเฉพาะล่าสุด",
 
   "create.newGeneration": "การสร้างใหม่",
   "create.smartEnhance": "ปรับปรุงอัจฉริยะ",

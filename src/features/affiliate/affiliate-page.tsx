@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Copy, RefreshCw, TriangleAlert } from "lucide-react";
+import { CalendarDays, Check, CircleCheck, Clock, Coins, Copy, Filter, Gift, RefreshCw, Star, TriangleAlert, UserRound, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { affiliateApi, type AffiliateApi, type AffiliateOverview, type AffiliateWallet, type AffiliateWithdrawal } from "@/lib/api/affiliate";
 import { buildReferralLink } from "@/lib/affiliate/referral-storage";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { MegaphoneArt } from "./affiliate-art";
+import { CollapsibleListCard } from "./collapsible-list-card";
 import { EarningsChart } from "./earnings-chart";
 import { ExchangeCard } from "./exchange-card";
 import { formatDate, formatNumber } from "./format";
@@ -164,6 +166,60 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
     failed: t("settings.affiliate.statusFailed"),
   } as const;
 
+  // The banner's promise names the rate that is really paid: the top-up rate, else the usage rate, else nothing in numbers.
+  const heroSubtitle = showTopup
+    ? t("affiliate.page.heroSubtitleRate", { percent })
+    : showUsage
+      ? t("affiliate.page.heroSubtitleRate", { percent: usagePercent })
+      : t("affiliate.page.heroSubtitleNone");
+
+  const heroNotes = (
+    <ul className={styles.heroNotes}>
+      {showTopup ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteEarn", { percent })}</li> : null}
+      {showUsage ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteUsage", { usagePercent })}</li> : null}
+      <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteCredits", { days: holdDays })}</li>
+    </ul>
+  );
+
+  const activityRows = activity.map((item) => {
+    const ready = new Date(item.availableAt).getTime() <= loadedAt;
+    return {
+      key: item.id,
+      node: (
+        <div className={styles.rowLine}>
+          <div className={styles.rowMain}>
+            <strong>
+              <span className={`${styles.badge} ${item.source === "topup" ? styles.badgeTopup : styles.badgeUsage}`}>
+                {item.source === "topup" ? t("affiliate.page.sourceTopup") : t("affiliate.page.sourceUsage")}
+              </span>
+              {item.member}
+            </strong>
+            <span>{formatDate(item.createdAt, locale)} · {ready ? t("affiliate.page.readyNow") : t("affiliate.page.readyOn", { date: formatDate(item.availableAt, locale) })}</span>
+          </div>
+          <div className={styles.rowSide}>
+            <strong>+฿{formatNumber(item.amountBaht, locale)}</strong>
+          </div>
+        </div>
+      ),
+    };
+  });
+
+  const referralRows = (overview?.referrals ?? []).map((item) => ({
+    key: `${item.member}-${item.joinedAt}`,
+    node: (
+      <div className={styles.rowLine}>
+        <div className={styles.rowMain}>
+          <strong>{item.member}</strong>
+          <span>{t("settings.affiliate.joined", { date: formatDate(item.joinedAt, locale) })}</span>
+        </div>
+        <div className={styles.rowSide}>
+          <span>{t("settings.affiliate.topupOf", { amount: formatNumber(item.topupAmountThb, locale) })}</span>
+          <strong>+฿{formatNumber(item.earnedBaht, locale)}</strong>
+        </div>
+      </div>
+    ),
+  }));
+
   return (
     <div className={styles.page} data-page="affiliate">
       <div className={styles.intro}>
@@ -173,7 +229,7 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
           <p className={styles.description}>{t("affiliate.page.subtitle")}</p>
         </div>
         {loadState === "ready" && affiliate ? (
-          <Button type="button" variant="outline" size="sm" disabled={refreshing} onClick={() => { void load(); }}>
+          <Button type="button" variant="outline" size="sm" className={styles.refresh} disabled={refreshing} onClick={() => { void load(); }}>
             <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} />
             {t("affiliate.page.refresh")}
           </Button>
@@ -193,23 +249,22 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
       ) : null}
 
       {loadState === "ready" && overview && !affiliate ? (
-        <Card className={styles.card}>
-          <p className={styles.lead}>{t("settings.affiliate.intro")}</p>
-          <ul className={styles.notes}>
-            <li>{t("settings.affiliate.noteLink")}</li>
-            {showTopup ? <li>{t("settings.affiliate.noteEarn", { percent })}</li> : null}
-            {showUsage ? <li>{t("settings.affiliate.noteUsage", { usagePercent })}</li> : null}
-            <li>{t("settings.affiliate.noteCredits", { days: holdDays })}</li>
-          </ul>
-          {overview.settings.enabled ? (
-            <Button type="button" size="sm" disabled={creating} onClick={() => { void handleCreate(); }}>
-              {creating ? t("settings.affiliate.creating") : t("settings.affiliate.create")}
-            </Button>
-          ) : (
-            <p className={styles.muted}>{t("settings.affiliate.programOff")}</p>
-          )}
-          {createError ? <p className={styles.error} role="alert">{createError}</p> : null}
-        </Card>
+        <section className={styles.hero} aria-labelledby="affiliate-hero-title">
+          <div className={styles.heroBody}>
+            <h2 id="affiliate-hero-title" className={styles.heroTitle}>{t("settings.affiliate.title")}</h2>
+            <p className={styles.heroSubtitle}>{t("settings.affiliate.intro")}</p>
+            {heroNotes}
+            {overview.settings.enabled ? (
+              <Button type="button" size="sm" className={styles.heroButton} disabled={creating} onClick={() => { void handleCreate(); }}>
+                {creating ? t("settings.affiliate.creating") : t("settings.affiliate.create")}
+              </Button>
+            ) : (
+              <p className={styles.heroHint}>{t("settings.affiliate.programOff")}</p>
+            )}
+            {createError ? <p className={styles.heroError} role="alert">{createError}</p> : null}
+          </div>
+          <MegaphoneArt className={styles.heroArt} />
+        </section>
       ) : null}
 
       {loadState === "ready" && overview && affiliate && settings && wallet ? (
@@ -227,41 +282,40 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
             </div>
           ) : null}
 
-          <Card className={styles.card}>
-            <p className={styles.label}>{t("settings.affiliate.linkLabel")}</p>
-            <div className={styles.linkRow}>
-              <input
-                className={styles.linkField}
-                readOnly
-                value={link}
-                aria-label={t("settings.affiliate.linkLabel")}
-                onFocus={(event) => event.currentTarget.select()}
-              />
-              <Button type="button" variant="outline" size="sm" onClick={() => { void handleCopy(); }}>
-                {copied ? <Check size={15} /> : <Copy size={15} />}
-                {copied ? t("settings.affiliate.copied") : t("settings.affiliate.copy")}
-              </Button>
+          <section className={styles.hero} aria-labelledby="affiliate-hero-title">
+            <div className={styles.heroBody}>
+              <h2 id="affiliate-hero-title" className={styles.heroTitle}>{t("settings.affiliate.linkLabel")}</h2>
+              <p className={styles.heroSubtitle}>{heroSubtitle}</p>
+              <div className={styles.linkPill}>
+                <input
+                  className={styles.linkField}
+                  readOnly
+                  value={link}
+                  aria-label={t("settings.affiliate.linkLabel")}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <button type="button" className={styles.copyButton} onClick={() => { void handleCopy(); }} aria-label={copied ? t("settings.affiliate.copied") : t("settings.affiliate.copy")} title={copied ? t("settings.affiliate.copied") : t("settings.affiliate.copy")}>
+                  {copied ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
+                </button>
+              </div>
+              {heroNotes}
+              <p className={styles.heroHint}>{t("settings.affiliate.linkHint")}</p>
             </div>
-            <p className={styles.hint}>{t("settings.affiliate.linkHint")}</p>
-            <ul className={styles.notes}>
-              {showTopup ? <li>{t("settings.affiliate.noteEarn", { percent })}</li> : null}
-              {showUsage ? <li>{t("settings.affiliate.noteUsage", { usagePercent })}</li> : null}
-              <li>{t("settings.affiliate.noteCredits", { days: holdDays })}</li>
-            </ul>
-          </Card>
+            <MegaphoneArt className={styles.heroArt} />
+          </section>
 
           <dl className={styles.kpis}>
-            <div className={styles.kpiPrimary}>
-              <dt>{t("settings.affiliate.walletAvailable")}</dt>
+            <div className={`${styles.kpi} ${styles.kpiPrimary}`}>
+              <dt><span className={`${styles.kpiIcon} ${styles.iconWarm}`} aria-hidden="true"><Users size={18} /></span>{t("settings.affiliate.walletAvailable")}</dt>
               <dd>฿{formatNumber(wallet.availableBaht, locale)}</dd>
             </div>
-            <div>
-              <dt>{t("settings.affiliate.walletPending")}</dt>
+            <div className={styles.kpi}>
+              <dt><span className={`${styles.kpiIcon} ${styles.iconBlue}`} aria-hidden="true"><Clock size={18} /></span>{t("settings.affiliate.walletPending")}</dt>
               <dd>฿{formatNumber(wallet.pendingBaht, locale)}</dd>
               {wallet.pendingBaht > 0 ? <dd className={styles.kpiSub}>{t("settings.affiliate.walletPendingHint", { days: holdDays })}</dd> : null}
             </div>
-            <div>
-              <dt>{t("settings.affiliate.walletRedeemed")}</dt>
+            <div className={styles.kpi}>
+              <dt><span className={`${styles.kpiIcon} ${styles.iconGreen}`} aria-hidden="true"><CircleCheck size={18} /></span>{t("settings.affiliate.walletRedeemed")}</dt>
               <dd>฿{formatNumber(wallet.redeemedBaht, locale)}</dd>
               {withdrawnBaht > 0 || withdrawWaitingBaht > 0 ? (
                 <dd className={styles.kpiSub}>
@@ -269,8 +323,8 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
                 </dd>
               ) : null}
             </div>
-            <div>
-              <dt>{t("affiliate.page.kpiEarned")}</dt>
+            <div className={styles.kpi}>
+              <dt><span className={`${styles.kpiIcon} ${styles.iconGold}`} aria-hidden="true"><Coins size={18} /></span>{t("affiliate.page.kpiEarned")}</dt>
               <dd>฿{formatNumber(wallet.earnedBaht, locale)}</dd>
               {showUsage ? (
                 <dd className={styles.kpiSub}>
@@ -284,8 +338,12 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
           </dl>
 
           <div className={styles.grid}>
-            <Card className={styles.card}>
-              <h2 className={styles.cardTitle}>{t("affiliate.page.chartTitle", { days: daily.length || 30 })}</h2>
+            <Card className={`${styles.card} ${styles.chartCard}`}>
+              <h2 className={styles.cardTitle}>
+                <span className={styles.titleIcon} aria-hidden="true"><CalendarDays size={18} /></span>
+                {t("affiliate.page.chartTitle", { days: daily.length || 30 })}
+              </h2>
+              {daily.every((point) => point.topupBaht + point.usageBaht <= 0) ? <p className={styles.cardSubtitle}>{t("affiliate.page.chartEmpty")}</p> : null}
               <EarningsChart points={daily} />
             </Card>
 
@@ -294,6 +352,7 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
                 <ExchangeCard
                   overview={overview}
                   api={api}
+                  icon={<Gift size={20} />}
                   onWallet={applyWallet}
                   onReload={() => { void api.load().then(apply).catch(() => undefined); }}
                 />
@@ -301,12 +360,15 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
 
               {settings.withdrawEnabled ? (
                 <Card className={styles.card}>
-                  <WithdrawCard overview={overview} api={api} onWithdrawal={handleWithdrawal} />
+                  <WithdrawCard overview={overview} api={api} icon={<Wallet size={20} />} onWithdrawal={handleWithdrawal} />
                 </Card>
               ) : null}
 
               <Card className={styles.card}>
-                <h2 className={styles.cardTitle}>{t("affiliate.page.funnelTitle")}</h2>
+                <h2 className={styles.cardTitle}>
+                  <span className={styles.titleIcon} aria-hidden="true"><Filter size={18} /></span>
+                  {t("affiliate.page.funnelTitle")}
+                </h2>
                 {invited === 0 ? (
                   <p className={styles.muted}>{t("affiliate.page.funnelNone")}</p>
                 ) : (
@@ -332,59 +394,9 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
             </div>
           </div>
 
-          <div className={styles.grid}>
-            <Card className={styles.card}>
-              <h2 className={styles.cardTitle}>{t("affiliate.page.activityTitle")}</h2>
-              {activity.length === 0 ? (
-                <p className={styles.muted}>{t("affiliate.page.activityEmpty")}</p>
-              ) : (
-                <ul className={styles.list}>
-                  {activity.map((item) => {
-                    const ready = new Date(item.availableAt).getTime() <= loadedAt;
-                    return (
-                      <li key={item.id}>
-                        <div>
-                          <strong>
-                            <span className={`${styles.badge} ${item.source === "topup" ? styles.badgeTopup : styles.badgeUsage}`}>
-                              {item.source === "topup" ? t("affiliate.page.sourceTopup") : t("affiliate.page.sourceUsage")}
-                            </span>
-                            {item.member}
-                          </strong>
-                          <span>
-                            {formatDate(item.createdAt, locale)} · {ready ? t("affiliate.page.readyNow") : t("affiliate.page.readyOn", { date: formatDate(item.availableAt, locale) })}
-                          </span>
-                        </div>
-                        <div className={styles.listNumbers}>
-                          <strong>+฿{formatNumber(item.amountBaht, locale)}</strong>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Card>
-
-            <Card className={styles.card}>
-              <h2 className={styles.cardTitle}>{t("settings.affiliate.recentTitle")}</h2>
-              {overview.referrals.length === 0 ? (
-                <p className={styles.muted}>{t("settings.affiliate.recentEmpty")}</p>
-              ) : (
-                <ul className={styles.list}>
-                  {overview.referrals.map((item) => (
-                    <li key={`${item.member}-${item.joinedAt}`}>
-                      <div>
-                        <strong>{item.member}</strong>
-                        <span>{t("settings.affiliate.joined", { date: formatDate(item.joinedAt, locale) })}</span>
-                      </div>
-                      <div className={styles.listNumbers}>
-                        <span>{t("settings.affiliate.topupOf", { amount: formatNumber(item.topupAmountThb, locale) })}</span>
-                        <strong>+฿{formatNumber(item.earnedBaht, locale)}</strong>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
+          <div className={styles.pair}>
+            <CollapsibleListCard icon={<Star size={18} />} title={t("affiliate.page.activityTitle")} rows={activityRows} empty={t("affiliate.page.activityEmpty")} />
+            <CollapsibleListCard icon={<UserRound size={18} />} title={t("settings.affiliate.recentTitle")} rows={referralRows} empty={t("settings.affiliate.recentEmpty")} />
           </div>
 
           {withdrawals.length > 0 ? (

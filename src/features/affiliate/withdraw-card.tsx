@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AffiliateApi, AffiliateOverview, AffiliateWallet, AffiliateWithdrawal, PayoutMethod, WithdrawErrorCode } from "@/lib/api/affiliate";
@@ -58,7 +58,9 @@ export function WithdrawCard({
   overview,
   api,
   onWithdrawal,
+  icon,
 }: {
+  icon?: ReactNode;
   overview: AffiliateOverview;
   api: Pick<AffiliateApi, "withdraw">;
   onWithdrawal: (result: { withdrawal: AffiliateWithdrawal; wallet: AffiliateWallet }) => void;
@@ -184,20 +186,21 @@ export function WithdrawCard({
 
   return (
     <div className={styles.exchange}>
-      <div className={styles.exchangeHead}>
-        <div>
+      <div className={styles.actionHead}>
+        {icon ? <span className={styles.actionIcon} aria-hidden="true">{icon}</span> : null}
+        <div className={styles.actionText}>
           <strong>{t("affiliate.withdraw.title")}</strong>
           <span>{t("affiliate.withdraw.rate", { min: formatNumber(minimum, locale) })}</span>
+          {step === "closed" && !canWithdraw && active ? (
+            <span className={styles.actionHint}>{t("affiliate.withdraw.notReady", { min: formatNumber(minimum, locale) })}</span>
+          ) : null}
         </div>
         {step === "closed" ? (
-          <Button type="button" size="sm" disabled={!canWithdraw} onClick={open}>
+          <Button type="button" variant="outline" size="sm" className={styles.actionOutline} disabled={!canWithdraw} onClick={open}>
             {t("affiliate.withdraw.button")}
           </Button>
         ) : null}
       </div>
-      {step === "closed" && !canWithdraw && active ? (
-        <p className={styles.hint}>{t("affiliate.withdraw.notReady", { min: formatNumber(minimum, locale) })}</p>
-      ) : null}
 
       {step === "entering" ? (
         <div className={styles.exchangePanel}>
