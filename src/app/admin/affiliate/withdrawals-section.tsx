@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Copy, ImageIcon, LoaderCircle } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, CircleCheck, Copy, ImageIcon, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogBody, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listAdminWithdrawals, reviewAdminWithdrawal, type AdminWithdrawal, type WithdrawalStatus } from "@/lib/api/affiliate";
 
 const PAGE_SIZE = 25;
@@ -37,8 +38,9 @@ function destinationLines(item: AdminWithdrawal): { label: string; value: string
 type Acting = { id: string; kind: "pay" | "reject" } | null;
 
 /**
- * The queue of withdrawal requests. An admin makes the transfer outside the system, then marks the request paid (with the
- * transfer reference) or rejects it with a reason the member sees, which gives the baht back to them.
+ * The queue of withdrawal requests. An admin makes the transfer outside the system, then marks the request paid (the server
+ * makes the transfer reference, and a dialog shows it) or rejects it with a reason the member sees, which gives the baht
+ * back to them.
  */
 export function WithdrawalsSection() {
   const [filter, setFilter] = useState<Filter>("pending");
@@ -53,6 +55,8 @@ export function WithdrawalsSection() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  /** The request that was just marked paid, shown in the success dialog until it is closed. */
+  const [paid, setPaid] = useState<AdminWithdrawal | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -112,7 +116,9 @@ export function WithdrawalsSection() {
     setBusy(true);
     setError(null);
     try {
-      await reviewAdminWithdrawal(acting.id, acting.kind === "pay" ? { action: "pay", reference: note || undefined } : { action: "reject", note });
+      // Paying sends no reference: the server makes one, and it comes back with the request.
+      const result = await reviewAdminWithdrawal(acting.id, acting.kind === "pay" ? { action: "pay" } : { action: "reject", note });
+      if (acting.kind === "pay") setPaid(result);
       setActing(null);
       setText("");
       await reload();
@@ -234,16 +240,23 @@ export function WithdrawalsSection() {
                     {item.status === "pending" ? (
                       acting?.id === item.id ? (
                         <div className="ml-auto grid w-60 gap-1.5 text-left">
-                          <label className="grid gap-1 font-semibold">
-                            {acting.kind === "pay" ? "Transfer reference (optional)" : "Reason for the member"}
-                            <input
-                              className="h-8 rounded-lg border border-border bg-white px-2 text-xs font-normal"
-                              value={text}
-                              maxLength={acting.kind === "pay" ? 100 : 300}
-                              onChange={(event) => setText(event.target.value)}
-                              autoFocus
-                            />
-                          </label>
+                          {acting.kind === "pay" ? (
+                            <p className="font-semibold">
+                              Have you transferred ฿{numberFormat.format(item.amountBaht)}?
+                              <span className="mt-0.5 block font-normal text-muted-foreground">The transfer reference is created automatically.</span>
+                            </p>
+                          ) : (
+                            <label className="grid gap-1 font-semibold">
+                              Reason for the member
+                              <input
+                                className="h-8 rounded-lg border border-border bg-white px-2 text-xs font-normal"
+                                value={text}
+                                maxLength={300}
+                                onChange={(event) => setText(event.target.value)}
+                                autoFocus
+                              />
+                            </label>
+                          )}
                           <div className="flex gap-1.5">
                             <Button type="button" size="sm" disabled={busy || (acting.kind === "reject" && !text.trim())} onClick={() => { void confirm(); }}>
                               {busy ? <LoaderCircle size={13} className="animate-spin" /> : null}
@@ -281,6 +294,50 @@ export function WithdrawalsSection() {
           </Button>
         </div>
       </nav>
+
+      <Dialog open={paid !== null} onOpenChange={(open) => { if (!open) setPaid(null); }}>
+        <DialogContent className="max-w-sm">
+          {paid ? (
+            <>
+              <DialogHeader className="items-center pr-5 text-center">
+                <span className="grid size-12 place-items-center rounded-full bg-[#e4f4e9] text-[#2f7d46]" aria-hidden="true"><CircleCheck size={26} /></span>
+                <DialogTitle className="mt-2 text-lg">Transfer successful</DialogTitle>
+                <DialogDescription>
+                  ฿{numberFormat.format(paid.amountBaht)} to {paid.accountName} is marked as paid. The member is told by email.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogBody>
+                <dl className="grid gap-2 rounded-xl border border-border bg-[#fcfaf8] p-3 text-xs">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">Member</dt>
+                    <dd className="truncate font-semibold">{paid.email || paid.displayName || "—"}</dd>
+                  </div>
+                  {destinationLines(paid).map((line) => (
+                    <div key={line.label} className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">{line.label}</dt>
+                      <dd className="font-mono font-semibold">{line.value}</dd>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-muted-foreground">Transfer reference</dt>
+                    <dd className="flex items-center gap-1.5 font-mono font-bold">
+                      {paid.reference || "—"}
+                      {paid.reference ? (
+                        <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="Copy transfer reference" onClick={() => { void copy(paid.reference ?? "", `${paid.id}-ref`); }}>
+                          {copied === `${paid.id}-ref` ? <Check size={13} /> : <Copy size={13} />}
+                        </button>
+                      ) : null}
+                    </dd>
+                  </div>
+                </dl>
+              </DialogBody>
+              <DialogFooter>
+                <DialogClose render={<Button type="button" />}>Done</DialogClose>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
