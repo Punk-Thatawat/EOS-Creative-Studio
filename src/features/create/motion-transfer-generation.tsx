@@ -429,7 +429,7 @@ export function MotionTransferWorkspace() {
       const generationId = created.generationId ?? created.id;
       setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
-      if (generationId && pollUrl) emitGenerationStarted({ feature: "motion-transfer", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
+      if (generationId && pollUrl) emitGenerationStarted({ feature: "motion-transfer", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, creditCost: videoCreditEstimate.creditCost ?? 0, status: created.status === "processing" ? "processing" : "queued" });
       let status: MotionTransferGenerationStatus = { ...created, status: created.status ?? "processing" } as MotionTransferGenerationStatus;
       let progress = 0;
       if (status.status !== "completed" && status.status !== "failed" && status.status !== "cancelled") {

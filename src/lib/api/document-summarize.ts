@@ -1,4 +1,5 @@
 import { getApiAccessToken } from '@/lib/auth/access-token';
+import { requestCreditBalanceSync } from '@/lib/credits/credit-events';
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000').replace(/\/+$/, '');
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, '')}/api/v1`;
@@ -68,6 +69,7 @@ export async function summarizeDocument(input: {
   });
   const payload = await response.json().catch(() => null) as { data?: { id: string; model: string; summary: DocumentSummary; creditsUsed: number }; message?: string | string[] } | null;
   if (!response.ok || !payload?.data?.summary) throw new Error(errorMessage(payload?.message, 'Document summary failed'));
+  requestCreditBalanceSync();
   return payload.data;
 }
 

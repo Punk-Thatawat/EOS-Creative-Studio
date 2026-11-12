@@ -738,7 +738,7 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
       const generationId = created.generationId ?? created.id;
       setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
-      if (generationId && pollUrl) emitGenerationStarted({ feature: progressFeature, requestId, generationId, pollUrl, workspaceId: typeof created.workspaceId === "string" ? created.workspaceId : undefined, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
+      if (generationId && pollUrl) emitGenerationStarted({ feature: progressFeature, requestId, generationId, pollUrl, workspaceId: typeof created.workspaceId === "string" ? created.workspaceId : undefined, model: selectedModel, creditCost: videoCreditEstimate.creditCost ?? 0, status: created.status === "processing" ? "processing" : "queued" });
       let status: PeopleVideoGenerationStatus | LipsyncGenerationStatus = {
         ...created,
         status: created.status ?? "processing",
