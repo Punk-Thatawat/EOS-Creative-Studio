@@ -1,4 +1,5 @@
 import { getApiAccessToken } from '@/lib/auth/access-token';
+import { requestCreditBalanceSync } from '@/lib/credits/credit-events';
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000').replace(/\/+$/, '');
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, '')}/api/v1`;
@@ -43,5 +44,6 @@ export async function translateDocument(input: {
     const message = Array.isArray(payload?.message) ? payload.message.join(', ') : payload?.message;
     throw new Error(typeof message === 'string' ? message : 'Document translation failed');
   }
+  requestCreditBalanceSync();
   return payload.data;
 }

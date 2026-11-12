@@ -163,11 +163,12 @@ function featureKeyForTab(tab: ImageGenerationTab): string {
   }
 }
 
-function emitTrackedImageProgress(feature: string, requestId: string, progress: GenerationProgress): void {
+function emitTrackedImageProgress(feature: string, requestId: string, progress: GenerationProgress, creditCost: number): void {
   if (progress.status !== "queued" && progress.status !== "processing") return;
   emitGenerationStarted({
     feature,
     requestId,
+    creditCost,
     generationId: progress.generationId,
     pollUrl: progress.pollUrl ?? `/api/v1/generations/${encodeURIComponent(progress.generationId)}/status`,
     workspaceId: progress.workspaceId,
@@ -2152,7 +2153,7 @@ export function useImageGenerationState() {
       try {
         const handleProgress = (progress: GenerationProgress) => {
           applyGenerationProgress(progress);
-          emitTrackedImageProgress("text-to-image", requestId, progress);
+          emitTrackedImageProgress("text-to-image", requestId, progress, imageCreditEstimate.creditCost ?? 0);
           if (progress.status === "failed" || progress.status === "cancelled") terminalStatus = progress.status;
         };
         const result = await createTextToImage({ prompt, promptOptimizerEnabled, ...(style ? { style } : {}), ...(selectedModelCapabilities?.aspectRatioParameter ? {} : { ratio: effectiveRatio }), resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count: effectiveCount, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedModel ? { model: selectedModel } : {}), idempotencyKey: crypto.randomUUID() }, handleProgress, abortController.signal);
@@ -2219,7 +2220,7 @@ export function useImageGenerationState() {
           idempotencyKey: crypto.randomUUID(),
         }, (progress) => {
           applyExtendProgress(progress);
-          emitTrackedImageProgress("extend-image", requestId, progress);
+          emitTrackedImageProgress("extend-image", requestId, progress, imageCreditEstimate.creditCost ?? 0);
         }, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
@@ -2281,7 +2282,7 @@ export function useImageGenerationState() {
           idempotencyKey: crypto.randomUUID(),
         }, (progress) => {
           applyUpscaleProgress(progress);
-          emitTrackedImageProgress("upscale", requestId, progress);
+          emitTrackedImageProgress("upscale", requestId, progress, imageCreditEstimate.creditCost ?? 0);
         }, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
@@ -2334,7 +2335,7 @@ export function useImageGenerationState() {
         setImageToImageSourceImagesAndPersist(uploadedSourceImages);
         const result = await createImageToImage({ workspaceId, sourceImage: uploadedSourceImage, ...(uploadedSourceImages.length > 0 ? { sourceImages: uploadedSourceImages } : {}), prompt: imageToImagePrompt, promptOptimizerEnabled, ...(style ? { style } : {}), ratio: effectiveRatio, resolution: effectiveResolution, ...(qualityEnabled ? { quality: effectiveQuality } : {}), ...(effectiveOutputFormat ? { outputFormat: effectiveOutputFormat } : {}), count, negativePrompt, ...(Object.keys(requestModelParams).length ? { modelParams: requestModelParams } : {}), ...(selectedImageToImageModel ? { model: selectedImageToImageModel } : {}), idempotencyKey: crypto.randomUUID() }, (progress) => {
           applyImageToImageProgress(progress);
-          emitTrackedImageProgress("image-to-image", requestId, progress);
+          emitTrackedImageProgress("image-to-image", requestId, progress, imageCreditEstimate.creditCost ?? 0);
         }, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
@@ -2408,7 +2409,7 @@ export function useImageGenerationState() {
           idempotencyKey: crypto.randomUUID(),
         }, (progress) => {
           applyStyleTransferProgress(progress);
-          emitTrackedImageProgress("style-transfer", requestId, progress);
+          emitTrackedImageProgress("style-transfer", requestId, progress, imageCreditEstimate.creditCost ?? 0);
         }, abortController.signal);
         const urls = result.data.output.map((output) => output.url).filter(Boolean);
         setWorkspaceId(result.data.workspaceId);
@@ -2492,7 +2493,7 @@ export function useImageGenerationState() {
           idempotencyKey: crypto.randomUUID(),
         }, (progress) => {
           applyBackgroundProgress(progress);
-          emitTrackedImageProgress("background-removal", requestId, progress);
+          emitTrackedImageProgress("background-removal", requestId, progress, imageCreditEstimate.creditCost ?? 0);
         }, abortController.signal);
         const rawUrls = result.data.output.map((output) => output.url).filter(Boolean);
         const urls = isLocalSolidBackground

@@ -1,4 +1,5 @@
 import { getApiAccessToken } from '@/lib/auth/access-token';
+import { requestCreditBalanceSync } from '@/lib/credits/credit-events';
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000').replace(/\/+$/, '');
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, '')}/api/v1`;
@@ -130,6 +131,7 @@ export async function runDocumentOcr(input: DocumentOcrInput, signal?: AbortSign
   });
   const payload = await response.json().catch(() => null) as { data?: DocumentOcrResult; message?: string | string[] } | null;
   if (!response.ok || !payload?.data) throw new Error(errorMessage(payload?.message, 'Document OCR failed'));
+  requestCreditBalanceSync();
   return payload.data;
 }
 
