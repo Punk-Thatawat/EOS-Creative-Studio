@@ -1048,3 +1048,62 @@
     padding: 1rem;
   }
 }
+
+/* Tiers and the step bonus. */
+.tierBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+  border-radius: 999px;
+  background: #fff0e9;
+  padding: 0.25rem 0.7rem;
+  color: #b8481f;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+.dotBonus {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 0.15rem;
+  background: #d99a00;
+}
+.barBonus {
+  display: block;
+  background: #d99a00;
+}
+.list .badgeBonus {
+  background: #fff6d9;
+  color: #8a6100;
+}
+.bonusSteps {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.8rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.bonusSteps li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-radius: 0.6rem;
+  background: #f7f4f1;
+  padding: 0.4rem 0.7rem;
+  color: var(--aff-muted);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+.bonusSteps li strong {
+  color: var(--aff-ink);
+  font-size: 0.86rem;
+}
+.bonusSteps .bonusStepOn {
+  background: #fff0e9;
+  color: #b8481f;
+}
+.bonusSteps .bonusStepOn strong {
+  color: #b8481f;
+}

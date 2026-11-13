@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, Save, Search } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, Plus, Save, Search, Trash2 } from "lucide-react";
 import { SidebarNavigation } from "@/components/app-shell/navigation";
 import { StudioHeader } from "@/components/app-shell/studio-header";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -11,9 +11,13 @@ import {
   listAdminAffiliates,
   updateAdminAffiliateSettings,
   updateAdminAffiliateStatus,
+  updateAdminAffiliateTier,
+  AFFILIATE_TIERS,
   type AdminAffiliate,
+  type AffiliateSettings,
   type AffiliateSort,
   type AffiliateStatus,
+  type AffiliateTier,
 } from "@/lib/api/affiliate";
 import { WithdrawalsSection } from "./withdrawals-section";
 
@@ -22,12 +26,40 @@ const numberFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }
 const dateFormat = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
 
 type StatusFilter = AffiliateStatus | "all";
+type TierFilter = AffiliateTier | "all";
 type SortOrder = "asc" | "desc";
+
+const TIER_LABELS: Record<AffiliateTier, string> = { partner: "Partner", kol: "KOL", user: "General user" };
+/** The most a tier can pay: for a member's first top-up, and for each one after it. */
+const MAX_FIRST_PERCENT = 20;
+const MAX_REPEAT_PERCENT = 10;
+const MAX_BONUS_STEPS = 10;
+
+/** The rates and steps as the text in their boxes, so a half-typed number is not thrown away. */
+type TierRateText = Record<AffiliateTier, { first: string; repeat: string }>;
+type BonusStepText = { id: number; minTopupBaht: string; percent: string };
+
+const EMPTY_RATES: TierRateText = { partner: { first: "", repeat: "" }, kol: { first: "", repeat: "" }, user: { first: "", repeat: "" } };
+
+function ratesText(settings: AffiliateSettings): TierRateText {
+  const text = { ...EMPTY_RATES };
+  for (const tier of AFFILIATE_TIERS) {
+    // A server that predates tiers has one rate for every top-up.
+    const rate = settings.tierRates?.[tier] ?? { firstTopupPercent: Math.min(settings.commissionPercent, MAX_FIRST_PERCENT), repeatTopupPercent: Math.min(settings.commissionPercent, MAX_REPEAT_PERCENT) };
+    text[tier] = { first: String(rate.firstTopupPercent), repeat: String(rate.repeatTopupPercent) };
+  }
+  return text;
+}
+
+function stepsText(settings: AffiliateSettings): BonusStepText[] {
+  return (settings.bonusSteps ?? []).map((step, index) => ({ id: index, minTopupBaht: String(step.minTopupBaht), percent: String(step.percent) }));
+}
 
 /** The column headings, left to right: what each is called, what the server sorts it by, and which side its numbers sit on. */
 const columns: { sort: AffiliateSort; label: string; right?: boolean }[] = [
   { sort: "member", label: "Member" },
   { sort: "code", label: "Code" },
+  { sort: "tier", label: "Tier" },
   { sort: "invited", label: "Invited", right: true },
   { sort: "topups", label: "Their top-ups (฿)", right: true },
   { sort: "commission", label: "Earned (฿)", right: true },
@@ -75,7 +107,9 @@ const inRange = (text: string, min: number, max: number) => {
 
 function AdminAffiliateContent() {
   const [enabled, setEnabled] = useState(true);
-  const [percent, setPercent] = useState("10");
+  const [tierRates, setTierRates] = useState<TierRateText>(EMPTY_RATES);
+  const [bonusEnabled, setBonusEnabled] = useState(true);
+  const [bonusSteps, setBonusSteps] = useState<BonusStepText[]>([]);
   const [topupEnabled, setTopupEnabled] = useState(true);
   const [usageEnabled, setUsageEnabled] = useState(false);
   const [usagePercent, setUsagePercent] = useState("3");
@@ -95,6 +129,7 @@ function AdminAffiliateContent() {
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
+  const [tier, setTier] = useState<TierFilter>("all");
   const [pageSize, setPageSize] = useState(25);
   const [sort, setSort] = useState<AffiliateSort>("joined");
   const [order, setOrder] = useState<SortOrder>("desc");
@@ -107,7 +142,9 @@ function AdminAffiliateContent() {
       .then((settings) => {
         if (!active) return;
         setEnabled(settings.enabled);
-        setPercent(String(settings.commissionPercent));
+        setTierRates(ratesText(settings));
+        setBonusEnabled(settings.bonusEnabled ?? false);
+        setBonusSteps(stepsText(settings));
         setTopupEnabled(settings.topupEnabled);
         setUsageEnabled(settings.usageEnabled);
         setUsagePercent(String(settings.usageCommissionPercent));
@@ -129,7 +166,7 @@ function AdminAffiliateContent() {
 
   useEffect(() => {
     let active = true;
-    void listAdminAffiliates({ q: appliedQuery, status, page, limit: pageSize, sort, order })
+    void listAdminAffiliates({ q: appliedQuery, status, tier, page, limit: pageSize, sort, order })
       .then((result) => {
         if (!active) return;
         setAffiliates(result.affiliates);
@@ -144,10 +181,15 @@ function AdminAffiliateContent() {
     return () => {
       active = false;
     };
-  }, [appliedQuery, status, page, pageSize, sort, order]);
+  }, [appliedQuery, status, tier, page, pageSize, sort, order]);
 
-  const percentValue = Number(percent);
-  const percentValid = percent.trim() !== "" && Number.isFinite(percentValue) && percentValue >= 0 && percentValue <= 100;
+  const ratesValid = AFFILIATE_TIERS.every((name) => inRange(tierRates[name].first, 0, MAX_FIRST_PERCENT) && inRange(tierRates[name].repeat, 0, MAX_REPEAT_PERCENT));
+  // Each step needs a total above 0 and a percent; a bigger total cannot pay a smaller percent, and no two start at the same total.
+  const sortedSteps = [...bonusSteps].sort((a, b) => Number(a.minTopupBaht) - Number(b.minTopupBaht));
+  const stepsValid =
+    bonusSteps.length <= MAX_BONUS_STEPS &&
+    bonusSteps.every((step) => inRange(step.minTopupBaht, 0.01, 1000000000) && inRange(step.percent, 0, 100)) &&
+    sortedSteps.every((step, index) => index === 0 || (Number(step.minTopupBaht) > Number(sortedSteps[index - 1].minTopupBaht) && Number(step.percent) >= Number(sortedSteps[index - 1].percent)));
   const usagePercentValue = Number(usagePercent);
   const usagePercentValid = usagePercent.trim() !== "" && Number.isFinite(usagePercentValue) && usagePercentValue >= 0 && usagePercentValue <= 100;
   const bahtPerCreditValid = inRange(bahtPerCredit, 0.000001, 1000);
@@ -155,7 +197,7 @@ function AdminAffiliateContent() {
   const holdDaysValid = inRange(holdDays, 0, 365) && Number.isInteger(Number(holdDays));
   const minExchangeValid = inRange(minExchangeBaht, 0.01, 10000000);
   const minWithdrawValid = inRange(minWithdrawBaht, 0.01, 10000000);
-  const settingsValid = percentValid && usagePercentValid && bahtPerCreditValid && creditsPerBahtValid && holdDaysValid && minExchangeValid && minWithdrawValid;
+  const settingsValid = ratesValid && stepsValid && usagePercentValid && bahtPerCreditValid && creditsPerBahtValid && holdDaysValid && minExchangeValid && minWithdrawValid;
 
   async function saveSettings() {
     if (!settingsValid) return;
@@ -165,7 +207,13 @@ function AdminAffiliateContent() {
       const saved = await updateAdminAffiliateSettings({
         enabled,
         topupEnabled,
-        commissionPercent: percentValue,
+        tierRates: {
+          partner: { firstTopupPercent: Number(tierRates.partner.first), repeatTopupPercent: Number(tierRates.partner.repeat) },
+          kol: { firstTopupPercent: Number(tierRates.kol.first), repeatTopupPercent: Number(tierRates.kol.repeat) },
+          user: { firstTopupPercent: Number(tierRates.user.first), repeatTopupPercent: Number(tierRates.user.repeat) },
+        },
+        bonusEnabled,
+        bonusSteps: sortedSteps.map((step) => ({ minTopupBaht: Number(step.minTopupBaht), percent: Number(step.percent) })),
         usageEnabled,
         usageCommissionPercent: usagePercentValue,
         bahtPerCredit: Number(bahtPerCredit),
@@ -176,7 +224,9 @@ function AdminAffiliateContent() {
         minWithdrawBaht: Number(minWithdrawBaht),
       });
       setEnabled(saved.enabled);
-      setPercent(String(saved.commissionPercent));
+      setTierRates(ratesText(saved));
+      setBonusEnabled(saved.bonusEnabled ?? false);
+      setBonusSteps(stepsText(saved));
       setTopupEnabled(saved.topupEnabled);
       setUsageEnabled(saved.usageEnabled);
       setUsagePercent(String(saved.usageCommissionPercent));
@@ -208,6 +258,31 @@ function AdminAffiliateContent() {
     }
   }
 
+  async function changeTier(item: AdminAffiliate, next: AffiliateTier) {
+    if (next === (item.tier ?? "user")) return;
+    setBusyId(item.id);
+    setMessage(null);
+    try {
+      await updateAdminAffiliateTier(item.id, next);
+      setAffiliates((current) => current.map((row) => (row.id === item.id ? { ...row, tier: next } : row)));
+      setMessage({ tone: "ok", text: `${item.displayName || item.email || item.code} is now ${TIER_LABELS[next]}. The new rates apply from the next top-up in their line.` });
+    } catch (error: unknown) {
+      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Could not change the tier" });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function setRate(name: AffiliateTier, field: "first" | "repeat", value: string) {
+    setTierRates((current) => ({ ...current, [name]: { ...current[name], [field]: value } }));
+  }
+  function setStep(id: number, field: "minTopupBaht" | "percent", value: string) {
+    setBonusSteps((current) => current.map((step) => (step.id === id ? { ...step, [field]: value } : step)));
+  }
+  function addStep() {
+    setBonusSteps((current) => [...current, { id: current.reduce((max, step) => Math.max(max, step.id), -1) + 1, minTopupBaht: "", percent: "" }]);
+  }
+
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const firstShown = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const lastShown = Math.min(total, page * pageSize);
@@ -221,7 +296,7 @@ function AdminAffiliateContent() {
       return;
     }
     setSort(column);
-    setOrder(column === "member" || column === "code" || column === "status" ? "asc" : "desc");
+    setOrder(column === "member" || column === "code" || column === "status" || column === "tier" ? "asc" : "desc");
   }
   function goTo(next: number) {
     if (next < 1 || next > pages || next === page) return;
@@ -240,7 +315,7 @@ function AdminAffiliateContent() {
               <div className="mx-auto max-w-5xl">
                 <h1 className="text-xl font-extrabold">Affiliate</h1>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Members share a link. When someone who signed up through it tops up or creates something, the member earns a percent in baht. After a short hold, they can exchange the baht for credits.
+                  Members share a link. When someone who signed up through it tops up, the member earns a percent in baht: one rate for that person&apos;s first top-up and another for every top-up after it, set per tier (Partner, KOL, General user). A step bonus is added from everything the member&apos;s whole line has topped up. After a short hold, the baht can be exchanged for credits or withdrawn.
                 </p>
 
                 {message ? (
@@ -260,30 +335,92 @@ function AdminAffiliateContent() {
                     Program is on
                   </label>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <fieldset className="rounded-xl border border-border p-3">
-                      <legend className="px-1 text-xs font-bold">Earn from top-ups</legend>
-                      <label className="flex items-center gap-2 text-xs font-semibold">
-                        <input type="checkbox" checked={topupEnabled} disabled={!settingsLoaded} onChange={(event) => setTopupEnabled(event.target.checked)} />
-                        Pay a commission when an invited member tops up
-                      </label>
-                      <label className="mt-2 grid gap-1 text-xs font-semibold">
-                        Commission (% of what the member pays, before VAT)
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={0.01}
-                          inputMode="decimal"
-                          className="h-9 w-40 rounded-lg border border-border bg-white px-3 text-sm"
-                          value={percent}
-                          disabled={!settingsLoaded || !topupEnabled}
-                          onChange={(event) => setPercent(event.target.value)}
-                          aria-invalid={!percentValid}
-                        />
-                      </label>
-                    </fieldset>
+                  <fieldset className="mt-4 rounded-xl border border-border p-3">
+                    <legend className="px-1 text-xs font-bold">Earn from top-ups, by tier</legend>
+                    <label className="flex items-center gap-2 text-xs font-semibold">
+                      <input type="checkbox" checked={topupEnabled} disabled={!settingsLoaded} onChange={(event) => setTopupEnabled(event.target.checked)} />
+                      Pay a commission when an invited member tops up
+                    </label>
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="w-full min-w-[420px] text-left text-xs">
+                        <thead className="text-[11px] text-muted-foreground">
+                          <tr className="border-b border-border">
+                            <th className="py-2 pr-3 font-semibold">Tier</th>
+                            <th className="py-2 pr-3 font-semibold">First top-up (0–{MAX_FIRST_PERCENT}%)</th>
+                            <th className="py-2 font-semibold">2nd top-up onward (0–{MAX_REPEAT_PERCENT}%)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {AFFILIATE_TIERS.map((name) => (
+                            <tr key={name} className="border-b border-border/60 last:border-0">
+                              <th scope="row" className="py-2 pr-3 font-semibold">{TIER_LABELS[name]}</th>
+                              <td className="py-2 pr-3">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={MAX_FIRST_PERCENT}
+                                  step={0.01}
+                                  inputMode="decimal"
+                                  className="h-9 w-28 rounded-lg border border-border bg-white px-3 text-sm"
+                                  aria-label={`${TIER_LABELS[name]}: first top-up percent`}
+                                  value={tierRates[name].first}
+                                  disabled={!settingsLoaded || !topupEnabled}
+                                  onChange={(event) => setRate(name, "first", event.target.value)}
+                                  aria-invalid={!inRange(tierRates[name].first, 0, MAX_FIRST_PERCENT)}
+                                />
+                              </td>
+                              <td className="py-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={MAX_REPEAT_PERCENT}
+                                  step={0.01}
+                                  inputMode="decimal"
+                                  className="h-9 w-28 rounded-lg border border-border bg-white px-3 text-sm"
+                                  aria-label={`${TIER_LABELS[name]}: percent from the second top-up onward`}
+                                  value={tierRates[name].repeat}
+                                  disabled={!settingsLoaded || !topupEnabled}
+                                  onChange={(event) => setRate(name, "repeat", event.target.value)}
+                                  aria-invalid={!inRange(tierRates[name].repeat, 0, MAX_REPEAT_PERCENT)}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">Percent of what the invited member pays, before VAT. A member&apos;s tier is set in the list below; everyone starts as a general user.</p>
+                  </fieldset>
 
+                  <fieldset className="mt-3 rounded-xl border border-border p-3">
+                    <legend className="px-1 text-xs font-bold">Step bonus</legend>
+                    <label className="flex items-center gap-2 text-xs font-semibold">
+                      <input type="checkbox" checked={bonusEnabled} disabled={!settingsLoaded} onChange={(event) => setBonusEnabled(event.target.checked)} />
+                      Pay a bonus from everything an affiliate&apos;s line has topped up
+                    </label>
+                    <div className="mt-3 grid gap-2">
+                      {bonusSteps.map((step) => (
+                        <div key={step.id} className="flex flex-wrap items-end gap-3">
+                          <NumberField label="Line total from (฿)" value={step.minTopupBaht} onChange={(value) => setStep(step.id, "minTopupBaht", value)} disabled={!settingsLoaded || !bonusEnabled} invalid={!inRange(step.minTopupBaht, 0.01, 1000000000)} min={0.01} max={1000000000} step={0.01} />
+                          <NumberField label="Bonus (%)" value={step.percent} onChange={(value) => setStep(step.id, "percent", value)} disabled={!settingsLoaded || !bonusEnabled} invalid={!inRange(step.percent, 0, 100)} min={0} max={100} step={0.01} />
+                          <Button type="button" variant="outline" size="sm" aria-label="Remove this step" disabled={!settingsLoaded || !bonusEnabled} onClick={() => setBonusSteps((current) => current.filter((row) => row.id !== step.id))}>
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3">
+                      <Button type="button" variant="outline" size="sm" disabled={!settingsLoaded || !bonusEnabled || bonusSteps.length >= MAX_BONUS_STEPS} onClick={addStep}>
+                        <Plus size={14} />
+                        Add a step
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      The line total is everything the people an affiliate invited have topped up, before VAT, since they joined. When it reaches a step, the affiliate has earned that percent of the whole total: reaching a higher step pays the difference, and a top-up inside a step pays that step&apos;s percent of it. Top-ups made before the bonus was switched on count too, so the first top-up after that pays what the line has already reached.
+                    </p>
+                  </fieldset>
+
+                  <div className="mt-3 grid gap-3">
                     <fieldset className="rounded-xl border border-border p-3">
                       <legend className="px-1 text-xs font-bold">Earn from usage</legend>
                       <label className="flex items-center gap-2 text-xs font-semibold">
@@ -336,9 +473,9 @@ function AdminAffiliateContent() {
                       Save
                     </Button>
                   </div>
-                  {!settingsValid ? <p className="mt-2 text-xs text-[#b8481f]">Check the highlighted fields: percents are 0 to 100, the other numbers must be above 0 (hold days can be 0, whole days only).</p> : null}
+                  {!settingsValid ? <p className="mt-2 text-xs text-[#b8481f]">Check the highlighted fields: a first top-up rate is 0 to 20, a rate from the second top-up is 0 to 10, bonus steps need a total above 0 and a higher step cannot pay a lower percent, the other numbers must be above 0 (hold days can be 0, whole days only).</p> : null}
                   <p className="mt-3 text-[11px] text-muted-foreground">
-                    A new rate only applies from the next top-up or creation after you save; what was earned before keeps the rate it was earned at. Earnings wait for the hold before they can be exchanged, which covers refunds and chargebacks. The exchange rate and minimum apply at the moment a member exchanges. Usage commissions only count after the invited member has topped up at least once, so free sign-up credits never pay anyone. They are paid on the credits actually spent, net of any refund. Turning the program off stops new links and new commissions of both kinds.
+                    A new rate or tier only applies from the next top-up or creation after you save; what was earned before keeps the rate it was earned at. Earnings wait for the hold before they can be exchanged, which covers refunds and chargebacks. The exchange rate and minimum apply at the moment a member exchanges. Usage commissions only count after the invited member has topped up at least once, so free sign-up credits never pay anyone. They are paid on the credits actually spent, net of any refund. Turning the program off stops new links and new commissions of both kinds.
                   </p>
                 </section>
 
@@ -380,20 +517,34 @@ function AdminAffiliateContent() {
                         <option value="active">Active</option>
                         <option value="suspended">Suspended</option>
                       </select>
+                      <select
+                        className="h-9 rounded-lg border border-border bg-white px-2 text-xs"
+                        aria-label="Filter by tier"
+                        value={tier}
+                        onChange={(event) => {
+                          setLoading(true);
+                          setPage(1);
+                          setTier(event.target.value as TierFilter);
+                        }}
+                      >
+                        <option value="all">All tiers</option>
+                        {AFFILIATE_TIERS.map((name) => <option key={name} value={name}>{TIER_LABELS[name]}</option>)}
+                      </select>
                     </form>
                   </div>
 
                   <div className="mt-3 overflow-x-auto">
-                    <table className="w-full min-w-[820px] table-fixed text-left text-xs">
+                    <table className="w-full min-w-[960px] table-fixed text-left text-xs">
                       <colgroup>
-                        <col className="w-[25%]" />
-                        <col className="w-[12%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[15%]" />
+                        <col className="w-[21%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[14%]" />
+                        <col className="w-[8%]" />
                         <col className="w-[13%]" />
                         <col className="w-[11%]" />
-                        <col className="w-[9%]" />
-                        <col className="w-[6%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[5%]" />
                       </colgroup>
                       <thead className="text-[11px] text-muted-foreground">
                         <tr className="border-b border-border">
@@ -418,9 +569,9 @@ function AdminAffiliateContent() {
                       </thead>
                       <tbody>
                         {loading && affiliates.length === 0 ? (
-                          <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">Loading…</td></tr>
+                          <tr><td colSpan={9} className="py-6 text-center text-muted-foreground">Loading…</td></tr>
                         ) : affiliates.length === 0 ? (
-                          <tr><td colSpan={8} className="py-6 text-center text-muted-foreground">No affiliates found.</td></tr>
+                          <tr><td colSpan={9} className="py-6 text-center text-muted-foreground">No affiliates found.</td></tr>
                         ) : (
                           affiliates.map((item) => (
                             <tr key={item.id} className={`border-b border-border/60 transition-opacity last:border-0 ${loading ? "opacity-50" : ""}`}>
@@ -429,6 +580,17 @@ function AdminAffiliateContent() {
                                 {item.displayName && item.email ? <div className="text-[11px] text-muted-foreground">{item.email}</div> : null}
                               </td>
                               <td className="py-2.5 pr-3 font-mono">{item.code}</td>
+                              <td className="py-2.5 pr-3">
+                                <select
+                                  className="h-8 w-full rounded-lg border border-border bg-white px-1.5 text-xs"
+                                  aria-label={`Tier of ${item.displayName || item.email || item.code}`}
+                                  value={item.tier ?? "user"}
+                                  disabled={busyId === item.id}
+                                  onChange={(event) => { void changeTier(item, event.target.value as AffiliateTier); }}
+                                >
+                                  {AFFILIATE_TIERS.map((name) => <option key={name} value={name}>{TIER_LABELS[name]}</option>)}
+                                </select>
+                              </td>
                               <td className="py-2.5 pr-3 text-right tabular-nums">{numberFormat.format(item.invitedCount)}</td>
                               <td className="py-2.5 pr-3 text-right tabular-nums">{numberFormat.format(item.topupAmountThb)}</td>
                               <td className="py-2.5 pr-3 text-right tabular-nums">

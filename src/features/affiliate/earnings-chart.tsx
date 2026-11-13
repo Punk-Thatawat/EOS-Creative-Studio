@@ -7,13 +7,17 @@ import { formatDay, formatNumber } from "./format";
 import styles from "./affiliate-page.module.css";
 
 /**
- * Commission per day as stacked bars, top-ups under usage. Bars are drawn with plain boxes so the chart needs no library
+ * Commission per day as stacked bars: top-ups at the bottom, then usage, then the step bonus. Bars are drawn with plain boxes so the chart needs no library
  * and follows the page's colours. A day with nothing earned keeps its slot, which keeps the days evenly spaced.
  */
 export function EarningsChart({ points }: { points: AffiliateDailyPoint[] }) {
   const { locale, t } = useLocale();
-  const total = points.reduce((sum, point) => sum + point.topupBaht + point.usageBaht, 0);
-  const peak = points.reduce((max, point) => Math.max(max, point.topupBaht + point.usageBaht), 0);
+  const sumOf = (point: AffiliateDailyPoint) => point.topupBaht + point.usageBaht + (point.bonusBaht ?? 0);
+  const total = points.reduce((sum, point) => sum + sumOf(point), 0);
+  const peak = points.reduce((max, point) => Math.max(max, sumOf(point)), 0);
+  // A kind that earned nothing in the window is left out of the legend.
+  const hasUsage = points.some((point) => point.usageBaht > 0);
+  const hasBonus = points.some((point) => (point.bonusBaht ?? 0) > 0);
   const amount = `฿${formatNumber(total, locale)}`;
 
   if (points.length === 0 || total <= 0) {
@@ -35,24 +39,29 @@ export function EarningsChart({ points }: { points: AffiliateDailyPoint[] }) {
         <strong>{amount}</strong>
         <span className={styles.legend}>
           <span><i className={styles.dotTopup} aria-hidden="true" />{t("affiliate.page.legendTopup")}</span>
-          <span><i className={styles.dotUsage} aria-hidden="true" />{t("affiliate.page.legendUsage")}</span>
+          {hasUsage ? <span><i className={styles.dotUsage} aria-hidden="true" />{t("affiliate.page.legendUsage")}</span> : null}
+          {hasBonus ? <span><i className={styles.dotBonus} aria-hidden="true" />{t("affiliate.page.legendBonus")}</span> : null}
         </span>
       </div>
       <div className={styles.chart} role="img" aria-label={t("affiliate.page.chartAria", { days: points.length, amount })}>
         {points.map((point) => {
-          const sum = point.topupBaht + point.usageBaht;
+          const bonusBaht = point.bonusBaht ?? 0;
+          const sum = sumOf(point);
           const height = peak > 0 ? (sum / peak) * 100 : 0;
           const usageShare = sum > 0 ? (point.usageBaht / sum) * 100 : 0;
-          const label = t("affiliate.page.chartDay", {
+          const bonusShare = sum > 0 ? (bonusBaht / sum) * 100 : 0;
+          const label = t(bonusBaht > 0 ? "affiliate.page.chartDayBonus" : "affiliate.page.chartDay", {
             date: formatDay(point.date, locale),
             topup: formatNumber(point.topupBaht, locale),
             usage: formatNumber(point.usageBaht, locale),
+            bonus: formatNumber(bonusBaht, locale),
           });
           return (
             <div key={point.date} className={styles.chartColumn} title={label}>
               <div className={styles.chartBar} style={{ height: `${Math.max(height, sum > 0 ? 3 : 0)}%` }}>
+                {bonusBaht > 0 ? <span className={styles.barBonus} style={{ height: `${bonusShare}%` }} /> : null}
                 {point.usageBaht > 0 ? <span className={styles.barUsage} style={{ height: `${usageShare}%` }} /> : null}
-                {point.topupBaht > 0 ? <span className={styles.barTopup} style={{ height: `${100 - usageShare}%` }} /> : null}
+                {point.topupBaht > 0 ? <span className={styles.barTopup} style={{ height: `${100 - usageShare - bonusShare}%` }} /> : null}
               </div>
             </div>
           );

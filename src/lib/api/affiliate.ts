@@ -8,13 +8,46 @@ const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:400
 const REQUEST_TIMEOUT_MS = 15000;
 
 export type AffiliateStatus = "active" | "suspended";
+/** What an affiliate is to the program. An admin sets it; everyone starts as a general user. */
+export type AffiliateTier = "partner" | "kol" | "user";
+export const AFFILIATE_TIERS: readonly AffiliateTier[] = ["partner", "kol", "user"];
+
+/** The two rates of a tier, as percents of what an invited member pays (before VAT). */
+export type TierRate = {
+  /** For the first top-up a member ever makes (0-20). */
+  firstTopupPercent: number;
+  /** For every top-up after the first (0-10). */
+  repeatTopupPercent: number;
+};
+
+/** One step of the bonus: once the line has topped up this much in total, the affiliate has earned `percent` of all of it. */
+export type BonusStep = { minTopupBaht: number; percent: number };
+
+/** Where the affiliate stands on the step bonus. */
+export type AffiliateBonusProgress = {
+  enabled: boolean;
+  /** Everything the invited members have topped up, in baht before VAT. */
+  lineTopupBaht: number;
+  /** The percent of the step reached, 0 before the first one. */
+  percent: number;
+  earnedBaht: number;
+  /** The step after the one reached, or null at the top. */
+  nextStep: BonusStep | null;
+  steps: BonusStep[];
+};
 
 export type AffiliateSettings = {
   /** The whole program: off means no new links, no new commissions and no new exchanges. */
   enabled: boolean;
   topupEnabled: boolean;
-  /** The percent of what an invited member pays (before VAT) when they top up. */
+  /** The single rate of the program before tiers. Only read from a server that predates them. */
   commissionPercent: number;
+  /** What each tier earns from a top-up. Missing from a server that predates tiers. */
+  tierRates?: Record<AffiliateTier, TierRate>;
+  /** Whether the step bonus is paid. */
+  bonusEnabled?: boolean;
+  /** The steps of the bonus, smallest total first. */
+  bonusSteps?: BonusStep[];
   /** Whether successful creations earn a commission (only after the member has topped up at least once). */
   usageEnabled: boolean;
   /** The percent of the credits an invited member spends on a creation that succeeds. */
@@ -47,6 +80,8 @@ export type AffiliateWallet = {
   earnedBaht: number;
   topupEarnedBaht: number;
   usageEarnedBaht: number;
+  /** Earned as step bonus. Missing from a server that predates it. */
+  bonusEarnedBaht?: number;
 };
 
 export type AffiliateStats = {
@@ -63,13 +98,14 @@ export type AffiliateDailyPoint = {
   date: string;
   topupBaht: number;
   usageBaht: number;
+  bonusBaht?: number;
 };
 
 export type AffiliateActivity = {
   id: string;
   /** The invited member, already masked by the server. */
   member: string;
-  source: "topup" | "usage";
+  source: "topup" | "usage" | "bonus";
   amountBaht: number;
   createdAt: string;
   /** When the baht can be exchanged. */
@@ -133,7 +169,10 @@ export type WithdrawalResult = { withdrawal: AffiliateWithdrawal; wallet: Affili
 
 export type AffiliateOverview = {
   settings: AffiliateSettings;
-  affiliate: { id: string; code: string; status: AffiliateStatus; createdAt: string } | null;
+  affiliate: { id: string; code: string; status: AffiliateStatus; tier?: AffiliateTier; createdAt: string } | null;
+  /** The rates of the member's own tier. Missing from a server that predates tiers. */
+  rates?: TierRate;
+  bonus?: AffiliateBonusProgress;
   wallet: AffiliateWallet;
   stats: AffiliateStats;
   referrals: AffiliateReferral[];
@@ -196,6 +235,7 @@ export type AdminAffiliate = {
   displayName: string | null;
   code: string;
   status: AffiliateStatus;
+  tier?: AffiliateTier;
   createdAt: string;
   invitedCount: number;
   topupAmountThb: number;
@@ -310,16 +350,20 @@ export function getAdminAffiliateSettings(): Promise<AffiliateSettings> {
   return request<AffiliateSettings>("/admin/affiliate/settings");
 }
 
-export function updateAdminAffiliateSettings(input: Partial<AffiliateSettings>): Promise<AffiliateSettings> {
+/** What an admin can change. Only the tiers and rates sent are changed; `bonusSteps` replaces the whole list. */
+export type AffiliateSettingsInput = Partial<Omit<AffiliateSettings, "tierRates">> & { tierRates?: Partial<Record<AffiliateTier, Partial<TierRate>>> };
+
+export function updateAdminAffiliateSettings(input: AffiliateSettingsInput): Promise<AffiliateSettings> {
   return request<AffiliateSettings>("/admin/affiliate/settings", { method: "PATCH", body: input });
 }
 
-export type AffiliateSort = "member" | "code" | "invited" | "topups" | "commission" | "joined" | "status";
+export type AffiliateSort = "member" | "code" | "invited" | "topups" | "commission" | "joined" | "status" | "tier";
 
-export function listAdminAffiliates(input: { q?: string; status?: AffiliateStatus | "all"; page?: number; limit?: number; sort?: AffiliateSort; order?: "asc" | "desc" } = {}): Promise<AdminAffiliateList> {
+export function listAdminAffiliates(input: { q?: string; status?: AffiliateStatus | "all"; tier?: AffiliateTier | "all"; page?: number; limit?: number; sort?: AffiliateSort; order?: "asc" | "desc" } = {}): Promise<AdminAffiliateList> {
   const params = new URLSearchParams();
   if (input.q?.trim()) params.set("q", input.q.trim());
   if (input.status && input.status !== "all") params.set("status", input.status);
+  if (input.tier && input.tier !== "all") params.set("tier", input.tier);
   params.set("page", String(input.page ?? 1));
   params.set("limit", String(input.limit ?? 25));
   if (input.sort) params.set("sort", input.sort);
@@ -329,6 +373,11 @@ export function listAdminAffiliates(input: { q?: string; status?: AffiliateStatu
 
 export function updateAdminAffiliateStatus(affiliateId: string, status: AffiliateStatus): Promise<{ id: string; status: AffiliateStatus }> {
   return request<{ id: string; status: AffiliateStatus }>(`/admin/affiliate/affiliates/${affiliateId}`, { method: "PATCH", body: { status } });
+}
+
+/** Moves an affiliate to another tier. It decides the rate of their line's top-ups from now on. */
+export function updateAdminAffiliateTier(affiliateId: string, tier: AffiliateTier): Promise<{ id: string; status: AffiliateStatus; tier: AffiliateTier }> {
+  return request<{ id: string; status: AffiliateStatus; tier: AffiliateTier }>(`/admin/affiliate/affiliates/${affiliateId}`, { method: "PATCH", body: { tier } });
 }
 
 export function listAdminWithdrawals(input: { status?: WithdrawalStatus | "all"; page?: number; limit?: number } = {}): Promise<AdminWithdrawalList> {

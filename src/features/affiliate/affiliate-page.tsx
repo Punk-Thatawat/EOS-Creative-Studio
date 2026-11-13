@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, Check, CircleCheck, Clock, Coins, Copy, Filter, Gift, RefreshCw, Star, TriangleAlert, UserRound, Users, Wallet } from "lucide-react";
+import { CalendarDays, Check, CircleCheck, Clock, Coins, Copy, Crown, Filter, Gift, RefreshCw, Star, TriangleAlert, Trophy, UserRound, Users, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { affiliateApi, type AffiliateApi, type AffiliateOverview, type AffiliateWallet, type AffiliateWithdrawal } from "@/lib/api/affiliate";
@@ -144,12 +144,24 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
   const settings = overview?.settings;
   const wallet = overview?.wallet;
   const stats = overview?.stats;
-  const percent = settings ? formatNumber(settings.commissionPercent, locale) : "";
+  // The rates of the member's own tier; a server that predates tiers has one rate for every top-up.
+  const rates = overview?.rates ?? (settings ? { firstTopupPercent: settings.commissionPercent, repeatTopupPercent: settings.commissionPercent } : null);
+  const firstPercent = rates ? formatNumber(rates.firstTopupPercent, locale) : "";
+  const repeatPercent = rates ? formatNumber(rates.repeatTopupPercent, locale) : "";
+  const bestRate = rates ? Math.max(rates.firstTopupPercent, rates.repeatTopupPercent) : 0;
   const usagePercent = settings ? formatNumber(settings.usageCommissionPercent, locale) : "";
   const holdDays = settings ? formatNumber(settings.holdDays, locale, 0) : "";
   // Only the kinds the admin has switched on are shown, so the page never promises what is not paid.
   const showTopup = Boolean(settings?.enabled && settings.topupEnabled);
   const showUsage = Boolean(settings?.enabled && settings.usageEnabled);
+  const bonus = overview?.bonus;
+  const bonusSteps = bonus?.steps ?? [];
+  const showBonus = Boolean(showTopup && bonus?.enabled && bonusSteps.length > 0);
+  const topBonusPercent = bonusSteps.reduce((max, step) => Math.max(max, step.percent), 0);
+  const bonusEarnedBaht = wallet?.bonusEarnedBaht ?? 0;
+  // How far the line is on the way to the next step, measured from 0 so the bar never jumps back when a step is reached.
+  const bonusProgress = bonus?.nextStep ? Math.min(100, Math.round((bonus.lineTopupBaht / bonus.nextStep.minTopupBaht) * 100)) : 100;
+  const tierName = affiliate?.tier ? t(`affiliate.tier.${affiliate.tier}`) : "";
 
   const invited = stats?.invitedCount ?? 0;
   const paying = stats?.payingCount ?? 0;
@@ -167,15 +179,17 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
   } as const;
 
   // The banner's promise names the rate that is really paid: the top-up rate, else the usage rate, else nothing in numbers.
-  const heroSubtitle = showTopup
-    ? t("affiliate.page.heroSubtitleRate", { percent })
+  const heroSubtitle = showTopup && bestRate > 0
+    ? t("affiliate.page.heroSubtitleTier", { percent: formatNumber(bestRate, locale) })
     : showUsage
       ? t("affiliate.page.heroSubtitleRate", { percent: usagePercent })
       : t("affiliate.page.heroSubtitleNone");
 
   const heroNotes = (
     <ul className={styles.heroNotes}>
-      {showTopup ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteEarn", { percent })}</li> : null}
+      {showTopup ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteEarnFirst", { percent: firstPercent })}</li> : null}
+      {showTopup ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteEarnRepeat", { percent: repeatPercent })}</li> : null}
+      {showBonus ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteBonus", { percent: formatNumber(topBonusPercent, locale) })}</li> : null}
       {showUsage ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteUsage", { usagePercent })}</li> : null}
       <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteCredits", { days: holdDays })}</li>
     </ul>
@@ -189,8 +203,8 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
         <div className={styles.rowLine}>
           <div className={styles.rowMain}>
             <strong>
-              <span className={`${styles.badge} ${item.source === "topup" ? styles.badgeTopup : styles.badgeUsage}`}>
-                {item.source === "topup" ? t("affiliate.page.sourceTopup") : t("affiliate.page.sourceUsage")}
+              <span className={`${styles.badge} ${item.source === "topup" ? styles.badgeTopup : item.source === "bonus" ? styles.badgeBonus : styles.badgeUsage}`}>
+                {item.source === "topup" ? t("affiliate.page.sourceTopup") : item.source === "bonus" ? t("affiliate.page.sourceBonus") : t("affiliate.page.sourceUsage")}
               </span>
               {item.member}
             </strong>
@@ -227,6 +241,9 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
           <p className={styles.eyebrow}>{t("affiliate.page.eyebrow")}</p>
           <h1>{t("affiliate.page.title")}</h1>
           <p className={styles.description}>{t("affiliate.page.subtitle")}</p>
+          {loadState === "ready" && affiliate && tierName ? (
+            <p className={styles.tierBadge}><Crown size={14} aria-hidden="true" />{t("affiliate.page.headBadge", { tier: tierName })}</p>
+          ) : null}
         </div>
         {loadState === "ready" && affiliate ? (
           <Button type="button" variant="outline" size="sm" className={styles.refresh} disabled={refreshing} onClick={() => { void load(); }}>
@@ -334,6 +351,14 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
                   })}
                 </dd>
               ) : null}
+              {showBonus || bonusEarnedBaht > 0 ? (
+                <dd className={styles.kpiSub}>
+                  {t("settings.affiliate.earnedBreakdownBonus", {
+                    topup: `฿${formatNumber(wallet.topupEarnedBaht, locale)}`,
+                    bonus: `฿${formatNumber(bonusEarnedBaht, locale)}`,
+                  })}
+                </dd>
+              ) : null}
             </div>
           </dl>
 
@@ -343,7 +368,7 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
                 <span className={styles.titleIcon} aria-hidden="true"><CalendarDays size={18} /></span>
                 {t("affiliate.page.chartTitle", { days: daily.length || 30 })}
               </h2>
-              {daily.every((point) => point.topupBaht + point.usageBaht <= 0) ? <p className={styles.cardSubtitle}>{t("affiliate.page.chartEmpty")}</p> : null}
+              {daily.every((point) => point.topupBaht + point.usageBaht + (point.bonusBaht ?? 0) <= 0) ? <p className={styles.cardSubtitle}>{t("affiliate.page.chartEmpty")}</p> : null}
               <EarningsChart points={daily} />
             </Card>
 
@@ -361,6 +386,42 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
               {settings.withdrawEnabled ? (
                 <Card className={styles.card}>
                   <WithdrawCard overview={overview} api={api} icon={<Wallet size={20} />} onWithdrawal={handleWithdrawal} />
+                </Card>
+              ) : null}
+
+              {showBonus && bonus ? (
+                <Card className={styles.card}>
+                  <h2 className={styles.cardTitle}>
+                    <span className={styles.titleIcon} aria-hidden="true"><Trophy size={18} /></span>
+                    {t("affiliate.bonus.title")}
+                  </h2>
+                  <p className={styles.cardSubtitle}>{t("affiliate.bonus.subtitle")}</p>
+                  <div className={styles.funnelRow}>
+                    <span>{t("affiliate.bonus.lineTotal")}</span>
+                    <strong>฿{formatNumber(bonus.lineTopupBaht, locale)}</strong>
+                  </div>
+                  <div className={styles.funnelBar} aria-hidden="true"><span style={{ width: `${bonusProgress}%` }} /></div>
+                  <p className={styles.hint}>
+                    {bonus.nextStep
+                      ? t("affiliate.bonus.next", { amount: formatNumber(Math.max(0, bonus.nextStep.minTopupBaht - bonus.lineTopupBaht), locale), percent: formatNumber(bonus.nextStep.percent, locale) })
+                      : t("affiliate.bonus.top")}
+                  </p>
+                  <div className={styles.funnelRow}>
+                    <span>{t("affiliate.bonus.current")}</span>
+                    <strong>{formatNumber(bonus.percent, locale)}%</strong>
+                  </div>
+                  <div className={styles.funnelRow}>
+                    <span>{t("affiliate.bonus.earned")}</span>
+                    <strong>฿{formatNumber(bonus.earnedBaht, locale)}</strong>
+                  </div>
+                  <ul className={styles.bonusSteps} aria-label={t("affiliate.bonus.stepsAria")}>
+                    {bonusSteps.map((step) => (
+                      <li key={step.minTopupBaht} className={bonus.lineTopupBaht >= step.minTopupBaht ? styles.bonusStepOn : undefined}>
+                        <span>{t("affiliate.bonus.stepFrom", { amount: formatNumber(step.minTopupBaht, locale, 0) })}</span>
+                        <strong>{formatNumber(step.percent, locale)}%</strong>
+                      </li>
+                    ))}
+                  </ul>
                 </Card>
               ) : null}
 
