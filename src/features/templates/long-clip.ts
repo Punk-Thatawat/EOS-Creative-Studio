@@ -94,7 +94,7 @@ export function useExtensionQueue() {
             const generationId = created.generationId ?? created.id;
             const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
             if (generationId && pollUrl) {
-              emitGenerationStarted({ feature: "extend-video", requestId: crypto.randomUUID(), generationId, pollUrl, workspaceId: created.workspaceId, model: longClipExtender, status: created.status === "processing" ? "processing" : "queued" });
+              emitGenerationStarted({ feature: "extend-video", requestId: crypto.randomUUID(), generationId, pollUrl, workspaceId: created.workspaceId, model: longClipExtender, creditCost: 0, status: created.status === "processing" ? "processing" : "queued" });
             }
           } catch {
             // The first part is kept as it is; the rest could not be started (for instance, not enough credits).

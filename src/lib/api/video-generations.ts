@@ -233,6 +233,14 @@ export async function splitPresenterScript(script: string): Promise<{ scenes: st
   }) as { scenes: string[] };
 }
 
+export type PresenterVisualDirectionPlan = { id: string; opening: string; continuation: string };
+
+export async function analyzePresenterVisualDirections(scenes: Array<{ id: string; direction: string }>, signal?: AbortSignal): Promise<{ scenes: PresenterVisualDirectionPlan[] }> {
+  return await authenticatedRequest("/generations/presenter/analyze-visual-directions", {
+    method: "POST", body: JSON.stringify({ scenes }), signal,
+  }) as { scenes: PresenterVisualDirectionPlan[] };
+}
+
 export async function createVideoStoryboard(input: VideoGenerationInput, signal?: AbortSignal): Promise<VideoStoryboardResponse> {
   return await authenticatedRequest("/generations/video/image-to-video", {
     method: "POST",
@@ -253,15 +261,17 @@ export async function quoteVideoStoryboard(input: Omit<VideoGenerationInput, "id
   }) as VideoCreditQuoteResponse;
 }
 
-export async function composePresenterVideo(storyboardId: string, scenes: PresenterSceneMediaInput[], signal?: AbortSignal): Promise<PresenterVideoCompositionResponse> {
+export async function composePresenterVideo(storyboardId: string, scenes: PresenterSceneMediaInput[], voiceover: Blob, chunkDurations: number[], signal?: AbortSignal): Promise<PresenterVideoCompositionResponse> {
   const accessToken = await getApiAccessToken();
   if (!accessToken) throw new Error("Please sign in before finalizing a presenter video");
   const formData = new FormData();
-  if (scenes.length > 0) formData.append("manifest", JSON.stringify({
+  formData.append("manifest", JSON.stringify({
     scenes: scenes.map(({ sceneIndex, startSeconds, endSeconds }) => ({ sceneIndex, startSeconds, endSeconds })),
+    chunkDurations,
   }));
+  formData.append("voiceover", voiceover, "presenter-voiceover.wav");
   for (const scene of scenes) formData.append("media", scene.file, scene.file.name);
-  const response = await fetch(`${backendApiUrl}/generations/presenter/storyboard/${encodeURIComponent(storyboardId)}/compose`, {
+  const response = await fetch(`${backendApiUrl}/generations/presenter/${encodeURIComponent(storyboardId)}/compose`, {
     method: "POST",
     headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
     body: formData,

@@ -16,3 +16,9 @@ test("explicit expiry takes precedence and unknown dates are not assumed expired
   assert.equal(isGenerationMediaAvailable(undefined, undefined, now), true);
   assert.equal(isGenerationMediaAvailable("invalid", undefined, now), true);
 });
+
+test("audio uses the server expiry without guessing a seven-day deadline", () => {
+  assert.equal(isGenerationMediaAvailable(undefined, "2026-11-05T00:00:00Z", now), true);
+  assert.equal(isGenerationMediaAvailable(undefined, "2026-11-04T12:00:00Z", now), false);
+  assert.equal(isGenerationMediaAvailable(undefined, undefined, now), true);
+});

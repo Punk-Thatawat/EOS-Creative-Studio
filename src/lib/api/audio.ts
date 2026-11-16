@@ -652,7 +652,7 @@ export async function listAudioHistory(input: { feature?: AudioHistoryFeature; l
   const payload = await response.json().catch(() => null);
   const data = unwrapAudioHistoryPayload(payload);
   const items = Array.isArray(data) ? data : data && typeof data === "object" && "items" in data && Array.isArray(data.items) ? data.items : data && typeof data === "object" && "history" in data && Array.isArray(data.history) ? data.history : [];
-  return items.map(normalizeAudioHistoryEntry).filter((item) => isGenerationMediaAvailable(item.createdAt, item.expiresAt));
+  return items.map(normalizeAudioHistoryEntry).filter((item) => isGenerationMediaAvailable(undefined, item.expiresAt));
 }
 
 export async function listOwnedAudioAssets(input: { page: number; limit: number; search?: string; sort: "newest" | "oldest" }): Promise<{ items: AudioHistoryEntry[]; total: number }> {
@@ -689,7 +689,10 @@ export async function getAudioHistory(id: string): Promise<AudioHistoryEntry> {
 }
 
 export async function fetchAudioHistoryAudio(id: string): Promise<TextToSpeechResponse> {
-  const response = await userAudioRequest(`/audio/history/${encodeURIComponent(id)}/audio`, { headers: { Accept: "audio/*, application/json" } });
+  const path = id.startsWith("wavespeed:")
+    ? `/audio/provider-history/${encodeURIComponent(id.slice("wavespeed:".length))}/audio`
+    : `/audio/history/${encodeURIComponent(id)}/audio`;
+  const response = await userAudioRequest(path, { headers: { Accept: "audio/*, application/json" } });
   const contentType = response.headers.get("content-type") ?? "";
   if (contentType.startsWith("audio/") || contentType.includes("octet-stream")) {
     return { blob: await response.blob(), contentType };

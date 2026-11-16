@@ -16,8 +16,10 @@ import {
   emitGenerationCompleted,
   GENERATION_REQUEST_FAILED_EVENT,
   GENERATION_REQUEST_FINISHED_EVENT,
+  settleGenerationCredits,
 } from "@/lib/generation-progress-events";
 import { AUTH_SESSION_UPDATED_EVENT } from "@/lib/auth/auth-events";
+import { requestCreditBalanceSync } from "@/lib/credits/credit-events";
 import { getDismissedProgressStorageKey, getGenerationProgressStorageKey } from "@/lib/generation-progress-storage";
 import { useHydrated } from "@/components/app-shell/use-hydrated";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
@@ -674,6 +676,11 @@ export function GenerationProgressFloating() {
           item.pending,
           (progress) => {
             if (disposed) return;
+            // The job has ended, so its credits were taken or refunded; read the balance even
+            // when the user already dismissed its card.
+            if (progress.status === "completed" || progress.status === "failed" || progress.status === "cancelled") {
+              settleGenerationCredits({ generationId });
+            }
             if (dismissedGenerationIdsRef.current.has(generationId) || readDismissedGenerationIds().has(generationId))
               return;
             if (progress.status === "completed" && !completedGenerationIdsRef.current.has(generationId)) {
@@ -761,6 +768,12 @@ export function GenerationProgressFloating() {
         ? (await cancelVideoStoryboard(generationId)).status
         : await cancelGeneration(generationId, item.pending.workspaceId);
 
+      if (status === "cancelled" || status === "completed" || status === "failed") {
+        settleGenerationCredits({ generationId });
+        // The backend refunds a cancelled job from its worker, which can land a moment after
+        // the cancel request returns, so read the balance once more shortly afterwards.
+        if (status === "cancelled") window.setTimeout(() => requestCreditBalanceSync(), 4_000);
+      }
       if (status === "cancelled") {
         removeProgressForItem(item);
         setActive((current) => current.filter((entry) => entry.pending.generationId !== generationId));

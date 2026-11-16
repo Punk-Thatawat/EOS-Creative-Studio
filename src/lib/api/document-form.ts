@@ -1,4 +1,5 @@
 import { getApiAccessToken } from '@/lib/auth/access-token';
+import { requestCreditBalanceSync } from '@/lib/credits/credit-events';
 
 const configuredBackendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:4000').replace(/\/+$/, '');
 const backendApiUrl = `${configuredBackendUrl.replace(/\/api\/v1$/, '')}/api/v1`;
@@ -73,6 +74,7 @@ export async function readForm(input: { file: File; fields?: string; model?: str
   });
   const payload = await response.json().catch(() => null) as { data?: FormReadResult; message?: string | string[] } | null;
   if (!response.ok || !payload?.data?.fields) throw new Error(errorMessage(payload?.message, 'Reading the form failed'));
+  requestCreditBalanceSync();
   return payload.data;
 }
 

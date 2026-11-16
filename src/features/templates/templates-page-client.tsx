@@ -490,7 +490,7 @@ function RecreateDialog({ t, onClose, onStarted }: { t: Template; onClose: () =>
       const generationId = created.generationId ?? created.id;
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) {
-        emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
+        emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, creditCost: credits ?? 0, status: created.status === "processing" ? "processing" : "queued" });
       }
       onStarted(t);
     } catch (error) {
@@ -498,7 +498,7 @@ function RecreateDialog({ t, onClose, onStarted }: { t: Template; onClose: () =>
       setSending({ state: "error", message: formatGenerationError(error, c("templates.composer.generateFailed")) });
     }
   };
-  const slot = (label: string, flag: string, required: boolean, image: PickedImage | null, set: (image: PickedImage | null) => void, input: React.RefObject<HTMLInputElement | null>, cta: string, Icon: typeof Plus) => (
+  const slot =(label: string, flag: string, required: boolean, image: PickedImage | null, set: (image: PickedImage | null) => void, input: React.RefObject<HTMLInputElement | null>, cta: string, Icon: typeof Plus) => (
     <div className={s.recreateSlot}>
       <span className={s.recreateLabel}>{label}</span>
       <button type="button" className={s.recreateBox} onClick={() => input.current?.click()} aria-label={cta}>
@@ -1535,7 +1535,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
       const generationId = created.generationId ?? created.id;
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) {
-        emitGenerationStarted({ feature: "motion-transfer", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
+        emitGenerationStarted({ feature: "motion-transfer", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, creditCost: credits ?? 0, status: created.status === "processing" ? "processing" : "queued" });
       }
       setSending({ state: "sent", message: c("templates.composer.sent") });
     } catch (error) {
@@ -2062,7 +2062,7 @@ function Composer({
       const generationId = created.generationId ?? created.id;
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) {
-        emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, status: created.status === "processing" ? "processing" : "queued" });
+        emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, creditCost: firstCredits ?? 0, status: created.status === "processing" ? "processing" : "queued" });
         if (restPart > 0) queueExtension({ generationId, pollUrl, prompt: request.prompt, duration: restPart, resolution, aspectRatio, templateSlug: template.slug });
       }
       onUse(template);
@@ -3822,17 +3822,18 @@ export function TemplatesPageClient() {
               <LibraryHero mode={mode} items={visible} />
               {laneToolbar}
               {libraryBody}
-              {!loading && !error && pagination.totalPages > 1 && (
+              {!loading && !error && pagination.totalPages >= 1 && (
                 <nav className={s.pagination} aria-label={c("templates.paginationAria")}>
                   <button
                     type="button"
                     disabled={pagination.page === 1}
+                    aria-label={c("templates.prev")}
                     onClick={() => {
                       setPage(pagination.page - 1);
                       setLoading(true);
                     }}
                   >
-                    {c("templates.prev")}
+                    <ChevronLeft size={18} aria-hidden="true" />
                   </button>
                   {pages.map((n, i) => (
                     <span key={n}>
@@ -3853,12 +3854,13 @@ export function TemplatesPageClient() {
                   <button
                     type="button"
                     disabled={pagination.page === pagination.totalPages}
+                    aria-label={c("templates.next")}
                     onClick={() => {
                       setPage(pagination.page + 1);
                       setLoading(true);
                     }}
                   >
-                    {c("templates.next")}
+                    <ChevronRight size={18} aria-hidden="true" />
                   </button>
                 </nav>
               )}

@@ -285,7 +285,7 @@ export function ExtendVideoWorkspace() {
       setGenerationId(id ?? null);
       if (created.workspaceId) window.sessionStorage.setItem("eos.generation.workspace-id", created.workspaceId);
       const pollUrl = created.pollUrl ?? (id ? `/generations/${encodeURIComponent(id)}/status` : "");
-      if (id && pollUrl) emitGenerationStarted({ feature: "extend-video", requestId, generationId: id, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
+      if (id && pollUrl) emitGenerationStarted({ feature: "extend-video", requestId, generationId: id, pollUrl, workspaceId: created.workspaceId, model: selectedModel, creditCost: videoCreditEstimate.creditCost ?? 0, status: created.status === "processing" ? "processing" : "queued" });
       let status = responseStatus(created);
       let currentProgress = 0;
       if (status.status !== "completed" && status.status !== "failed" && status.status !== "cancelled") {

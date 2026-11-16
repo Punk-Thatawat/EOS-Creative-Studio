@@ -608,9 +608,11 @@
 .previewHeader {
   display: flex;
   min-height: 52px;
+  /* On a narrow column the toolbar drops under the title instead of running over it. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px 6px;
   border-bottom: 1px solid #efedeb;
 }
 
@@ -635,6 +637,7 @@
   display: flex;
   min-width: 0;
   align-items: center;
+  margin-left: auto;
   gap: 4px;
   color: #59626b;
   font-size: 10px;
@@ -652,6 +655,27 @@
   width: 1px;
   height: 17px;
   background: #e5e3e0;
+}
+/* The document tools (zoom, hand, compare, notes) in a row of their own under the title, like the form tab's toolbar. */
+.previewTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  border: 1px solid #ece9e6;
+  border-radius: 12px;
+  background: #fff;
+  padding: 4px 8px;
+  color: #59626b;
+  font-size: 10px;
+}
+.previewTools svg {
+  flex: none;
+  color: #69727b;
+}
+.previewTools .toolbarLabel {
+  display: inline;
 }
 
 .previewStage {
@@ -2371,6 +2395,9 @@
 }
 
 .toolbarZoomValue {
+  /* A fixed width, so the buttons beside it stay put while the number changes between 25% and 300%. */
+  box-sizing: border-box;
+  width: 6ch;
   min-width: 43px;
   font-variant-numeric: tabular-nums;
 }
@@ -2395,6 +2422,18 @@
     min-width: 32px;
     min-height: 32px;
     justify-content: center;
+  }
+  .previewTools {
+    justify-content: space-between;
+    gap: 2px;
+  }
+  .previewTools .toolbarButton {
+    min-width: 32px;
+    min-height: 32px;
+    justify-content: center;
+  }
+  .previewTools .toolbarLabel {
+    display: none;
   }
   .toolbarLabel {
     display: none;

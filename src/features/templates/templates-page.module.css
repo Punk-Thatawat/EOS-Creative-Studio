@@ -1430,11 +1430,22 @@
 }
 .panelTabs {
   display: flex;
-  flex-wrap: wrap;
+  /* One row that swipes sideways; a tab never wraps or shrinks. */
+  min-width: 0;
+  flex-wrap: nowrap;
   gap: 4px;
   margin-bottom: 14px;
+  overflow-x: auto;
+  padding: 2px 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.panelTabs::-webkit-scrollbar {
+  display: none;
 }
 .panelTabs button {
+  flex: none;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2033,8 +2044,7 @@
   font-size: 20px;
   color: #171719;
 }
-.empty button,
-.pagination button {
+.empty button {
   min-height: 40px;
   border: 0;
   border-radius: 0;
@@ -2046,14 +2056,35 @@
 .pagination {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   margin-top: 22px;
-  color: #17171980;
+  color: #525466;
 }
+.pagination > span { display: inline-flex; align-items: center; gap: 7px; }
+.pagination button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+  color: #202236;
+  border: 1px solid #e5e6ec;
+  border-radius: 7px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+.pagination button:disabled { color: #b9bac2; cursor: not-allowed; }
+.pagination button:focus-visible { outline: 2px solid #f26b38; outline-offset: 2px; }
 .pagination button[aria-current] {
-  border-color: #f26b38;
-  background: #f26b38;
+  color: #ff5b14;
+  border-color: #ff9d78;
+  background: #fff1eb;
+}
+@media (max-width: 1023.98px), (pointer: coarse) {
+  .pagination button { width: auto; min-width: 40px; height: auto; min-height: 40px; }
 }
 
 /* History: the invitation shown before anything has been opened. */
@@ -2146,6 +2177,8 @@
   position: relative;
   display: flex;
   height: 78%;
+  /* Lifts the text clear of the tilted photo in the corner. */
+  padding-bottom: 20%;
   margin: 0 12%;
   flex-direction: column;
   align-items: center;
@@ -2157,13 +2190,13 @@
   text-align: center;
 }
 .uploadDemo strong { font-size: 18px; }
-.uploadDemo small { max-width: 75%; color: #17171970; font-size: 12px; }
+.uploadDemo small { max-width: 56%; color: #17171970; font-size: 12px; }
 .uploadDemo > span {
   position: absolute;
-  right: -9%;
-  bottom: -24%;
-  width: 48%;
-  height: 56%;
+  right: -5%;
+  bottom: -8%;
+  width: 34%;
+  height: 42%;
   border: 2px solid #f26b38;
   border-radius: 0;
   background: #202225 center / cover;
@@ -2193,12 +2226,14 @@
   transform: translateY(-2px);
 }
 .resultDemo {
-  width: 88%;
-  height: 88%;
-  border: 6px solid #fff;
+  /* Narrower than its box, so it is centred on its own; the other demos fill their box. */
+  justify-self: center;
+  width: 80%;
+  height: 80%;
+  border: 0;
   border-radius: 0;
   background: #25282a center / cover;
-  box-shadow: 0 0 0 12px #050505, 0 12px 32px #0008;
+  box-shadow: 0 0 0 1px #1717191a, 0 10px 28px #17171933;
 }
 .inviteSteps h3 {
   margin: 0 0 4px;
@@ -3093,7 +3128,6 @@
   .videoPreviewInfo { box-shadow: inset 0 1px 0 #e8eaee; }
 }
 
-.pagination button[aria-current] { color: #fff; }
 .composerBar .use, .motionGenerateDock button, .editGenerateDock button { color: #fff; }
 
 /* A grey divider between the create panel and the library, the same hairline the Images page uses. */

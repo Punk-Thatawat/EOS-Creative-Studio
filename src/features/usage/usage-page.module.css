@@ -95,6 +95,7 @@ hidden the same way the other swipeable strips in this app hide theirs
 grey bar under the tabs and steals ~15px, which pushed the panel below it
 down. Swiping and keyboard scrolling still work. */
 .tabBar {
+  position: relative;
   display: flex;
   gap: 36px;
   border-bottom: 1px solid #e9e9ed;
@@ -106,14 +107,19 @@ down. Swiping and keyboard scrolling still work. */
 .tabBar::-webkit-scrollbar { display: none; }
 .tabBar button {
   position: relative;
+  display: grid;
+  place-items: center;
   border: 0;
+  border-bottom: 3px solid transparent;
   background: none;
   color: #494953;
   min-height: 62px;
   white-space: nowrap;
   padding: 14px 0;
 }
-.tabBar button[aria-selected=true] { color: #d84300; font-weight: 700; border-bottom: 3px solid #ff5900; }
+.tabBar button > span, .tabBar button::after { grid-area: 1 / 1; }
+.tabBar button::after { content: attr(data-label); visibility: hidden; font-weight: 700; }
+.tabBar button[aria-selected=true] { color: #d84300; font-weight: 700; border-bottom-color: #ff5900; }
 .periodControl { display: flex; gap: 12px; align-items: center; padding: 22px 8px 2px; }
 .periodDropdown { flex: 0 0 auto; width: min(240px,calc(100% - 52px)); }
 .refresh { display: grid; place-items: center; background: none; border: 0; color: #686874; min-width: 40px; min-height: 40px; }
@@ -182,7 +188,11 @@ down. Swiping and keyboard scrolling still work. */
 }
 .tools>div { display: flex; align-items: center; gap: 12px; padding: 0 20px; border-right: 1px solid #ededf1; }
 .tools>div:nth-child(3n) { border-right: 0; }
-.toolIcon { width: 80px; height: 80px; object-fit: contain; }
+.toolIcon { width: 80px; height: 80px; flex: none; object-fit: contain; }
+/* The artwork includes different transparent margins; balance the visible icons within equal layout boxes. */
+.toolIcon[data-tool="image"] { transform: scale(.86); }
+.toolIcon[data-tool="video"] { transform: scale(.78); }
+.toolIcon[data-tool="document"] { transform: scale(1.05); }
 .tools strong { display: block; font-weight: 600; }
 .tools b { display: block; font-size: 24px; color: #e54b00; }
 .tools small { font-size: 12px; font-weight: 400; color: #4f4f5b; }

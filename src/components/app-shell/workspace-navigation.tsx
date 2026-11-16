@@ -1,7 +1,7 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { AudioLines, BarChart3, ChevronDown, Clock3, FileText, Home, ImageIcon, LayoutTemplate, Settings, UserRound, Video, WandSparkles, type LucideIcon } from "lucide-react";
+import { AudioLines, BarChart3, ChevronDown, Clock3, FileText, Home, ImageIcon, LayoutTemplate, Settings, Share2, UserRound, Video, WandSparkles, type LucideIcon } from "lucide-react";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { preloadCreatePage } from "@/features/create/components/preload-create-page";
 import type { GenerationKind } from "@/features/create/types/generation";
@@ -13,6 +13,7 @@ const workspaceItems = [
   { label: "Assets", href: "/assets", icon: ImageIcon },
   { label: "History", href: "/history", icon: Clock3 },
   { label: "Usage & Credits", href: "/usage", icon: BarChart3 },
+  { label: "Affiliate", href: "/affiliate", icon: Share2 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 const createItems: { kind?: GenerationKind; label: string; href: string; icon: LucideIcon }[] = [

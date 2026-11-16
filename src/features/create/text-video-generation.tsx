@@ -629,7 +629,7 @@ export function TextToVideoWorkspace() {
       const generationId = created.generationId ?? created.id;
       setGenerationId(generationId ?? null);
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
-      if (generationId && pollUrl) emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, status: created.status === "processing" ? "processing" : "queued" });
+      if (generationId && pollUrl) emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model: selectedModel, creditCost: videoCreditEstimate.creditCost ?? 0, status: created.status === "processing" ? "processing" : "queued" });
       let status: TextVideoGenerationStatus = {
         ...created,
         status: created.status ?? "processing",

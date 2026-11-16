@@ -9,6 +9,7 @@ import { GENERATION_COMPLETED_EVENT } from "@/lib/generation-progress-events";
 import styles from "./video-generation-page.module.css";
 import { EosCutButton } from "./eos-cut-button";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { latestVideoResult } from "./latest-video-result";
 
 type VideoResultLibraryProps = {
   feature: string;
@@ -173,13 +174,13 @@ export function VideoResultLibrary({ feature, currentVideoUrl, currentSourceGene
   }, [currentVideoUrl, feature, items, onVideoSelect, selectedVideoUrl, view]);
 
   const selectLatest = () => {
-    const latestVideoUrl = currentVideoUrl ?? selectedVideoUrl ?? items[0]?.url ?? null;
+    const latestVideoUrl = latestVideoResult(currentVideoUrl, items);
     if (!latestVideoUrl) return;
     setView("latest");
     onVideoSelect(latestVideoUrl, "latest");
   };
 
-  const latestVideoUrl = currentVideoUrl ?? selectedVideoUrl ?? items[0]?.url ?? null;
+  const latestVideoUrl = latestVideoResult(currentVideoUrl, items);
   const selectedHistoryItem = selectedVideoUrl ? items.find((item) => item.url === selectedVideoUrl) : undefined;
   const selectedSourceGenerationId = selectedHistoryItem?.id
     ?? (selectedVideoUrl === currentVideoUrl ? currentSourceGenerationId : null)

@@ -20,12 +20,10 @@ import {
   Type,
   WrapText,
   X,
-  ZoomIn,
-  ZoomOut,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Dropdown } from "@/components/ui/dropdown";
+import { DocumentZoomControl } from "./document-zoom-control";
 import type { TranslationKey } from "@/lib/i18n/dictionary";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { HIGHLIGHT_COLORS, TextStyleBar, type MarkStyle } from "./preview-marks";
@@ -178,25 +176,7 @@ export function FormToolbar({
 
         </div>
         <div className={styles.toolGroup}>
-          <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomOut"))} title={hasPreview ? t(K("ocr.tool.zoomOut")) : needFile} disabled={!hasPreview || zoom <= 25} onClick={() => onZoom(Math.max(25, zoom - 25))}>
-            <ZoomOut size={16} aria-hidden="true" />
-          </button>
-          <span className={styles.zoomDropdown} title={hasPreview ? undefined : needFile}>
-            <Dropdown
-              value={String(zoom)}
-              options={Array.from({ length: 12 }, (_, index) => ({ value: String((index + 1) * 25), label: `${(index + 1) * 25}%` }))}
-              onChange={(value) => onZoom(Number(value))}
-              ariaLabel={t(K("ocr.tool.zoom"))}
-              disabled={!hasPreview}
-              menuPosition="fixed"
-              triggerClassName="h-[34px] min-h-0 w-[92px] gap-1.5 rounded-lg border-transparent bg-transparent px-2.5 text-[12px] font-medium text-[#59626b] hover:bg-[#fff2ea]"
-              menuClassName="min-w-[110px]"
-              optionClassName="px-3 py-2 text-[12px]"
-            />
-          </span>
-          <button type="button" className={styles.toolbarButton} aria-label={t(K("ocr.tool.zoomIn"))} title={hasPreview ? t(K("ocr.tool.zoomIn")) : needFile} disabled={!hasPreview || zoom >= 300} onClick={() => onZoom(Math.min(300, zoom + 25))}>
-            <ZoomIn size={16} aria-hidden="true" />
-          </button>
+          <DocumentZoomControl value={zoom} onChange={onZoom} disabled={!hasPreview} />
           <MenuButton icon={Maximize} label={t(K("form.tool.fit"))} compact disabled={!hasPreview} title={hasPreview ? t(K("form.tool.fit")) : needFile}>
             {(close) => (
               <>

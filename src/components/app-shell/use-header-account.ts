@@ -19,29 +19,43 @@ function toNumericBalance(balance: HeaderAccountData["balance"]): number | null 
 
 export function useHeaderAccount() {
   const [account, setAccount] = useState<HeaderAccountData>(initialAccount);
-  const optimisticDeduction = useRef(0);
+  // Credits are taken by the backend worker some seconds after a job is accepted, so the
+  // header lowers the balance right away (an "expected" balance) and only trusts the server
+  // once the job is settled. While jobs are pending the shown balance is the lower of the
+  // server balance and the expected balance, which can never count a charge twice.
+  const pendingJobs = useRef({ total: 0, expectedBalance: null as number | null });
+  const shownAccount = useRef<HeaderAccountData>(initialAccount);
 
   useEffect(() => {
     let isMounted = true;
+    const show = (next: HeaderAccountData) => {
+      shownAccount.current = next;
+      setAccount(next);
+    };
     const handleSessionExpired = () => {
       if (!isMounted) return;
       clearHeaderAccountCache();
-      setAccount(initialAccount);
+      pendingJobs.current = { total: 0, expectedBalance: null };
+      show(initialAccount);
       window.location.replace("/?login=1&reason=session-expired");
     };
-    const refreshAccount = async (confirmedDelta = 0) => {
+    // `force` skips the 10 second cache. Every explicit sync request means "the balance just
+    // changed", so it must always go to the server; only the first load may use the cache.
+    const refreshAccount = async (confirmedDelta = 0, force = false) => {
       try {
-        const nextAccount = await fetchHeaderAccountData({ force: confirmedDelta > 0 });
+        const nextAccount = await fetchHeaderAccountData({ force });
         if (!isMounted) return;
-        if (confirmedDelta > 0) {
-          optimisticDeduction.current = Math.max(0, optimisticDeduction.current - confirmedDelta);
+        const pending = pendingJobs.current;
+        if (confirmedDelta > 0) pending.total = Math.max(0, pending.total - confirmedDelta);
+        if (pending.total <= 0) {
+          pending.total = 0;
+          pending.expectedBalance = null;
         }
-        const visibleBalance = toNumericBalance(nextAccount.balance);
-        const pendingDeduction = optimisticDeduction.current;
-        setAccount(
-          visibleBalance === null || pendingDeduction <= 0
+        const serverBalance = toNumericBalance(nextAccount.balance);
+        show(
+          serverBalance === null || pending.expectedBalance === null || serverBalance <= pending.expectedBalance
             ? nextAccount
-            : { ...nextAccount, balance: Math.max(0, visibleBalance - pendingDeduction) },
+            : { ...nextAccount, balance: pending.expectedBalance },
         );
       } catch {
         // Keep the current value when the account endpoints are unavailable.
@@ -51,17 +65,17 @@ export function useHeaderAccount() {
       const detail = (event as CustomEvent<CreditBalanceChangedDetail>).detail;
       const delta = Number(detail?.delta);
       if (!Number.isFinite(delta) || delta <= 0) return;
-      optimisticDeduction.current += delta;
-      setAccount((current) => {
-        const currentBalance = toNumericBalance(current.balance);
-        if (currentBalance === null) return current;
-        return { ...current, balance: Math.max(0, currentBalance - delta) };
-      });
+      const currentBalance = toNumericBalance(shownAccount.current.balance);
+      if (currentBalance === null) return;
+      const nextBalance = Math.max(0, currentBalance - delta);
+      pendingJobs.current.total += delta;
+      pendingJobs.current.expectedBalance = nextBalance;
+      show({ ...shownAccount.current, balance: nextBalance });
     };
     const handleBalanceSync = (event: Event) => {
       const detail = (event as CustomEvent<CreditBalanceSyncDetail>).detail;
       const confirmedDelta = Number(detail?.confirmedDelta);
-      void refreshAccount(Number.isFinite(confirmedDelta) && confirmedDelta > 0 ? confirmedDelta : 0);
+      void refreshAccount(Number.isFinite(confirmedDelta) && confirmedDelta > 0 ? confirmedDelta : 0, true);
     };
 
     void refreshAccount();
