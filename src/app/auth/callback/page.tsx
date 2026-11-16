@@ -6,8 +6,11 @@ import { useEffect, useRef, useState } from "react";
 import { exchangeGoogleCode, persistBackendSession } from "@/lib/auth/backend-auth";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
 import { clearGenerationProgressStorage } from "@/lib/generation-progress-storage";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 type AuthStage = "authenticating" | "workspace" | "ready";
+
+const MISSING_CODE_MESSAGE = "Google login code is missing or expired";
 
 const stageIndex: Record<AuthStage, number> = {
   authenticating: 0,
@@ -31,6 +34,7 @@ function resolveSafeRedirect(rawRedirect: string | null): string {
 }
 
 export default function AuthCallbackPage() {
+  const { t } = useLocale();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stage, setStage] = useState<AuthStage>("authenticating");
   const completionStarted = useRef(false);
@@ -38,12 +42,11 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     if (completionStarted.current) return undefined;
     completionStarted.current = true;
-    let active = true;
     const redirectParam = new URLSearchParams(window.location.search).get("redirect");
 
     async function completeAuth() {
       const code = new URLSearchParams(window.location.search).get("code");
-      if (!code) throw new Error("Google login code is missing or expired");
+      if (!code) throw new Error(MISSING_CODE_MESSAGE);
       const exchangeResult = await exchangeGoogleCode(code);
       const session = exchangeResult.data.session;
       if (!session) throw new Error("EOS session was not created");
@@ -59,17 +62,14 @@ export default function AuthCallbackPage() {
       window.location.replace(resolveSafeRedirect(redirectParam));
     }
 
+    // No "active" guard on purpose: React StrictMode (dev) mounts twice and the second mount is skipped by the ref
+    // above, so a guard cleared by the first cleanup would swallow the result and leave the loader spinning forever.
     completeAuth().catch((error: unknown) => {
-      if (!active) return;
-
       const message = error instanceof Error ? error.message : "Unable to complete login";
       setErrorMessage(message);
       window.sessionStorage.setItem("eos.auth.login-error", message);
     });
 
-    return () => {
-      active = false;
-    };
   }, []);
 
   return (
@@ -78,19 +78,19 @@ export default function AuthCallbackPage() {
         {errorMessage ? (
           <div className="auth-callback-error">
             <div className="auth-callback-error-mark" aria-hidden="true">!</div>
-            <h1>Login failed</h1>
-            <p>{errorMessage}</p>
-            <Link href="/?login=1">Back to login</Link>
+            <h1>{t("auth.callback.failedTitle")}</h1>
+            <p>{errorMessage === MISSING_CODE_MESSAGE ? t("auth.callback.missingCode") : errorMessage}</p>
+            <Link href="/?login=1">{t("auth.action.backToLogin")}</Link>
           </div>
         ) : (
           <>
             <div className="auth-callback-loader" aria-hidden="true" />
             <div className="auth-callback-title-row">
-              <Image src="/generated-assets/signing-you-in-transparent.png" alt="Signing you in..." width={1776} height={434} priority className="auth-callback-title-art" />
+              <Image src="/generated-assets/signing-you-in-transparent.png" alt={t("auth.callback.signingInAlt")} width={1776} height={434} priority className="auth-callback-title-art" />
             </div>
-            <p className="auth-callback-subtitle">Connecting your EOS Creative Studio account.</p>
+            <p className="auth-callback-subtitle">{t("auth.callback.subtitle")}</p>
             <div className="auth-callback-steps">
-              {(["Authenticating", "Loading workspace", "Ready"] as const).map((label, index) => {
+              {[t("auth.callback.stageAuthenticating"), t("auth.callback.stageWorkspace"), t("auth.callback.stageReady")].map((label, index) => {
                 const currentIndex = stageIndex[stage];
                 const isActive = index === currentIndex;
                 const isComplete = index < currentIndex;
