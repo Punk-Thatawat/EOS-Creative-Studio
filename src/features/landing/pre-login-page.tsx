@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ArrowRight, Check, ChevronLeft, ChevronRight, CircleAlert, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, MailCheck, UserRound, X, type LucideIcon } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { EosLogo } from "@/components/brand/eos-logo";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { VideoSource } from "@/components/media/video-source";
 import { getVideoEmbedUrl } from "@/lib/media/video-embed";
 import { fetchBackendSession } from "@/lib/auth/backend-session";
@@ -195,6 +196,9 @@ export function PreLoginPage() {
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
   const showcaseVideoRefs = useRef<Array<HTMLVideoElement | null>>([]);
   const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
+  const loginShellRef = useRef<HTMLDivElement | null>(null);
+  const introShellRef = useRef<HTMLDivElement | null>(null);
+  const loginOpenRef = useRef(false);
   const recaptchaWidgetRef = useRef<string | number | null>(null);
   const maxExampleOffset = Math.max(0, examples.length - 5);
   const visibleExampleOffset = Math.min(exampleOffset, maxExampleOffset);
@@ -465,6 +469,22 @@ export function PreLoginPage() {
     return () => window.clearTimeout(timer);
   }, [resendCooldown]);
 
+  useDialogFocus(loginOpen, loginShellRef, "input:not([type='checkbox'])");
+  useDialogFocus(showIntroVideo, introShellRef, ".video-modal-close");
+
+  useEffect(() => {
+    loginOpenRef.current = loginOpen;
+  }, [loginOpen]);
+
+  useEffect(() => {
+    if (!showIntroVideo) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowIntroVideo(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showIntroVideo]);
+
   useEffect(() => {
     if (!loginOpen) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -494,6 +514,8 @@ export function PreLoginPage() {
 
     let timer = 0;
     const play = () => {
+      // Someone opened the login dialog first (e.g. ?login=1): do not stack the intro behind it; show it next visit.
+      if (loginOpenRef.current) return;
       try {
         window.localStorage.setItem(introVideoShownDateKey, today);
       } catch {
@@ -600,7 +622,7 @@ export function PreLoginPage() {
           <Image src="/generated-assets/intro-corner-bottom-left-transparent.webp" alt="" width={1672} height={940} className="intro-video-decor-image" />
           <Image src="/generated-assets/intro-corner-bottom-right-transparent.webp" alt="" width={1672} height={940} className="intro-video-decor-image" />
         </div>
-        <div className="video-modal-shell" onClick={(event) => event.stopPropagation()}>
+        <div ref={introShellRef} className="video-modal-shell" onClick={(event) => event.stopPropagation()}>
           <div className="video-modal-actions"><button type="button" className="video-modal-close" aria-label="Close intro video" onClick={() => setShowIntroVideo(false)}><X size={24} /></button></div>
           <VideoSource
             key={introVideoUrl}
@@ -615,7 +637,7 @@ export function PreLoginPage() {
       </div>}
 
       {loginOpen && <div className="auth-modal" role="dialog" aria-modal="true" aria-label={authMode === "login" ? t("auth.modal.loginTitle") : authMode === "register" ? t("auth.modal.registerTitle") : authMode === "forgot" ? t("auth.modal.forgotTitle") : t("auth.modal.confirmationTitle")} onClick={closeLogin}>
-        <div className="auth-modal-shell" onClick={(event) => event.stopPropagation()}>
+        <div ref={loginShellRef} className="auth-modal-shell" onClick={(event) => event.stopPropagation()}>
           <div className="auth-mobile-logo"><EosLogo href="/" /></div>
           <button type="button" className="auth-modal-close" aria-label={t("auth.a11y.closeLogin")} onClick={closeLogin}><X size={22} /></button>
           <div className={`auth-modal-panel auth-modal-panel--${authMode}`}>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Check, Cookie, Settings2, X } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 const COOKIE_NAME = "eos_cookie_consent";
 const MAX_AGE = 60 * 60 * 24 * 180;
@@ -60,6 +61,7 @@ function saveConsent(value: Consent) {
 }
 
 export function CookieConsentBanner() {
+  const { t } = useLocale();
   const rawConsent = useSyncExternalStore(subscribeToConsent, readConsentCookieValue, getServerConsent);
   const consent = parseConsent(rawConsent);
   const hydrated = useSyncExternalStore(subscribeToHydration, getClientHydration, getServerHydration);
@@ -106,16 +108,16 @@ export function CookieConsentBanner() {
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold text-[#242125]">เราใช้คุกกี้</h2>
+              <h2 className="text-sm font-bold text-[#242125]">{t("cookie.banner.title")}</h2>
               <p className="mt-1 text-xs leading-5 text-[#716a70]">
-                คุกกี้ที่จำเป็นช่วยให้ระบบทำงาน ส่วนคุกกี้ analytics และ marketing จะเปิดใช้ตามตัวเลือกของคุณ
+                {t("cookie.banner.description")}
               </p>
             </div>
             <button
               type="button"
               className="rounded-lg p-1 text-[#8c858a] hover:bg-[#fff4ef]"
               onClick={rejectAll}
-              aria-label="ปิดและปฏิเสธคุกกี้ที่ไม่จำเป็น"
+              aria-label={t("cookie.banner.closeReject")}
             >
               <X size={16} />
             </button>
@@ -125,8 +127,8 @@ export function CookieConsentBanner() {
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked disabled className="accent-[#f15b20]" />
                 <span>
-                  <strong>จำเป็น</strong>
-                  <small className="ml-1 text-[#8c858a]">ระบบจะทำงานไม่ได้หากปิด</small>
+                  <strong>{t("cookie.banner.necessary")}</strong>
+                  <small className="ml-1 text-[#8c858a]">{t("cookie.banner.necessaryHint")}</small>
                 </span>
               </label>
               <label className="flex items-center gap-2">
@@ -138,7 +140,7 @@ export function CookieConsentBanner() {
                 />
                 <span>
                   <strong>Analytics</strong>
-                  <small className="ml-1 text-[#8c858a]">วัดการใช้งานเพื่อปรับปรุงบริการ</small>
+                  <small className="ml-1 text-[#8c858a]">{t("cookie.banner.analyticsHint")}</small>
                 </span>
               </label>
               <label className="flex items-center gap-2">
@@ -150,7 +152,7 @@ export function CookieConsentBanner() {
                 />
                 <span>
                   <strong>Marketing</strong>
-                  <small className="ml-1 text-[#8c858a]">การตลาดและโฆษณาที่ปรับตามความสนใจ</small>
+                  <small className="ml-1 text-[#8c858a]">{t("cookie.banner.marketingHint")}</small>
                 </span>
               </label>
             </div>
@@ -161,14 +163,14 @@ export function CookieConsentBanner() {
               onClick={acceptAll}
               className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#f15b20] px-3.5 text-xs font-bold text-white hover:bg-[#dd5418]"
             >
-              <Check size={14} /> ยอมรับทั้งหมด
+              <Check size={14} /> {t("cookie.banner.acceptAll")}
             </button>
             <button
               type="button"
               onClick={rejectAll}
               className="inline-flex min-h-9 items-center rounded-lg border border-[#eaded6] px-3.5 text-xs font-bold text-[#615b61] hover:bg-[#fff8f4]"
             >
-              ปฏิเสธทั้งหมด
+              {t("cookie.banner.rejectAll")}
             </button>
             {customize ? (
               <button
@@ -176,7 +178,7 @@ export function CookieConsentBanner() {
                 onClick={savePreferences}
                 className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-[#f5a27e] px-3.5 text-xs font-bold text-[#c64f1f] hover:bg-[#fff4ef]"
               >
-                <Settings2 size={14} /> บันทึกการตั้งค่า
+                <Settings2 size={14} /> {t("cookie.banner.savePreferences")}
               </button>
             ) : (
               <button
@@ -184,14 +186,14 @@ export function CookieConsentBanner() {
                 onClick={() => setCustomize(true)}
                 className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-bold text-[#8a5a44] hover:bg-[#fff8f4]"
               >
-                <Settings2 size={14} /> ปรับแต่ง
+                <Settings2 size={14} /> {t("cookie.banner.customize")}
               </button>
             )}
             <Link
               href="/legal/cookies"
               className="ml-auto text-[11px] font-semibold text-[#8a858a] underline underline-offset-2"
             >
-              อ่านนโยบายคุกกี้
+              {t("cookie.banner.readPolicy")}
             </Link>
           </div>
         </div>
