@@ -1,4 +1,6 @@
 const systemTitle = /^(create a high-quality image that follows the user instruction|preserve the entire original image content|upscale the provided image|continue the source image naturally|generate only the new canvas area|perform background removal|edit the provided source image|animate the provided image into a coherent video|create a coherent video that follows the user instruction|create a natural human performance video|transfer the motion from the reference video|generate a natural lip-synchronized performance|continue the supplied video naturally)/i;
+/** True when a work title is only the generic system prompt the backend used, not something the user wrote. */
+export const isSystemTitle = (value: string) => systemTitle.test(value.trim());
 type CopyLocale = "th" | "en";
 const labels: Record<CopyLocale, Record<string, string>> = {
   th: { "extend-image": "ขยายภาพ", "upscale": "เพิ่มความละเอียดภาพ", "image-to-image": "ปรับแต่งภาพ", "text-to-image": "สร้างภาพ", "style-transfer": "เปลี่ยนสไตล์ภาพ", "background-removal": "ปรับพื้นหลังภาพ", "text-to-video": "สร้างวิดีโอ", "image-to-video": "สร้างวิดีโอจากภาพ", "people-video": "พรีเซนเตอร์ AI", "motion-transfer": "ถ่ายทอดการเคลื่อนไหว", "lipsync": "ลิปซิงก์", "extend-video": "ขยายวิดีโอ", "tts": "เสียงบรรยาย" },
