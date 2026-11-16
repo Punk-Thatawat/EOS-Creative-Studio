@@ -43,6 +43,8 @@ function AssetTypeIcon({ type }: { type: AssetsApiType }) {
 function AssetCard({ asset, locale, t }: { asset: AssetsApiAsset; locale: "th" | "en"; t: (key: TranslationKey, params?: Record<string, string | number>) => string }) {
   const typeLabel = t(assetTypeKeys[asset.type]);
   const previewUrl = asset.previewUrl ?? asset.url;
+  // A preview that fails to load (expired, deleted or blocked file) would show a broken-image glyph; use the type icon instead.
+  const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null);
   const thumbnailClassName = "absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105";
   const sizeLabel = asset.sizeBytes === 0 ? null : asset.sizeLabel;
   const metadata = [typeLabel, formatAssetDate(asset.createdAt, locale), sizeLabel].filter(Boolean).join(" · ");
@@ -51,8 +53,8 @@ function AssetCard({ asset, locale, t }: { asset: AssetsApiAsset; locale: "th" |
     <div className={`relative flex h-28 items-center justify-center overflow-hidden rounded-xl ${assetBackgrounds[asset.type]}`}>
       {asset.type === "video" && !asset.previewUrl && asset.url
         ? <VideoFrameThumbnail key={asset.url} src={asset.url} alt={`${asset.title} preview`} className={thumbnailClassName} fallback={<span className="text-white/70"><AssetTypeIcon type="video" /></span>} />
-        : previewUrl
-          ? <img src={previewUrl} alt="" loading="lazy" decoding="async" className={thumbnailClassName} />
+        : previewUrl && failedPreviewUrl !== previewUrl
+          ? <img src={previewUrl} alt="" loading="lazy" decoding="async" className={thumbnailClassName} onError={() => setFailedPreviewUrl(previewUrl)} />
           : <AssetTypeIcon type={asset.type} />}
       <span className="absolute left-2 top-2 rounded-full bg-white/85 px-2 py-1 text-[10px] font-bold text-foreground">{typeLabel}</span>
     </div>
