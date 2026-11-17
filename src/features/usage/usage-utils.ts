@@ -2,10 +2,11 @@ import { isSystemTitle } from "@/features/templates/template-copy";
 import type { UsageDashboard } from "@/lib/api/usage";
 export type Activity = UsageDashboard["recentActivity"]["items"][number];
 export const number = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+const roundToSatang = (amountThb: number) => Math.round((amountThb + Number.EPSILON) * 100) / 100;
 export function calculateVat(amountThb: number, vatPercent: number) {
-  const subtotalThb = Math.round((amountThb + Number.EPSILON) * 100) / 100;
-  const vatAmountThb = Math.round((subtotalThb * vatPercent / 100 + Number.EPSILON) * 100) / 100;
-  return { subtotalThb, vatAmountThb, totalThb: Math.round((subtotalThb + vatAmountThb + Number.EPSILON) * 100) / 100 };
+  const subtotalThb = roundToSatang(amountThb);
+  const vatAmountThb = roundToSatang(subtotalThb * vatPercent / 100);
+  return { subtotalThb, vatAmountThb, totalThb: roundToSatang(subtotalThb + vatAmountThb) };
 }
 export const signed = (value: number) => `${value > 0 ? "+" : ""}${number(value)}`;
 export type UsageLocale = "th" | "en";
@@ -42,12 +43,13 @@ export function recentMonths(count = 12, now = new Date(), locale: UsageLocale =
     return { value: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`, label: monthLabel(date.toISOString(), locale) };
   });
 }
+const labelKeyByTransactionType: Record<string, UsageLabelKey> = { usage: "usage", refund: "refund", purchase: "purchase", grant: "grant", expiry: "expiry", adjustment: "adjustment", admin_adjustment: "admin" };
 export function creditLabel(item: Activity, locale: UsageLocale = "th") {
   const text = labels[locale];
   if (item.referenceType === "stripe_checkout") return text.stripe;
   if (item.referenceType === "admin_adjustment") return text.admin;
-  const byType: Record<string, string> = { usage: text.usage, refund: text.refund, purchase: text.purchase, grant: text.grant, expiry: text.expiry, adjustment: text.adjustment, admin_adjustment: text.admin };
-  return byType[item.transactionType] ?? text.fallback;
+  const key = labelKeyByTransactionType[item.transactionType];
+  return key ? text[key] : text.fallback;
 }
 export function activityLabel(item: Activity, locale: UsageLocale = "th") {
   const text = labels[locale];
