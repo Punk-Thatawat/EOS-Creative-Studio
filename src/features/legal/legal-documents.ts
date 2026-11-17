@@ -27,7 +27,7 @@ export const legalDocuments: LegalDocument[] = [
     title: "นโยบายคุกกี้",
     shortTitle: "Cookies",
     description: "อธิบายคุกกี้และเทคโนโลยีจัดเก็บข้อมูลที่ EOS Creative Studio ใช้",
-    effectiveDate: "ฉบับร่าง · ต้องตรวจสอบก่อนเผยแพร่",
+    effectiveDate: "",
     sections: [
       { heading: "1. คุกกี้คืออะไร", paragraphs: ["คุกกี้คือไฟล์ข้อมูลขนาดเล็กที่เว็บไซต์เก็บไว้ในเบราว์เซอร์ เพื่อจดจำการตั้งค่า รักษา session และช่วยให้บริการทำงานได้ต่อเนื่อง"] },
       { heading: "2. เทคโนโลยีที่ระบบใช้", paragraphs: ["ระบบอาจใช้คุกกี้และ storage ในเบราว์เซอร์เพื่อรักษาการเข้าสู่ระบบ จดจำการตั้งค่าภาษา/เมนู และบันทึกการเลือกความเป็นส่วนตัวของคุณ"] , bullets: ["คุกกี้ที่จำเป็น: session และความปลอดภัยของบัญชี รวมถึงการตั้งค่าเมนู", "คุกกี้การตั้งค่า: ใช้จำตัวเลือก เช่น สถานะเมนูด้านข้างและ cookie consent", "Local/session storage: ใช้เก็บสถานะการทำงานชั่วคราวและ session บางส่วนของเว็บแอป ซึ่งไม่ใช่คุกกี้"] },
@@ -42,8 +42,7 @@ export const legalDocuments: LegalDocument[] = [
     title: "นโยบายความเป็นส่วนตัว",
     shortTitle: "Privacy",
     description: "วิธีที่ EOS Creative Studio เก็บ ใช้ เปิดเผย และปกป้องข้อมูลของคุณ",
-    effectiveDate: "ฉบับร่าง · ต้องตรวจสอบก่อนเผยแพร่",
-    draftNote: "ต้องกรอกชื่อนิติบุคคล ที่อยู่ อีเมลติดต่อ รายชื่อ provider และระยะเวลาเก็บข้อมูลก่อนใช้งานจริง",
+    effectiveDate: "",
     sections: [
       { heading: "1. ผู้ควบคุมข้อมูล", paragraphs: ["ผู้ควบคุมข้อมูล: [ชื่อบริษัท/นิติบุคคลที่ให้บริการ EOS Creative Studio]", "ที่อยู่: [ที่อยู่จดทะเบียน] · อีเมล: [อีเมลด้าน privacy] · เว็บไซต์: https://creative.eoslabs.tech"] },
       { heading: "2. ข้อมูลที่เราอาจเก็บ", bullets: ["ข้อมูลบัญชี: ชื่อ อีเมล รูปโปรไฟล์ และ provider ที่ใช้เข้าสู่ระบบ เช่น email หรือ Google", "ข้อมูลการใช้งาน: prompt, model, setting, credit, ประวัติการสร้างงาน สถานะงาน และ technical log", "ไฟล์ที่คุณส่ง: ภาพ วิดีโอ เสียง voice sample และไฟล์อ้างอิงที่คุณอัปโหลดเพื่อสร้างงาน", "ข้อมูลอุปกรณ์และความปลอดภัย: IP address, browser, device metadata และข้อมูลป้องกันการใช้งานผิดปกติ", "ข้อมูลธุรกรรม: package, ยอดเงิน, สถานะการชำระเงิน และข้อมูลอ้างอิงจาก Stripe โดยระบบไม่ควรเก็บเลขบัตรเต็ม"] },
@@ -104,8 +103,7 @@ export const legalDocuments: LegalDocument[] = [
     title: "ข้อกำหนด Creator Community",
     shortTitle: "Creator Community",
     description: "เงื่อนไขสำหรับการเผยแพร่ผลงาน การแชร์ และการมีส่วนร่วมในพื้นที่สาธารณะของ EOS",
-    effectiveDate: "ฉบับร่าง · ใช้เมื่อเปิดฟีเจอร์ community เท่านั้น",
-    draftNote: "ขณะนี้ควรถือเป็นเอกสารเตรียมไว้ก่อน หากระบบยังไม่มี public gallery, profile, comment หรือ like ไม่ควรผูกเป็นเงื่อนไขบังคับของผู้ใช้ทั่วไป",
+    effectiveDate: "",
     sections: [
       { heading: "1. ขอบเขต", paragraphs: ["ข้อกำหนดนี้ใช้กับฟีเจอร์ที่ผู้ใช้เลือกเผยแพร่ผลงานต่อผู้ใช้อื่น เช่น public gallery, profile, feed, comment หรือการแชร์งาน ไม่ใช้กับ history ส่วนตัวที่ไม่ได้เผยแพร่"] },
       { heading: "2. ความเป็นเจ้าของและสิทธิ์ที่ให้แก่ EOS", paragraphs: ["คุณยังคงเป็นเจ้าของหรือผู้ได้รับอนุญาตในผลงานของคุณ เมื่อกดเผยแพร่ คุณให้สิทธิ์ EOS แบบไม่ผูกขาด เฉพาะเท่าที่จำเป็นเพื่อโฮสต์ แสดง แจกจ่ายภายใน community สำรองข้อมูล และดูแลบริการ รายละเอียดสิทธิ์เพื่อการตลาดต้องเลือกแยกและต้องได้รับความยินยอมที่เหมาะสม"] },
@@ -119,8 +117,7 @@ export const legalDocuments: LegalDocument[] = [
     title: "ข้อกำหนด Business Subscription",
     shortTitle: "Business subscription",
     description: "เงื่อนไขสำหรับบัญชีองค์กร workspace ทีม ที่นั่งผู้ใช้ และการใช้งานแบบธุรกิจ",
-    effectiveDate: "ฉบับร่าง · ใช้เมื่อเปิด Business plan เท่านั้น",
-    draftNote: "ระบบปัจจุบันมีการเติมเครดิตผ่าน Stripe แต่ต้องยืนยันก่อนว่ามี recurring subscription, workspace owner และ seat management แล้วหรือยัง",
+    effectiveDate: "",
     sections: [
       { heading: "1. ลูกค้าองค์กรและผู้มีอำนาจ", paragraphs: ["ผู้ซื้อ Business plan ต้องเป็นองค์กรหรือผู้ประกอบวิชาชีพ และผู้ดำเนินการซื้อรับรองว่ามีอำนาจผูกพันองค์กรตามข้อตกลง"] },
       { heading: "2. Workspace และที่นั่งผู้ใช้", paragraphs: ["Business account อาจมี owner, admin และสมาชิกตามจำนวน seat ที่ซื้อ เจ้าของบัญชีมีหน้าที่จัดการสิทธิ์ เพิ่ม ลบ หรือเปลี่ยนสมาชิก และต้องไม่ให้บุคคลนอกองค์กรใช้ seat โดยไม่ได้รับอนุญาต"] },

@@ -1,3 +1,4 @@
+import { isSystemTitle } from "@/features/templates/template-copy";
 import type { UsageDashboard } from "@/lib/api/usage";
 export type Activity = UsageDashboard["recentActivity"]["items"][number];
 export const number = (value: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
@@ -55,8 +56,10 @@ export function activityLabel(item: Activity, locale: UsageLocale = "th") {
   if (item.transactionType === "purchase") return text.purchase;
   if (item.transactionType === "refund") return text.refund;
   if (item.transactionType === "grant") return text.grantShort;
-  if (item.artwork) return item.artwork.name;
-  return item.title.replace(/ Generation$/, "");
+  const fallback = item.title.replace(/ Generation$/, "");
+  // The artwork name falls back to the generic system prompt when the user gave no title.
+  if (item.artwork) return isSystemTitle(item.artwork.name) ? fallback : item.artwork.name;
+  return fallback;
 }
 export function visibleTrend(dashboard: UsageDashboard) {
   const end = dashboard.period.isCurrent ? dashboard.generatedAt.slice(0, 10) : dashboard.period.endAt.slice(0, 10);

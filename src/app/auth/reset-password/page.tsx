@@ -24,10 +24,10 @@ export default function ResetPasswordPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const token = new URLSearchParams(window.location.search).get("token")?.trim();
-    if (!token || password.length < 8 || password !== confirmation) {
-      setMessage(password.length < 8 ? t("auth.validation.passwordMinFull") : t("auth.validation.passwordMismatch"));
-      return;
-    }
+    if (password.length < 8) { setMessage(t("auth.validation.passwordMinFull")); return; }
+    if (password !== confirmation) { setMessage(t("auth.validation.passwordMismatch")); return; }
+    // A link without a token can never succeed, so say the link is invalid instead of blaming the passwords.
+    if (!token) { setState("error"); setMessage(inviteMode ? t("auth.invite.invalid") : t("auth.reset.invalid")); return; }
     setLoading(true); setMessage(null);
     try { await resetPasswordWithBackend({ token, newPassword: password }); setState("success"); }
     catch { setState("error"); setMessage(inviteMode ? t("auth.invite.invalid") : t("auth.reset.invalid")); }

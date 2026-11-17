@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AudioLines, FileText, Image as ImageIcon, Package, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 import { VideoFrameThumbnail } from "@/components/media/video-frame-thumbnail";
+import { templateCopy } from "@/features/templates/template-copy";
 import { fetchAssets, type AssetsApiAsset, type AssetsApiType } from "@/lib/api/assets";
 import { useLocale, type TranslationKey } from "@/lib/i18n/locale-provider";
 import { ProjectCarousel } from "./project-carousel";
@@ -43,20 +44,24 @@ function AssetTypeIcon({ type }: { type: AssetsApiType }) {
 function AssetCard({ asset, locale, t }: { asset: AssetsApiAsset; locale: "th" | "en"; t: (key: TranslationKey, params?: Record<string, string | number>) => string }) {
   const typeLabel = t(assetTypeKeys[asset.type]);
   const previewUrl = asset.previewUrl ?? asset.url;
+  // A preview that fails to load (expired, deleted or blocked file) would show a broken-image glyph; use the type icon instead.
+  const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null);
   const thumbnailClassName = "absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-105";
   const sizeLabel = asset.sizeBytes === 0 ? null : asset.sizeLabel;
   const metadata = [typeLabel, formatAssetDate(asset.createdAt, locale), sizeLabel].filter(Boolean).join(" · ");
+  // Works created without a user title carry the generic system prompt as title; show a readable label instead.
+  const title = templateCopy(asset.title, "", asset.feature ?? undefined, asset.type, locale).title;
 
   return <Link href={`/assets?asset=${encodeURIComponent(asset.id)}`} className="group block min-w-[220px] snap-start rounded-2xl border border-border bg-surface p-2 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] sm:min-w-[250px]" aria-label={t("home.openAsset", { title: asset.title })}>
     <div className={`relative flex h-28 items-center justify-center overflow-hidden rounded-xl ${assetBackgrounds[asset.type]}`}>
       {asset.type === "video" && !asset.previewUrl && asset.url
         ? <VideoFrameThumbnail key={asset.url} src={asset.url} alt={`${asset.title} preview`} className={thumbnailClassName} fallback={<span className="text-white/70"><AssetTypeIcon type="video" /></span>} />
-        : previewUrl
-          ? <img src={previewUrl} alt="" loading="lazy" decoding="async" className={thumbnailClassName} />
+        : previewUrl && failedPreviewUrl !== previewUrl
+          ? <img src={previewUrl} alt="" loading="lazy" decoding="async" className={thumbnailClassName} onError={() => setFailedPreviewUrl(previewUrl)} />
           : <AssetTypeIcon type={asset.type} />}
       <span className="absolute left-2 top-2 rounded-full bg-white/85 px-2 py-1 text-[10px] font-bold text-foreground">{typeLabel}</span>
     </div>
-    <div className="px-1 pb-1 pt-3"><h3 className="truncate text-xs font-bold" title={asset.title}>{asset.title}</h3><p className="mt-1 truncate text-[10px] text-muted-foreground">{metadata}</p></div>
+    <div className="px-1 pb-1 pt-3"><h3 className="truncate text-xs font-bold" title={title}>{title}</h3><p className="mt-1 truncate text-[10px] text-muted-foreground">{metadata}</p></div>
   </Link>;
 }
 

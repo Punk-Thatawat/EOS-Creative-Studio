@@ -151,6 +151,7 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
   const bestRate = rates ? Math.max(rates.firstTopupPercent, rates.repeatTopupPercent) : 0;
   const usagePercent = settings ? formatNumber(settings.usageCommissionPercent, locale) : "";
   const holdDays = settings ? formatNumber(settings.holdDays, locale, 0) : "";
+  const exchangeInstantly = settings?.holdDays === 0;
   // Only the kinds the admin has switched on are shown, so the page never promises what is not paid.
   const showTopup = Boolean(settings?.enabled && settings.topupEnabled);
   const showUsage = Boolean(settings?.enabled && settings.usageEnabled);
@@ -191,7 +192,7 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
       {showTopup ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteEarnRepeat", { percent: repeatPercent })}</li> : null}
       {showBonus ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteBonus", { percent: formatNumber(topBonusPercent, locale) })}</li> : null}
       {showUsage ? <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteUsage", { usagePercent })}</li> : null}
-      <li><CircleCheck size={16} aria-hidden="true" />{t("settings.affiliate.noteCredits", { days: holdDays })}</li>
+      <li><CircleCheck size={16} aria-hidden="true" />{exchangeInstantly ? t("settings.affiliate.noteCreditsInstant") : t("settings.affiliate.noteCredits", { days: holdDays })}</li>
     </ul>
   );
 
@@ -329,7 +330,7 @@ export function AffiliatePage({ api = affiliateApi }: { api?: AffiliateApi }) {
             <div className={styles.kpi}>
               <dt><span className={`${styles.kpiIcon} ${styles.iconBlue}`} aria-hidden="true"><Clock size={18} /></span>{t("settings.affiliate.walletPending")}</dt>
               <dd>฿{formatNumber(wallet.pendingBaht, locale)}</dd>
-              {wallet.pendingBaht > 0 ? <dd className={styles.kpiSub}>{t("settings.affiliate.walletPendingHint", { days: holdDays })}</dd> : null}
+              {wallet.pendingBaht > 0 ? <dd className={styles.kpiSub}>{exchangeInstantly ? t("settings.affiliate.walletPendingHintInstant") : t("settings.affiliate.walletPendingHint", { days: holdDays })}</dd> : null}
             </div>
             <div className={styles.kpi}>
               <dt><span className={`${styles.kpiIcon} ${styles.iconGreen}`} aria-hidden="true"><CircleCheck size={18} /></span>{t("settings.affiliate.walletRedeemed")}</dt>
