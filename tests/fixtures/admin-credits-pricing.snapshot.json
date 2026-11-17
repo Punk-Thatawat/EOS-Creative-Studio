@@ -1,0 +1,1131 @@
+{
+  "constants": {
+    "MAX_TARGET_MARKUP_PERCENT": 999.99,
+    "MAX_TARGET_MARKUP_RATIO": 9.9999,
+    "featureLabels": {
+      "text-to-image": "Text to Image",
+      "image-to-image": "Image to Image",
+      "image-to-video": "Image to Video",
+      "video-to-sfx": "Sound Effects",
+      "video-to-music": "Video to Music",
+      "text-to-video": "Text to Video",
+      "people-video": "People Video",
+      "motion-transfer": "Motion Transfer",
+      "lipsync": "Lip Sync",
+      "extend-video": "Extend Video",
+      "video": "Video",
+      "style-transfer": "Style Transfer",
+      "background-removal": "AI Background",
+      "upscale": "Upscale",
+      "extend-image": "Extend Image",
+      "audio": "Audio Text to Speech",
+      "audio-music": "Background Music Add-on",
+      "podcastDialogue": "Podcast & Dialogue",
+      "audio-voice-clone": "Voice Clone",
+      "audio-sound-effects": "Sound Effects",
+      "audio-text-to-music": "Text to Music",
+      "audio-cleanup": "Audio Cleanup",
+      "document": "Document",
+      "document-ocr": "Document OCR",
+      "document-summary": "Document Summary",
+      "document-translate": "Document Translation",
+      "document-contract": "Contract Review",
+      "document-report": "Document Report",
+      "document-form": "Form Reading",
+      "ai-presenter": "AI Presenter"
+    },
+    "featureOrder": [
+      "text-to-image",
+      "image-to-image",
+      "image-to-video",
+      "video-to-sfx",
+      "video-to-music",
+      "text-to-video",
+      "people-video",
+      "motion-transfer",
+      "lipsync",
+      "extend-video",
+      "video",
+      "style-transfer",
+      "background-removal",
+      "upscale",
+      "extend-image",
+      "ai-presenter",
+      "audio",
+      "podcastDialogue",
+      "audio-voice-clone",
+      "audio-sound-effects",
+      "audio-text-to-music",
+      "audio-cleanup",
+      "audio-music",
+      "document",
+      "document-ocr",
+      "document-summary",
+      "document-translate",
+      "document-contract",
+      "document-report",
+      "document-form"
+    ],
+    "videoFeatureKeys": [
+      "video",
+      "image-to-video",
+      "video-to-music",
+      "text-to-video",
+      "people-video",
+      "motion-transfer",
+      "lipsync",
+      "extend-video",
+      "ai-presenter"
+    ],
+    "presenterFeatureKeys": [
+      "ai-presenter"
+    ],
+    "documentFeatureKeys": [
+      "document",
+      "document-ocr",
+      "document-summary",
+      "document-translate",
+      "document-contract",
+      "document-report",
+      "document-form"
+    ],
+    "audioFeatureKeys": [
+      "audio",
+      "audio-music",
+      "podcastDialogue",
+      "audio-voice-clone",
+      "audio-sound-effects",
+      "audio-text-to-music",
+      "video-to-sfx",
+      "audio-cleanup"
+    ],
+    "audioFeatureGroups": [
+      {
+        "key": "audio",
+        "featureKeys": [
+          "audio",
+          "audio-music"
+        ]
+      },
+      {
+        "key": "podcastDialogue",
+        "featureKeys": [
+          "podcastDialogue"
+        ]
+      },
+      {
+        "key": "audio-voice-clone",
+        "featureKeys": [
+          "audio-voice-clone"
+        ]
+      },
+      {
+        "key": "audio-sound-effects",
+        "featureKeys": [
+          "audio-sound-effects",
+          "video-to-sfx"
+        ]
+      },
+      {
+        "key": "audio-text-to-music",
+        "featureKeys": [
+          "audio-text-to-music"
+        ]
+      },
+      {
+        "key": "audio-cleanup",
+        "featureKeys": [
+          "audio-cleanup"
+        ]
+      }
+    ],
+    "fallbackModelRows": [
+      {
+        "feature": "Text to Image",
+        "featureKey": "text-to-image",
+        "model": "wavespeed-ai/z-image/turbo",
+        "provider": "wavespeed",
+        "displayName": "Z-Image Turbo",
+        "unit": "Per image",
+        "note": "Live quote from provider"
+      },
+      {
+        "feature": "Image to Image",
+        "featureKey": "image-to-image",
+        "model": "wavespeed-ai/z-image-turbo/image-to-image",
+        "provider": "wavespeed",
+        "displayName": "Z-Image Turbo",
+        "unit": "Per image",
+        "note": "Live quote from provider"
+      },
+      {
+        "feature": "AI Background",
+        "featureKey": "background-removal",
+        "model": "bria/remove-background",
+        "provider": "bria",
+        "displayName": "BRIA Remove Background",
+        "unit": "Per image",
+        "note": "Fallback until provider quote is available"
+      },
+      {
+        "feature": "Extend Image",
+        "featureKey": "extend-image",
+        "model": "bria/expand",
+        "provider": "bria",
+        "displayName": "BRIA Expand",
+        "unit": "Per image",
+        "note": "Fallback until provider quote is available"
+      }
+    ],
+    "PRICING_PREVIEW_BATCH_SIZE": 50,
+    "UNUSED_VOICE_CLONE_MODELS": [
+      "eleven_v3",
+      "elevenlabs_v3",
+      "elevenlabs/eleven-v3",
+      "eleven_multilingual_v2",
+      "elevenlabs_multilingual_v2",
+      "elevenlabs/multilingual-v2"
+    ],
+    "pricingParameterPattern": "/(count|num[_-]?images?|batch|size|resolution|aspect|quality|duration|seconds?|frames?|fps|length|steps|audio|video|output[_-]?type)/i",
+    "nonPricingParameters": [
+      "prompt",
+      "text_prompt",
+      "textPrompt",
+      "positive_prompt",
+      "positivePrompt",
+      "instruction",
+      "image",
+      "image_url",
+      "imageUrl",
+      "input_image",
+      "inputImage",
+      "source",
+      "source_image",
+      "sourceImage",
+      "images",
+      "reference_images",
+      "referenceImages",
+      "references",
+      "input_images",
+      "inputImages",
+      "style_image",
+      "styleImage",
+      "negative_prompt",
+      "negativePrompt",
+      "seed",
+      "mask",
+      "mask_image",
+      "maskImage"
+    ]
+  },
+  "matchesPricingCategory": {
+    "all": [
+      "text-to-image",
+      "image-to-image",
+      "image-to-video",
+      "video-to-sfx",
+      "video-to-music",
+      "text-to-video",
+      "people-video",
+      "motion-transfer",
+      "lipsync",
+      "extend-video",
+      "video",
+      "style-transfer",
+      "background-removal",
+      "upscale",
+      "extend-image",
+      "ai-presenter",
+      "audio",
+      "podcastDialogue",
+      "audio-voice-clone",
+      "audio-sound-effects",
+      "audio-text-to-music",
+      "audio-cleanup",
+      "audio-music",
+      "document",
+      "document-ocr",
+      "document-summary",
+      "document-translate",
+      "document-contract",
+      "document-report",
+      "document-form",
+      "unknown-feature"
+    ],
+    "image": [
+      "text-to-image",
+      "image-to-image",
+      "style-transfer",
+      "background-removal",
+      "upscale",
+      "extend-image",
+      "unknown-feature"
+    ],
+    "video": [
+      "image-to-video",
+      "video-to-music",
+      "text-to-video",
+      "people-video",
+      "motion-transfer",
+      "lipsync",
+      "extend-video",
+      "video"
+    ],
+    "audio": [
+      "video-to-sfx",
+      "audio",
+      "podcastDialogue",
+      "audio-voice-clone",
+      "audio-sound-effects",
+      "audio-text-to-music",
+      "audio-cleanup",
+      "audio-music"
+    ],
+    "document": [
+      "document",
+      "document-ocr",
+      "document-summary",
+      "document-translate",
+      "document-contract",
+      "document-report",
+      "document-form"
+    ],
+    "presenter": [
+      "ai-presenter"
+    ]
+  },
+  "rowKey": "p:m:f",
+  "modelRowsFromOverview": [
+    {
+      "feature": "Text to Image",
+      "featureKey": "text-to-image",
+      "model": "wavespeed-ai/z-image/turbo",
+      "provider": "wavespeed",
+      "displayName": "Z-Image Turbo",
+      "unit": "Per image",
+      "note": "Live quote from provider"
+    },
+    {
+      "feature": "Image to Image",
+      "featureKey": "image-to-image",
+      "model": "bria/edit",
+      "provider": "bria",
+      "displayName": "Bria Edit",
+      "unit": "Per image",
+      "note": "Fallback until provider quote is available"
+    },
+    {
+      "feature": "Image to Video",
+      "featureKey": "image-to-video",
+      "model": "kling/i2v",
+      "provider": "wavespeed",
+      "displayName": "Kling I2V",
+      "unit": "Per video",
+      "note": "Live quote from provider"
+    },
+    {
+      "feature": "Image to Video",
+      "featureKey": "image-to-video",
+      "model": "other/i2v",
+      "provider": "fal",
+      "displayName": "Other I2V",
+      "unit": "Per video",
+      "note": "Fallback until provider quote is available"
+    },
+    {
+      "feature": "Text to Video",
+      "featureKey": "text-to-video",
+      "model": "seedance/t2v",
+      "provider": "wavespeed",
+      "displayName": "Seedance",
+      "unit": "Per video",
+      "note": "Live quote from provider"
+    },
+    {
+      "feature": "AI Presenter",
+      "featureKey": "ai-presenter",
+      "model": "presenter/one",
+      "provider": "wavespeed",
+      "displayName": "Presenter One",
+      "unit": "Per scene · 13 sec sample",
+      "note": "Provider quote for one 13-second scene; configure duration for a different estimate"
+    },
+    {
+      "feature": "Document Summary",
+      "featureKey": "document-summary",
+      "model": "gemini/flash",
+      "provider": "wavespeed",
+      "displayName": "Gemini Flash",
+      "unit": "Per document · token estimate",
+      "note": "Estimate: 2,000 input + 1,000 output tokens; current Document billing remains unchanged"
+    }
+  ],
+  "documentOcrPricingRows": [
+    {
+      "feature": "Document OCR",
+      "featureKey": "document-ocr",
+      "model": "document-ocr/thai-id-card/basic",
+      "provider": "iapp",
+      "displayName": "Thai Id Card · Text / JSON",
+      "unit": "Per page",
+      "note": "iApp published rate at 1.25 THB / IC · Document billing remains unchanged"
+    },
+    {
+      "feature": "Document OCR",
+      "featureKey": "document-ocr",
+      "model": "document-ocr/thai-id-card/advanced",
+      "provider": "iapp",
+      "displayName": "Thai Id Card · Layout",
+      "unit": "Per page",
+      "note": "iApp published rate at 1.25 THB / IC · Document billing remains unchanged"
+    },
+    {
+      "feature": "Document OCR",
+      "featureKey": "document-ocr",
+      "model": "document-ocr/thai-id-card/docx",
+      "provider": "iapp",
+      "displayName": "Thai Id Card · DOCX export",
+      "unit": "Per page",
+      "note": "iApp published rate at 1.25 THB / IC · Document billing remains unchanged"
+    },
+    {
+      "feature": "Document OCR",
+      "featureKey": "document-ocr",
+      "model": "document-ocr/thai-id-card/pdf",
+      "provider": "iapp",
+      "displayName": "Thai Id Card · Searchable PDF",
+      "unit": "Per page",
+      "note": "iApp published rate at 1.25 THB / IC · Document billing remains unchanged"
+    },
+    {
+      "feature": "Document OCR",
+      "featureKey": "document-ocr",
+      "model": "document-ocr/invoice/basic",
+      "provider": "iapp",
+      "displayName": "Invoice · Text / JSON",
+      "unit": "Per page",
+      "note": "iApp published rate at 1.25 THB / IC · Document billing remains unchanged"
+    },
+    {
+      "feature": "Document OCR",
+      "featureKey": "document-ocr",
+      "model": "document-ocr/bank-statement/basic",
+      "provider": "iapp",
+      "displayName": "Bank Statement · Text / JSON",
+      "unit": "Per page",
+      "note": "iApp published rate at 1.25 THB / IC · Document billing remains unchanged"
+    },
+    {
+      "feature": "Document OCR",
+      "featureKey": "document-ocr",
+      "model": "document-ocr/bank-statement/pdf",
+      "provider": "iapp",
+      "displayName": "Bank Statement · Searchable PDF",
+      "unit": "Per page",
+      "note": "iApp published rate at 1.25 THB / IC · Document billing remains unchanged"
+    }
+  ],
+  "audioPricingRows": [
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "eleven_flash_v2_5",
+      "provider": "elevenlabs",
+      "displayName": "Eleven Flash v2.5",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "eleven_turbo_v2_5",
+      "provider": "elevenlabs",
+      "displayName": "Eleven Turbo v2.5",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "minimax/speech-02-hd",
+      "provider": "wavespeed",
+      "displayName": "minimax/speech-02-hd",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "eleven_v4",
+      "provider": "elevenlabs",
+      "displayName": "Eleven v4",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "eleven_multilingual_v2",
+      "provider": "elevenlabs",
+      "displayName": "Eleven Multilingual v2",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Podcast & Dialogue",
+      "featureKey": "podcastDialogue",
+      "model": "elevenlabs/eleven-v4",
+      "provider": "elevenlabs",
+      "displayName": "Eleven v4",
+      "unit": "Per dialogue",
+      "note": "Provider quote by spoken text length"
+    },
+    {
+      "feature": "Podcast & Dialogue",
+      "featureKey": "podcastDialogue",
+      "model": "music_v1",
+      "provider": "elevenlabs",
+      "displayName": "ElevenLabs Music v1",
+      "unit": "Per dialogue",
+      "note": "Provider quote by spoken text length"
+    },
+    {
+      "feature": "Podcast & Dialogue",
+      "featureKey": "podcastDialogue",
+      "model": "music_v2",
+      "provider": "elevenlabs",
+      "displayName": "ElevenLabs Music v2",
+      "unit": "Per dialogue",
+      "note": "Provider quote by spoken text length"
+    },
+    {
+      "feature": "Podcast & Dialogue",
+      "featureKey": "podcastDialogue",
+      "model": "eleven_v3",
+      "provider": "elevenlabs",
+      "displayName": "Eleven v3",
+      "unit": "Per dialogue",
+      "note": "Provider quote by spoken text length"
+    },
+    {
+      "feature": "Voice Clone",
+      "featureKey": "audio-voice-clone",
+      "model": "minimax/speech-2.8-hd",
+      "provider": "wavespeed",
+      "displayName": "minimax/speech-2.8-hd",
+      "unit": "Per voice preview",
+      "note": "WaveSpeed quote for speech generated with a cloned voice"
+    },
+    {
+      "feature": "Voice Clone",
+      "featureKey": "audio-voice-clone",
+      "model": "custom_clone",
+      "provider": "wavespeed",
+      "displayName": "custom_clone",
+      "unit": "Per voice preview",
+      "note": "WaveSpeed quote for speech generated with a cloned voice"
+    },
+    {
+      "feature": "Voice Clone",
+      "featureKey": "audio-voice-clone",
+      "model": "minimax/voice-clone",
+      "provider": "wavespeed",
+      "displayName": "minimax/voice-clone",
+      "unit": "Per clone registration",
+      "note": "WaveSpeed quote for MiniMax voice-clone creation"
+    },
+    {
+      "feature": "Text to Music",
+      "featureKey": "audio-text-to-music",
+      "model": "sonilo/text-to-music",
+      "provider": "wavespeed",
+      "displayName": "Sonilo Text-to-Music",
+      "unit": "Per second · 10 second minimum",
+      "note": "WaveSpeed Sonilo · $0.0025 / second"
+    },
+    {
+      "feature": "Sound Effects",
+      "featureKey": "audio-sound-effects",
+      "model": "sonilo/v1/text-to-sfx",
+      "provider": "wavespeed",
+      "displayName": "Sonilo Text-to-SFX",
+      "unit": "Per second · variations",
+      "note": "WaveSpeed Sonilo · $0.002 / second"
+    },
+    {
+      "feature": "Sound Effects",
+      "featureKey": "video-to-sfx",
+      "model": "sonilo/v1/video-to-sfx",
+      "provider": "wavespeed",
+      "displayName": "Sonilo Video-to-SFX",
+      "unit": "Per video second",
+      "note": "WaveSpeed Sonilo · $0.009 / second"
+    },
+    {
+      "feature": "Audio Cleanup",
+      "featureKey": "audio-cleanup",
+      "model": "voice_isolator",
+      "provider": "elevenlabs",
+      "displayName": "ElevenLabs Voice Isolator",
+      "unit": "Per audio minute",
+      "note": "Used when paid cleanup tools are selected"
+    },
+    {
+      "feature": "Background Music Add-on",
+      "featureKey": "audio-music",
+      "model": "elevenlabs/music",
+      "provider": "wavespeed",
+      "displayName": "elevenlabs/music",
+      "unit": "Per background track",
+      "note": "Background music add-on for speech and dialogue"
+    }
+  ],
+  "audioPricingRowsNoPreset": [
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "eleven_flash_v2_5",
+      "provider": "elevenlabs",
+      "displayName": "Eleven Flash v2.5",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "eleven_turbo_v2_5",
+      "provider": "elevenlabs",
+      "displayName": "Eleven Turbo v2.5",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "minimax/speech-02-hd",
+      "provider": "wavespeed",
+      "displayName": "minimax/speech-02-hd",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "eleven_v4",
+      "provider": "elevenlabs",
+      "displayName": "Eleven v4",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Audio Text to Speech",
+      "featureKey": "audio",
+      "model": "eleven_multilingual_v2",
+      "provider": "elevenlabs",
+      "displayName": "Eleven Multilingual v2",
+      "unit": "Per scene",
+      "note": "Provider quote by text length"
+    },
+    {
+      "feature": "Podcast & Dialogue",
+      "featureKey": "podcastDialogue",
+      "model": "elevenlabs/eleven-v4",
+      "provider": "elevenlabs",
+      "displayName": "Eleven v4",
+      "unit": "Per dialogue",
+      "note": "Provider quote by spoken text length"
+    },
+    {
+      "feature": "Podcast & Dialogue",
+      "featureKey": "podcastDialogue",
+      "model": "music_v1",
+      "provider": "elevenlabs",
+      "displayName": "ElevenLabs Music v1",
+      "unit": "Per dialogue",
+      "note": "Provider quote by spoken text length"
+    },
+    {
+      "feature": "Podcast & Dialogue",
+      "featureKey": "podcastDialogue",
+      "model": "music_v2",
+      "provider": "elevenlabs",
+      "displayName": "ElevenLabs Music v2",
+      "unit": "Per dialogue",
+      "note": "Provider quote by spoken text length"
+    },
+    {
+      "feature": "Podcast & Dialogue",
+      "featureKey": "podcastDialogue",
+      "model": "eleven_v3",
+      "provider": "elevenlabs",
+      "displayName": "Eleven v3",
+      "unit": "Per dialogue",
+      "note": "Provider quote by spoken text length"
+    },
+    {
+      "feature": "Voice Clone",
+      "featureKey": "audio-voice-clone",
+      "model": "minimax/speech-2.8-hd",
+      "provider": "wavespeed",
+      "displayName": "minimax/speech-2.8-hd",
+      "unit": "Per voice preview",
+      "note": "WaveSpeed quote for speech generated with a cloned voice"
+    },
+    {
+      "feature": "Voice Clone",
+      "featureKey": "audio-voice-clone",
+      "model": "custom_clone",
+      "provider": "wavespeed",
+      "displayName": "custom_clone",
+      "unit": "Per voice preview",
+      "note": "WaveSpeed quote for speech generated with a cloned voice"
+    },
+    {
+      "feature": "Voice Clone",
+      "featureKey": "audio-voice-clone",
+      "model": "minimax/voice-clone",
+      "provider": "wavespeed",
+      "displayName": "minimax/voice-clone",
+      "unit": "Per clone registration",
+      "note": "WaveSpeed quote for MiniMax voice-clone creation"
+    },
+    {
+      "feature": "Text to Music",
+      "featureKey": "audio-text-to-music",
+      "model": "sonilo/text-to-music",
+      "provider": "wavespeed",
+      "displayName": "Sonilo Text-to-Music",
+      "unit": "Per second · 10 second minimum",
+      "note": "WaveSpeed Sonilo · $0.0025 / second"
+    },
+    {
+      "feature": "Sound Effects",
+      "featureKey": "audio-sound-effects",
+      "model": "sonilo/v1/text-to-sfx",
+      "provider": "wavespeed",
+      "displayName": "Sonilo Text-to-SFX",
+      "unit": "Per second · variations",
+      "note": "WaveSpeed Sonilo · $0.002 / second"
+    },
+    {
+      "feature": "Sound Effects",
+      "featureKey": "video-to-sfx",
+      "model": "sonilo/v1/video-to-sfx",
+      "provider": "wavespeed",
+      "displayName": "Sonilo Video-to-SFX",
+      "unit": "Per video second",
+      "note": "WaveSpeed Sonilo · $0.009 / second"
+    },
+    {
+      "feature": "Audio Cleanup",
+      "featureKey": "audio-cleanup",
+      "model": "voice_isolator",
+      "provider": "elevenlabs",
+      "displayName": "ElevenLabs Voice Isolator",
+      "unit": "Per audio minute",
+      "note": "Used when paid cleanup tools are selected"
+    }
+  ],
+  "previewBatches": {
+    "sizes": [
+      50,
+      50,
+      20
+    ],
+    "total": 120,
+    "first": {
+      "status": "ready",
+      "model": "m0"
+    },
+    "last": {
+      "status": "ready",
+      "model": "m119"
+    }
+  },
+  "previewBatchesEmpty": {
+    "previews": [],
+    "calls": 0
+  },
+  "formatMetric": [
+    "—",
+    "—",
+    "—",
+    "0",
+    "1,234.57",
+    "0.01",
+    "-7",
+    "1,235",
+    "1,234.5678"
+  ],
+  "previewWithDraft": [
+    null,
+    {
+      "status": "unavailable",
+      "providerCostThb": 3.37,
+      "creditCost": 1,
+      "sellingPriceThb": 0,
+      "costCredits": 0,
+      "profitCredits": 0,
+      "profitThb": 0
+    },
+    {
+      "status": "ready"
+    },
+    {
+      "status": "ready",
+      "providerCostThb": 3.37,
+      "creditCost": 1,
+      "sellingPriceThb": 0,
+      "costCredits": 0,
+      "profitCredits": 0,
+      "profitThb": 0
+    },
+    {
+      "status": "ready",
+      "providerCostThb": 3.37,
+      "creditCost": 48,
+      "sellingPriceThb": 4.800000000000001,
+      "costCredits": 33.699999999999996,
+      "profitCredits": 14.300000000000004,
+      "profitThb": 1.4300000000000006
+    },
+    {
+      "status": "ready",
+      "providerCostThb": 3.37,
+      "creditCost": 68.18,
+      "sellingPriceThb": 6.818000000000001,
+      "costCredits": 33.699999999999996,
+      "profitCredits": 34.48000000000001,
+      "profitThb": 3.4480000000000013
+    },
+    {
+      "status": "ready",
+      "providerCostThb": 3.37,
+      "creditCost": 370.7,
+      "sellingPriceThb": 37.07,
+      "costCredits": 33.699999999999996,
+      "profitCredits": 337,
+      "profitThb": 33.7
+    },
+    {
+      "status": "ready",
+      "providerCostThb": 3.37,
+      "creditCost": 34,
+      "sellingPriceThb": 3.4000000000000004,
+      "costCredits": 33.699999999999996,
+      "profitCredits": 0.30000000000000426,
+      "profitThb": 0.03000000000000025
+    },
+    {
+      "status": "ready",
+      "providerCostThb": 3.37,
+      "creditCost": 1,
+      "sellingPriceThb": 100,
+      "costCredits": 0.0337,
+      "profitCredits": 0.9663,
+      "profitThb": 96.63
+    }
+  ],
+  "pricingLabel": [
+    "Num Images",
+    "Aspect Ratio",
+    "Custom"
+  ],
+  "pricingProperties": {
+    "schemaRow": [
+      [
+        "size",
+        {
+          "type": "string",
+          "enum": [
+            "512*512",
+            "1024*1024"
+          ],
+          "title": " Image size "
+        }
+      ],
+      [
+        "num_images",
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4,
+          "default": 2
+        }
+      ],
+      [
+        "duration_seconds",
+        {
+          "type": "number"
+        }
+      ],
+      [
+        "frame_rate",
+        {
+          "type": "number",
+          "default": 24
+        }
+      ],
+      [
+        "aspectRatio",
+        {
+          "type": "string",
+          "enum": [
+            "1:1",
+            "16:9"
+          ]
+        }
+      ]
+    ],
+    "capabilityRow": [
+      [
+        "size",
+        {
+          "title": "Image size",
+          "type": "string",
+          "enum": [
+            "1024x1024",
+            "512x512"
+          ]
+        }
+      ],
+      [
+        "resolution",
+        {
+          "title": "Resolution",
+          "type": "string",
+          "enum": [
+            "1k",
+            "2k"
+          ]
+        }
+      ],
+      [
+        "quality",
+        {
+          "title": "Quality",
+          "type": "string",
+          "enum": [
+            "low",
+            "high"
+          ]
+        }
+      ],
+      [
+        "n",
+        {
+          "title": "Images per generation",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        }
+      ]
+    ],
+    "ocrRow": [
+      [
+        "pages",
+        {
+          "title": "Pages",
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 100000
+        }
+      ]
+    ],
+    "docRow": [
+      [
+        "input_tokens",
+        {
+          "title": "Estimated input tokens",
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      ],
+      [
+        "output_tokens",
+        {
+          "title": "Estimated output tokens",
+          "type": "integer",
+          "default": 1000,
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      ]
+    ],
+    "presenterRow": [
+      [
+        "duration",
+        {
+          "title": "Scene duration (seconds)",
+          "type": "integer",
+          "default": 13,
+          "minimum": 1,
+          "maximum": 15
+        }
+      ]
+    ],
+    "manyRow": [
+      [
+        "size",
+        {
+          "type": "integer"
+        }
+      ],
+      [
+        "count",
+        {
+          "type": "integer"
+        }
+      ],
+      [
+        "quality",
+        {
+          "type": "integer"
+        }
+      ],
+      [
+        "resolution",
+        {
+          "type": "integer"
+        }
+      ],
+      [
+        "steps",
+        {
+          "type": "integer"
+        }
+      ],
+      [
+        "fps",
+        {
+          "type": "integer"
+        }
+      ],
+      [
+        "frames",
+        {
+          "type": "integer"
+        }
+      ],
+      [
+        "duration",
+        {
+          "title": "Scene duration (seconds)",
+          "type": "integer",
+          "default": 13,
+          "minimum": 1,
+          "maximum": 15
+        }
+      ]
+    ],
+    "bareRow": []
+  },
+  "defaultScenarioValues": {
+    "schemaRow": {
+      "size": "1024*1024",
+      "num_images": 2,
+      "frame_rate": 24,
+      "aspectRatio": "1:1"
+    },
+    "capabilityRow": {
+      "size": "1024x1024",
+      "resolution": "1k",
+      "quality": "low"
+    },
+    "ocrRow": {
+      "pages": 1
+    },
+    "docRow": {
+      "input_tokens": 2000,
+      "output_tokens": 1000
+    },
+    "presenterRow": {
+      "duration": 13,
+      "aspect_ratio": "16:9"
+    },
+    "manyRow": {
+      "duration": 13,
+      "aspect_ratio": "16:9"
+    },
+    "bareRow": {}
+  },
+  "cleanScenarioValues": {
+    "a": 1,
+    "d": 0,
+    "e": false,
+    "f": null
+  },
+  "promptAddonsJson": [
+    "{}",
+    "{\n  \"style\": {\n    \"cinematic\": 2,\n    \"plain\": 0\n  }\n}"
+  ],
+  "parsePromptAddonsJson": [
+    {
+      "ok": {}
+    },
+    {
+      "ok": {}
+    },
+    {
+      "ok": {
+        "a": {
+          "b": 1
+        }
+      }
+    },
+    {
+      "throws": "Error: Prompt add-ons must be a JSON object"
+    },
+    {
+      "throws": "Error: Prompt add-ons must be a JSON object"
+    },
+    {
+      "throws": "Error: Prompt add-ons must be a JSON object"
+    },
+    {
+      "throws": "SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+    }
+  ],
+  "promptAddonEntries": [
+    {
+      "ok": [
+        {
+          "key": "style",
+          "values": [
+            {
+              "option": "a",
+              "amount": "1"
+            },
+            {
+              "option": "b",
+              "amount": "2.5"
+            }
+          ]
+        },
+        {
+          "key": "bad",
+          "values": []
+        },
+        {
+          "key": "nul",
+          "values": []
+        }
+      ]
+    },
+    {
+      "ok": []
+    },
+    {
+      "throws": "Error: Prompt add-ons must be a JSON object"
+    }
+  ],
+  "promptAddonVariableCount": [
+    2,
+    0,
+    0,
+    0
+  ]
+}

@@ -1,0 +1,555 @@
+{
+  "constants": {
+    "MIN_PODCAST_SPEAKERS": 2,
+    "podcastVoiceAvatarEntries": [
+      [
+        "jessica",
+        "/generated-assets/podcast-voices/jessica.jpg"
+      ],
+      [
+        "laura",
+        "/generated-assets/podcast-voices/laura.jpg"
+      ],
+      [
+        "alice",
+        "/generated-assets/podcast-voices/alice.jpg"
+      ],
+      [
+        "bill",
+        "/generated-assets/podcast-voices/bill.jpg"
+      ],
+      [
+        "brian",
+        "/generated-assets/podcast-voices/brian.jpg"
+      ],
+      [
+        "haytham",
+        "/generated-assets/podcast-voices/haytham.jpg"
+      ],
+      [
+        "amelia",
+        "/generated-assets/podcast-voices/amelia.jpg"
+      ],
+      [
+        "otto",
+        "/generated-assets/podcast-voices/otto.jpg"
+      ]
+    ],
+    "visibleTabs": [
+      "Text to Speech",
+      "Podcast & Dialogue",
+      "Voice Clone",
+      "Sound Effects",
+      "Text to Music",
+      "Audio Cleanup"
+    ],
+    "ELEVENLABS_TEXT_TO_SPEECH_MODEL_KEYS": [
+      "eleven_v4",
+      "elevenlabs/eleven-v4"
+    ],
+    "MINIMAX_TEXT_TO_SPEECH_MODEL_KEYS": [
+      "minimax/speech-2.8-hd"
+    ],
+    "AUDIO_TAB_STORAGE_KEY": "eos.audio.active-tab",
+    "audioTabKeys": {
+      "Text to Speech": "create.audio.tabs.textToSpeech",
+      "Podcast & Dialogue": "create.audio.tabs.podcastDialogue",
+      "Voice Clone": "create.audio.tabs.voiceClone",
+      "Sound Effects": "create.audio.tabs.soundEffects",
+      "Text to Music": "create.audio.tabs.textToMusic",
+      "Audio Cleanup": "create.audio.tabs.audioCleanup"
+    },
+    "audioModeIcons": {
+      "Text to Speech": "AudioLines",
+      "Podcast & Dialogue": "AudioWaveform",
+      "Voice Clone": "Mic2",
+      "Sound Effects": "Waves",
+      "Text to Music": "Music2",
+      "Audio Cleanup": "WandSparkles"
+    },
+    "mobileAudioModeOptions": [
+      {
+        "value": "Text to Speech",
+        "label": "Text to Speech",
+        "icon": "AudioLines"
+      },
+      {
+        "value": "Podcast & Dialogue",
+        "label": "Podcast & Dialogue",
+        "icon": "AudioWaveform"
+      },
+      {
+        "value": "Voice Clone",
+        "label": "Voice Clone",
+        "icon": "Mic2"
+      },
+      {
+        "value": "Sound Effects",
+        "label": "Sound Effects",
+        "icon": "Waves"
+      },
+      {
+        "value": "Text to Music",
+        "label": "Text to Music",
+        "icon": "Music2"
+      },
+      {
+        "value": "Audio Cleanup",
+        "label": "Audio Cleanup",
+        "icon": "WandSparkles"
+      }
+    ],
+    "tones": [
+      {
+        "label": "Energetic",
+        "icon": "Zap"
+      },
+      {
+        "label": "Friendly",
+        "icon": "Smile"
+      },
+      {
+        "label": "Premium",
+        "icon": "Star"
+      },
+      {
+        "label": "Dramatic",
+        "icon": "Clapperboard"
+      }
+    ],
+    "toneKeys": {
+      "Energetic": "create.audio.tones.energetic",
+      "Friendly": "create.audio.tones.friendly",
+      "Premium": "create.audio.tones.premium",
+      "Dramatic": "create.audio.tones.dramatic"
+    },
+    "voiceImages": [
+      "/generated-assets/audio-ui/audio-voice-female-warm.png",
+      "/generated-assets/audio-ui/audio-voice-male-bold.png",
+      "/generated-assets/audio-ui/audio-voice-youthful.png",
+      "/generated-assets/audio-ui/audio-voice-corporate.png",
+      "/generated-assets/audio-ui/audio-voice-podcast-host.png"
+    ],
+    "waveformBars": [
+      24,
+      57,
+      76,
+      75,
+      81,
+      90,
+      77,
+      51,
+      49,
+      52,
+      56,
+      73,
+      90,
+      85,
+      70,
+      74,
+      59,
+      29,
+      54,
+      77,
+      79,
+      77,
+      88,
+      79,
+      52,
+      46,
+      53,
+      60,
+      69,
+      89,
+      88,
+      68,
+      71,
+      60,
+      34,
+      50,
+      76,
+      83,
+      72,
+      86,
+      81,
+      56,
+      42,
+      53,
+      64,
+      65,
+      87,
+      90,
+      73,
+      67,
+      60,
+      38,
+      46,
+      75,
+      85,
+      76,
+      83,
+      82,
+      60,
+      37,
+      53,
+      67,
+      66,
+      85,
+      92,
+      77,
+      63,
+      59,
+      42,
+      43,
+      73,
+      87,
+      81,
+      79,
+      81,
+      63,
+      32,
+      51,
+      70,
+      70,
+      81,
+      91,
+      80,
+      58,
+      57,
+      44,
+      48,
+      69
+    ],
+    "AUDIO_HISTORY_LIMIT": 10,
+    "CLONE_HISTORY_SPEECH_SCAN_LIMIT": 50,
+    "VOICE_PAGE_SIZE": 8,
+    "DEFAULT_AUDIO_PROMPT": "ขอแนะนำ EOS Creative Studio — แพลตฟอร์มครบวงจรสำหรับสร้างสรรค์ สื่อสาร และสร้างความประทับใจ ตั้งแต่ภาพที่โดดเด่นไปจนถึงเสียงที่ทรงพลัง เราช่วยให้ไอเดียของคุณส่งถึงใจและเชื่อมต่อได้ลึกกว่าเดิม",
+    "defaultAudioScenes": [
+      {
+        "id": "01",
+        "title": "ฉากที่ 1",
+        "durationSeconds": 12,
+        "text": "ขอแนะนำ EOS Creative Studio — แพลตฟอร์มครบวงจรสำหรับสร้างสรรค์ สื่อสาร และสร้างความประทับใจ ตั้งแต่ภาพที่โดดเด่นไปจนถึงเสียงที่ทรงพลัง เราช่วยให้ไอเดียของคุณส่งถึงใจและเชื่อมต่อได้ลึกกว่าเดิม",
+        "voice": ""
+      }
+    ],
+    "VOICE_CLONE_MODEL_ID": "minimax/voice-clone",
+    "MINIMAX_LANGUAGE_BOOST_OPTIONS": [
+      {
+        "value": "Thai",
+        "label": "ภาษาไทย"
+      },
+      {
+        "value": "English",
+        "label": "English"
+      }
+    ],
+    "VOICE_CLONE_MODEL_OPTIONS": [
+      {
+        "value": "minimax/voice-clone",
+        "label": "MiniMax · Voice Clone"
+      }
+    ],
+    "SFX_MODEL_OPTIONS": [
+      {
+        "value": "text",
+        "label": "WaveSpeed · Sonilo Text-to-SFX"
+      },
+      {
+        "value": "video",
+        "label": "WaveSpeed · Sonilo Video-to-SFX"
+      }
+    ],
+    "podcastSpeakerTones": [
+      "orange",
+      "blue",
+      "green",
+      "purple",
+      "pink"
+    ],
+    "defaultPodcastSpeakers": [
+      {
+        "id": "host",
+        "role": "พิธีกร",
+        "name": "ณัฐพงษ์",
+        "voice": "เสียงหญิงนุ่ม",
+        "image": "/generated-assets/audio-ui/audio-voice-female-warm.png"
+      },
+      {
+        "id": "guest-1",
+        "role": "แขกรับเชิญ 1",
+        "name": "สุพิชฌาย์",
+        "voice": "เสียงหญิงสดใส",
+        "image": "/generated-assets/audio-ui/audio-voice-youthful.png"
+      },
+      {
+        "id": "guest-2",
+        "role": "แขกรับเชิญ 2",
+        "name": "ธนกฤต",
+        "voice": "เสียงชายหนักแน่น",
+        "image": "/generated-assets/audio-ui/audio-voice-male-bold.png"
+      },
+      {
+        "id": "co-host",
+        "role": "ผู้ร่วมดำเนินรายการ",
+        "name": "พิมพ์ชนก",
+        "voice": "เสียงพิธีกรพอดแคสต์",
+        "image": "/generated-assets/audio-ui/audio-voice-podcast-host.png"
+      }
+    ],
+    "defaultPodcastLines": [
+      {
+        "id": "line-1",
+        "speakerId": "host",
+        "text": "สวัสดีครับทุกคน ยินดีต้อนรับเข้าสู่พอดแคสต์เปิดโลก AI สำหรับครีเอเตอร์ครับ"
+      },
+      {
+        "id": "line-2",
+        "speakerId": "guest-1",
+        "text": "สวัสดีค่ะ วันนี้เราจะมาคุยกันเรื่อง AI ที่ช่วยให้การทำงานคอนเทนต์ง่ายขึ้นค่ะ"
+      },
+      {
+        "id": "line-3",
+        "speakerId": "guest-2",
+        "text": "ใช่ครับ โดยเฉพาะเครื่องมือที่ช่วยสร้างเสียงและพอดแคสต์อัตโนมัติ"
+      },
+      {
+        "id": "line-4",
+        "speakerId": "co-host",
+        "text": "เดี๋ยวเรามาเริ่มกันที่พื้นฐานกันก่อนเลยดีกว่าว่า AI ทำงานยังไงบ้างนะคะ"
+      }
+    ],
+    "audioSettingInfo": [
+      [
+        "create.audio.voiceModel",
+        "create.audio.info.model"
+      ],
+      [
+        "create.audio.clone.model",
+        "create.audio.info.model"
+      ],
+      [
+        "create.audio.outputFormat",
+        "create.audio.info.format"
+      ],
+      [
+        "create.audio.podcast.outputFormat",
+        "create.audio.info.format"
+      ],
+      [
+        "create.audio.cleanup.outputFormat",
+        "create.audio.info.format"
+      ],
+      [
+        "create.audio.clone.outputFormat",
+        "create.audio.info.format"
+      ],
+      [
+        "create.audio.sfx.outputFormat",
+        "create.audio.info.format"
+      ],
+      [
+        "create.audio.speechSpeed",
+        "create.audio.info.speed"
+      ],
+      [
+        "create.audio.clone.speed",
+        "create.audio.info.speed"
+      ],
+      [
+        "create.audio.podcast.pacing",
+        "create.audio.info.speed"
+      ],
+      [
+        "create.audio.pitch",
+        "create.audio.info.pitch"
+      ],
+      [
+        "create.audio.synthVolume",
+        "create.audio.info.volume"
+      ],
+      [
+        "create.audio.clone.accuracy",
+        "create.audio.info.accuracy"
+      ],
+      [
+        "create.audio.clone.noiseReduction",
+        "create.audio.info.noiseReduction"
+      ],
+      [
+        "create.audio.clone.volumeNormalization",
+        "create.audio.info.volumeNormalization"
+      ],
+      [
+        "create.audio.clone.emotion",
+        "create.audio.info.emotion"
+      ],
+      [
+        "create.audio.language",
+        "create.audio.info.language"
+      ],
+      [
+        "create.audio.pronunciationHints",
+        "create.audio.info.pronunciation"
+      ],
+      [
+        "create.audio.podcast.language",
+        "create.audio.info.language"
+      ],
+      [
+        "create.audio.music.model",
+        "create.audio.info.model"
+      ],
+      [
+        "create.audio.clone.sampleRate",
+        "create.audio.info.sampleRate"
+      ],
+      [
+        "create.audio.clone.bitrate",
+        "create.audio.info.bitrate"
+      ],
+      [
+        "create.audio.clone.channel",
+        "create.audio.info.channel"
+      ],
+      [
+        "create.audio.clone.englishNormalization",
+        "create.audio.info.normalization"
+      ],
+      [
+        "create.audio.podcast.speakingStyle",
+        "create.audio.info.speakingStyle"
+      ],
+      [
+        "create.audio.clone.voiceCharacter",
+        "create.audio.info.voiceCharacter"
+      ],
+      [
+        "create.audio.sfx.source",
+        "create.audio.info.sfxSource"
+      ],
+      [
+        "create.audio.sfx.effectCategory",
+        "create.audio.info.sfxCategory"
+      ],
+      [
+        "create.audio.sfx.duration",
+        "create.audio.info.sfxDuration"
+      ],
+      [
+        "create.audio.sfx.variations",
+        "create.audio.info.sfxVariations"
+      ]
+    ]
+  },
+  "getPodcastVoiceAvatar": [
+    null,
+    null,
+    "/generated-assets/podcast-voices/jessica.jpg",
+    "/generated-assets/podcast-voices/laura.jpg",
+    "https://cdn.example/brian.png",
+    null,
+    "/generated-assets/podcast-voices/otto.jpg"
+  ],
+  "supportsMiniMaxSpeechTuning": [
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false
+  ],
+  "pickTextToSpeechModels": [
+    [],
+    [
+      "eleven_v4:false",
+      "minimax/speech-2.8-hd:false"
+    ],
+    [
+      "elevenlabs/eleven-v4:true",
+      "MiniMax/Speech-2.8-HD:false"
+    ],
+    [
+      "elevenlabs/eleven-v4:false"
+    ],
+    [
+      "minimax/speech-2.8-hd:false"
+    ],
+    []
+  ],
+  "formatSceneSeconds": [
+    "00:00",
+    "00:00",
+    "00:00",
+    "00:01",
+    "00:10",
+    "00:59",
+    "01:00",
+    "01:01",
+    "02:06",
+    "59:59"
+  ],
+  "formatCreditAmount": [
+    "0",
+    "1",
+    "12.35",
+    "1,234,567.89",
+    "-2.5"
+  ],
+  "formatAudioHistoryDate": [
+    "9:05",
+    "12:30:45",
+    "8:15",
+    "not a date",
+    "17 พ.ย. 2569 08:30",
+    "Nov 17, 2026, 08:30 AM",
+    ""
+  ],
+  "progress": {
+    "key": "uuid-1",
+    "requestId": "uuid-1",
+    "events": [
+      [
+        "submitting",
+        {
+          "feature": "text-to-speech",
+          "requestId": "uuid-1"
+        }
+      ],
+      [
+        "finished",
+        {
+          "feature": "text-to-speech",
+          "requestId": "req-1"
+        }
+      ],
+      [
+        "failed",
+        {
+          "feature": "sound-effects",
+          "requestId": "req-2"
+        }
+      ]
+    ]
+  },
+  "estimatePodcastLineSeconds": [
+    1,
+    1,
+    1,
+    1,
+    5.6,
+    1
+  ],
+  "formatAudioFileSize": [
+    "1 KB",
+    "1 KB",
+    "1 KB",
+    "1 KB",
+    "2 KB",
+    "1024 KB",
+    "1.0 MB",
+    "5.5 MB",
+    "953.7 MB"
+  ]
+}
