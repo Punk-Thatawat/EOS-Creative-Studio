@@ -1,0 +1,5 @@
+# Project-scoped Codex config (applies once the project is trusted).
+# Keep in sync with .mcp.json, which Claude Code reads.
+[mcp_servers.context7]
+command = "cmd"
+args = ["/c", "npx", "-y", "@upstash/context7-mcp@4.5.1"]
