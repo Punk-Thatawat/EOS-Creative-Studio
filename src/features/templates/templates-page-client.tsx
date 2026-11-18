@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import Link from "next/link";
-import { createContext, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { Dropdown } from "@/components/ui/dropdown";
@@ -1808,30 +1808,8 @@ function PickerRow({
   const flyRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const [query, setQuery] = useState("");
-  useEffect(() => {
-    if (!anchor) return;
-    const close = () => setAnchor(null);
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    // The list is fixed on the screen, so when the page scrolls under it, it is put back beside its row.
-    const follow = (event: Event) => {
-      if (flyRef.current?.contains(event.target as Node)) return;
-      const next = place();
-      if (next) setAnchor(next);
-    };
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", follow, true);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", follow, true);
-    };
-    // `place` only reads the row and the window.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchor !== null]);
-  const place = () => {
+  const isOpen = anchor !== null;
+  const place = useCallback(() => {
     const rect = rowRef.current?.getBoundingClientRect();
     if (!rect) return null;
     // On a phone the sticky header and the tab bar stay visible, so the list sits between them.
@@ -1857,7 +1835,30 @@ function PickerRow({
     const width = Math.min(340, window.innerWidth - 24);
     const left = Math.max(12, Math.min(rect.right + 10, window.innerWidth - width - 12));
     return { top, left, maxHeight };
-  };
+  }, [searchPlaceholder]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = () => setAnchor(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    // The list is fixed on the screen, so when the page scrolls under it, it is put back beside its row.
+    const follow = (event: Event) => {
+      if (flyRef.current?.contains(event.target as Node)) return;
+      const next = place();
+      if (next) setAnchor(next);
+    };
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", follow, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", follow, true);
+    };
+  }, [isOpen, place]);
+
   const open = () => {
     const next = place();
     if (!next) return;
