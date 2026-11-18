@@ -76,7 +76,7 @@ import { MediaPicker, rememberUploads, type PickerCategory } from "./media-picke
 import { longClipLengths, longClipModels, queueExtension, useExtensionQueue } from "./long-clip";
 import { listTemplateGenerationModels, loadTemplateModelSettings, type TemplateModelMode, type TemplateModelSetting } from "@/lib/api/template-model-settings";
 import { formatGenerationError } from "@/lib/api/generation-errors";
-import { fetchHistory, type HistoryItem } from "@/lib/api/history";
+import { deleteHistoryItem, fetchHistory, type HistoryItem } from "@/lib/api/history";
 import { createAdminTemplate, createTemplateCoverFromPreview, keepTemplateAssets } from "@/lib/api/templates";
 import { listStylePresets } from "@/lib/api/style-presets";
 import { cancelTemplateWorkflow, listTemplateWorkflows, startTemplateWorkflow, workflowFeature, type TemplateWorkflowRun } from "@/lib/api/template-workflows";
@@ -1949,8 +1949,27 @@ function PickerRow({
 /** An image attached in the optional card, with its preview address. */
 type AttachedImage = { id: string; file: File; url: string; /** Put there by a template, not picked by the visitor. */ fromTemplate?: boolean; slot?: number; /** What the template says this image is: a character, a product or other. */ category?: ReferenceCategory };
 
+/** The panel of Create Video when no template is picked: a blank form, so a visitor can make a clip without one. */
+const blankTemplate: Template = {
+  id: "free-create",
+  slug: "",
+  title: "",
+  description: "",
+  category: "Video",
+  kind: "video",
+  format: "Video",
+  thumbnailUrl: "",
+  targetPath: "",
+  prompt: "",
+  tags: [],
+  featured: false,
+  createdAt: "",
+  updatedAt: "",
+  settings: {},
+};
+
 function Composer({
-  t,
+  t: chosen,
   mode,
   onMode,
   options,
@@ -1981,6 +2000,9 @@ function Composer({
   onExpand: (t: Template) => void;
 }) {
   const { c, locale } = useStudioCopy();
+  // No template picked in Create Video: the form is blank and the visitor writes the prompt and picks the settings.
+  const free = !chosen && mode === "create";
+  const t = chosen ?? (free ? blankTemplate : undefined);
   const [picking, setPicking] = useState(false);
   const [pickingEditTool, setPickingEditTool] = useState(false);
   const [editToolId, setEditToolId] = useState<EditToolId | null>(null);
@@ -2062,7 +2084,7 @@ function Composer({
     setSending({ state: "busy" });
     emitGenerationSubmitting({ feature: "text-to-video", requestId });
     try {
-      const request: TextVideoGenerationInput = { prompt, model, resolution, duration: firstPart, aspectRatio, templateSlug: template.slug };
+      const request: TextVideoGenerationInput = { prompt, model, resolution, duration: firstPart, aspectRatio, ...(free ? {} : { templateSlug: template.slug }) };
       if (images.length && reference) {
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
         rememberUploads(urls, "image", images.map((image) => image.category));
@@ -2081,9 +2103,9 @@ function Composer({
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) {
         emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, creditCost: firstCredits ?? 0, status: created.status === "processing" ? "processing" : "queued" });
-        if (restPart > 0) queueExtension({ generationId, pollUrl, prompt: request.prompt, duration: restPart, resolution, aspectRatio, templateSlug: template.slug });
+        if (restPart > 0) queueExtension({ generationId, pollUrl, prompt: request.prompt, duration: restPart, resolution, aspectRatio, templateSlug: free ? undefined : template.slug });
       }
-      onUse(template);
+      if (!free) onUse(template);
       setSending({ state: "sent", message: c("templates.composer.sent") });
     } catch (error) {
       emitGenerationRequestFailed({ feature: "text-to-video", requestId });
@@ -2244,7 +2266,7 @@ function Composer({
       <aside className={s.composer} aria-label={c("templates.composer.aria")}>
         {tabs}
         {banner}
-        <MotionWorkspace key={t?.id ?? "empty-motion"} t={t} onClear={onClear} incoming={incoming} />
+        <MotionWorkspace key={chosen?.id ?? "empty-motion"} t={chosen} onClear={onClear} incoming={incoming} />
       </aside>
     );
   if (mode === "edit" && !editToolId)
@@ -2330,7 +2352,7 @@ function Composer({
       {tabs}
       {banner}
       {styleRow}
-      <div className={s.composerStage}>
+      {!free && <div className={s.composerStage}>
         <button type="button" className={s.cardClose} onClick={onClear} aria-label={c("templates.composer.remove")}>
           <X size={14} aria-hidden="true" />
         </button>
@@ -2348,7 +2370,7 @@ function Composer({
             </small>
           </span>
         </button>
-      </div>
+      </div>}
       {!isWorkflow && (
         <div className={s.composerSlots}>
           <span className={s.slotOptional}>{c("templates.composer.optional")}</span>
@@ -2413,24 +2435,26 @@ function Composer({
       <section className={s.composerBlock}>
         <div className={s.composerLabel}>
           <span>{c("templates.composer.prompt")}</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showPrompt}
-            aria-label={c("templates.composer.showPrompt")}
-            className={s.switchControl}
-            onClick={() => setShowPrompt((v) => !v)}
-          >
-            <i />
-          </button>
+          {!free && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showPrompt}
+              aria-label={c("templates.composer.showPrompt")}
+              className={s.switchControl}
+              onClick={() => setShowPrompt((v) => !v)}
+            >
+              <i />
+            </button>
+          )}
         </div>
-        {showPrompt && (
+        {(showPrompt || free) && (
           <textarea
             key={`${t.id}-${locale}`}
             ref={promptRef}
             className={s.composerPrompt}
             defaultValue={promptOf(t, locale)}
-            placeholder={c("templates.composer.promptPlaceholder")}
+            placeholder={c(free ? "templates.composer.freePromptPlaceholder" : "templates.composer.promptPlaceholder")}
             aria-label={c("templates.composer.prompt")}
           />
         )}
@@ -2775,6 +2799,42 @@ function MyVideos({
   const [pending, setPending] = useState<HistoryItem[]>([]);
   const [runs, setRuns] = useState<TemplateWorkflowRun[]>([]);
   const [saving, setSaving] = useState<HistoryItem | null>(null);
+  // The clip whose bin was pressed once: deleting asks for a second press. A failed delete says so under the list.
+  const [confirmWork, setConfirmWork] = useState<string | null>(null);
+  const [deleteFailed, setDeleteFailed] = useState(false);
+  const [dismissedRuns, setDismissedRuns] = useState<string[]>([]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDismissedRuns(readDismissedRuns()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const dismissRun = (id: string) => {
+    const next = [...new Set([...dismissedRuns, id])].slice(-100);
+    setDismissedRuns(next);
+    try {
+      window.localStorage.setItem(DISMISSED_RUNS_KEY, JSON.stringify(next));
+    } catch {
+      // Ignore storage restrictions; the item is hidden until the page reloads.
+    }
+  };
+  useEffect(() => {
+    if (!confirmWork) return;
+    const timer = window.setTimeout(() => setConfirmWork(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [confirmWork]);
+  const removeWork = async (item: HistoryItem) => {
+    if (confirmWork !== item.id) {
+      setConfirmWork(item.id);
+      return;
+    }
+    setConfirmWork(null);
+    setDeleteFailed(false);
+    try {
+      await deleteHistoryItem(item);
+      setVideos((current) => current.filter((video) => video.id !== item.id));
+    } catch {
+      setDeleteFailed(true);
+    }
+  };
   useEffect(() => {
     const controller = new AbortController();
     let timer: number | undefined;
@@ -2835,7 +2895,7 @@ function MyVideos({
     return () => document.removeEventListener("fullscreenchange", opened);
   }, [tiles, videos, savedSlugs, onDetails]);
   // Failed runs are listed only until a newer one exists, so an old failure does not stay forever.
-  const shownRuns = runs.filter((run, index) => (run.status !== "failed" && run.status !== "cancelled") || index < 2);
+  const shownRuns = runs.filter((run, index) => ((run.status !== "failed" && run.status !== "cancelled") || index < 2) && !dismissedRuns.includes(run.id));
   if (!videos.length && !pending.length && !shownRuns.length) return null;
   return (
     <section className={s.myVideos} aria-label={c("templates.history.mine")}>
@@ -2874,6 +2934,11 @@ function MyVideos({
                 </div>
               )}
               <span>{run.prompt}</span>
+              {(run.status === "failed" || run.status === "cancelled") && (
+                <button type="button" className={s.workDelete} aria-label={c("templates.history.dismissRun")} title={c("templates.history.dismissRun")} onClick={() => dismissRun(run.id)}>
+                  <X size={14} aria-hidden="true" />
+                </button>
+              )}
               {run.status === "running" && (
                 <button
                   type="button"
@@ -2905,6 +2970,15 @@ function MyVideos({
             <button type="button" className={s.workOpen} onClick={() => onDetails(templateOfWork(item, savedSlugs.has(workSlug(item.id))))} aria-label={c("templates.card.previewAria", { name: item.title })} title={item.prompt?.trim() || item.title}>
               <video src={item.outputUrl} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />
             </button>
+            <button
+              type="button"
+              className={`${s.workDelete} ${confirmWork === item.id ? s.workDeleteConfirm : ""}`}
+              aria-label={c(confirmWork === item.id ? "templates.history.deleteConfirm" : "templates.history.delete")}
+              title={c(confirmWork === item.id ? "templates.history.deleteConfirm" : "templates.history.delete")}
+              onClick={() => void removeWork(item)}
+            >
+              {confirmWork === item.id ? <span>{c("templates.picker.removeConfirmShort")}</span> : <Trash2 size={14} aria-hidden="true" />}
+            </button>
           </li>
         ) : (
           <li key={item.id}>
@@ -2927,6 +3001,7 @@ function MyVideos({
           </li>
         ))}
       </ul>
+      {deleteFailed && <p className={s.sendError} role="alert">{c("templates.history.deleteFailed")}</p>}
       {videos.length > shown && (
         <button type="button" className={s.showMore} onClick={() => setShown((count) => count + 8)}>
           {c("templates.history.more", { count: videos.length - shown })}
@@ -2959,9 +3034,12 @@ function HistoryPanel({
   onOpenSaved,
   onTemplateCreated,
   onRecreate,
+  onClearRecent,
 }: {
   mode: Mode;
   recent: Template[];
+  /** Empties the list of templates opened lately. */
+  onClearRecent: () => void;
   items: Template[];
   onSelect: (t: Template) => void;
   onExpand: (t: Template) => void;
@@ -2977,7 +3055,9 @@ function HistoryPanel({
   onTemplateCreated: (saved: { slug: string; title: string }) => void;
 }) {
   const { c } = useStudioCopy();
-  const covers = items.filter((t) => valid(t.thumbnailUrl));
+  const own = items.filter((t) => valid(t.thumbnailUrl));
+  // With no template in the library yet, the pictures of the three steps are the stock covers, so the steps are never left empty.
+  const covers: Array<{ id: string; thumbnailUrl: string }> = own.length ? own : [modeCover.create, modeCover.edit, modeCover.motion].map((thumbnailUrl) => ({ id: thumbnailUrl, thumbnailUrl }));
   const steps = stepsByMode[mode];
   if (recent.length)
     return (
@@ -2986,6 +3066,7 @@ function HistoryPanel({
         <section>
           <div className={s.libraryTitle}>
             <h2>{c("templates.history.recent")}</h2>
+            <button type="button" className={s.clearRecent} onClick={onClearRecent}>{c("templates.history.clearRecent")}</button>
           </div>
           <div className={s.masonry}>
             {recent.map((t) => (
@@ -3264,6 +3345,23 @@ function readRecent(): Template[] {
     const raw = window.localStorage.getItem(RECENT_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? (parsed as Template[]).filter((t) => t && typeof t.id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function clearRecent() {
+  try {
+    window.localStorage.removeItem(RECENT_KEY);
+  } catch {
+    // Ignore storage restrictions.
+  }
+}
+/** Failed or cancelled workflow runs the visitor removed from the list (the server keeps no way to delete a run). */
+const DISMISSED_RUNS_KEY = "eos.templates.dismissedRuns";
+function readDismissedRuns(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(DISMISSED_RUNS_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
   } catch {
     return [];
   }
@@ -3863,6 +3961,7 @@ export function TemplatesPageClient() {
             <HistoryPanel
               mode={mode}
               recent={recentForMode}
+              onClearRecent={() => { clearRecent(); setRecent([]); }}
               items={visible}
               onSelect={(t) => mode === "motion" ? setPreview(t) : setSelectedId(t.id)}
               onExpand={setPreview}

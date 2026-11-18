@@ -1759,6 +1759,8 @@
   gap: 12px;
   margin: 4px 4px 12px;
 }
+.clearRecent { margin-left: auto; border: 0; background: none; color: #6b6b73; font-size: 13px; cursor: pointer; text-decoration: underline; }
+.clearRecent:hover { color: #d92d20; }
 .libraryTitle h2 {
   margin: 0;
   font-size: 16px;
@@ -2964,6 +2966,9 @@
 .motionAdvancedLabel p { margin: 0; font-size: 12px; font-weight: 400; line-height: 1.55; color: #17171980; }
 /* A clip of "Your videos": the video fills the tile and its buttons appear when the pointer is on it. */
 .myVideos li .workOpen { position: absolute; inset: 0; display: block; width: 100%; height: 100%; padding: 0; border-radius: 0; background: none; cursor: pointer; align-self: stretch; }
+.workDelete { position: absolute; right: 8px; top: 8px; z-index: 2; display: grid; min-width: 28px; height: 28px; place-items: center; border: 0; border-radius: 999px; background: #000a; color: #fff; cursor: pointer; opacity: .85; }
+.workDelete:hover, .workDelete:focus-visible { background: #d92d20; opacity: 1; }
+.workDeleteConfirm { padding: 0 10px; background: #d92d20; font-size: 12px; font-weight: 700; opacity: 1; }
 .myVideos li .workOpen video { width: 100%; height: 100%; aspect-ratio: auto; object-fit: cover; pointer-events: none; }
 /* Motion Control, as in a motion library: two boxes, one over the other, for the motion to copy and for the character. */
 .motionStack { display: grid; gap: 10px; }
