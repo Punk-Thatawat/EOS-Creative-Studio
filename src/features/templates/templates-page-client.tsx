@@ -64,12 +64,15 @@ import {
 } from "@/lib/api/templates";
 import s from "./templates-page.module.css";
 import { templateCopy } from "./template-copy";
+import { CategoryChips } from "./category-chips";
+import { categoryLabel } from "./template-categories";
+import { referenceCategoryCopyKeys, referenceCategoryOf, type ReferenceCategory } from "./template-references";
 import { listGenerationModels, type GenerationModelOption } from "@/lib/api/generation-models";
 import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/api/video-generations";
 import { createTextVideoGeneration, type TextVideoGenerationInput } from "@/lib/api/text-video-generations";
 import { createMotionTransferGeneration, createVideoSwapGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
-import { MediaPicker, rememberUploads } from "./media-picker";
+import { MediaPicker, rememberUploads, type PickerCategory } from "./media-picker";
 import { longClipLengths, longClipModels, queueExtension, useExtensionQueue } from "./long-clip";
 import { listTemplateGenerationModels, loadTemplateModelSettings, type TemplateModelMode, type TemplateModelSetting } from "@/lib/api/template-model-settings";
 import { formatGenerationError } from "@/lib/api/generation-errors";
@@ -1100,7 +1103,8 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
   }, [images]);
   useEffect(() => () => imagesRef.current.forEach((image) => URL.revokeObjectURL(image.url)), []);
   const addresses = enabled ? inputImagesOf(t).join("\n") : "";
-  const requestKey = JSON.stringify([addresses, limit, enabled, fixedSlots]);
+  const categoryKey = enabled ? JSON.stringify(t?.settings?.inputImageCategories ?? {}) : "{}";
+  const requestKey = JSON.stringify([addresses, limit, enabled, fixedSlots, categoryKey]);
   const loadError = c("templates.attach.templateLoadFailed");
   useEffect(() => {
     let alive = true;
@@ -1116,7 +1120,10 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
         setReadyKey(requestKey);
         return;
       }
-      const loaded = files.filter((file): file is File => file !== null).slice(0, Math.max(0, limit - own.length)).map((file, index) => ({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), fromTemplate: true, ...(fixedSlots ? { slot: index } : {}) }));
+      const loaded = files.filter((file): file is File => file !== null).slice(0, Math.max(0, limit - own.length)).map((file, index) => {
+        const category = referenceCategoryOf({ inputImageCategories: JSON.parse(categoryKey) as unknown }, addresses.split("\n")[index] ?? "");
+        return { id: crypto.randomUUID(), file, url: URL.createObjectURL(file), fromTemplate: true, ...(category ? { category } : {}), ...(fixedSlots ? { slot: index } : {}) };
+      });
       // Template references precede images added by the visitor, matching @Image numbering.
       const next = [...loaded, ...own];
       imagesRef.current = next;
@@ -1127,8 +1134,8 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
     return () => {
       alive = false;
     };
-  }, [addresses, limit, loadError, requestKey, fixedSlots]);
-  const attach = (list: FileList | null) => {
+  }, [addresses, categoryKey, limit, loadError, requestKey, fixedSlots]);
+  const attach = (list: FileList | null, category?: ReferenceCategory) => {
     if (!list) return;
     // A panel that takes one image swaps it for the new one.
     const current = imagesRef.current;
@@ -1144,7 +1151,7 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
         break;
       }
       const slot = fixedSlots ? Array.from({ length: limit }, (_, index) => index).find((index) => !next.some((image) => image.slot === index)) : undefined;
-      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(slot !== undefined ? { slot } : {}) });
+      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(category ? { category } : {}), ...(slot !== undefined ? { slot } : {}) });
     }
     if (fixedSlots) next.sort((a, b) => (a.slot ?? limit) - (b.slot ?? limit));
     current.filter((image) => !next.includes(image)).forEach((image) => URL.revokeObjectURL(image.url));
@@ -1413,6 +1420,8 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
   const swapMode = mine.swapMode || (typeof own.swapMode === "string" && swapModes.includes(own.swapMode) ? own.swapMode : (swapModes[0] ?? ""));
   const pick = (patch: Partial<typeof mine>) => setPicked({ ...picked, [variant]: { ...mine, ...patch } });
   const inputRef = useRef<HTMLInputElement>(null);
+  /** The group chip the picker was on when "upload from device" was pressed. */
+  const inputCategoryRef = useRef<PickerCategory | undefined>(undefined);
   const replaceInputRef = useRef<HTMLInputElement>(null);
   const replaceTargetRef = useRef<string | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
@@ -1494,7 +1503,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
     emitGenerationSubmitting({ feature: "motion-transfer", requestId });
     try {
       const uploaded = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "motion-transfer" })));
-      rememberUploads(uploaded);
+      rememberUploads(uploaded, "image", images.map((image) => image.category));
       let video: string = reference ?? "";
       if (swapping && readyVideo) {
         video = readyVideo;
@@ -1637,11 +1646,11 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
         kind="image"
         remaining={swapping ? Math.max(0, imageLimit - images.length) : 1}
         onClose={() => setImagePickerOpen(false)}
-        onUploadFromDevice={() => inputRef.current?.click()}
-        onPick={(files) => {
+        onUploadFromDevice={(category) => { inputCategoryRef.current = category; inputRef.current?.click(); }}
+        onPick={(files, category) => {
           const transfer = new DataTransfer();
           files.forEach((file) => transfer.items.add(file));
-          attach(transfer.files);
+          attach(transfer.files, category);
           setSending({ state: "idle" });
         }}
       />
@@ -1652,7 +1661,8 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
         multiple={swapping}
         accept="image/png,image/jpeg,image/webp"
         onChange={(event) => {
-          attach(event.currentTarget.files);
+          attach(event.currentTarget.files, inputCategoryRef.current);
+          inputCategoryRef.current = undefined;
           setSending({ state: "idle" });
           event.currentTarget.value = "";
         }}
@@ -1681,6 +1691,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
                     <span className={s.motionReferenceEditLabel}>{c("templates.motion.replaceReferenceShort")}</span>
                   </button>
                   <span className={s.motionReferenceNumber}>{(image.slot ?? index) + 1}</span>
+                  {image.category && <em className={s.slotCategory}>{c(referenceCategoryCopyKeys[image.category])}</em>}
                   <button type="button" className={s.motionReferenceRemove} aria-label={c("templates.motion.removeReference", { number: (image.slot ?? index) + 1 })} onClick={() => detach(image.id)}><X size={12} aria-hidden="true" /></button>
                 </span>
               ))}
@@ -1930,7 +1941,7 @@ function PickerRow({
  * quality rows, the rest of the settings folded under "Advanced", and the button that opens it in the creator.
  */
 /** An image attached in the optional card, with its preview address. */
-type AttachedImage = { id: string; file: File; url: string; /** Put there by a template, not picked by the visitor. */ fromTemplate?: boolean; slot?: number };
+type AttachedImage = { id: string; file: File; url: string; /** Put there by a template, not picked by the visitor. */ fromTemplate?: boolean; slot?: number; /** What the template says this image is: a character, a product or other. */ category?: ReferenceCategory };
 
 function Composer({
   t,
@@ -1985,10 +1996,11 @@ function Composer({
   // The images a template was made with start in it.
   const { images, attach: attachImages, detach, error: attachError } = useTemplateImages(t, 5, !isWorkflow);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileCategoryRef = useRef<PickerCategory | undefined>(undefined);
   // The picker: images already uploaded, saved or generated, instead of a new upload.
   const [pickerOpen, setPickerOpen] = useState(false);
-  const attach = (list: FileList | null) => {
-    attachImages(list);
+  const attach = (list: FileList | null, category?: ReferenceCategory) => {
+    attachImages(list, category);
     setSending({ state: "idle" });
   };
   // The price follows the model and quality the panel shows: picked here, else the template's own.
@@ -2047,7 +2059,7 @@ function Composer({
       const request: TextVideoGenerationInput = { prompt, model, resolution, duration: firstPart, aspectRatio, templateSlug: template.slug };
       if (images.length && reference) {
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
-        rememberUploads(urls);
+        rememberUploads(urls, "image", images.map((image) => image.category));
         // The reference-to-video models follow the images the prompt names as "@Image 1"; say so when the prompt does not.
         if (model.endsWith("/reference-to-video") && !/@Image\s*\d/i.test(prompt)) {
           request.prompt = `${prompt}\n\nUse the reference images to keep the same subjects and look: ${urls.map((_, index) => `@Image ${index + 1}`).join(", ")}.`;
@@ -2186,7 +2198,7 @@ function Composer({
                     <span className={s.pickerCopy}>
                       <strong>{name(o, locale)}</strong>
                       <small>
-                        {c(kindKeys[o.kind])} · {o.category} · {o.format}
+                        {c(kindKeys[o.kind])} · {categoryLabel(o.category, locale)} · {o.format}
                       </small>
                     </span>
                     {o.id === t?.id && <Check size={16} aria-hidden="true" />}
@@ -2319,7 +2331,7 @@ function Composer({
           <span className={s.composerCardInfo}>
             <strong>{name(t, locale)}</strong>
             <small>
-              {t.category} · {t.format}
+              {categoryLabel(t.category, locale)} · {t.format}
               {t.source === "community" && t.authorName ? ` · ${t.authorName}` : ""}
             </small>
           </span>
@@ -2335,7 +2347,8 @@ function Composer({
             multiple
             accept="image/png,image/jpeg,image/webp"
             onChange={(event) => {
-              attach(event.currentTarget.files);
+              attach(event.currentTarget.files, fileCategoryRef.current);
+              fileCategoryRef.current = undefined;
               event.currentTarget.value = "";
             }}
           />
@@ -2354,6 +2367,7 @@ function Composer({
               {images.map((image) => (
                 <span key={image.id} className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
                   <Image src={image.url} alt={image.file.name} fill unoptimized sizes="64px" />
+                  {image.category && <em className={s.slotCategory}>{c(referenceCategoryCopyKeys[image.category])}</em>}
                   <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
                     <X size={11} aria-hidden="true" />
                   </button>
@@ -2370,11 +2384,11 @@ function Composer({
             open={pickerOpen}
             remaining={Math.max(0, 5 - images.length)}
             onClose={() => setPickerOpen(false)}
-            onUploadFromDevice={() => fileInputRef.current?.click()}
-            onPick={(files) => {
+            onUploadFromDevice={(category) => { fileCategoryRef.current = category; fileInputRef.current?.click(); }}
+            onPick={(files, category) => {
               const transfer = new DataTransfer();
               files.forEach((file) => transfer.items.add(file));
-              attach(transfer.files);
+              attach(transfer.files, category);
             }}
           />
           {(attachError || images.some((image) => image.fromTemplate)) && (
@@ -3541,7 +3555,7 @@ function Preview({ t, close, onEdit }: { t: Template; close: () => void; onEdit?
   );
 }
 export function TemplatesPageClient() {
-  const { c } = useStudioCopy();
+  const { c, locale } = useStudioCopy();
   useExtensionQueue();
   const [items, setItems] = useState<Template[]>([]);
   const [addedImages, setAddedImages] = useState<{ key: number; templateId: string; files: File[] } | null>(null);
@@ -3583,6 +3597,7 @@ export function TemplatesPageClient() {
   const [q, setQ] = useState(""),
     [mode, setMode] = useState<Mode>(DEFAULT_MODE),
     [category, setCategory] = useState("all"),
+    [categories, setCategories] = useState<string[]>([]),
     [lane, setLane] = useState<Lane>("eos"),
     [page, setPage] = useState(1);
   const [pagination, setPagination] = useState<TemplatePagination>({ page: 1, limit: 24, total: 0, totalPages: 1 }),
@@ -3627,6 +3642,24 @@ export function TemplatesPageClient() {
       clearTimeout(timer);
     };
   }, [q, category, lane, page, retry]);
+  // The categories that have something in the open list and mode, so a chip never leads to an empty page.
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const found = new Set<string>();
+        for (let pageNo = 1; pageNo <= 10; pageNo += 1) {
+          const r = await listTemplates({ ...laneQuery[lane], page: pageNo, limit: 50, signal: controller.signal });
+          r.templates.filter((t) => (mode === "create" ? t.kind === "video" && modeOf(t) === "create" : modeOf(t) === mode)).forEach((t) => t.category && found.add(t.category));
+          if (pageNo >= (r.pagination?.totalPages ?? 1)) break;
+        }
+        if (!controller.signal.aborted) setCategories([...found].sort((a, b) => a.localeCompare(b)));
+      } catch {
+        // The chips are a convenience; the list works without them.
+      }
+    })();
+    return () => controller.abort();
+  }, [lane, mode, retry]);
   // The community's templates, so a clip that already became one is recognised whichever list is open.
   useEffect(() => {
     const controller = new AbortController();
@@ -3662,6 +3695,7 @@ export function TemplatesPageClient() {
   }, []);
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
+    setCategory("all");
     setPanel(nextMode === "motion" ? "how" : "history");
   };
   // The Recreate button of a tile: a product template opens its own window, any other one goes to the create panel.
@@ -3710,6 +3744,7 @@ export function TemplatesPageClient() {
               onClick={() => {
                 if (lane === id) return;
                 setLane(id);
+                setCategory("all");
                 change();
               }}
             >
@@ -3718,6 +3753,21 @@ export function TemplatesPageClient() {
             </button>
           ))}
         </div>
+        {categories.length > 0 && (
+          <CategoryChips
+            names={["all", ...categories]}
+            active={category}
+            onSelect={(name) => {
+              if (category === name) return;
+              setCategory(name);
+              change();
+            }}
+            labelOf={(name) => (name === "all" ? c("templates.category.all") : categoryLabel(name, locale))}
+            ariaLabel={c("templates.categoryAria")}
+            scrollLeftLabel={c("templates.category.scrollLeft")}
+            scrollRightLabel={c("templates.category.scrollRight")}
+          />
+        )}
       </section>
   );
   const libraryBody = loading ? (

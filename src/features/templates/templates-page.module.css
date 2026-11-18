@@ -2916,6 +2916,17 @@
 }
 /* An image the template brought, as opposed to one the visitor picked. */
 .slotFromTemplate { outline: 2px solid #f26b38; outline-offset: -2px; }
+.categoryRow { position: relative; margin-top: 10px; max-width: 100%; }
+.categoryArrow { position: absolute; top: 50%; z-index: 1; display: grid; width: 30px; height: 30px; transform: translateY(-50%); place-items: center; border: 1px solid #e5e5e5; border-radius: 999px; background: #fff; color: #171719; box-shadow: 0 2px 8px #17171926; cursor: pointer; }
+.categoryArrow:hover { border-color: #f26b38; color: #f26b38; }
+.categoryArrowLeft { left: 0; }
+.categoryArrowRight { right: 0; }
+.categoryChips { display: flex; gap: 8px; max-width: 100%; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.categoryChips::-webkit-scrollbar { display: none; }
+.categoryChips button { flex: none; border: 1px solid #e5e5e5; border-radius: 999px; background: #fff; padding: 6px 14px; color: #17171999; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.categoryChips button:hover { border-color: #f26b38; color: #f26b38; }
+.categoryChips button[aria-pressed="true"] { border-color: #f26b38; background: #f26b38; color: #fff; }
+.slotCategory { position: absolute; right: 0; bottom: 0; left: 0; overflow: hidden; background: #171719b3; padding: 1px 4px; color: #fff; font-size: 10px; font-style: normal; line-height: 14px; text-align: center; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .motionThumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 2px; }
 .motionThumbs small { flex-basis: 100%; font-size: 11px; line-height: 1.5; color: #17171980; }
 .motionThumbs small:empty { display: none; }
@@ -3283,6 +3294,11 @@
 .pickerHeart { position: absolute; left: 6px; top: 6px; display: grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 999px; background: #0008; color: #fff; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
 .pickerCell:hover .pickerHeart, .pickerHeart:focus-visible, .pickerHeartOn { opacity: 1; }
 .pickerHeartOn { color: #ff5c8a; }
+.pickerRemove { position: absolute; right: 6px; top: 6px; display: grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 999px; background: #0008; color: #fff; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
+.pickerCell:hover .pickerRemove, .pickerRemove:focus-visible { opacity: 1; }
+.pickerRemove:hover { background: #d92d20; }
+.pickerRemoveConfirm { width: auto; min-width: 24px; padding: 0 8px; background: #d92d20; font-size: 12px; font-weight: 700; opacity: 1; }
+@media (hover: none) { .pickerRemove { opacity: 1; } }
 @media (hover: none) { .pickerHeart { opacity: 1; } }
 .pickerSub { align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .pickerSub > div { display: flex; gap: 6px; }
