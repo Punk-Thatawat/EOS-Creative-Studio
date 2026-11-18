@@ -1115,6 +1115,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.rowNote { margin-left: 6px; color: #f26b38; font-size: 11px; font-style: normal; font-weight: 600; }
 .rowPlaceholder {
   color: #17171980;
   font-weight: 500;
