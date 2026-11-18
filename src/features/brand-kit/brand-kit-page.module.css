@@ -1,0 +1,450 @@
+.page {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding-bottom: 40px;
+  color: var(--foreground, #171412);
+}
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.header h1 {
+  font-family: var(--font-heading);
+  font-size: clamp(28px, 4vw, 38px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin: 5px 0;
+}
+.header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 10px 0 5px;
+}
+.header p,
+.sectionHead p,
+.storage p {
+  color: var(--muted-foreground, #736b65);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  color: var(--primary, #f26b38);
+}
+.storage {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  background: linear-gradient(115deg, #fff5ee, #fff);
+  border: 1px solid #f2dfd2;
+  padding: 22px 24px;
+  border-radius: 18px;
+}
+.storage > div:first-child {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.storageIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  background: #ffebe0;
+  border-radius: 14px;
+  color: var(--primary, #f26b38);
+}
+.storage h2 {
+  font-weight: 700;
+  font-size: 15px;
+}
+.storageNumbers {
+  text-align: right;
+}
+.storageNumbers strong {
+  font-size: 19px;
+  font-weight: 800;
+}
+.storageNumbers strong span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.meter {
+  grid-column: 1/-1;
+  height: 7px;
+  border-radius: 8px;
+  background: #f0e6de;
+  overflow: hidden;
+}
+.meter span {
+  display: block;
+  height: 100%;
+  background: var(--primary, #f26b38);
+  border-radius: 8px;
+  transition: width 0.2s;
+}
+.card {
+  padding: 24px;
+  background: var(--card, #fff);
+  border: 1px solid var(--border, #ece5e0);
+  border-radius: 18px;
+  min-width: 0;
+}
+.sectionHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.sectionHead h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 17px;
+  font-weight: 750;
+}
+.sectionHead h2 svg {
+  color: var(--primary, #f26b38);
+}
+.sectionHead p {
+  margin-top: 7px;
+}
+.count {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: var(--muted, #f5f3f1);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.fileInput,
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 205px;
+  padding: 24px;
+  gap: 8px;
+  border: 1px dashed #ddcfc5;
+  border-radius: 14px;
+  background: var(--background, #fcfaf8);
+  cursor: pointer;
+  text-align: center;
+}
+.empty:hover {
+  border-color: var(--primary, #f26b38);
+  background: #fff6ef;
+}
+.empty:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.empty strong {
+  font-size: 15px;
+}
+.empty > span:not(.emptyIcon):not(.uploadLabel) {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  background: #fff0e5;
+  color: #b86e45;
+  border-radius: 16px;
+  margin-bottom: 5px;
+}
+.uploadLabel {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--primary);
+  margin-top: 5px;
+}
+.fileHint {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 13px;
+}
+.assetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 16px;
+}
+.asset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  overflow: hidden;
+}
+.preview {
+  height: 170px;
+  background: #f7f4f1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 12px;
+}
+.logoPreview {
+  background-color: #fafafa;
+  background-image:
+    linear-gradient(45deg, #eee 25%, transparent 25%), linear-gradient(-45deg, #eee 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eee 75%), linear-gradient(-45deg, transparent 75%, #eee 75%);
+  background-size: 20px 20px;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0;
+}
+.previewFallback:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+.assetInfo {
+  padding: 13px;
+}
+.assetInfo > strong {
+  display: block;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.assetInfo > span {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+}
+.assetActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+.assetActions button,
+.editActions > button,
+.colorActions button {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 32px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.assetActions button:hover {
+  color: var(--primary);
+}
+.assetActions button:disabled,
+.colorActions button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.assetInfo form > input {
+  border: 1px solid var(--border);
+  padding: 8px;
+  width: 100%;
+  border-radius: 7px;
+  font-size: 13px;
+}
+.editActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
+  gap: 13px;
+}
+.colorCard {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  min-width: 0;
+}
+.colorPicker {
+  height: 75px;
+  border-radius: 8px;
+  display: block;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.colorPicker input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.colorCode {
+  width: 100%;
+  font-family: monospace;
+  text-align: center;
+  padding: 10px 0 4px;
+  font-size: 13px;
+  outline-offset: 2px;
+}
+.colorActions {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 7px;
+}
+.colorActions button {
+  min-width: 32px;
+  justify-content: center;
+}
+.colorEmpty {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 25px;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.colorFooter {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.validation {
+  color: #a52424;
+  font-size: 12px;
+  margin-top: 10px;
+}
+.notice,
+.pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.notice {
+  background: #eff8f1;
+  color: #286442;
+}
+.pending {
+  background: #fff5e8;
+  color: #916032;
+}
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #f4cdcd;
+  border-radius: 12px;
+  background: #fff3f3;
+  color: #a52424;
+  padding: 14px 18px;
+  font-size: 13px;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 250px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.page button:focus-visible,
+.page input:focus-visible,
+.colorPicker:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+@media (max-width: 640px) {
+  .page {
+    gap: 14px;
+  }
+  .header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header h2 {
+    font-size: 15px;
+  }
+  .card {
+    padding: 17px;
+  }
+  .sectionHead {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .sectionHead > button {
+    width: 100%;
+  }
+  .storage {
+    padding: 18px;
+    grid-template-columns: 1fr;
+  }
+  .storageNumbers {
+    text-align: left;
+  }
+  .assetGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .preview {
+    height: 135px;
+  }
+  .assetInfo {
+    padding: 10px;
+  }
+  .assetActions {
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+  .colorGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .error {
+    flex-wrap: wrap;
+  }
+}
