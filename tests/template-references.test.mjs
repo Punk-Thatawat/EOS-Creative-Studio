@@ -20,8 +20,8 @@ test('reads the category of one image and ignores anything unknown', () => {
   assert.equal(referenceCategoryOf({ inputImageCategories: 'product' }, bottle), undefined);
 });
 
-test('only character, product, brand, logo and other are categories', () => {
-  assert.deepEqual(plain(['character', 'product', 'brand', 'logo', 'other', 'Product', '', 1, null].map(isReferenceCategory)), [true, true, true, true, true, false, false, false, false]);
+test('only character, product, brand, logo, scene and other are categories', () => {
+  assert.deepEqual(plain(['character', 'product', 'brand', 'logo', 'scene', 'other', 'Product', '', 1, null].map(isReferenceCategory)), [true, true, true, true, true, true, false, false, false, false]);
 });
 
 test('sets and clears a category without touching other settings', () => {

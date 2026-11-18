@@ -2376,13 +2376,15 @@ function Composer({
             </button>
           ) : (
             <div className={s.attachFiles}>
-              {images.map((image) => (
-                <span key={image.id} className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
-                  <Image src={image.url} alt={image.file.name} fill unoptimized sizes="64px" />
-                  {image.category && <em className={s.slotCategory}>{c(referenceCategoryCopyKeys[image.category])}</em>}
-                  <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
-                    <X size={11} aria-hidden="true" />
-                  </button>
+              {images.map((image, index) => (
+                <span key={image.id} className={s.slotCell}>
+                  <span className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
+                    <Image src={image.url} alt={image.file.name} fill unoptimized sizes="64px" />
+                    <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
+                      <X size={11} aria-hidden="true" />
+                    </button>
+                  </span>
+                  <em className={s.slotCaption}>{image.category ? c(referenceCategoryCopyKeys[image.category]) : c("templates.attach.imageNumber", { n: index + 1 })}</em>
                 </span>
               ))}
               {images.length < 5 && (
