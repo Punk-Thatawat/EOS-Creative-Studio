@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDownUp, Check, ChevronDown, Clock3, Heart, ImagePlus, Loader2, Play, Upload, X } from "lucide-react";
-import { fetchAssets } from "@/lib/api/assets";
+import { deleteAsset, fetchAssets, updateAsset } from "@/lib/api/assets";
 import { fetchHistory } from "@/lib/api/history";
 import { listTemplates, type CreativeTemplate, type TemplateSource } from "@/lib/api/templates";
 import { listMyTemplateLikes } from "@/lib/api/template-likes";
@@ -18,9 +18,15 @@ const RECENT_TTL_MS = 6 * 24 * 60 * 60 * 1000;
 const RECENT_MAX = 40;
 const PAGE = 18;
 const MOTION = /(motion|swap)/i;
+/** Groups of your own images, read from the asset folder of the same name. */
+const CATEGORY_FOLDERS = { product: "Product", brand: "Brand", character: "Character", logo: "Logo" } as const;
+export type PickerCategory = keyof typeof CATEGORY_FOLDERS;
+const PICKER_VIEWS = ["recent", "all", "product", "brand", "character", "logo"] as const;
+type PickerView = (typeof PICKER_VIEWS)[number];
+const isPickerCategory = (view: PickerView): view is PickerCategory => view !== "recent" && view !== "all";
 
 const LIKED_KEY = "eos.templates.likedImages";
-type Recent = { url: string; at: number };
+type Recent = { url: string; at: number; category?: PickerCategory };
 type Liked = { id: string; url: string; label: string };
 
 function readLikedImages(): Liked[] {
@@ -38,7 +44,12 @@ function writeLikedImages(list: Liked[]) {
     // Liking is a convenience; the picker works without it.
   }
 }
-type Choice = { id: string; url: string; label: string };
+/**
+ * `removable` says what the cross on a picture does: "device" drops an image just added here, "recent" takes a remembered upload out of its group
+ * (or out of the latest uploads when no group is open), "asset" moves a saved asset out of its group folder (it is kept in Assets),
+ * "trash" moves a saved asset to the trash of Assets (it can be restored there), after a second press.
+ */
+type Choice = { id: string; url: string; label: string; removable?: "device" | "recent" | "asset" | "trash" };
 type Tab = "recent" | "uploads" | "presets" | "generated" | "liked";
 const ALLOWED: Record<MediaKind, string[]> = { image: ["image/png", "image/jpeg", "image/webp"], video: ["video/mp4", "video/quicktime", "video/webm"] };
 
@@ -54,18 +65,43 @@ export function readRecentUploads(kind: MediaKind = "image"): Recent[] {
 }
 
 /** Remembers what was just uploaded for a video, newest first, so it can be picked again without uploading. */
-export function rememberUploads(urls: string[], kind: MediaKind = "image") {
+/** Takes an image out of its group; it stays in the latest uploads. */
+export function forgetUploadCategory(url: string, kind: MediaKind = "image") {
   try {
-    const now = Date.now();
-    const known = readRecentUploads(kind).filter((entry) => !urls.includes(entry.url));
-    const next = [...urls.map((url) => ({ url, at: now })), ...known].slice(0, RECENT_MAX);
+    const next = readRecentUploads(kind).map((entry) => {
+      if (entry.url !== url) return entry;
+      const { category: _category, ...rest } = entry;
+      void _category;
+      return rest;
+    });
     window.localStorage.setItem(RECENT_KEY[kind], JSON.stringify(next));
   } catch {
     // Remembering is a convenience; the page works without it.
   }
 }
 
-async function toFile(choice: Choice, index: number, kind: MediaKind): Promise<File | null> {
+/** Takes an upload out of the latest uploads. */
+export function forgetUpload(url: string, kind: MediaKind = "image") {
+  try {
+    window.localStorage.setItem(RECENT_KEY[kind], JSON.stringify(readRecentUploads(kind).filter((entry) => entry.url !== url)));
+  } catch {
+    // Remembering is a convenience; the page works without it.
+  }
+}
+
+export function rememberUploads(urls: string[], kind: MediaKind = "image", categories: Array<string | undefined> = []) {
+  try {
+    const now = Date.now();
+    const known = readRecentUploads(kind).filter((entry) => !urls.includes(entry.url));
+    const next = [...urls.map((url, index): Recent => { const category = categories[index]; return { url, at: now, ...(category && category in CATEGORY_FOLDERS ? { category: category as PickerCategory } : {}) }; }), ...known].slice(0, RECENT_MAX);
+    window.localStorage.setItem(RECENT_KEY[kind], JSON.stringify(next));
+  } catch {
+    // Remembering is a convenience; the page works without it.
+  }
+}
+
+async function toFile(choice: Choice, index: number, kind: MediaKind, added?: File): Promise<File | null> {
+  if (added) return added;
   try {
     const response = await fetch(choice.url);
     if (!response.ok) return null;
@@ -103,8 +139,9 @@ export function MediaPicker({
   /** How many more the panel takes. */
   remaining: number;
   onClose: () => void;
-  onPick: (files: File[]) => void;
-  onUploadFromDevice: () => void;
+  /** `category` is the group chip the visitor was on, when there was one. */
+  onPick: (files: File[], category?: PickerCategory) => void;
+  onUploadFromDevice: (category?: PickerCategory) => void;
 }) {
   const { c } = useStudioCopy();
   const tabs: Array<{ id: Tab; label: string }> =
@@ -122,8 +159,20 @@ export function MediaPicker({
         ];
   const [tab, setTab] = useState<Tab>(kind === "image" ? "uploads" : "recent");
   // Uploads: the last ones you made here, or everything saved in your assets; newest or oldest first.
-  const [view, setView] = useState<"recent" | "all">("recent");
+  const [view, setView] = useState<PickerView>("recent");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
+  const activeCategory = kind === "image" && tab === "uploads" && isPickerCategory(view) ? view : undefined;
+  // Images added from the device in this window: they stay here, picked, so more can be added without closing it.
+  const [added, setAdded] = useState<Array<{ choice: Choice; category?: PickerCategory }>>([]);
+  const addedFiles = useRef(new Map<string, File>());
+  // The picture whose cross was pressed once: moving a saved image to the trash asks for a second press.
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!confirmId) return;
+    const timer = window.setTimeout(() => setConfirmId(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [confirmId]);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [sortOpen, setSortOpen] = useState(false);
   const [liked, setLiked] = useState<Liked[]>([]);
   const [source, setSource] = useState<TemplateSource>("official");
@@ -159,10 +208,13 @@ export function MediaPicker({
         let more = false;
         if (tab === "recent" || (tab === "uploads" && view === "recent")) {
           const recent = readRecentUploads(kind);
-          next = (sort === "oldest" ? [...recent].reverse() : recent).map((entry, index) => ({ id: entry.url, url: entry.url, label: `upload-${index + 1}` }));
+          next = (sort === "oldest" ? [...recent].reverse() : recent).map((entry, index): Choice => ({ id: entry.url, url: entry.url, label: `upload-${index + 1}`, removable: "recent" }));
         } else if (tab === "uploads") {
-          const result = await fetchAssets({ tab: "mine", type: "image", limit: PAGE, page, sort });
-          next = result.assets.map((asset) => ({ id: asset.id, url: asset.url ?? asset.previewUrl ?? "", label: asset.title || "asset" })).filter((choice) => choice.url);
+          const result = await fetchAssets({ tab: "mine", type: "image", limit: PAGE, page, sort, ...(isPickerCategory(view) ? { folder: CATEGORY_FOLDERS[view] } : {}) });
+          const fromAssets = result.assets.map((asset): Choice => ({ id: asset.id, url: asset.url ?? asset.previewUrl ?? "", label: asset.title || "asset", removable: isPickerCategory(view) ? ("asset" as const) : ("trash" as const) })).filter((choice) => choice.url);
+          // What was added under this group in this browser comes first (it is not in an asset folder).
+          const remembered = page === 1 && isPickerCategory(view) ? readRecentUploads(kind).filter((entry) => entry.category === view).map((entry, index): Choice => ({ id: entry.url, url: entry.url, label: `upload-${index + 1}`, removable: "recent" })) : [];
+          next = [...remembered, ...fromAssets.filter((choice) => !remembered.some((known) => known.url === choice.url))];
           more = page < result.pagination.totalPages;
         } else if (tab === "generated") {
           const result = await fetchHistory({ type: kind, status: "completed", limit: PAGE, offset: (page - 1) * PAGE });
@@ -200,7 +252,8 @@ export function MediaPicker({
 
   if (!open) return null;
 
-  const shown = choices.filter((choice) => !gone.has(choice.id));
+  const addedHere = tab === "uploads" && kind === "image" ? added.filter((entry) => !activeCategory || entry.category === activeCategory).map((entry) => entry.choice) : [];
+  const shown = [...addedHere, ...choices.filter((choice) => !gone.has(choice.id))];
   const toggle = (choice: Choice) =>
     setSelected((current) => {
       if (current.some((entry) => entry.id === choice.id)) return current.filter((entry) => entry.id !== choice.id);
@@ -210,20 +263,76 @@ export function MediaPicker({
     });
   const confirm = async () => {
     setBusy(true);
-    const files = (await Promise.all(selected.map((choice, index) => toFile(choice, index, kind)))).filter((file): file is File => file !== null);
+    const files = (await Promise.all(selected.map((choice, index) => toFile(choice, index, kind, addedFiles.current.get(choice.id))))).filter((file): file is File => file !== null);
     setBusy(false);
     setSkipped(selected.length - files.length);
     if (files.length) {
-      onPick(files);
+      // Images added here keep the group they were added under; the rest take the group chip that is open.
+      const groups = selected.map((choice) => added.find((entry) => entry.choice.id === choice.id)?.category ?? activeCategory);
+      onPick(files, groups.every((group) => group === groups[0]) ? groups[0] : undefined);
       setSelected([]);
+      discardAdded();
     }
     if (files.length === selected.length) onClose();
   };
+  function discardAdded() {
+    added.forEach((entry) => URL.revokeObjectURL(entry.choice.url));
+    addedFiles.current.clear();
+    setAdded([]);
+  }
+  const addFromDevice = (list: FileList | null) => {
+    const entries = Array.from(list ?? [])
+      .filter((file) => ALLOWED[kind].includes(file.type))
+      .map((file) => {
+        const choice: Choice = { id: `device-${crypto.randomUUID()}`, url: URL.createObjectURL(file), label: file.name, removable: "device" };
+        addedFiles.current.set(choice.id, file);
+        return { choice, ...(activeCategory ? { category: activeCategory } : {}) };
+      });
+    if (entries.length === 0) return;
+    setAdded((current) => [...entries, ...current]);
+    // What was just added is picked, so adding is one step; the panel's limit still applies.
+    setSelected((current) => {
+      const next = [...current];
+      for (const entry of entries) {
+        if (remaining === 1) return [entry.choice];
+        if (next.length < remaining) next.push(entry.choice);
+      }
+      return next;
+    });
+  };
   const close = () => {
+    discardAdded();
     setSelected([]);
     setSkipped(0);
     onClose();
   };
+  const removeChoice = async (choice: Choice) => {
+    if (choice.removable === "trash" && confirmId !== choice.id) {
+      setConfirmId(choice.id);
+      return;
+    }
+    setConfirmId(null);
+    if (choice.removable === "device") {
+      URL.revokeObjectURL(choice.url);
+      addedFiles.current.delete(choice.id);
+      setAdded((current) => current.filter((entry) => entry.choice.id !== choice.id));
+    } else {
+      if (choice.removable === "asset" || choice.removable === "trash") {
+        // A group folder only gives the image up (it stays in Assets); "trash" moves it to the trash there, where it can be restored.
+        try {
+          if (choice.removable === "asset") await updateAsset(choice.id, { folder: null });
+          else await deleteAsset(choice.id);
+        } catch {
+          setFailed(true);
+          return;
+        }
+      } else if (activeCategory) forgetUploadCategory(choice.url, kind);
+      else forgetUpload(choice.url, kind);
+      setChoices((current) => current.filter((entry) => entry.id !== choice.id));
+    }
+    setSelected((current) => current.filter((entry) => entry.id !== choice.id));
+  };
+  const removeLabel = (choice: Choice) => c(choice.removable === "trash" ? (confirmId === choice.id ? "templates.picker.removeToTrashConfirm" : "templates.picker.removeToTrash") : choice.removable === "device" ? "templates.picker.removeDiscard" : activeCategory ? "templates.picker.removeFromCategory" : "templates.picker.removeFromRecent");
   const markGone = (choice: Choice) => setGone((current) => new Set(current).add(choice.id));
   const isLiked = (choice: Choice) => liked.some((entry) => entry.id === choice.id);
   const toggleLike = (choice: Choice) => {
@@ -254,9 +363,9 @@ export function MediaPicker({
         {kind === "image" && tab === "uploads" && (
           <div className={s.pickerSub}>
             <div role="tablist" aria-label={c("templates.picker.uploads")}>
-              {(["recent", "all"] as const).map((item) => (
+              {PICKER_VIEWS.map((item) => (
                 <button key={item} type="button" role="tab" aria-selected={view === item} onClick={() => setView(item)}>
-                  {c(item === "recent" ? "templates.picker.latest" : "templates.picker.all")}
+                  {c(item === "recent" ? "templates.picker.latest" : item === "all" ? "templates.picker.all" : (`templates.picker.category.${item}` as const))}
                 </button>
               ))}
             </div>
@@ -294,9 +403,22 @@ export function MediaPicker({
             ))}
           </div>
         )}
+        <input
+          ref={uploadInputRef}
+          className={s.visuallyHidden}
+          type="file"
+          multiple
+          accept={ALLOWED.image.join(",")}
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(event) => {
+            addFromDevice(event.currentTarget.files);
+            event.currentTarget.value = "";
+          }}
+        />
         <div className={s.pickerGrid}>
           {(tab === "recent" || (kind === "image" && tab === "uploads")) && (
-            <button type="button" className={s.pickerUpload} onClick={() => { close(); onUploadFromDevice(); }}>
+            <button type="button" className={s.pickerUpload} onClick={() => { if (kind === "image") uploadInputRef.current?.click(); else { close(); onUploadFromDevice(activeCategory); } }}>
               {kind === "video" ? <Upload size={22} aria-hidden="true" /> : <ImagePlus size={22} aria-hidden="true" />}
               <span>{c("templates.picker.upload")}</span>
             </button>
@@ -320,6 +442,11 @@ export function MediaPicker({
                   </i>
                 )}
               </button>
+              {choice.removable && (
+                <button type="button" className={`${s.pickerRemove} ${confirmId === choice.id ? s.pickerRemoveConfirm : ""}`} aria-label={removeLabel(choice)} title={removeLabel(choice)} onClick={() => void removeChoice(choice)}>
+                  {confirmId === choice.id ? <span>{c("templates.picker.removeConfirmShort")}</span> : <X size={14} aria-hidden="true" />}
+                </button>
+              )}
               {kind === "image" && (
                 <button type="button" className={`${s.pickerHeart} ${isLiked(choice) ? s.pickerHeartOn : ""}`} aria-pressed={isLiked(choice)} aria-label={c(isLiked(choice) ? "templates.picker.unlike" : "templates.picker.like")} onClick={() => toggleLike(choice)}>
                   <Heart size={14} fill={isLiked(choice) ? "currentColor" : "none"} aria-hidden="true" />
@@ -335,7 +462,7 @@ export function MediaPicker({
           </p>
         )}
         {!loading && failed && <p className={`${s.pickerNote} ${s.sendError}`}>{c("templates.picker.failed")}</p>}
-        {!loading && !failed && shown.length === 0 && <p className={s.pickerNote}>{c(tab === "liked" && kind === "image" ? "templates.picker.likedEmpty" : "templates.picker.empty")}</p>}
+        {!loading && !failed && shown.length === 0 && <p className={s.pickerNote}>{tab === "uploads" && kind === "image" && isPickerCategory(view) ? c("templates.picker.categoryEmpty", { folder: CATEGORY_FOLDERS[view] }) : c(tab === "liked" && kind === "image" ? "templates.picker.likedEmpty" : "templates.picker.empty")}</p>}
         {hasMore && !loading && (
           <button type="button" className={s.showMore} onClick={() => setPage((current) => current + 1)}>
             {c("templates.picker.more")}
