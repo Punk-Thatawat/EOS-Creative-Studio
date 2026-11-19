@@ -72,7 +72,8 @@ import { quoteDirectVideoGeneration, type DirectVideoQuoteInput } from "@/lib/ap
 import { createTextVideoGeneration, type TextVideoGenerationInput } from "@/lib/api/text-video-generations";
 import { createMotionTransferGeneration, createVideoSwapGeneration } from "@/lib/api/motion-transfer-generations";
 import { uploadImageAsset } from "@/lib/api/storage";
-import { MediaPicker, rememberUploads, type PickerCategory } from "./media-picker";
+import { ImageAttachmentPicker } from "@/features/brand-kit/image-attachment-picker";
+import { MotionVideoPicker, rememberVideoUpload } from "./media-picker";
 import { longClipLengths, longClipModels, queueExtension, useExtensionQueue } from "./long-clip";
 import { listTemplateGenerationModels, loadTemplateModelSettings, type TemplateModelMode, type TemplateModelSetting } from "@/lib/api/template-model-settings";
 import { formatGenerationError } from "@/lib/api/generation-errors";
@@ -1136,15 +1137,14 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
       alive = false;
     };
   }, [addresses, categoryKey, limit, loadError, requestKey, fixedSlots]);
-  const attach = (list: FileList | null, category?: ReferenceCategory, templateIndex?: number) => {
-    if (!list) return;
+  const attach = (files: File[], categories: Array<ReferenceCategory | undefined> = [], templateIndex?: number) => {
     // A panel that takes one image swaps it for the new one.
     const current = imagesRef.current;
     const next = limit === 1 && !fixedSlots ? [] : [...current];
     let problem: string | undefined;
     // The first image goes to the box that was asked for, if that box is free.
     let target = templateIndex !== undefined && !next.some((image) => image.templateIndex === templateIndex) ? templateIndex : undefined;
-    for (const file of Array.from(list)) {
+    for (const [index, file] of files.entries()) {
       if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
         problem = c("templates.attach.unsupported");
         continue;
@@ -1154,6 +1154,7 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
         break;
       }
       const slot = fixedSlots ? Array.from({ length: limit }, (_, index) => index).find((index) => !next.some((image) => image.slot === index)) : undefined;
+      const category = categories[index];
       next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(category ? { category } : {}), ...(slot !== undefined ? { slot } : {}), ...(target !== undefined ? { templateIndex: target } : {}) });
       target = undefined;
     }
@@ -1173,7 +1174,7 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
     setImages(next);
     setError(undefined);
   };
-  const replace = (id: string, file: File | undefined) => {
+  const replace = (id: string, file: File | undefined, category?: ReferenceCategory) => {
     if (!file) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
       setError(c("templates.attach.unsupported"));
@@ -1184,7 +1185,7 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
     if (index < 0) return;
     const previous = current[index]!;
     const next = [...current];
-    next[index] = { id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(previous.slot !== undefined ? { slot: previous.slot } : {}) };
+    next[index] = { id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(previous.slot !== undefined ? { slot: previous.slot } : {}), ...(category ? { category } : {}) };
     URL.revokeObjectURL(previous.url);
     imagesRef.current = next;
     setImages(next);
@@ -1384,9 +1385,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
   useEffect(() => {
     if (!incoming || incoming.templateId !== t?.id || handledIncoming.current === incoming.key) return;
     handledIncoming.current = incoming.key;
-    const transfer = new DataTransfer();
-    incoming.files.forEach((file) => transfer.items.add(file));
-    attach(transfer.files);
+    attach(incoming.files);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- each batch is transferred once
   }, [incoming, t?.id]);
   const [sending, setSending] = useState<{ state: "idle" | "busy" | "sent" | "error"; message?: string }>({ state: "idle" });
@@ -1398,6 +1397,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
   // The pickers: media already uploaded, saved, generated or liked, instead of a new upload.
   const [motionPickerOpen, setMotionPickerOpen] = useState(false);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const [replacementId, setReplacementId] = useState<string | null>(null);
   const [sceneControl, setSceneControl] = useState(true);
   const [sceneSource, setSceneSource] = useState<"video" | "image">("video");
   const [orientation, setOrientation] = useState<"video" | "image">("video");
@@ -1425,11 +1425,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
   const swapModes = swapping ? picker.modesOf(model) : [];
   const swapMode = mine.swapMode || (typeof own.swapMode === "string" && swapModes.includes(own.swapMode) ? own.swapMode : (swapModes[0] ?? ""));
   const pick = (patch: Partial<typeof mine>) => setPicked({ ...picked, [variant]: { ...mine, ...patch } });
-  const inputRef = useRef<HTMLInputElement>(null);
   /** The group chip the picker was on when "upload from device" was pressed. */
-  const inputCategoryRef = useRef<PickerCategory | undefined>(undefined);
-  const replaceInputRef = useRef<HTMLInputElement>(null);
-  const replaceTargetRef = useRef<string | null>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const reference = referenceVideoOf(t);
   const motionSrc = ownMotion?.url ?? reference;
@@ -1509,13 +1505,12 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
     emitGenerationSubmitting({ feature: "motion-transfer", requestId });
     try {
       const uploaded = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "motion-transfer" })));
-      rememberUploads(uploaded, "image", images.map((image) => image.category));
       let video: string = reference ?? "";
       if (swapping && readyVideo) {
         video = readyVideo;
       } else if (ownMotion) {
         video = await uploadImageAsset(ownMotion.file, { purpose: "content", feature: "motion-transfer" });
-        rememberUploads([video], "video");
+        rememberVideoUpload(video);
       } else if (!/^https?:\/\//i.test(video)) {
         const response = await fetch(video);
         if (!response.ok) throw new Error(c("templates.motion.referenceFailed"));
@@ -1637,52 +1632,23 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
           if (file) acceptMotion(file);
         }}
       />
-      <MediaPicker
+      <MotionVideoPicker
         open={motionPickerOpen}
-        kind="video"
-        remaining={1}
         onClose={() => setMotionPickerOpen(false)}
         onUploadFromDevice={() => motionInputRef.current?.click()}
-        onPick={(files) => {
-          if (files[0]) acceptMotion(files[0]);
-        }}
+        onPick={acceptMotion}
       />
-      <MediaPicker
+      <ImageAttachmentPicker
         open={imagePickerOpen}
-        kind="image"
-        remaining={swapping ? Math.max(0, imageLimit - images.length) : 1}
-        onClose={() => setImagePickerOpen(false)}
-        onUploadFromDevice={(category) => { inputCategoryRef.current = category; inputRef.current?.click(); }}
-        onPick={(files, category) => {
-          const transfer = new DataTransfer();
-          files.forEach((file) => transfer.items.add(file));
-          attach(transfer.files, category);
+        limit={swapping && !replacementId ? Math.max(0, imageLimit - images.length) : 1}
+        onOpenChange={(open) => { setImagePickerOpen(open); if (!open) setReplacementId(null); }}
+        onPick={(files, categories) => {
+          if (replacementId) {
+            replace(replacementId, files[0], categories[0]);
+          } else {
+            attach(files, categories);
+          }
           setSending({ state: "idle" });
-        }}
-      />
-      <input
-        ref={inputRef}
-        className={s.visuallyHidden}
-        type="file"
-        multiple={swapping}
-        accept="image/png,image/jpeg,image/webp"
-        onChange={(event) => {
-          attach(event.currentTarget.files, inputCategoryRef.current);
-          inputCategoryRef.current = undefined;
-          setSending({ state: "idle" });
-          event.currentTarget.value = "";
-        }}
-      />
-      <input
-        ref={replaceInputRef}
-        className={s.visuallyHidden}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        onChange={(event) => {
-          if (replaceTargetRef.current) replace(replaceTargetRef.current, event.currentTarget.files?.[0]);
-          replaceTargetRef.current = null;
-          setSending({ state: "idle" });
-          event.currentTarget.value = "";
         }}
       />
       {(swapping || attachError || images.some((image) => image.fromTemplate)) && (
@@ -1692,7 +1658,7 @@ function MotionWorkspace({ t, onClear, incoming }: { t?: Template; onClear?: () 
             <div className={s.motionReferenceList}>
               {images.map((image, index) => (
                 <span key={image.id} className={s.motionReferenceThumb} title={image.file.name}>
-                  <button type="button" className={s.motionReferenceEdit} aria-label={c("templates.motion.replaceReference", { number: (image.slot ?? index) + 1 })} onClick={() => { replaceTargetRef.current = image.id; replaceInputRef.current?.click(); }}>
+                  <button type="button" className={s.motionReferenceEdit} aria-label={c("templates.motion.replaceReference", { number: (image.slot ?? index) + 1 })} onClick={() => { setReplacementId(image.id); setImagePickerOpen(true); }}>
                     <Image src={image.url} alt={c("templates.motion.referenceImage", { number: (image.slot ?? index) + 1 })} fill unoptimized sizes="64px" />
                     <span className={s.motionReferenceEditLabel}>{c("templates.motion.replaceReferenceShort")}</span>
                   </button>
@@ -2032,12 +1998,9 @@ function Composer({
   // Reference images attached in the optional card (up to five), sent with the video request when the model takes them.
   // The images a template was made with start in it.
   const { images, attach: attachImages, detach, error: attachError } = useTemplateImages(t, 5, !isWorkflow);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const fileCategoryRef = useRef<PickerCategory | undefined>(undefined);
-  // The picker: images already uploaded, saved or generated, instead of a new upload.
   const [pickerOpen, setPickerOpen] = useState(false);
-  const attach = (list: FileList | null, category?: ReferenceCategory, templateIndex?: number) => {
-    attachImages(list, category, templateIndex);
+  const attach = (files: File[], categories?: Array<ReferenceCategory | undefined>, templateIndex?: number) => {
+    attachImages(files, categories, templateIndex);
     setSending({ state: "idle" });
   };
   // A template with reference images gives one labelled box for each, and a box stays when its image is taken out.
@@ -2097,9 +2060,7 @@ function Composer({
   useEffect(() => {
     if (!incoming || incoming.templateId !== t?.id || handledIncoming.current === incoming.key || mode !== "create" || isWorkflow) return;
     handledIncoming.current = incoming.key;
-    const transfer = new DataTransfer();
-    incoming.files.forEach((file) => transfer.items.add(file));
-    attach(transfer.files);
+    attach(incoming.files);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once for each batch of images the details hand over
   }, [incoming, mode, isWorkflow, t?.id]);
   // Generates right here: the same request the creator page sends, then the app's progress panel follows it to the result.
@@ -2121,7 +2082,6 @@ function Composer({
       const request: TextVideoGenerationInput = { prompt, model, resolution, duration: firstPart, aspectRatio, templateSlug: free ? FREE_CREATE_SLUG : template.slug };
       if (images.length && reference) {
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
-        rememberUploads(urls, "image", images.map((image) => image.category));
         // The reference-to-video models follow the images the prompt names as "@Image 1"; say so when the prompt does not.
         if (model.endsWith("/reference-to-video") && !/@Image\s*\d/i.test(prompt)) {
           request.prompt = `${prompt}\n\nUse the reference images to keep the same subjects and look: ${urls.map((_, index) => `@Image ${index + 1}`).join(", ")}.`;
@@ -2408,19 +2368,6 @@ function Composer({
       {!isWorkflow && (
         <div className={s.composerSlots}>
           <span className={s.slotOptional}>{c("templates.composer.optional")}</span>
-          <input
-            ref={fileInputRef}
-            className={s.visuallyHidden}
-            type="file"
-            multiple
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(event) => {
-              const slot = takeSlotTarget();
-              attach(event.currentTarget.files, (slot !== undefined ? slotPlan[slot] : undefined) ?? fileCategoryRef.current, slot);
-              fileCategoryRef.current = undefined;
-              event.currentTarget.value = "";
-            }}
-          />
           {slotPlan.length === 0 && images.length === 0 ? (
             <button type="button" className={s.attachBox} onClick={() => openPicker()}>
               <span className={s.attachIcons} aria-hidden="true">
@@ -2454,16 +2401,15 @@ function Composer({
               )}
             </div>
           )}
-          <MediaPicker
+          <ImageAttachmentPicker
             open={pickerOpen}
-            remaining={Math.max(0, 5 - images.length)}
-            onClose={() => setPickerOpen(false)}
-            onUploadFromDevice={(category) => { fileCategoryRef.current = category; fileInputRef.current?.click(); }}
-            onPick={(files, category) => {
-              const transfer = new DataTransfer();
-              files.forEach((file) => transfer.items.add(file));
+            limit={Math.max(0, 5 - images.length)}
+            onOpenChange={setPickerOpen}
+            onPick={(files, categories) => {
               const slot = takeSlotTarget();
-              attach(transfer.files, (slot !== undefined ? slotPlan[slot] : undefined) ?? category, slot);
+              const slotCategory = slot === undefined ? undefined : slotPlan[slot];
+              const labeled = slotCategory ? [slotCategory, ...categories.slice(1)] : categories;
+              attach(files, labeled, slot);
             }}
           />
           {(attachError || images.some((image) => image.fromTemplate)) && (

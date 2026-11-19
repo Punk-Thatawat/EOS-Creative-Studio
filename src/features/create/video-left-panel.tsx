@@ -1,4 +1,7 @@
 import { CloudUpload, ImageIcon, Link2, X } from "lucide-react";
+import { useState } from "react";
+import { ImageAttachmentPicker } from "@/features/brand-kit/image-attachment-picker";
+import type { ReferenceImageRole } from "./video-generation.types";
 import { promptMaxLength } from "@/lib/prompt-limits";
 import { Dropdown } from "@/components/ui/dropdown";
 import { InfoTooltip } from "./components/info-tooltip";
@@ -18,6 +21,7 @@ import styles from "./video-generation-page.module.css";
 import type { VideoGenerationPageState } from "./use-video-generation-page";
 
 export function VideoLeftPanel({ videoGen }: { videoGen: VideoGenerationPageState }) {
+  const [imageTarget, setImageTarget] = useState<"source" | ReferenceImageRole | null>(null);
   const {
     storyboardSlices,
     storyboardGridLabel,
@@ -34,8 +38,6 @@ export function VideoLeftPanel({ videoGen }: { videoGen: VideoGenerationPageStat
     referenceImageSlots,
     setStoryboardScenes,
     isSourceImageDragging,
-    referenceImageInputRefs,
-    sourceInputRef,
     supportsReferenceImages,
     uploadSource,
     handleSourceImageDragOver,
@@ -199,7 +201,7 @@ export function VideoLeftPanel({ videoGen }: { videoGen: VideoGenerationPageStat
                           <button
                             type="button"
                             className={styles.referenceRoleUpload}
-                            onClick={() => referenceImageInputRefs.current[role.key]?.click()}
+                            onClick={() => setImageTarget(role.key)}
                             aria-label={`${t("create.video.common.uploadImage")} ${t(role.labelKey)}`}
                           >
                             <CloudUpload size={17} />
@@ -207,19 +209,6 @@ export function VideoLeftPanel({ videoGen }: { videoGen: VideoGenerationPageStat
                              <small>{t("create.video.common.pngFormats")}</small>
                           </button>
                         )}
-                        <input
-                          ref={(element) => {
-                            referenceImageInputRefs.current[role.key] = element;
-                          }}
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp"
-                          className="hidden"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            if (file) void addReferenceImage(role.key, file);
-                            event.currentTarget.value = "";
-                          }}
-                        />
                       </div>
                     );
                   })}
@@ -246,13 +235,15 @@ export function VideoLeftPanel({ videoGen }: { videoGen: VideoGenerationPageStat
               className={generationMode === "single-image" ? "object-contain" : "object-cover"}
             />
             <div className={styles.sourceImageActions}>
-               <button type="button" onClick={() => sourceInputRef.current?.click()}>{t("create.video.common.replaceSource")}</button>
+               <button type="button" onClick={() => setImageTarget("source")}>{t("create.video.common.replaceSource")}</button>
                <button type="button" onClick={clearSource}>{t("create.video.common.removeSource")}</button>
             </div>
           </div>
         ) : (
-          <label
+          <button
+            type="button"
             className={`${styles.upload} ${isSourceImageDragging ? styles.uploadDragging : ""}`}
+            onClick={() => setImageTarget("source")}
             onDragEnter={handleSourceImageDragOver}
             onDragOver={handleSourceImageDragOver}
             onDragLeave={handleSourceImageDragLeave}
@@ -263,32 +254,8 @@ export function VideoLeftPanel({ videoGen }: { videoGen: VideoGenerationPageStat
                <strong>{t("create.video.common.uploadImage")}</strong>
                <small>{t("create.video.common.pngFormats")}</small>
             </span>
-            <input
-              ref={sourceInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void uploadSource(file);
-                event.currentTarget.value = "";
-              }}
-            />
-          </label>
+          </button>
         )}
-        {sourcePreviewImage ? (
-          <input
-            ref={sourceInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void uploadSource(file);
-              event.currentTarget.value = "";
-            }}
-          />
-        ) : null}
         {generationMode === "single-image" ? (
           <>
              <p className={styles.sourceModeNote}>{t("create.video.common.sourceModeNote")}</p>
@@ -314,6 +281,11 @@ export function VideoLeftPanel({ videoGen }: { videoGen: VideoGenerationPageStat
           </>
         ) : null}
       </section> : null}
+      <ImageAttachmentPicker
+        open={imageTarget !== null}
+        onOpenChange={(open) => { if (!open) setImageTarget(null); }}
+        onPick={([file]) => imageTarget === "source" ? uploadSource(file) : imageTarget ? addReferenceImage(imageTarget, file) : undefined}
+      />
     </div>
   );
 }

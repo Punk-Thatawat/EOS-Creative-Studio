@@ -1,5 +1,6 @@
 "use client";
 import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { ImageAttachmentPicker } from "@/features/brand-kit/image-attachment-picker";
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
@@ -323,7 +324,7 @@ export function TextToVideoWorkspace() {
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const referenceImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -768,13 +769,14 @@ export function TextToVideoWorkspace() {
                    <button type="button" onClick={clearReferenceImage} aria-label={t("create.video.common.removeReferenceImage")}><X size={14} /></button>
                 </div>
               ) : (
-                <button type="button" className={`${styles.upload} ${isReferenceImageDragging ? styles.uploadDragging : ""}`} onClick={() => referenceImageInputRef.current?.click()} onDragEnter={handleReferenceImageDragOver} onDragOver={handleReferenceImageDragOver} onDragLeave={handleReferenceImageDragLeave} onDrop={handleReferenceImageDrop}>
+                <button type="button" className={`${styles.upload} ${isReferenceImageDragging ? styles.uploadDragging : ""}`} onClick={() => setReferencePickerOpen(true)} onDragEnter={handleReferenceImageDragOver} onDragOver={handleReferenceImageDragOver} onDragLeave={handleReferenceImageDragLeave} onDrop={handleReferenceImageDrop}>
                   <CloudUpload size={22} />
                    <strong>{t("create.video.common.uploadImage")}</strong>
                    <small>{t("create.video.common.pngFormats")}</small>
                 </button>
               )}
-              <input ref={referenceImageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleReferenceImage(file); event.currentTarget.value = ""; }} />
+              {referenceImage && <button type="button" className={styles.imagePickerLink} onClick={() => setReferencePickerOpen(true)}>{t("create.video.common.replaceSource")}</button>}
+              <ImageAttachmentPicker open={referencePickerOpen} onOpenChange={setReferencePickerOpen} onPick={([file]) => handleReferenceImage(file)} />
             </div>
           </section>
         ) : null}

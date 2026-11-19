@@ -3284,7 +3284,6 @@
 .pickerUpload { display: flex; aspect-ratio: 1; flex-direction: column; align-items: center; justify-content: center; gap: 6px; border: 1.5px dashed #c9cdd3; border-radius: 12px; background: #fff; color: #3f444b; font-size: 12px; font-weight: 650; cursor: pointer; }
 .pickerUpload:hover { border-color: #f26b38; color: #f26b38; }
 .pickerItem { position: relative; aspect-ratio: 1; overflow: hidden; border: 2px solid transparent; border-radius: 12px; background: #f4f5f7; padding: 0; cursor: pointer; }
-.pickerItem img { object-fit: cover; }
 .pickerItemOn { border-color: #f26b38; }
 .pickerItem i { position: absolute; top: 6px; right: 6px; display: grid; width: 22px; height: 22px; place-items: center; border-radius: 999px; background: #f26b38; color: #fff; }
 .pickerNote { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0; color: #6b7280; font-size: 12px; }
@@ -3302,29 +3301,9 @@
 
 .pickerCell { position: relative; }
 .pickerCell > .pickerItem { width: 100%; }
-.pickerHeart { position: absolute; left: 6px; top: 6px; display: grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 999px; background: #0008; color: #fff; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
-.pickerCell:hover .pickerHeart, .pickerHeart:focus-visible, .pickerHeartOn { opacity: 1; }
-.pickerHeartOn { color: #ff5c8a; }
 .pickerRemove { position: absolute; right: 6px; top: 6px; display: grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 999px; background: #0008; color: #fff; cursor: pointer; opacity: 0; transition: opacity .12s ease; }
 .pickerCell:hover .pickerRemove, .pickerRemove:focus-visible { opacity: 1; }
 .pickerRemove:hover { background: #d92d20; }
 .pickerRemoveConfirm { width: auto; min-width: 24px; padding: 0 8px; background: #d92d20; font-size: 12px; font-weight: 700; opacity: 1; }
 @media (hover: none) { .pickerRemove { opacity: 1; } }
-@media (hover: none) { .pickerHeart { opacity: 1; } }
 .pickerSub { align-items: center; justify-content: space-between; flex-wrap: wrap; }
-.pickerSub > div { display: flex; gap: 6px; }
-.pickerSort { display: inline-flex; align-items: center; gap: 6px; color: #6b7280; font-size: 12px; }
-.pickerSort select { border: 1px solid #e5e5e5; border-radius: 10px; background: #fff; padding: 5px 8px; color: #171719; font-size: 12px; }
-
-/* The "Sort by" menu: a button and a short list with a tick, not the browser's own select. */
-.pickerSort { position: relative; }
-.pickerSortButton { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e5e5e5; border-radius: 999px; background: #fff; padding: 6px 12px; color: #3f444b; font-size: 12px; font-weight: 650; cursor: pointer; }
-.pickerSortButton:hover { background: #f4f5f7; }
-.pickerSortBackdrop { position: fixed; inset: 0; z-index: 1; border: 0; background: transparent; cursor: default; }
-.pickerSortMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 2; display: grid; width: max-content; min-width: 0; gap: 2px; margin: 0; border: 1px solid #e5e5e5; border-radius: 14px; background: #fff; padding: 6px; list-style: none; }
-.pickerSortMenu li { margin: 0; }
-.pickerSortMenu li button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 10px; background: none; padding: 9px 10px; color: #171719; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
-.pickerSortMenu li button:hover { background: #f4f5f7; }
-.pickerSortMenu li[aria-selected="true"] button { color: #f26b38; }
-.pickerSortMenu li button span { flex: none; }
-.pickerSortMenu li button svg:last-child:not(:first-child) { margin-left: 4px; }

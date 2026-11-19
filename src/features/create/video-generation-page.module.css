@@ -1456,6 +1456,16 @@
   justify-content: flex-start;
   margin-bottom: 7px;
 }
+.imagePickerLink {
+  margin: 8px 8px 0 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.imagePickerLink:hover { background: var(--muted); }
+
 .sceneModalBackdrop {
   position: fixed;
   inset: 0;

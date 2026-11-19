@@ -1,5 +1,6 @@
 "use client";
 import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { ImageAttachmentPicker } from "@/features/brand-kit/image-attachment-picker";
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
@@ -223,7 +224,7 @@ export function MotionTransferWorkspace() {
   const [isSourceImageDragging, setIsSourceImageDragging] = useState(false);
   const [isMotionVideoDragging, setIsMotionVideoDragging] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
-  const sourceImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const motionVideoInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -522,8 +523,9 @@ export function MotionTransferWorkspace() {
          <section className={styles.panel}><section className={styles.videoModePanel} aria-labelledby="motion-transfer-title"><div className={styles.videoModeHeading}><h2 id="motion-transfer-title">{t("create.video.motion.title")}</h2><InfoTooltip content={t("create.video.motion.description")} size={11} /></div><div className={styles.featureIdentity}><span className={styles.featureIdentityEyebrow}>{t("create.video.motion.eyebrow")}</span><p className={styles.textVideoDescription}>{t("create.video.motion.description")}</p><div className={styles.featurePills}>{[t("create.video.motion.chipCopyMovement"), t("create.video.motion.chipCharacterImage"), t("create.video.motion.chipDrivingVideo")].map((chip) => <span key={chip} className={styles.featurePill}>{chip}</span>)}</div><small className={styles.featureGuideNote}>{t("create.video.motion.note")}</small></div></section></section>
         <section className={styles.panel}>
            <MotionSectionTitle number="1">{t("create.video.common.characterImage")}</MotionSectionTitle>
-           <div className={`${styles.peopleSourcePreview} ${!sourceImage ? styles.peopleSourceUploadEmpty : ""}`}>{sourceImage ? <div className={styles.peopleSourceMedia}><Image src={sourceImage.url} alt={t("create.video.common.characterImage")} fill unoptimized className="object-cover" /><button type="button" onClick={() => setSourceImage(null)} aria-label={t("create.video.common.removeSourceImage")}><X size={14} /></button></div> : <button type="button" className={`${styles.upload} ${isSourceImageDragging ? styles.uploadDragging : ""}`} onClick={() => document.getElementById("motion-source-image")?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSourceImageDragging(true); }} onDragLeave={() => setIsSourceImageDragging(false)} onDrop={handleSourceImageDrop}><CloudUpload size={23} /><strong>{t("create.video.common.uploadImage")}</strong><small>{t("create.video.common.pngFormats")}</small></button>}</div>
-          <input id="motion-source-image" ref={sourceImageInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void setMotionAsset(file, "image"); event.currentTarget.value = ""; }} />
+           <div className={`${styles.peopleSourcePreview} ${!sourceImage ? styles.peopleSourceUploadEmpty : ""}`}>{sourceImage ? <div className={styles.peopleSourceMedia}><Image src={sourceImage.url} alt={t("create.video.common.characterImage")} fill unoptimized className="object-cover" /><button type="button" onClick={() => setSourceImage(null)} aria-label={t("create.video.common.removeSourceImage")}><X size={14} /></button></div> : <button type="button" className={`${styles.upload} ${isSourceImageDragging ? styles.uploadDragging : ""}`} onClick={() => setImagePickerOpen(true)} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSourceImageDragging(true); }} onDragLeave={() => setIsSourceImageDragging(false)} onDrop={handleSourceImageDrop}><CloudUpload size={23} /><strong>{t("create.video.common.uploadImage")}</strong><small>{t("create.video.common.pngFormats")}</small></button>}</div>
+          {sourceImage && <button type="button" className={styles.imagePickerLink} onClick={() => setImagePickerOpen(true)}>{t("create.video.common.replaceSource")}</button>}
+          <ImageAttachmentPicker open={imagePickerOpen} onOpenChange={setImagePickerOpen} onPick={([file]) => setMotionAsset(file, "image")} />
         </section>
         <section className={styles.panel}>
            <MotionSectionTitle number="2">{t("create.video.common.drivingVideo")}</MotionSectionTitle>
