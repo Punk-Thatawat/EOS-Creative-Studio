@@ -188,13 +188,9 @@ export function useVideoGenerationPage() {
     canScrollLeft: false,
     canScrollRight: false,
   });
-  const frameInputRef = useRef<HTMLInputElement | null>(null);
-  const referenceImageInputRefs = useRef<Partial<Record<ReferenceImageRole, HTMLInputElement | null>>>({});
   const detectedImageAspectRatioRef = useRef<number | null>(null);
   const selectedModelOptionRef = useRef<GenerationModelOption | undefined>(undefined);
-  const sourceInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
-  const sceneInputRef = useRef<HTMLInputElement | null>(null);
   const sceneRowRef = useRef<HTMLDivElement | null>(null);
   const storyboardSplitRequestRef = useRef(0);
   const storyboardPreparedFileRef = useRef<File | null>(null);
@@ -1897,11 +1893,7 @@ export function useVideoGenerationPage() {
     router,
     initialPeopleVideoVariant,
     videoRecentRowRef,
-    frameInputRef,
-    referenceImageInputRefs,
-    sourceInputRef,
     audioInputRef,
-    sceneInputRef,
     sceneRowRef,
     selectVideoTab,
     selectedModelOption,

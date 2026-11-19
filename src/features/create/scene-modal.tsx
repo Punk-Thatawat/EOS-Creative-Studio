@@ -1,4 +1,6 @@
 import { CloudUpload, Link2, X } from "lucide-react";
+import { useState } from "react";
+import { ImageAttachmentPicker } from "@/features/brand-kit/image-attachment-picker";
 import { promptMaxLength } from "@/lib/prompt-limits";
 import { Dropdown } from "@/components/ui/dropdown";
 import { DurationControl } from "./components/duration-control";
@@ -11,6 +13,7 @@ import styles from "./video-generation-page.module.css";
 import type { VideoGenerationPageState } from "./use-video-generation-page";
 
 export function SceneModal({ videoGen }: { videoGen: VideoGenerationPageState }) {
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
   const {
     promptOptimizerEnabled,
     setPromptOptimizerEnabled,
@@ -31,7 +34,6 @@ export function SceneModal({ videoGen }: { videoGen: VideoGenerationPageState })
     isSceneImageDragging,
     setIsSceneImageDragging,
     localizedParameterLabel,
-    sceneInputRef,
     requiredProperties,
     durationProperty,
     modelParameterEntries,
@@ -107,7 +109,7 @@ export function SceneModal({ videoGen }: { videoGen: VideoGenerationPageState })
                     <div className={styles.sceneModalImageActions}>
                       <button
                         type="button"
-                        onClick={() => sceneInputRef.current?.click()}
+                        onClick={() => setImagePickerOpen(true)}
                       >
                         {t("create.video.common.replace")}
                       </button>
@@ -132,7 +134,7 @@ export function SceneModal({ videoGen }: { videoGen: VideoGenerationPageState })
             <button
               type="button"
               className={`${styles.sceneModalUploadButton} ${isSceneImageDragging ? styles.uploadDragging : ""}`}
-              onClick={() => sceneInputRef.current?.click()}
+              onClick={() => setImagePickerOpen(true)}
               onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSceneImageDragging(true); }}
               onDragLeave={() => setIsSceneImageDragging(false)}
               onDrop={handleSceneImageDrop}
@@ -142,17 +144,7 @@ export function SceneModal({ videoGen }: { videoGen: VideoGenerationPageState })
               <small>{t("create.video.common.pngFormats")}</small>
             </button>
           )}
-          <input
-            ref={sceneInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void handleSceneImageFile(file);
-              event.currentTarget.value = "";
-            }}
-          />
+          <ImageAttachmentPicker open={imagePickerOpen} onOpenChange={setImagePickerOpen} onPick={([file]) => handleSceneImageFile(file)} />
         </div>
         {videoMode === "flexible" ? (
           <div className={styles.sceneModalSourceField}>

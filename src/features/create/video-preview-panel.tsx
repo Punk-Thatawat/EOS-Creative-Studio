@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ImageAttachmentPicker } from "@/features/brand-kit/image-attachment-picker";
 import {
   CloudUpload,
   ChevronLeft,
@@ -26,6 +28,7 @@ import styles from "./video-generation-page.module.css";
 import type { VideoGenerationPageState } from "./use-video-generation-page";
 
 export function VideoPreviewPanel({ videoGen }: { videoGen: VideoGenerationPageState }) {
+  const [framePickerOpen, setFramePickerOpen] = useState(false);
   const {
     storyboardSlices,
     generationMode,
@@ -51,7 +54,6 @@ export function VideoPreviewPanel({ videoGen }: { videoGen: VideoGenerationPageS
     sceneScrollState,
     router,
     videoRecentRowRef,
-    frameInputRef,
     sceneRowRef,
     selectedModelOption,
     supportsReferenceImages,
@@ -292,24 +294,14 @@ export function VideoPreviewPanel({ videoGen }: { videoGen: VideoGenerationPageS
               <button
                 type="button"
                 className={`${styles.addFrame} ${isFrameDragging ? styles.uploadDragging : ""}`}
-                onClick={() => frameInputRef.current?.click()}
+                onClick={() => setFramePickerOpen(true)}
                 onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsFrameDragging(true); }}
                 onDragLeave={() => setIsFrameDragging(false)}
                 onDrop={handleFrameDrop}
               >
                  <Plus size={16} /> {t("create.video.common.addFrame")}
               </button>
-              <input
-                ref={frameInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void addFrame(file);
-                  event.currentTarget.value = "";
-                }}
-              />
+              <ImageAttachmentPicker open={framePickerOpen} onOpenChange={setFramePickerOpen} onPick={([file]) => addFrame(file)} />
               {frameReferences.map((src, index) => (
                 <div className={styles.thumb} key={src}>
                   <Image

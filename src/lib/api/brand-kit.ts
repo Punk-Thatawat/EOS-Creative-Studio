@@ -58,6 +58,20 @@ export const brandKitApi = {
   loadSettings: (signal?: AbortSignal) => request<BrandKitSettings>("", "GET", undefined, signal, true),
   saveSettings: (quotaMb: number) => request<BrandKitSettings>("", "PATCH", { quotaMb }, undefined, true),
   load: (signal?: AbortSignal) => request("", "GET", undefined, signal),
+  async imageFile(asset: Pick<BrandAsset, "id" | "name">, signal = AbortSignal.timeout(15000)): Promise<File> {
+    const token = await getApiAccessToken();
+    if (!token) throw new Error("brand_session_expired");
+    const response = await fetch(`${backend}/api/v1/brand-kit/assets/${encodeURIComponent(asset.id)}/content`, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+      cache: "no-store",
+      signal,
+    });
+    if (!response.ok) throw new Error("brand_request_failed");
+    const image = await response.blob();
+    if (image.type !== "image/webp" || !image.size) throw new Error("brand_invalid_image");
+    return new File([image], `${asset.name}.webp`, { type: image.type });
+  },
   colors: (colors: string[]) => request("/colors", "PATCH", { colors }),
   upload: (kind: BrandAssetKind, file: File) => {
     const form = new FormData();

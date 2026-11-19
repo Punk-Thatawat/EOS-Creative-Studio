@@ -162,6 +162,7 @@ export function ImageGenerationPage() {
       tabs={<ImageGenerationTabs activeTab={state.activeTab} onTabChange={(nextTab) => { setPreviewDisplayMode("current"); state.setActiveTab(nextTab); if (requestedTab) router.replace("/create/image", { scroll: false }); }} />}
       left={<PromptPanel
         activeTab={state.activeTab}
+        isLoadingModels={state.isLoadingModels}
         tutorialButton={<ImageTutorialButton feature={activeTutorialFeature} featureName={state.activeTab} mode={activeTutorialMode} />}
         clearButton={<ClearValuesButton onClick={() => { state.clearAllValues(); setPreviewDisplayMode("current"); }} disabled={anyTabIsGenerating} />}
         prompt={isStyleTransferTab ? state.styleTransferPrompt : isImageToImageTab ? state.imageToImagePrompt : state.prompt}
