@@ -19,9 +19,9 @@ const RECENT_MAX = 40;
 const PAGE = 18;
 const MOTION = /(motion|swap)/i;
 /** Groups of your own images, read from the asset folder of the same name. */
-const CATEGORY_FOLDERS = { product: "Product", brand: "Brand", character: "Character", logo: "Logo" } as const;
+const CATEGORY_FOLDERS = { product: "Product", brand: "Brand", character: "Character", logo: "Logo", scene: "Scene" } as const;
 export type PickerCategory = keyof typeof CATEGORY_FOLDERS;
-const PICKER_VIEWS = ["recent", "all", "product", "brand", "character", "logo"] as const;
+const PICKER_VIEWS = ["recent", "all", "product", "brand", "character", "logo", "scene"] as const;
 type PickerView = (typeof PICKER_VIEWS)[number];
 const isPickerCategory = (view: PickerView): view is PickerCategory => view !== "recent" && view !== "all";
 

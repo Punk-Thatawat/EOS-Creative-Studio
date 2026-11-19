@@ -1,19 +1,20 @@
 /**
- * What a reference image is: a character, a product, a brand, a logo, or anything else.
+ * What a reference image is: a character, a product, a brand, a logo, a scene, or anything else.
  * The category is stored in the template's free-form `settings`, keyed by the image address, next to `inputImages`:
  *   settings.inputImages = ["https://…/bottle.png", "https://…/lemon.png"]
  *   settings.inputImageCategories = { "https://…/bottle.png": "product", "https://…/lemon.png": "other" }
  * An image without a category is shown as it was before, with no label.
  */
-export type ReferenceCategory = "character" | "product" | "brand" | "logo" | "other";
+export type ReferenceCategory = "character" | "product" | "brand" | "logo" | "scene" | "other";
 
-export const referenceCategories: readonly ReferenceCategory[] = ["character", "product", "brand", "logo", "other"];
+export const referenceCategories: readonly ReferenceCategory[] = ["character", "product", "brand", "logo", "scene", "other"];
 
 export const referenceCategoryCopyKeys = {
   character: "templates.attach.category.character",
   product: "templates.attach.category.product",
   brand: "templates.attach.category.brand",
   logo: "templates.attach.category.logo",
+  scene: "templates.attach.category.scene",
   other: "templates.attach.category.other",
 } as const;
 

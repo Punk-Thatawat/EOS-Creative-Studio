@@ -17,7 +17,7 @@ import { listGenerationModels, type GenerationModelOption } from "@/lib/api/gene
 import { modeOfTemplate } from "@/features/templates/template-mode";
 import { isReferenceCategory, pruneReferenceCategories, referenceCategories, referenceCategoryOf, withReferenceCategory, type ReferenceCategory } from "@/features/templates/template-references";
 
-const referenceCategoryLabels: Record<ReferenceCategory, string> = { character: "ตัวละคร", product: "สินค้า", brand: "แบรนด์", logo: "โลโก้", other: "อื่นๆ" };
+const referenceCategoryLabels: Record<ReferenceCategory, string> = { character: "ตัวละคร", product: "สินค้า", brand: "แบรนด์", logo: "โลโก้", scene: "ฉาก", other: "อื่นๆ" };
 
 const kindOptions: Array<{ value: TemplateKind; label: string; icon: typeof ImageIcon }> = [
   { value: "image", label: "Image", icon: ImageIcon },

@@ -1784,6 +1784,7 @@ function PickerRow({
   value,
   placeholder,
   badge,
+  note,
   heading,
   searchPlaceholder,
   empty,
@@ -1797,6 +1798,8 @@ function PickerRow({
   placeholder?: boolean;
   /** The small tag after the value (and its icon), for example "New". */
   badge?: string;
+  /** Said after the label, for example that the value is the one the template sets. */
+  note?: string;
   heading: string;
   /** When given, the list has a search box. */
   searchPlaceholder?: string;
@@ -1904,7 +1907,10 @@ function PickerRow({
     <>
       <button ref={rowRef} type="button" className={s.composerRow} aria-expanded={anchor !== null} onClick={open}>
         <span>
-          <small>{label}</small>
+          <small>
+            {label}
+            {note && <i className={s.rowNote}>{note}</i>}
+          </small>
           <strong>
             <span className={`${s.rowValue} ${placeholder ? s.rowPlaceholder : ""}`}>{value}</span>
             {badge && (
@@ -2315,6 +2321,12 @@ function Composer({
     if (typeof resolution === "string") qualityIds.add(resolution);
   }
   const qualityOptions: FlyoutOption[] = [...qualityIds].map((id) => ({ id, label: id }));
+  // A value the visitor has not changed and that the template sets is marked, so it is clear where it came from.
+  const picked = picks.templateId === t.id;
+  const templateNote = c("templates.composer.fromTemplateNote");
+  const modelNote = !(picked && picks.model) && typeof t.settings?.model === "string" ? templateNote : undefined;
+  const qualityNote = !(picked && picks.quality) && typeof t.settings?.resolution === "string" ? templateNote : undefined;
+  const durationNote = !(picked && picks.duration) && typeof t.settings?.duration === "number" ? templateNote : undefined;
   return (
     <aside className={s.composer} aria-label={c("templates.composer.aria")}>
       {tabs}
@@ -2366,13 +2378,15 @@ function Composer({
             </button>
           ) : (
             <div className={s.attachFiles}>
-              {images.map((image) => (
-                <span key={image.id} className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
-                  <Image src={image.url} alt={image.file.name} fill unoptimized sizes="64px" />
-                  {image.category && <em className={s.slotCategory}>{c(referenceCategoryCopyKeys[image.category])}</em>}
-                  <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
-                    <X size={11} aria-hidden="true" />
-                  </button>
+              {images.map((image, index) => (
+                <span key={image.id} className={s.slotCell}>
+                  <span className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
+                    <Image src={image.url} alt={image.file.name} fill unoptimized sizes="64px" />
+                    <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
+                      <X size={11} aria-hidden="true" />
+                    </button>
+                  </span>
+                  <em className={s.slotCaption}>{image.category ? c(referenceCategoryCopyKeys[image.category]) : c("templates.attach.imageNumber", { n: index + 1 })}</em>
                 </span>
               ))}
               {images.length < 5 && (
@@ -2477,6 +2491,7 @@ function Composer({
         value={shownModel ? picker.labelOf(shownModel) : c("templates.composer.pickModel")}
         placeholder={!shownModel}
         badge={c("templates.tab.new")}
+        note={modelNote}
         heading={c("templates.composer.featuredModels")}
         searchPlaceholder={c("templates.composer.modelSearch")}
         empty={c("templates.composer.noModels")}
@@ -2488,6 +2503,7 @@ function Composer({
         label={c("templates.composer.quality")}
         value={shownQuality || c("templates.composer.pickQuality")}
         placeholder={!shownQuality}
+        note={qualityNote}
         heading={c("templates.composer.quality")}
         empty={c("templates.composer.noModels")}
         options={qualityOptions}
@@ -2497,6 +2513,7 @@ function Composer({
       <PickerRow
         label={c("templates.composer.duration")}
         value={c("templates.preview.seconds", { value: duration })}
+        note={durationNote}
         heading={c("templates.composer.duration")}
         empty={c("templates.composer.noModels")}
         options={(picker.durationsOf(shownModel).length ? picker.durationsOf(shownModel) : [5, 10]).map((seconds) => ({ id: String(seconds), label: c("templates.preview.seconds", { value: seconds }) }))}
