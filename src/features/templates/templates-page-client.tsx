@@ -77,6 +77,7 @@ import { longClipLengths, longClipModels, queueExtension, useExtensionQueue } fr
 import { listTemplateGenerationModels, loadTemplateModelSettings, type TemplateModelMode, type TemplateModelSetting } from "@/lib/api/template-model-settings";
 import { formatGenerationError } from "@/lib/api/generation-errors";
 import { fetchHistory, type HistoryItem } from "@/lib/api/history";
+import { generationMediaExpiry, isGenerationMediaAvailable } from "@/lib/generation-media-retention";
 import { createAdminTemplate, createTemplateCoverFromPreview, keepTemplateAssets } from "@/lib/api/templates";
 import { listStylePresets } from "@/lib/api/style-presets";
 import { cancelTemplateWorkflow, listTemplateWorkflows, startTemplateWorkflow, workflowFeature, type TemplateWorkflowRun } from "@/lib/api/template-workflows";
@@ -2765,12 +2766,15 @@ function MyVideos({
     const load = () => {
       window.clearTimeout(timer);
       const workflows = mode === "create" ? listTemplateWorkflows(12, controller.signal).catch(() => [] as TemplateWorkflowRun[]) : Promise.resolve([] as TemplateWorkflowRun[]);
-      Promise.all([fetchHistory({ type: "video", fromTemplate: true, limit: 50, signal: controller.signal }), workflows])
+      Promise.all([fetchHistory({ type: "video", fromTemplate: true, recentOnly: mode === "motion", limit: 50, signal: controller.signal }), workflows])
         .then(([result, flowRuns]) => {
           if (controller.signal.aborted) return;
           setRuns(flowRuns);
           const ofMode = result.items.filter((item) => modeFeatures[mode].includes(item.feature));
-          setVideos(ofMode.filter((item) => item.status === "completed" && item.outputUrl));
+          setVideos(ofMode.filter((item) =>
+            item.status === "completed" && item.outputUrl
+            && (mode !== "motion" || isGenerationMediaAvailable(item.createdAt, item.expiresAt)),
+          ));
           const running = ofMode.filter((item) => item.status === "queued" || item.status === "processing");
           setPending(running);
           // Follow the clips and workflow runs still being made until they are done.
@@ -2790,6 +2794,16 @@ function MyVideos({
       window.removeEventListener(workflowEvent, load);
     };
   }, [mode]);
+  useEffect(() => {
+    if (mode !== "motion") return;
+    const nextExpiry = Math.min(...videos.map((item) => generationMediaExpiry(item.createdAt, item.expiresAt) ?? Infinity));
+    if (!Number.isFinite(nextExpiry)) return;
+    const timer = window.setTimeout(() => {
+      const now = Date.now();
+      setVideos((items) => items.filter((item) => isGenerationMediaAvailable(item.createdAt, item.expiresAt, now)));
+    }, Math.min(Math.max(nextExpiry - Date.now(), 0), 2_147_483_647));
+    return () => window.clearTimeout(timer);
+  }, [mode, videos]);
   // The details of a clip save it as a template (or open it, once saved) through this event.
   useEffect(() => {
     const answer = (event: Event) => {

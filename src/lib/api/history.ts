@@ -60,6 +60,7 @@ export type HistoryItem = {
   totalCount: number;
   completedCount: number;
   durationSeconds?: number;
+  expiresAt?: string;
   creditCost?: number;
   errorMessage?: string;
   documentSummary?: HistoryDocumentSummary;
