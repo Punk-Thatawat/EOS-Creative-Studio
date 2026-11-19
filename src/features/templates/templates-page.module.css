@@ -3009,6 +3009,8 @@
 .attachFiles { display: flex; flex-wrap: wrap; gap: 8px; border: 1.5px dashed #1717192e; border-radius: 14px; background: #17171908; padding: 40px 14px 14px; }
 .attachFiles .slotFile, .attachFiles .slotAdd { width: 64px; height: 64px; border-radius: 10px; }
 .attachFiles { align-items: flex-start; }
+.attachFiles .slotEmpty { border: 1.5px dashed #17171940; background: #ffffff; color: #17171999; }
+.attachFiles .slotEmpty:hover { border-color: #ff5a1f; color: #ff5a1f; }
 .slotCell { display: flex; width: 64px; flex-direction: column; align-items: center; gap: 4px; }
 .slotCaption { max-width: 100%; overflow: hidden; color: #171719b3; font-size: 11px; font-style: normal; font-weight: 600; line-height: 14px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .composerSlots > small { display: block; margin-top: 6px; }

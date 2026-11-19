@@ -1122,7 +1122,7 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
       }
       const loaded = files.filter((file): file is File => file !== null).slice(0, Math.max(0, limit - own.length)).map((file, index) => {
         const category = referenceCategoryOf({ inputImageCategories: JSON.parse(categoryKey) as unknown }, addresses.split("\n")[index] ?? "");
-        return { id: crypto.randomUUID(), file, url: URL.createObjectURL(file), fromTemplate: true, ...(category ? { category } : {}), ...(fixedSlots ? { slot: index } : {}) };
+        return { id: crypto.randomUUID(), file, url: URL.createObjectURL(file), fromTemplate: true, templateIndex: index, ...(category ? { category } : {}), ...(fixedSlots ? { slot: index } : {}) };
       });
       // Template references precede images added by the visitor, matching @Image numbering.
       const next = [...loaded, ...own];
@@ -1135,12 +1135,14 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
       alive = false;
     };
   }, [addresses, categoryKey, limit, loadError, requestKey, fixedSlots]);
-  const attach = (list: FileList | null, category?: ReferenceCategory) => {
+  const attach = (list: FileList | null, category?: ReferenceCategory, templateIndex?: number) => {
     if (!list) return;
     // A panel that takes one image swaps it for the new one.
     const current = imagesRef.current;
     const next = limit === 1 && !fixedSlots ? [] : [...current];
     let problem: string | undefined;
+    // The first image goes to the box that was asked for, if that box is free.
+    let target = templateIndex !== undefined && !next.some((image) => image.templateIndex === templateIndex) ? templateIndex : undefined;
     for (const file of Array.from(list)) {
       if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
         problem = c("templates.attach.unsupported");
@@ -1151,9 +1153,12 @@ function useTemplateImages(t: Template | undefined, limit: number, enabled: bool
         break;
       }
       const slot = fixedSlots ? Array.from({ length: limit }, (_, index) => index).find((index) => !next.some((image) => image.slot === index)) : undefined;
-      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(category ? { category } : {}), ...(slot !== undefined ? { slot } : {}) });
+      next.push({ id: crypto.randomUUID(), file, url: URL.createObjectURL(file), ...(category ? { category } : {}), ...(slot !== undefined ? { slot } : {}), ...(target !== undefined ? { templateIndex: target } : {}) });
+      target = undefined;
     }
     if (fixedSlots) next.sort((a, b) => (a.slot ?? limit) - (b.slot ?? limit));
+    // The images follow the order of the boxes, so "@Image 1, 2" keep meaning the same thing.
+    else if (next.some((image) => image.templateIndex !== undefined)) next.sort((a, b) => (a.templateIndex ?? 99) - (b.templateIndex ?? 99));
     current.filter((image) => !next.includes(image)).forEach((image) => URL.revokeObjectURL(image.url));
     imagesRef.current = next;
     setImages(next);
@@ -1947,8 +1952,10 @@ function PickerRow({
  * quality rows, the rest of the settings folded under "Advanced", and the button that opens it in the creator.
  */
 /** An image attached in the optional card, with its preview address. */
-type AttachedImage = { id: string; file: File; url: string; /** Put there by a template, not picked by the visitor. */ fromTemplate?: boolean; slot?: number; /** What the template says this image is: a character, a product or other. */ category?: ReferenceCategory };
+type AttachedImage = { id: string; file: File; url: string; /** Put there by a template, not picked by the visitor. */ fromTemplate?: boolean; slot?: number; /** What the template says this image is: a character, a product or other. */ category?: ReferenceCategory; /** The box of the template this image fills. The box stays, with its label, when the image is taken out. */ templateIndex?: number };
 
+/** Sent with a clip made from the blank form, so it is listed in the history of this page like the clips made from a template. */
+const FREE_CREATE_SLUG = "free-create";
 /** The panel of Create Video when no template is picked: a blank form, so a visitor can make a clip without one. */
 const blankTemplate: Template = {
   id: "free-create",
@@ -2027,10 +2034,35 @@ function Composer({
   const fileCategoryRef = useRef<PickerCategory | undefined>(undefined);
   // The picker: images already uploaded, saved or generated, instead of a new upload.
   const [pickerOpen, setPickerOpen] = useState(false);
-  const attach = (list: FileList | null, category?: ReferenceCategory) => {
-    attachImages(list, category);
+  const attach = (list: FileList | null, category?: ReferenceCategory, templateIndex?: number) => {
+    attachImages(list, category, templateIndex);
     setSending({ state: "idle" });
   };
+  // A template with reference images gives one labelled box for each, and a box stays when its image is taken out.
+  const slotPlan: Array<ReferenceCategory | undefined> = !free && !isWorkflow && t ? inputImagesOf(t).slice(0, 5).map((address) => referenceCategoryOf(t.settings, address)) : [];
+  const emptySlots = slotPlan.filter((_, slotIndex) => !images.some((image) => image.templateIndex === slotIndex)).length;
+  // The box the picker or the file chooser fills next.
+  const slotTargetRef = useRef<number | undefined>(undefined);
+  const takeSlotTarget = () => {
+    const slot = slotTargetRef.current;
+    slotTargetRef.current = undefined;
+    return slot;
+  };
+  const openPicker = (slot?: number) => {
+    slotTargetRef.current = slot;
+    setPickerOpen(true);
+  };
+  const imageCell = (image: AttachedImage, caption: string) => (
+    <span key={image.id} className={s.slotCell}>
+      <span className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
+        <Image src={image.url} alt={image.file.name} fill unoptimized sizes="64px" />
+        <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
+          <X size={11} aria-hidden="true" />
+        </button>
+      </span>
+      <em className={s.slotCaption}>{caption}</em>
+    </span>
+  );
   // The price follows the model and quality the panel shows: picked here, else the template's own.
   const quoteModel = t && picks.templateId === t.id && picks.model ? picks.model : typeof t?.settings?.model === "string" ? t.settings.model : picker.preferredModel;
   const quoteQuality = t && picks.templateId === t.id && picks.quality ? picks.quality : typeof t?.settings?.resolution === "string" ? t.settings.resolution : undefined;
@@ -2084,7 +2116,7 @@ function Composer({
     setSending({ state: "busy" });
     emitGenerationSubmitting({ feature: "text-to-video", requestId });
     try {
-      const request: TextVideoGenerationInput = { prompt, model, resolution, duration: firstPart, aspectRatio, ...(free ? {} : { templateSlug: template.slug }) };
+      const request: TextVideoGenerationInput = { prompt, model, resolution, duration: firstPart, aspectRatio, templateSlug: free ? FREE_CREATE_SLUG : template.slug };
       if (images.length && reference) {
         const urls = await Promise.all(images.map((image) => uploadImageAsset(image.file, { purpose: "content", feature: "text-to-video" })));
         rememberUploads(urls, "image", images.map((image) => image.category));
@@ -2103,7 +2135,7 @@ function Composer({
       const pollUrl = created.pollUrl ?? (generationId ? `/generations/${encodeURIComponent(generationId)}/status` : "");
       if (generationId && pollUrl) {
         emitGenerationStarted({ feature: "text-to-video", requestId, generationId, pollUrl, workspaceId: created.workspaceId, model, creditCost: firstCredits ?? 0, status: created.status === "processing" ? "processing" : "queued" });
-        if (restPart > 0) queueExtension({ generationId, pollUrl, prompt: request.prompt, duration: restPart, resolution, aspectRatio, templateSlug: free ? undefined : template.slug });
+        if (restPart > 0) queueExtension({ generationId, pollUrl, prompt: request.prompt, duration: restPart, resolution, aspectRatio, templateSlug: free ? FREE_CREATE_SLUG : template.slug });
       }
       if (!free) onUse(template);
       setSending({ state: "sent", message: c("templates.composer.sent") });
@@ -2381,13 +2413,14 @@ function Composer({
             multiple
             accept="image/png,image/jpeg,image/webp"
             onChange={(event) => {
-              attach(event.currentTarget.files, fileCategoryRef.current);
+              const slot = takeSlotTarget();
+              attach(event.currentTarget.files, (slot !== undefined ? slotPlan[slot] : undefined) ?? fileCategoryRef.current, slot);
               fileCategoryRef.current = undefined;
               event.currentTarget.value = "";
             }}
           />
-          {images.length === 0 ? (
-            <button type="button" className={s.attachBox} onClick={() => setPickerOpen(true)}>
+          {slotPlan.length === 0 && images.length === 0 ? (
+            <button type="button" className={s.attachBox} onClick={() => openPicker()}>
               <span className={s.attachIcons} aria-hidden="true">
                 <i><User size={13} /></i>
                 <i><Shirt size={13} /></i>
@@ -2398,19 +2431,22 @@ function Composer({
             </button>
           ) : (
             <div className={s.attachFiles}>
-              {images.map((image, index) => (
-                <span key={image.id} className={s.slotCell}>
-                  <span className={`${s.slotFile} ${image.fromTemplate ? s.slotFromTemplate : ""}`} title={image.file.name}>
-                    <Image src={image.url} alt={image.file.name} fill unoptimized sizes="64px" />
-                    <button type="button" className={s.slotRemove} aria-label={c("templates.attach.remove")} onClick={() => detach(image.id)}>
-                      <X size={11} aria-hidden="true" />
+              {slotPlan.map((category, slotIndex) => {
+                const image = images.find((item) => item.templateIndex === slotIndex);
+                const caption = category ? c(referenceCategoryCopyKeys[category]) : c("templates.attach.imageNumber", { n: slotIndex + 1 });
+                if (image) return imageCell(image, caption);
+                return (
+                  <span key={`slot-${slotIndex}`} className={s.slotCell}>
+                    <button type="button" className={`${s.slotAdd} ${s.slotEmpty}`} onClick={() => openPicker(slotIndex)} aria-label={`${c("templates.attach.add")}: ${caption}`}>
+                      <Plus size={18} aria-hidden="true" />
                     </button>
+                    <em className={s.slotCaption}>{caption}</em>
                   </span>
-                  <em className={s.slotCaption}>{image.category ? c(referenceCategoryCopyKeys[image.category]) : c("templates.attach.imageNumber", { n: index + 1 })}</em>
-                </span>
-              ))}
-              {images.length < 5 && (
-                <button type="button" className={s.slotAdd} onClick={() => setPickerOpen(true)} aria-label={c("templates.attach.add")}>
+                );
+              })}
+              {images.map((image, index) => (image.templateIndex === undefined ? imageCell(image, image.category ? c(referenceCategoryCopyKeys[image.category]) : c("templates.attach.imageNumber", { n: index + 1 })) : null))}
+              {images.length + emptySlots < 5 && (
+                <button type="button" className={s.slotAdd} onClick={() => openPicker()} aria-label={c("templates.attach.add")}>
                   <Plus size={18} aria-hidden="true" />
                 </button>
               )}
@@ -2424,7 +2460,8 @@ function Composer({
             onPick={(files, category) => {
               const transfer = new DataTransfer();
               files.forEach((file) => transfer.items.add(file));
-              attach(transfer.files, category);
+              const slot = takeSlotTarget();
+              attach(transfer.files, (slot !== undefined ? slotPlan[slot] : undefined) ?? category, slot);
             }}
           />
           {(attachError || images.some((image) => image.fromTemplate)) && (
