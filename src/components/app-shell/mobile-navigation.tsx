@@ -21,6 +21,7 @@ const adminItems = [
 ];
 
 const adminOperations = [
+  { label: "Brand Kit", href: "/admin/brand-kit", icon: Palette },
   { label: "Members & roles", href: "/admin/members", icon: UsersRound },
   { label: "Credits & billing", href: "/admin/credits", icon: BarChart3 },
   { label: "Affiliate", href: "/admin/affiliate", icon: Share2 },

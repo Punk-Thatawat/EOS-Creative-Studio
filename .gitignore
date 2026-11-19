@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Codex shares .claude/skills via a local link (node scripts/link-agent-skills.mjs)
+/.agents/

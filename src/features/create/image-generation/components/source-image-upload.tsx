@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ImageAttachmentPicker } from "@/features/brand-kit/image-attachment-picker";
 import { AlertCircle, CloudUpload, Plus, Trash2, Upload } from "lucide-react";
 import type { PendingImageUpload } from "@/lib/media/deferred-upload";
 import { imageUploadHint, type ImageUploadConstraints, validateMediaFile } from "@/lib/media/upload-validation";
@@ -21,15 +22,16 @@ type SourceImageUploadProps = {
   workspaceId?: string | null;
   imageConstraints?: ImageUploadConstraints;
   disabled?: boolean;
+  pickerDisabled?: boolean;
   onPendingImageChange?: (file: File | null, previewUrl: string | null) => void;
   onPendingImagesChange?: (items: PendingImageUpload[]) => void;
   onPendingImageRemove?: (previewUrl: string) => void;
   onPendingImagesClear?: () => void;
 };
 
-function SingleSourceImageUpload({ imageUrl, onImageChange, onClear, imageConstraints, disabled = false, onPendingImageChange }: SourceImageUploadProps) {
+function SingleSourceImageUpload({ imageUrl, onImageChange, onClear, imageConstraints, disabled = false, pickerDisabled, onPendingImageChange }: SourceImageUploadProps) {
   const { t } = useLocale();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [isRemoteImageLoaded, setIsRemoteImageLoaded] = useState(Boolean(imageUrl));
@@ -62,9 +64,6 @@ function SingleSourceImageUpload({ imageUrl, onImageChange, onClear, imageConstr
     onImageChange(nextPreviewUrl);
   };
 
-  const chooseFile = () => {
-    if (!disabled) inputRef.current?.click();
-  };
   const handleDrop = (event: React.DragEvent<HTMLButtonElement>) => {
     event.preventDefault();
     setDragging(false);
@@ -90,27 +89,27 @@ function SingleSourceImageUpload({ imageUrl, onImageChange, onClear, imageConstr
   };
 
   return <div className={cx("gen-source-upload-wrap")}>
-    <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void readImageFile(file); event.currentTarget.value = ""; }} />
     {hasPreviewImage ? <div className={cx("gen-source-preview")}>
       {imageUrl && <img src={imageUrl} alt={visibleLocalPreviewUrl ? "" : t("create.image.upload.uploadedAlt")} aria-hidden={Boolean(visibleLocalPreviewUrl)} className={cx("gen-source-preview-image", "is-remote-preview", isRemoteImageLoaded && "is-visible")} onLoad={handleRemoteImageLoad} onError={handleRemoteImageError} />}
       {visibleLocalPreviewUrl && <img src={visibleLocalPreviewUrl} alt={t("create.image.upload.localAlt")} className={cx("gen-source-preview-image", "is-local-preview")} />}
       {imageUrl && <div className={cx("gen-source-actions")}>
-        <button type="button" onClick={chooseFile} aria-label={t("create.image.upload.replaceAria")} title={t("create.image.upload.replaceAria")}><Upload size={14} /> {t("create.image.upload.replace")}</button>
+        <button type="button" onClick={() => setPickerOpen(true)} disabled={disabled || pickerDisabled} aria-label={t("create.image.upload.replaceAria")} title={t("create.image.upload.replaceAria")}><Upload size={14} /> {t("create.image.upload.replace")}</button>
         <button type="button" onClick={handleClear} aria-label={t("create.image.upload.removeAria")} title={t("create.image.upload.removeAria")}><Trash2 size={14} /> {t("create.image.upload.remove")}</button>
       </div>}
-    </div> : <button type="button" className={cx("gen-upload", dragging && "is-dragging")} onClick={chooseFile} onDragOver={(event) => { if (disabled) return; event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} disabled={disabled}>
+    </div> : <button type="button" className={cx("gen-upload", dragging && "is-dragging")} onClick={() => setPickerOpen(true)} onDragOver={(event) => { if (disabled) return; event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} disabled={disabled || pickerDisabled}>
       <CloudUpload size={20} />
       <strong>{t("create.image.upload.chooseImage")}</strong>
       <small>{t("create.image.upload.hintSingle", { limit: imageUploadHint(imageConstraints) })}</small>
     </button>}
+    <ImageAttachmentPicker open={pickerOpen} onOpenChange={setPickerOpen} onPick={([file]) => readImageFile(file)} />
     {disabled && !hasPreviewImage && <p className={cx("gen-upload-helper", "is-disabled")}>{t("create.image.upload.noInput")}</p>}
     {error && <p className={cx("gen-upload-error")} role="alert"><AlertCircle size={12} /> {error}</p>}
   </div>;
 }
 
-function MultipleSourceImageUpload({ imageUrls, onImagesChange, onClear, imageConstraints, maxImages = 8, disabled = false, onPendingImagesChange, onPendingImageRemove, onPendingImagesClear }: SourceImageUploadProps & { imageUrls: string[]; onImagesChange: (imageUrls: string[]) => void }) {
+function MultipleSourceImageUpload({ imageUrls, onImagesChange, onClear, imageConstraints, maxImages = 8, disabled = false, pickerDisabled, onPendingImagesChange, onPendingImageRemove, onPendingImagesClear }: SourceImageUploadProps & { imageUrls: string[]; onImagesChange: (imageUrls: string[]) => void }) {
   const { t } = useLocale();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const previewUrlsRef = useRef(new Set<string>());
@@ -148,9 +147,6 @@ function MultipleSourceImageUpload({ imageUrls, onImagesChange, onClear, imageCo
     onPendingImagesChange?.(selectedFiles.map((file, index) => ({ file, previewUrl: previews[index] })));
   };
 
-  const chooseFile = () => {
-    if (!disabled && canAddMore) inputRef.current?.click();
-  };
   const handleDrop = (event: React.DragEvent<HTMLElement>) => {
     event.preventDefault();
     setDragging(false);
@@ -172,17 +168,17 @@ function MultipleSourceImageUpload({ imageUrls, onImagesChange, onClear, imageCo
   };
 
   return <div className={cx("gen-source-upload-wrap")}>
-    <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(event) => { void readImageFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} />
     {(imageUrls.length > 0) ? <div className={cx("gen-multi-source-preview")} onDragOver={(event) => { if (!disabled && canAddMore) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={handleDrop}>
       <div className={cx("gen-multi-source-grid")}>
         {imageUrls.map((url, index) => <div className={cx("gen-multi-source-item")} key={url}><img src={url} alt={t("create.image.upload.selectedAlt", { index: index + 1 })} /><button type="button" onClick={() => removeImage(index)} aria-label={t("create.image.upload.removeIndexed", { index: index + 1 })}><Trash2 size={12} /></button></div>)}
-        {canAddMore && <button type="button" className={cx("gen-multi-source-add")} onClick={chooseFile} aria-label={t("create.image.upload.addImages")} title={t("create.image.upload.addImages")} disabled={disabled}><Plus size={19} strokeWidth={1.8} aria-hidden="true" /></button>}
+        {canAddMore && <button type="button" className={cx("gen-multi-source-add")} onClick={() => setPickerOpen(true)} aria-label={t("create.image.upload.addImages")} title={t("create.image.upload.addImages")} disabled={disabled || pickerDisabled}><Plus size={19} strokeWidth={1.8} aria-hidden="true" /></button>}
       </div>
-    </div> : <button type="button" className={cx("gen-upload", dragging && "is-dragging")} onClick={chooseFile} onDragOver={(event) => { if (!disabled && canAddMore) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} disabled={disabled || !canAddMore}>
+    </div> : <button type="button" className={cx("gen-upload", dragging && "is-dragging")} onClick={() => setPickerOpen(true)} onDragOver={(event) => { if (!disabled && canAddMore) { event.preventDefault(); setDragging(true); } }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} disabled={disabled || pickerDisabled || !canAddMore}>
       <CloudUpload size={20} />
       <strong>{t("create.image.upload.chooseImages")}</strong>
       <small>{t("create.image.upload.hintMulti", { count: maxImages, limit: imageUploadHint(imageConstraints) })}</small>
     </button>}
+    <ImageAttachmentPicker open={pickerOpen} onOpenChange={setPickerOpen} limit={Math.max(0, maxImages - imageUrls.length)} onPick={readImageFiles} />
     {disabled && imageUrls.length === 0 && <p className={cx("gen-upload-helper", "is-disabled")}>{t("create.image.upload.singleOnly")}</p>}
     {error && <p className={cx("gen-upload-error")} role="alert"><AlertCircle size={12} /> {error}</p>}
   </div>;

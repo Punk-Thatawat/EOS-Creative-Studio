@@ -1,0 +1,1649 @@
+{
+  "constants": {
+    "videoModes": [
+      "Image to Video",
+      "Text to Video",
+      "Motion Transfer",
+      "Lipsync",
+      "Extend Video"
+    ],
+    "videoTabValues": {
+      "Image to Video": "image-to-video",
+      "Text to Video": "text-to-video",
+      "Motion Transfer": "motion-transfer",
+      "Lipsync": "people-video",
+      "Extend Video": "extend-video"
+    },
+    "videoTabKeys": {
+      "Image to Video": "create.video.tabs.imageToVideo",
+      "Text to Video": "create.video.tabs.textToVideo",
+      "Motion Transfer": "create.video.tabs.motionTransfer",
+      "Lipsync": "create.video.tabs.lipsync",
+      "Extend Video": "create.video.tabs.extendVideo"
+    },
+    "videoModeIcons": {
+      "Image to Video": "ImageIcon",
+      "Text to Video": "WandSparkles",
+      "Motion Transfer": "WandSparkles",
+      "Lipsync": "Mic2",
+      "Extend Video": "ImageIcon"
+    },
+    "mobileVideoModeOptions": [
+      {
+        "value": "image-to-video",
+        "label": "Image to Video",
+        "icon": "ImageIcon"
+      },
+      {
+        "value": "text-to-video",
+        "label": "Text to Video",
+        "icon": "WandSparkles"
+      },
+      {
+        "value": "motion-transfer",
+        "label": "Motion Transfer",
+        "icon": "WandSparkles"
+      },
+      {
+        "value": "people-video",
+        "label": "Lipsync",
+        "icon": "Mic2"
+      },
+      {
+        "value": "extend-video",
+        "label": "Extend Video",
+        "icon": "ImageIcon"
+      }
+    ],
+    "VIDEO_TAB_STORAGE_KEY": "eos.video.active-tab",
+    "videoModeOptions": [
+      {
+        "value": "storyboard",
+        "label": "Storyboard",
+        "description": "Every scene starts from its own image"
+      },
+      {
+        "value": "continuous",
+        "label": "Continuous",
+        "description": "Continue from the previous scene"
+      },
+      {
+        "value": "flexible",
+        "label": "Flexible Storyboard",
+        "description": "Choose the start frame per scene"
+      }
+    ],
+    "generationModeOptions": [
+      {
+        "value": "image-to-video",
+        "label": "Image to Video",
+        "description": "Generate one video from one image"
+      },
+      {
+        "value": "reference-to-video",
+        "label": "Reference to Video",
+        "description": "Use reference images to guide one video"
+      },
+      {
+        "value": "single-image",
+        "label": "Single Storyboard Image",
+        "description": "Split the uploaded sheet into scenes automatically"
+      },
+      {
+        "value": "multi-scene",
+        "label": "Multi-Scene Storyboard",
+        "description": "Build the video scene by scene"
+      },
+      {
+        "value": "continuous",
+        "label": "Continuous",
+        "description": "Continue each scene from the previous frame"
+      }
+    ],
+    "generationModeCopyKeys": {
+      "storyboard": {
+        "labelKey": "create.video.generationModes.storyboard",
+        "descriptionKey": "create.video.generationModes.storyboardDescription"
+      },
+      "continuous": {
+        "labelKey": "create.video.generationModes.continuous",
+        "descriptionKey": "create.video.generationModes.continuousDescription"
+      },
+      "flexible": {
+        "labelKey": "create.video.generationModes.flexible",
+        "descriptionKey": "create.video.generationModes.flexibleDescription"
+      },
+      "image-to-video": {
+        "labelKey": "create.video.generationModes.imageToVideo",
+        "descriptionKey": "create.video.generationModes.imageToVideoDescription"
+      },
+      "reference-to-video": {
+        "labelKey": "create.video.generationModes.referenceToVideo",
+        "descriptionKey": "create.video.generationModes.referenceToVideoDescription"
+      },
+      "single-image": {
+        "labelKey": "create.video.generationModes.singleImage",
+        "descriptionKey": "create.video.generationModes.singleImageDescription"
+      },
+      "multi-scene": {
+        "labelKey": "create.video.generationModes.multiScene",
+        "descriptionKey": "create.video.generationModes.multiSceneDescription"
+      }
+    },
+    "sceneSourceOptions": [
+      {
+        "value": "manual",
+        "label": "New image"
+      },
+      {
+        "value": "previous_last_frame",
+        "label": "Previous frame"
+      }
+    ],
+    "referenceImageRoles": [
+      {
+        "key": "avatar",
+        "labelKey": "create.video.common.avatar",
+        "descriptionKey": "create.video.common.avatarDescription"
+      },
+      {
+        "key": "product",
+        "labelKey": "create.video.common.product",
+        "descriptionKey": "create.video.common.productDescription"
+      }
+    ],
+    "DEFAULT_MAX_STORYBOARD_SCENES": 12,
+    "HARD_MAX_STORYBOARD_SCENES": 100,
+    "coreModelParameterNames": [
+      "image",
+      "prompt",
+      "duration",
+      "duration_seconds",
+      "durationSeconds",
+      "resolution",
+      "aspectRatio",
+      "aspect_ratio",
+      "generateAudio",
+      "generate_audio",
+      "audio",
+      "audio_enabled",
+      "audioOutput",
+      "audio_output",
+      "includeAudio",
+      "include_audio",
+      "withAudio",
+      "with_audio",
+      "nativeAudio",
+      "native_audio",
+      "sound",
+      "soundtrack",
+      "negativePrompt",
+      "negative_prompt",
+      "endFrameImage",
+      "end_frame_image",
+      "endImage",
+      "end_image",
+      "lastFrameImage",
+      "last_frame_image",
+      "lastImage",
+      "last_image",
+      "last_frame",
+      "lastFrame",
+      "end_frame",
+      "endFrame",
+      "reference_images",
+      "referenceImages",
+      "reference_image",
+      "referenceImage",
+      "references",
+      "images",
+      "image_urls",
+      "imageUrls",
+      "input_images",
+      "inputImages",
+      "init_images",
+      "initImages"
+    ],
+    "referenceImageParameterAliases": [
+      "reference_images",
+      "referenceImages",
+      "reference_image",
+      "referenceImage",
+      "references",
+      "images",
+      "image_urls",
+      "imageUrls",
+      "input_images",
+      "inputImages",
+      "init_images",
+      "initImages"
+    ],
+    "lastImageParameterAliases": [
+      "endFrameImage",
+      "end_frame_image",
+      "lastFrameImage",
+      "last_frame_image",
+      "last_image",
+      "lastImage",
+      "last_frame",
+      "lastFrame",
+      "end_image",
+      "endImage",
+      "end_frame",
+      "endFrame"
+    ],
+    "referenceAudioParameterAliases": [
+      "reference_audios",
+      "referenceAudios",
+      "reference_audio",
+      "referenceAudio"
+    ],
+    "referenceVideoParameterAliases": [
+      "reference_videos",
+      "referenceVideos",
+      "reference_video",
+      "referenceVideo"
+    ]
+  },
+  "isActiveVideoTab": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false
+  ],
+  "videoModeRouteFeature": [
+    "image-to-video",
+    "image-to-video:reference-to-video",
+    "image-to-video:single-image",
+    "image-to-video:multi-scene",
+    "image-to-video:continuous",
+    "image-to-video:unknown"
+  ],
+  "isSingleSceneGenerationMode": [
+    true,
+    true,
+    false,
+    false,
+    false,
+    false
+  ],
+  "isStorylinePromptMode": [
+    false,
+    false,
+    true,
+    true,
+    false,
+    false
+  ],
+  "parseSchemaEnumValue": [
+    "__undefined__",
+    "720p",
+    "480p",
+    5,
+    "9"
+  ],
+  "hasSchemaValue": [
+    false,
+    false,
+    false,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true
+  ],
+  "isCameraFixedParameter": [
+    true,
+    true,
+    true,
+    false,
+    false
+  ],
+  "isSeedParameter": [
+    true,
+    true,
+    true,
+    false,
+    false
+  ],
+  "modelParamsForGeneration": {
+    "aspect_ratio": "16:9",
+    "mode": "pro"
+  },
+  "schemaProperties": [
+    {
+      "aspect_ratio": {
+        "type": "string",
+        "enum": [
+          "16:9",
+          "9:16",
+          "auto"
+        ],
+        "default": "16:9"
+      },
+      "resolution": {
+        "type": "string",
+        "enum": [
+          "720p",
+          "1080p"
+        ]
+      },
+      "seed": {
+        "type": "integer"
+      },
+      "camera_fixed": {
+        "type": "boolean"
+      },
+      "generate_audio": {
+        "type": "boolean"
+      },
+      "prompt": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "std",
+          "pro"
+        ],
+        "default": "pro"
+      }
+    },
+    {
+      "alpha": {
+        "type": "string"
+      },
+      "beta": {
+        "type": "string"
+      }
+    },
+    {},
+    {}
+  ],
+  "requiredSchemaParameters": [
+    [
+      "prompt",
+      "image"
+    ],
+    [
+      "alpha"
+    ],
+    [],
+    []
+  ],
+  "modelFamily": [
+    "vendor/model-x",
+    "vendor/model-x",
+    "vendor/model-x",
+    "vendor/model-x/text-to-video",
+    ""
+  ],
+  "schemaDefault": [
+    "__undefined__",
+    "16:9",
+    "720p",
+    false,
+    "__undefined__",
+    0
+  ],
+  "findSchemaProperty": [
+    [
+      "aspect_ratio",
+      {
+        "type": "string",
+        "enum": [
+          "16:9",
+          "9:16",
+          "auto"
+        ],
+        "default": "16:9"
+      }
+    ],
+    "__undefined__",
+    "__undefined__"
+  ],
+  "modelAspectRatioOptions": [
+    [
+      "16:9",
+      "9:16",
+      "1:1",
+      "4:5",
+      "21:9",
+      "3:4"
+    ],
+    [],
+    [],
+    []
+  ],
+  "closestAspectRatio": [
+    "16:9",
+    "9:16",
+    "1:1",
+    "21:9",
+    "__undefined__",
+    "__undefined__",
+    "__undefined__",
+    "__undefined__",
+    "3:2",
+    "__undefined__"
+  ],
+  "findModelInputParameter": [
+    "custom",
+    "mode",
+    "__undefined__",
+    "beta"
+  ],
+  "modelSpecificDefaults": [
+    {
+      "camera_fixed": false,
+      "mode": "pro"
+    },
+    {
+      "camera_fixed": false,
+      "mode": "pro"
+    },
+    {},
+    {}
+  ],
+  "formatHistoryDate": [
+    "Recently generated",
+    "Recently generated",
+    "Recently generated",
+    "Nov 17, 8:30 AM",
+    "Jan 2, 11:05 PM"
+  ],
+  "storyboard": {
+    "plain": {
+      "size": [
+        112,
+        112
+      ],
+      "content": {
+        "x": 0,
+        "y": 0,
+        "width": 112,
+        "height": 112
+      },
+      "trimmed": {
+        "x": 0,
+        "y": 0,
+        "width": 112,
+        "height": 112
+      },
+      "zoomed": {
+        "x": 2,
+        "y": 2,
+        "width": 108,
+        "height": 108
+      },
+      "gapsX": [
+        {
+          "start": 52,
+          "end": 60
+        }
+      ],
+      "gapsY": [
+        {
+          "start": 52,
+          "end": 60
+        }
+      ],
+      "gridGapsX": [
+        {
+          "start": 52,
+          "end": 60
+        }
+      ],
+      "gridGapsY": [
+        {
+          "start": 52,
+          "end": 60
+        }
+      ],
+      "gridGapsX3": [],
+      "peaksX": [
+        {
+          "start": 52,
+          "end": 53
+        }
+      ],
+      "peaksY": [
+        {
+          "start": 52,
+          "end": 53
+        }
+      ],
+      "edges": [
+        [
+          {
+            "mean": 131.96428571428572,
+            "stdev": 36.28604822680978,
+            "saturation": 143.92857142857142
+          },
+          {
+            "mean": 134.75,
+            "stdev": 35.56043648293903,
+            "saturation": 143.92857142857142
+          },
+          {
+            "mean": 135.67857142857142,
+            "stdev": 35.26841319633985,
+            "saturation": 143.92857142857142
+          }
+        ],
+        [
+          {
+            "mean": 137.84523809523813,
+            "stdev": 36.11165249027279,
+            "saturation": 125.35714285714286
+          },
+          {
+            "mean": 135.05952380952382,
+            "stdev": 36.808389913540196,
+            "saturation": 125.35714285714286
+          },
+          {
+            "mean": 138.77380952380955,
+            "stdev": 36.11160539518676,
+            "saturation": 125.35714285714286
+          }
+        ],
+        [
+          {
+            "mean": 127.34523809523782,
+            "stdev": 37.123077379841675,
+            "saturation": 130
+          },
+          {
+            "mean": 127.70238095238066,
+            "stdev": 37.0570494638477,
+            "saturation": 130
+          },
+          {
+            "mean": 127.70238095238066,
+            "stdev": 37.07631975256741,
+            "saturation": 130
+          }
+        ],
+        [
+          {
+            "mean": 143.17857142857142,
+            "stdev": 33.36171198440832,
+            "saturation": 139.28571428571428
+          },
+          {
+            "mean": 143.17857142857142,
+            "stdev": 33.30814311785012,
+            "saturation": 139.28571428571428
+          },
+          {
+            "mean": 142.82142857142858,
+            "stdev": 33.32958099628244,
+            "saturation": 139.28571428571428
+          }
+        ]
+      ]
+    },
+    "framed": {
+      "size": [
+        138,
+        138
+      ],
+      "content": {
+        "x": 9,
+        "y": 9,
+        "width": 120,
+        "height": 120
+      },
+      "trimmed": {
+        "x": 9,
+        "y": 9,
+        "width": 120,
+        "height": 120
+      },
+      "zoomed": {
+        "x": 11,
+        "y": 11,
+        "width": 116,
+        "height": 116
+      },
+      "gapsX": [
+        {
+          "start": 65,
+          "end": 73
+        }
+      ],
+      "gapsY": [
+        {
+          "start": 65,
+          "end": 73
+        }
+      ],
+      "gridGapsX": [
+        {
+          "start": 65,
+          "end": 73
+        }
+      ],
+      "gridGapsY": [
+        {
+          "start": 65,
+          "end": 73
+        }
+      ],
+      "gridGapsX3": [],
+      "peaksX": [
+        {
+          "start": 65,
+          "end": 66
+        }
+      ],
+      "peaksY": [
+        {
+          "start": 65,
+          "end": 66
+        }
+      ],
+      "edges": [
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ]
+      ]
+    },
+    "bigFramed": {
+      "size": [
+        338,
+        338
+      ],
+      "content": {
+        "x": 12,
+        "y": 12,
+        "width": 314,
+        "height": 314
+      },
+      "trimmed": {
+        "x": 15,
+        "y": 15,
+        "width": 308,
+        "height": 308
+      },
+      "zoomed": {
+        "x": 21,
+        "y": 21,
+        "width": 296,
+        "height": 296
+      },
+      "gapsX": [
+        {
+          "start": 165,
+          "end": 173
+        }
+      ],
+      "gapsY": [
+        {
+          "start": 165,
+          "end": 173
+        }
+      ],
+      "gridGapsX": [
+        {
+          "start": 165,
+          "end": 173
+        }
+      ],
+      "gridGapsY": [
+        {
+          "start": 165,
+          "end": 173
+        }
+      ],
+      "gridGapsX3": [],
+      "peaksX": [
+        {
+          "start": 165,
+          "end": 166
+        }
+      ],
+      "peaksY": [
+        {
+          "start": 165,
+          "end": 166
+        }
+      ],
+      "edges": [
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 124.42857142857143,
+            "stdev": 28.52996992065482,
+            "saturation": 147.61904761904762
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 128.55555555555557,
+            "stdev": 30.12800439839948,
+            "saturation": 128.57142857142858
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 119.9841269841268,
+            "stdev": 28.49458802982073,
+            "saturation": 133.33333333333334
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 136.04761904761904,
+            "stdev": 27.7514069835957,
+            "saturation": 142.85714285714286
+          }
+        ]
+      ]
+    },
+    "bigLightFramed": {
+      "size": [
+        326,
+        326
+      ],
+      "content": {
+        "x": 6,
+        "y": 6,
+        "width": 314,
+        "height": 314
+      },
+      "trimmed": {
+        "x": 9,
+        "y": 9,
+        "width": 308,
+        "height": 308
+      },
+      "zoomed": {
+        "x": 15,
+        "y": 15,
+        "width": 296,
+        "height": 296
+      },
+      "gapsX": [
+        {
+          "start": 159,
+          "end": 167
+        }
+      ],
+      "gapsY": [
+        {
+          "start": 159,
+          "end": 167
+        }
+      ],
+      "gridGapsX": [
+        {
+          "start": 159,
+          "end": 167
+        }
+      ],
+      "gridGapsY": [
+        {
+          "start": 159,
+          "end": 167
+        }
+      ],
+      "gridGapsX3": [],
+      "peaksX": [
+        {
+          "start": 159,
+          "end": 160
+        }
+      ],
+      "peaksY": [
+        {
+          "start": 159,
+          "end": 160
+        }
+      ],
+      "edges": [
+        [
+          {
+            "mean": 225,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 225,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 128.14285714285714,
+            "stdev": 28.68762088143132,
+            "saturation": 147.61904761904762
+          }
+        ],
+        [
+          {
+            "mean": 225,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 225,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 132.2698412698413,
+            "stdev": 29.766750928197748,
+            "saturation": 128.57142857142858
+          }
+        ],
+        [
+          {
+            "mean": 225,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 225,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 123.6984126984125,
+            "stdev": 29.22289903771261,
+            "saturation": 133.33333333333334
+          }
+        ],
+        [
+          {
+            "mean": 225,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 225,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 139.76190476190476,
+            "stdev": 26.32200738094189,
+            "saturation": 142.85714285714286
+          }
+        ]
+      ]
+    },
+    "alpha16": {
+      "size": [
+        60,
+        60
+      ],
+      "content": {
+        "x": 10,
+        "y": 10,
+        "width": 40,
+        "height": 40
+      },
+      "trimmed": {
+        "x": 10,
+        "y": 10,
+        "width": 40,
+        "height": 40
+      },
+      "zoomed": {
+        "x": 12,
+        "y": 12,
+        "width": 36,
+        "height": 36
+      },
+      "gapsX": [],
+      "gapsY": [],
+      "gridGapsX": [],
+      "gridGapsY": [],
+      "gridGapsX3": [
+        {
+          "start": 8,
+          "end": 10
+        },
+        {
+          "start": 50,
+          "end": 53
+        }
+      ],
+      "peaksX": [],
+      "peaksY": [],
+      "edges": [
+        [
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          },
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          },
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          }
+        ],
+        [
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          },
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          },
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          }
+        ],
+        [
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          },
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          },
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          }
+        ],
+        [
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          },
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          },
+          {
+            "mean": 100,
+            "stdev": 0,
+            "saturation": 150
+          }
+        ]
+      ]
+    },
+    "bigFrame16": {
+      "size": [
+        800,
+        800
+      ],
+      "content": {
+        "x": 0,
+        "y": 0,
+        "width": 800,
+        "height": 800
+      },
+      "trimmed": {
+        "x": 16,
+        "y": 16,
+        "width": 768,
+        "height": 768
+      },
+      "zoomed": {
+        "x": 31,
+        "y": 31,
+        "width": 738,
+        "height": 738
+      },
+      "gapsX": [
+        {
+          "start": 396,
+          "end": 404
+        }
+      ],
+      "gapsY": [
+        {
+          "start": 396,
+          "end": 404
+        }
+      ],
+      "gridGapsX": [
+        {
+          "start": 396,
+          "end": 404
+        }
+      ],
+      "gridGapsY": [
+        {
+          "start": 396,
+          "end": 404
+        }
+      ],
+      "gridGapsX3": [],
+      "peaksX": [
+        {
+          "start": 396,
+          "end": 397
+        }
+      ],
+      "peaksY": [
+        {
+          "start": 396,
+          "end": 397
+        }
+      ],
+      "edges": [
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 30,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ]
+      ]
+    },
+    "blank": {
+      "size": [
+        40,
+        30
+      ],
+      "content": {
+        "x": 0,
+        "y": 0,
+        "width": 40,
+        "height": 30
+      },
+      "trimmed": {
+        "x": 0,
+        "y": 0,
+        "width": 40,
+        "height": 30
+      },
+      "zoomed": {
+        "x": 2,
+        "y": 2,
+        "width": 36,
+        "height": 26
+      },
+      "gapsX": [],
+      "gapsY": [],
+      "gridGapsX": [
+        {
+          "start": 8,
+          "end": 33
+        }
+      ],
+      "gridGapsY": [
+        {
+          "start": 3,
+          "end": 28
+        }
+      ],
+      "gridGapsX3": [
+        {
+          "start": 1,
+          "end": 26
+        },
+        {
+          "start": 15,
+          "end": 40
+        }
+      ],
+      "peaksX": [
+        {
+          "start": 8,
+          "end": 9
+        }
+      ],
+      "peaksY": [
+        {
+          "start": 3,
+          "end": 4
+        }
+      ],
+      "edges": [
+        [
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 255,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ]
+      ]
+    },
+    "transparent": {
+      "size": [
+        40,
+        30
+      ],
+      "content": {
+        "x": 0,
+        "y": 0,
+        "width": 40,
+        "height": 30
+      },
+      "trimmed": {
+        "x": 0,
+        "y": 0,
+        "width": 40,
+        "height": 30
+      },
+      "zoomed": {
+        "x": 2,
+        "y": 2,
+        "width": 36,
+        "height": 26
+      },
+      "gapsX": [],
+      "gapsY": [],
+      "gridGapsX": [
+        {
+          "start": 8,
+          "end": 33
+        }
+      ],
+      "gridGapsY": [
+        {
+          "start": 3,
+          "end": 28
+        }
+      ],
+      "gridGapsX3": [
+        {
+          "start": 1,
+          "end": 26
+        },
+        {
+          "start": 15,
+          "end": 40
+        }
+      ],
+      "peaksX": [
+        {
+          "start": 8,
+          "end": 9
+        }
+      ],
+      "peaksY": [
+        {
+          "start": 3,
+          "end": 4
+        }
+      ],
+      "edges": [
+        [
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ],
+        [
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          },
+          {
+            "mean": 10,
+            "stdev": 0,
+            "saturation": 0
+          }
+        ]
+      ]
+    }
+  },
+  "findLightRuns": [
+    [
+      {
+        "start": 1,
+        "end": 3
+      },
+      {
+        "start": 6,
+        "end": 10
+      }
+    ],
+    [
+      {
+        "start": 1,
+        "end": 6
+      }
+    ],
+    [
+      {
+        "start": 91,
+        "end": 100
+      },
+      {
+        "start": 191,
+        "end": 200
+      },
+      {
+        "start": 291,
+        "end": 300
+      },
+      {
+        "start": 391,
+        "end": 400
+      }
+    ],
+    [
+      {
+        "start": 0,
+        "end": 3
+      }
+    ],
+    [],
+    [],
+    [
+      {
+        "start": 2,
+        "end": 5
+      }
+    ],
+    [
+      {
+        "start": 100,
+        "end": 110
+      },
+      {
+        "start": 115,
+        "end": 125
+      },
+      {
+        "start": 600,
+        "end": 622
+      }
+    ]
+  ],
+  "axisCells": [
+    [
+      {
+        "start": 0,
+        "end": 20
+      }
+    ],
+    [
+      {
+        "start": 0,
+        "end": 5
+      },
+      {
+        "start": 8,
+        "end": 20
+      }
+    ],
+    [
+      {
+        "start": 3,
+        "end": 10
+      },
+      {
+        "start": 12,
+        "end": 20
+      }
+    ],
+    [
+      {
+        "start": 0,
+        "end": 18
+      }
+    ]
+  ],
+  "evenlyDividedCells": [
+    [
+      {
+        "start": 0,
+        "end": 10
+      }
+    ],
+    [
+      {
+        "start": 0,
+        "end": 3
+      },
+      {
+        "start": 3,
+        "end": 7
+      },
+      {
+        "start": 7,
+        "end": 10
+      }
+    ],
+    [
+      {
+        "start": 0,
+        "end": 4
+      },
+      {
+        "start": 4,
+        "end": 7
+      }
+    ],
+    [
+      {
+        "start": 0,
+        "end": 0
+      },
+      {
+        "start": 0,
+        "end": 0
+      }
+    ],
+    [
+      {
+        "start": 0,
+        "end": 1
+      },
+      {
+        "start": 1,
+        "end": 2
+      },
+      {
+        "start": 2,
+        "end": 3
+      },
+      {
+        "start": 3,
+        "end": 4
+      },
+      {
+        "start": 4,
+        "end": 5
+      }
+    ]
+  ]
+}

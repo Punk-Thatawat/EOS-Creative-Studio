@@ -1,5 +1,6 @@
 "use client";
 import { useTemplateSettings } from "@/features/templates/use-template-settings";
+import { ImageAttachmentPicker } from "@/features/brand-kit/image-attachment-picker";
 import { useTemplatePrompt } from "@/features/templates/use-template-prompt";
 
 import Image from "next/image";
@@ -325,6 +326,7 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
   const [isAudioDragging, setIsAudioDragging] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const sourceInputRef = useRef<HTMLInputElement | null>(null);
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const sourceUploadAbortRef = useRef<AbortController | null>(null);
@@ -430,11 +432,6 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
             ? "script"
             : audioSupported ? "audio" : "script"
     : undefined;
-  const sourceAccept = sourceImageSupported && sourceVideoSupported
-    ? "image/png,image/jpeg,image/webp,video/mp4,video/webm"
-    : sourceImageSupported
-      ? "image/png,image/jpeg,image/webp"
-      : "video/mp4,video/webm";
   const driverLabel = scriptSupported ? t("create.video.common.script") : !isLipsync && promptSupported ? t("create.video.common.performanceDirection") : t("create.video.common.prompt");
   const featureGuide = isLipsync
     ? {
@@ -853,14 +850,17 @@ export function PeopleVideoWorkspace({ initialVariant = "lipsync" }: { initialVa
                 <button type="button" onClick={removeSourcePerson} aria-label={t("create.video.common.removeSourcePerson")}><X size={14} /></button>
               </div>
             ) : (
-              <button type="button" className={`${styles.upload} ${isSourcePersonDragging ? styles.uploadDragging : ""}`} onClick={() => sourceInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSourcePersonDragging(true); }} onDragLeave={() => setIsSourcePersonDragging(false)} onDrop={handleSourcePersonDrop}>
+              <button type="button" className={`${styles.upload} ${isSourcePersonDragging ? styles.uploadDragging : ""}`} onClick={() => sourceImageSupported ? setSourcePickerOpen(true) : sourceInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setIsSourcePersonDragging(true); }} onDragLeave={() => setIsSourcePersonDragging(false)} onDrop={handleSourcePersonDrop}>
                 <CloudUpload size={23} />
-                 <strong>{sourceImageSupported && sourceVideoSupported ? t("create.video.common.uploadImageOrVideo") : sourceImageSupported ? t("create.video.common.uploadImage") : t("create.video.common.uploadVideo")}</strong>
-                 <small>{sourceImageSupported ? t("create.video.common.pngFormats") : ""}{sourceImageSupported && sourceVideoSupported ? " / " : ""}{sourceVideoSupported ? t("create.video.common.videoFormats") : ""}</small>
+                 <strong>{t(sourceImageSupported ? "create.video.common.uploadImage" : "create.video.common.uploadVideo")}</strong>
+                 <small>{t(sourceImageSupported ? "create.video.common.pngFormats" : "create.video.common.videoFormats")}</small>
               </button>
             )}
           </div>
-          <input ref={sourceInputRef} type="file" accept={sourceAccept} className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleSourcePerson(file); event.currentTarget.value = ""; }} />
+          {sourceImageSupported && sourcePerson && <button type="button" className={styles.imagePickerLink} onClick={() => setSourcePickerOpen(true)}>{t("create.video.common.uploadImage")}</button>}
+          {sourceVideoSupported && (sourceImageSupported || sourcePerson) && <button type="button" className={styles.imagePickerLink} onClick={() => sourceInputRef.current?.click()}>{t("create.video.common.uploadVideo")}</button>}
+          {sourceVideoSupported && <input ref={sourceInputRef} type="file" accept="video/mp4,video/webm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleSourcePerson(file); event.currentTarget.value = ""; }} />}
+          <ImageAttachmentPicker open={sourcePickerOpen} onOpenChange={setSourcePickerOpen} onPick={([file]) => handleSourcePerson(file)} />
           {sourcePerson ? <p className={styles.peopleFileName}>{sourcePerson.name}</p> : null}
         </section>
         {textSectionVisible ? (

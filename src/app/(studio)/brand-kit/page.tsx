@@ -1,7 +1,7 @@
-import { notFound } from "next/navigation";
+import type { Metadata } from "next";
+import { BrandKitPage } from "@/features/brand-kit/brand-kit-page";
 
-// Scaffold page with a sample palette only. It is not linked anywhere, so it answers 404
-// until it is backed by real brand data.
-export default function BrandKitPage(): never {
-  notFound();
+export const metadata: Metadata = { title: "Brand Kit" };
+export default function Page() {
+  return <BrandKitPage />;
 }
