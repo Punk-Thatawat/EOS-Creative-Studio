@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { brandKitApi, type BrandAssetKind, type BrandKit } from "@/lib/api/brand-kit";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { BrandKitFolderControls, useBrandKitFolders } from "./brand-kit-folders";
 import s from "./brand-kit-page.module.css";
 
 const copy = {
@@ -33,7 +34,7 @@ const copy = {
     loading: "กำลังโหลด Brand Kit…",
     retry: "ลองอีกครั้ง",
     logos: "โลโก้",
-    logoHint: "เก็บโลโก้พื้นโปร่งใสหรือเวอร์ชันสีต่าง ๆ ได้สูงสุด 5 รูป",
+    logoHint: "เก็บโลโก้พื้นโปร่งใสหรือเวอร์ชันสีต่าง ๆ ได้สูงสุด 5 รูปต่อโฟลเดอร์",
     products: "รูปสินค้า",
     productHint: "รวมภาพสินค้าและมุมต่าง ๆ ตั้งชื่อให้ค้นเจอได้ง่าย",
     uploadLogo: "เพิ่มโลโก้",
@@ -72,7 +73,7 @@ const copy = {
       brand_invalid_image: "รองรับภาพ JPG, PNG และ WebP แบบภาพนิ่งเท่านั้น",
       brand_image_too_complex: "ภาพมีรายละเอียดมากเกินไป กรุณาลดขนาดแล้วลองใหม่",
       brand_quota_exceeded: "พื้นที่ Brand Kit เต็มแล้ว กรุณาลบรูปที่ไม่ใช้ก่อนอัปโหลด",
-      brand_asset_limit: "เก็บโลโก้ได้สูงสุด 5 รูป และรูปทั้งหมดรวมกันไม่เกิน 100 รูป",
+      brand_asset_limit: "เก็บโลโก้ได้สูงสุด 5 รูปต่อโฟลเดอร์ และรูปทั้งหมดไม่เกิน 100 รูปต่อบัญชี",
       brand_invalid_colors: "กรุณาตรวจรหัสสีอีกครั้ง",
       brand_asset_not_found: "ไม่พบรูปนี้ กรุณาโหลดข้อมูลใหม่",
       brand_storage_unavailable: "พื้นที่จัดเก็บยังไม่พร้อมใช้งาน",
@@ -93,7 +94,7 @@ const copy = {
     loading: "Loading your Brand Kit…",
     retry: "Try again",
     logos: "Logos",
-    logoHint: "Keep up to 5 transparent logos or color variations.",
+    logoHint: "Keep up to 5 transparent logos or color variations per folder.",
     products: "Product photos",
     productHint: "Keep product shots and different angles with names you can recognize.",
     uploadLogo: "Add logo",
@@ -132,7 +133,7 @@ const copy = {
       brand_invalid_image: "Only static JPG, PNG, and WebP images are supported.",
       brand_image_too_complex: "This image is too complex. Resize it and try again.",
       brand_quota_exceeded: "Your Brand Kit storage is full. Delete unused images first.",
-      brand_asset_limit: "You can keep up to 5 logos and 100 images in total.",
+      brand_asset_limit: "You can keep up to 5 logos per folder and 100 images per account.",
       brand_invalid_colors: "Check your color codes.",
       brand_asset_not_found: "This image was not found. Refresh your kit.",
       brand_storage_unavailable: "Image storage is currently unavailable.",
@@ -148,13 +149,42 @@ function size(bytes: number) {
 }
 const accepted = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-export function BrandKitPage() {
+export function BrandKitPage({ initialFolderId }: { initialFolderId?: string }) {
+  const { locale } = useLocale();
+  const t = copy[locale];
+  const state = useBrandKitFolders(true, initialFolderId);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className={s.page}>
+      <header className={s.header}>
+        <div>
+          <span className={s.eyebrow}>YOUR CREATIVE IDENTITY</span>
+          <h1>Brand Kit</h1>
+          <h2>{t.intro}</h2>
+          <p>{t.description}</p>
+        </div>
+      </header>
+      <BrandKitFolderControls state={state} disabled={busy} />
+      {state.error && <div className={s.error} role="alert">
+        {t.generic}{" "}
+        <Button type="button" variant="outline" size="sm" onClick={state.retry}>{t.retry}</Button>
+      </div>}
+      {state.folders === null && !state.error && <div className={s.loading} role="status">{t.loading}</div>}
+      {state.folders?.length === 0 && <p>
+        {locale === "th" ? "สร้างโฟลเดอร์แรกเพื่อเก็บโลโก้ สีแบรนด์ และรูปสินค้า" : "Create your first folder to store logos, colors, and product images."}
+      </p>}
+      {state.active && <BrandKitFolderPage key={state.active.id} folderId={state.active.id} busy={busy} setBusy={setBusy} />}
+    </div>
+  );
+}
+
+function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; busy: boolean; setBusy: (busy: boolean) => void }) {
   const { locale } = useLocale();
   const t = copy[locale];
   const [kit, setKit] = useState<BrandKit | null>(null);
   const [colors, setColors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const actionLock = useRef(false);
   const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +198,7 @@ export function BrandKitPage() {
   useEffect(() => {
     const controller = new AbortController();
     void brandKitApi
-      .load(controller.signal)
+      .load(folderId, controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) {
           setKit(value);
@@ -182,7 +212,7 @@ export function BrandKitPage() {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [folderId]);
 
   async function action(work: () => Promise<BrandKit>, success: string) {
     if (actionLock.current) return;
@@ -204,7 +234,7 @@ export function BrandKitPage() {
   }
 
   async function refresh() {
-    const value = await action(() => brandKitApi.load(), "");
+    const value = await action(() => brandKitApi.load(folderId), "");
     if (value) setColors(value.colors);
   }
 
@@ -224,14 +254,14 @@ export function BrandKitPage() {
     try {
       for (let i = 0; i < files.length; i++) {
         setUploadProgress(`${i + 1}/${files.length}`);
-        setKit(await brandKitApi.upload(kind, files[i]));
+        setKit(await brandKitApi.upload(folderId, kind, files[i]));
       }
       setNotice(t.uploadingDone);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "brand_request_failed");
       // An interrupted response may still have saved the image. Reload before allowing another attempt.
       try {
-        setKit(await brandKitApi.load());
+        setKit(await brandKitApi.load(folderId));
       } catch {
         /* Keep the last confirmed snapshot and show the error. */
       }
@@ -403,14 +433,8 @@ export function BrandKitPage() {
   }
 
   return (
-    <div className={s.page}>
-      <header className={s.header}>
-        <div>
-          <span className={s.eyebrow}>YOUR CREATIVE IDENTITY</span>
-          <h1>Brand Kit</h1>
-          <h2>{t.intro}</h2>
-          <p>{t.description}</p>
-        </div>
+    <>
+      <div className="mb-3 flex justify-end">
         <Button
           type="button"
           variant="outline"
@@ -422,7 +446,7 @@ export function BrandKitPage() {
           <RefreshCw size={16} />
           {t.refresh}
         </Button>
-      </header>
+      </div>
       <div aria-live="polite" aria-atomic="true" className={!notice && !busy ? s.fileInput : undefined}>
         {notice ? (
           <p className={s.notice}>
@@ -610,7 +634,7 @@ export function BrandKitPage() {
                 type="button"
                 disabled={busy || !validColors || !dirty}
                 onClick={() => {
-                  void action(() => brandKitApi.colors(colors), t.saved).then((value) => {
+                  void action(() => brandKitApi.colors(folderId, colors), t.saved).then((value) => {
                     if (value) setColors(value.colors);
                   });
                 }}
@@ -623,6 +647,6 @@ export function BrandKitPage() {
           {assets("product")}
         </>
       ) : null}
-    </div>
+    </>
   );
 }

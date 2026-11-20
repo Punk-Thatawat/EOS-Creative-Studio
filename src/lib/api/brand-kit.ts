@@ -22,6 +22,7 @@ export type BrandKit = {
   remainingBytes: number;
 };
 export type BrandKitSettings = { quotaMb: number; minQuotaMb: number; maxQuotaMb: number };
+export type BrandKitFolder = { id: string; name: string };
 const backend = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000")
   .replace(/\/+$/, "")
   .replace(/\/api\/v1$/, "");
@@ -57,7 +58,10 @@ async function request<T = BrandKit>(
 export const brandKitApi = {
   loadSettings: (signal?: AbortSignal) => request<BrandKitSettings>("", "GET", undefined, signal, true),
   saveSettings: (quotaMb: number) => request<BrandKitSettings>("", "PATCH", { quotaMb }, undefined, true),
-  load: (signal?: AbortSignal) => request("", "GET", undefined, signal),
+  folders: (signal?: AbortSignal) => request<BrandKitFolder[]>("/folders", "GET", undefined, signal),
+  createFolder: (name: string) => request<BrandKitFolder>("/folders", "POST", { name }),
+  renameFolder: (id: string, name: string) => request<BrandKitFolder>(`/folders/${encodeURIComponent(id)}`, "PATCH", { name }),
+  load: (folderId: string, signal?: AbortSignal) => request(`?folderId=${encodeURIComponent(folderId)}`, "GET", undefined, signal),
   async imageFile(asset: Pick<BrandAsset, "id" | "name">, signal = AbortSignal.timeout(15000)): Promise<File> {
     const token = await getApiAccessToken();
     if (!token) throw new Error("brand_session_expired");
@@ -72,11 +76,11 @@ export const brandKitApi = {
     if (image.type !== "image/webp" || !image.size) throw new Error("brand_invalid_image");
     return new File([image], `${asset.name}.webp`, { type: image.type });
   },
-  colors: (colors: string[]) => request("/colors", "PATCH", { colors }),
-  upload: (kind: BrandAssetKind, file: File) => {
+  colors: (folderId: string, colors: string[]) => request(`/colors?folderId=${encodeURIComponent(folderId)}`, "PATCH", { colors }),
+  upload: (folderId: string, kind: BrandAssetKind, file: File) => {
     const form = new FormData();
     form.append("file", file);
-    return request(`/assets/${kind}`, "POST", form);
+    return request(`/assets/${kind}?folderId=${encodeURIComponent(folderId)}`, "POST", form);
   },
   rename: (id: string, name: string) => request(`/assets/${encodeURIComponent(id)}`, "PATCH", { name }),
   remove: (id: string) => request(`/assets/${encodeURIComponent(id)}`, "DELETE"),
