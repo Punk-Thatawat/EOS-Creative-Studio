@@ -22,7 +22,7 @@ export type BrandKit = {
   remainingBytes: number;
 };
 export type BrandKitSettings = { quotaMb: number; minQuotaMb: number; maxQuotaMb: number };
-export type BrandKitFolder = { id: string; name: string };
+export type BrandKitFolder = { id: string; name: string; imageCount?: number };
 const backend = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000")
   .replace(/\/+$/, "")
   .replace(/\/api\/v1$/, "");
@@ -61,6 +61,7 @@ export const brandKitApi = {
   folders: (signal?: AbortSignal) => request<BrandKitFolder[]>("/folders", "GET", undefined, signal),
   createFolder: (name: string) => request<BrandKitFolder>("/folders", "POST", { name }),
   renameFolder: (id: string, name: string) => request<BrandKitFolder>(`/folders/${encodeURIComponent(id)}`, "PATCH", { name }),
+  removeFolder: (id: string) => request<{ id: string }>("/folders/" + encodeURIComponent(id), "DELETE"),
   load: (folderId: string, signal?: AbortSignal) => request(`?folderId=${encodeURIComponent(folderId)}`, "GET", undefined, signal),
   async imageFile(asset: Pick<BrandAsset, "id" | "name">, signal = AbortSignal.timeout(15000)): Promise<File> {
     const token = await getApiAccessToken();
