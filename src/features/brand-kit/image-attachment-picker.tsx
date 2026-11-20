@@ -3,10 +3,13 @@
 import { Tabs } from "@base-ui/react/tabs";
 import { Check, ImagePlus, Loader2, X } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { brandKitApi, type BrandAsset, type BrandAssetKind } from "@/lib/api/brand-kit";
 import { useStudioCopy } from "@/lib/i18n/studio-copy";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { BrandKitFolderControls, useBrandKitFolders } from "./brand-kit-folders";
 import styles from "./image-attachment-picker.module.css";
 
 const imageTypes = ["image/png", "image/jpeg", "image/webp"];
@@ -35,15 +38,19 @@ function PickerContent({ limit, onPick, onClose }: {
   onClose: () => void;
 }) {
   const { c } = useStudioCopy();
+  const { locale } = useLocale();
+  const th = locale === "th";
   const input = useRef<HTMLInputElement>(null);
   const previews = useRef(new Set<string>());
   const download = useRef<AbortController | null>(null);
   const [tab, setTab] = useState<"uploads" | "brand-kit">("uploads");
   const [uploads, setUploads] = useState<ImageChoice[]>([]);
-  const [brandImages, setBrandImages] = useState<ImageChoice[] | null>(null);
+  const folders = useBrandKitFolders(tab === "brand-kit");
+  const activeId = folders.active?.id;
+  const [brandImages, setBrandImages] = useState<{ id: string; images: ImageChoice[] } | null>(null);
   const [selected, setSelected] = useState<ImageChoice[]>([]);
   const [busy, setBusy] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [failedFolder, setFailedFolder] = useState<string | null>(null);
   const [readFailed, setReadFailed] = useState(false);
   const [skipped, setSkipped] = useState(0);
   const [retry, setRetry] = useState(0);
@@ -57,25 +64,27 @@ function PickerContent({ limit, onPick, onClose }: {
   }, []);
 
   useEffect(() => {
-    if (tab !== "brand-kit" || brandImages !== null) return;
+    if (tab !== "brand-kit" || !activeId || brandImages?.id === activeId) return;
     const controller = new AbortController();
-    brandKitApi.load(AbortSignal.any([controller.signal, AbortSignal.timeout(15000)])).then((kit) => {
-      if (!controller.signal.aborted) setBrandImages(kit.assets.map((asset) => ({
+    brandKitApi.load(activeId, AbortSignal.any([controller.signal, AbortSignal.timeout(15000)])).then((kit) => {
+      if (!controller.signal.aborted) setBrandImages({ id: activeId, images: kit.assets.map((asset) => ({
         id: asset.id,
         name: asset.name,
         url: asset.url,
         brandAsset: asset,
-      })));
+      })) });
     }).catch(() => {
-      if (!controller.signal.aborted) setLoadFailed(true);
+      if (!controller.signal.aborted) setFailedFolder(activeId);
     });
     return () => controller.abort();
-  }, [tab, brandImages, retry]);
+  }, [tab, activeId, brandImages, retry]);
 
   const remaining = Math.max(0, limit - selected.length);
   const canUpload = limit > 0 && !busy && (limit === 1 || remaining > 0);
-  const displayed = tab === "uploads" ? uploads : brandImages ?? [];
-  const loading = tab === "brand-kit" && brandImages === null && !loadFailed;
+  const loadedFolder = brandImages && brandImages.id === activeId ? brandImages : null;
+  const displayed = tab === "uploads" ? uploads : loadedFolder?.images ?? [];
+  const loadFailed = folders.error || (Boolean(activeId) && failedFolder === activeId && !loadedFolder);
+  const loading = tab === "brand-kit" && !loadFailed && (folders.folders === null || (Boolean(activeId) && !loadedFolder));
 
   const addUploads = (files: FileList) => {
     const valid = Array.from(files).filter((file) => imageTypes.includes(file.type));
@@ -143,6 +152,7 @@ function PickerContent({ limit, onPick, onClose }: {
           </DialogClose>
         </header>
         <Tabs.Panel className={styles.panel} value={tab}>
+          {tab === "brand-kit" && <BrandKitFolderControls state={folders} disabled={busy} />}
           <div className={styles.grid}>
             {tab === "uploads" && <>
               <input ref={input} type="file" accept={imageTypes.join(",")} multiple={limit > 1} hidden onChange={(event) => {
@@ -175,12 +185,22 @@ function PickerContent({ limit, onPick, onClose }: {
           {tab === "brand-kit" && loadFailed && <p className={styles.notice} role="alert">
             {c("templates.picker.failed")}{" "}
             <button type="button" className={styles.retry} onClick={() => {
-              setLoadFailed(false);
-              setRetry((count) => count + 1);
+              if (folders.error) folders.retry();
+              else { setFailedFolder(null); setRetry((count) => count + 1); }
             }}>{c("templates.picker.retry")}</button>
           </p>}
           {!loading && !(tab === "brand-kit" && loadFailed) && displayed.length === 0 && (
-            <p className={styles.notice}>{c("templates.picker.empty")}</p>
+            <p className={styles.notice}>
+              {tab === "uploads" ? c("templates.picker.empty") : activeId ? <>
+                {th ? "โฟลเดอร์นี้ยังไม่มีรูป" : "This folder has no images yet."}{" "}
+                <Link href={`/brand-kit?folder=${encodeURIComponent(activeId)}`} target="_blank" rel="noopener" className={styles.retry}>
+                  {th ? "เพิ่มรูปในหน้า Brand Kit" : "Add images in Brand Kit"}
+                </Link>{" · "}
+                <button type="button" className={styles.retry} onClick={() => setBrandImages(null)}>
+                  {th ? "โหลดรูปใหม่" : "Reload images"}
+                </button>
+              </> : th ? "สร้าง Brand Kit แล้วตั้งชื่อโฟลเดอร์เพื่อเริ่มเก็บรูปและสีแบรนด์" : "Create and name a Brand Kit to store images and colors."}
+            </p>
           )}
         </Tabs.Panel>
       </Tabs.Root>
