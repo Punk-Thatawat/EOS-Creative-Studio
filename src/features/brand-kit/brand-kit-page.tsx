@@ -1,15 +1,20 @@
 "use client";
 
+import { AlertDialog } from "@base-ui/react/alert-dialog";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
+  ArrowLeft,
   Check,
   Copy,
   ImageIcon,
+  Layers3,
   LoaderCircle,
   Package,
   Palette,
   Pencil,
+  Pipette,
   Plus,
   RefreshCw,
   Trash2,
@@ -17,9 +22,10 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { brandKitApi, type BrandAssetKind, type BrandKit } from "@/lib/api/brand-kit";
+import { brandKitApi, type BrandAsset, type BrandAssetKind, type BrandKit } from "@/lib/api/brand-kit";
 import { useLocale } from "@/lib/i18n/locale-provider";
-import { BrandKitFolderControls, useBrandKitFolders } from "./brand-kit-folders";
+import { BrandKitFolderBrowser } from "./brand-kit-folder-browser";
+import { useBrandKitFolders } from "./brand-kit-folders";
 import s from "./brand-kit-page.module.css";
 
 const copy = {
@@ -43,6 +49,7 @@ const copy = {
     emptyLogo: "เพิ่มโลโก้แรกของแบรนด์",
     emptyProduct: "เพิ่มรูปสินค้าของคุณ",
     emptyHint: "เลือกไฟล์จากเครื่องเพื่อเริ่มต้น",
+    chooseFiles: "เลือกไฟล์",
     uploading: "กำลังอัปโหลด",
     colors: "สีแบรนด์",
     colorHint: "บันทึกได้สูงสุด 10 สี แล้วคัดลอกรหัสสีไปใช้กับงาน",
@@ -61,7 +68,9 @@ const copy = {
     saveName: "บันทึกชื่อ",
     cancel: "ยกเลิก",
     remove: "ลบรูป",
-    deletePrompt: "ลบรูปนี้ออกจาก Brand Kit? พื้นที่จะคืนหลังลบสำเร็จ",
+    deleteTitle: "ลบรูปนี้ออกจาก Brand Kit?",
+    deletePrompt: "รูปนี้จะถูกลบถาวร พื้นที่จัดเก็บจะคืนให้หลังลบสำเร็จ",
+    deleting: "กำลังลบรูป…",
     deleted: "ลบรูปแล้ว",
     preview: "โหลดภาพไม่ได้ ลองกดโหลดใหม่",
     uploadingDone: "อัปโหลดเรียบร้อยแล้ว",
@@ -103,6 +112,7 @@ const copy = {
     emptyLogo: "Add your first logo",
     emptyProduct: "Add your product photos",
     emptyHint: "Choose images from your device to get started",
+    chooseFiles: "Choose files",
     uploading: "Uploading",
     colors: "Brand colors",
     colorHint: "Save up to 10 colors and copy their codes into your work.",
@@ -121,7 +131,9 @@ const copy = {
     saveName: "Save name",
     cancel: "Cancel",
     remove: "Delete image",
-    deletePrompt: "Delete this image from your Brand Kit? Storage is released after deletion.",
+    deleteTitle: "Delete this image from Brand Kit?",
+    deletePrompt: "The image will be permanently deleted and its storage space will be freed.",
+    deleting: "Deleting image…",
     deleted: "Image deleted",
     preview: "Preview unavailable. Try refreshing.",
     uploadingDone: "Upload complete",
@@ -149,37 +161,61 @@ function size(bytes: number) {
 }
 const accepted = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-export function BrandKitPage({ initialFolderId }: { initialFolderId?: string }) {
+export function BrandKitPage({ initialFolderId, startCreating }: { initialFolderId?: string; startCreating?: boolean }) {
   const { locale } = useLocale();
   const t = copy[locale];
-  const state = useBrandKitFolders(true, initialFolderId);
+  const router = useRouter();
+  const state = useBrandKitFolders();
+  const folder = state.folders?.find(({ id }) => id === initialFolderId);
+  const th = locale === "th";
   const [busy, setBusy] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div className={s.page}>
-      <header className={s.header}>
-        <div>
+      <header className={s.hero}>
+        <div className={s.heroCopy}>
           <span className={s.eyebrow}>YOUR CREATIVE IDENTITY</span>
-          <h1>Brand Kit</h1>
+          <h1>Brand <span>Kit</span></h1>
           <h2>{t.intro}</h2>
           <p>{t.description}</p>
         </div>
+        <Image className={s.heroArt} src="/brand-kit/hero-folder.webp" alt="" width={920} height={518} unoptimized priority />
       </header>
-      <BrandKitFolderControls state={state} disabled={busy} />
       {state.error && <div className={s.error} role="alert">
         {t.generic}{" "}
         <Button type="button" variant="outline" size="sm" onClick={state.retry}>{t.retry}</Button>
       </div>}
       {state.folders === null && !state.error && <div className={s.loading} role="status">{t.loading}</div>}
-      {state.folders?.length === 0 && <p>
-        {locale === "th" ? "สร้างโฟลเดอร์แรกเพื่อเก็บโลโก้ สีแบรนด์ และรูปสินค้า" : "Create your first folder to store logos, colors, and product images."}
-      </p>}
-      {state.active && <BrandKitFolderPage key={state.active.id} folderId={state.active.id} busy={busy} setBusy={setBusy} />}
+      {state.folders && !folder && <>
+        {initialFolderId && <p className={s.error} role="status">{th ? "ไม่พบโฟลเดอร์นี้" : "This folder was not found."}</p>}
+        <BrandKitFolderBrowser key={startCreating ? "create" : "folders"} page folders={state.folders}
+          startCreating={startCreating} onSave={state.save} onRemove={state.remove}
+          onOpen={(id) => router.push("/brand-kit?folder=" + encodeURIComponent(id), { scroll: false })} />
+      </>}
+      {folder && <>
+        <div className={s.folderHeading}>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => router.push("/brand-kit", { scroll: false })}>
+            <ArrowLeft size={16} aria-hidden="true" /> {th ? "ทุกโฟลเดอร์" : "All folders"}
+          </Button>
+          <h2>{folder.name}</h2>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => setRefreshKey((key) => key + 1)}>
+            <RefreshCw size={16} aria-hidden="true" /> {t.refresh}
+          </Button>
+        </div>
+        <BrandKitFolderPage key={folder.id + ":" + refreshKey} folderId={folder.id} busy={busy} setBusy={setBusy}
+          updateImageCount={state.updateImageCount} />
+      </>}
     </div>
   );
 }
 
-function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; busy: boolean; setBusy: (busy: boolean) => void }) {
+function BrandKitFolderPage({ folderId, busy, setBusy, updateImageCount }: {
+  folderId: string;
+  busy: boolean;
+  setBusy: (busy: boolean) => void;
+  updateImageCount: (id: string, count: number) => void;
+}) {
   const { locale } = useLocale();
   const t = copy[locale];
   const [kit, setKit] = useState<BrandKit | null>(null);
@@ -189,6 +225,10 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
   const [uploadProgress, setUploadProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [deleteAsset, setDeleteAsset] = useState<BrandAsset | null>(null);
+  const cancelDelete = useRef<HTMLButtonElement>(null);
+  const deleteTrigger = useRef<HTMLButtonElement>(null);
+  const storageHeading = useRef<HTMLHeadingElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const logoInput = useRef<HTMLInputElement>(null);
@@ -213,6 +253,10 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
       });
     return () => controller.abort();
   }, [folderId]);
+
+  useEffect(() => {
+    if (kit) updateImageCount(folderId, kit.assets.length);
+  }, [folderId, kit, updateImageCount]);
 
   async function action(work: () => Promise<BrandKit>, success: string) {
     if (actionLock.current) return;
@@ -284,18 +328,18 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
     return (
       <section className={s.card} aria-labelledby={`${kind}-heading`}>
         <div className={s.sectionHead}>
-          <div>
-            <h2 id={`${kind}-heading`}>
-              {logo ? <ImageIcon size={19} /> : <Package size={19} />}
-              {logo ? t.logos : t.products}
-              <span className={s.count}>
-                {items.length}
-                {logo ? "/5" : ""}
-              </span>
-            </h2>
-            <p>{logo ? t.logoHint : t.productHint}</p>
+          <div className={s.sectionLabel}>
+            {logo ? <ImageIcon size={30} aria-hidden="true" /> : <Package size={30} aria-hidden="true" />}
+            <div>
+              <h2 id={`${kind}-heading`}>
+                {logo ? t.logos : t.products}
+                <span className={s.count}>{items.length}{logo ? "/5" : ""}</span>
+              </h2>
+              <p>{logo ? t.logoHint : t.productHint}</p>
+            </div>
           </div>
           <Button
+            className={s.sectionAction}
             type="button"
             variant="outline"
             disabled={busy || (logo && items.length >= 5) || (kit?.remainingBytes ?? 0) <= 0}
@@ -320,16 +364,17 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
           <button
             type="button"
             className={s.empty}
-            disabled={busy}
+            disabled={busy || (kit?.remainingBytes ?? 0) <= 0}
             onClick={() => (logo ? logoInput : productInput).current?.click()}
           >
             <span className={s.emptyIcon}>{logo ? <ImageIcon size={27} /> : <Package size={27} />}</span>
             <strong>{logo ? t.emptyLogo : t.emptyProduct}</strong>
             <span>{t.emptyHint}</span>
             <span className={s.uploadLabel}>
-              <Upload size={15} />
-              {logo ? t.uploadLogo : t.uploadProduct}
+              <Upload size={15} aria-hidden="true" />
+              {t.chooseFiles}
             </span>
+            <span className={s.emptyDecoration} aria-hidden="true">{logo ? <ImageIcon /> : <Package />}</span>
           </button>
         ) : (
           <div className={s.assetGrid}>
@@ -410,9 +455,10 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => {
-                            if (window.confirm(t.deletePrompt))
-                              void action(() => brandKitApi.remove(asset.id), t.deleted);
+                          onClick={(event) => {
+                            deleteTrigger.current = event.currentTarget;
+                            setError(null);
+                            setDeleteAsset(asset);
                           }}
                           aria-label={`${t.remove}: ${asset.name}`}
                         >
@@ -434,19 +480,49 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
 
   return (
     <>
-      <div className="mb-3 flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            void refresh();
-          }}
-          disabled={busy || loading}
-        >
-          <RefreshCw size={16} />
-          {t.refresh}
-        </Button>
-      </div>
+      <AlertDialog.Root open={deleteAsset !== null} onOpenChange={(open) => {
+        if (!open && !busy) setDeleteAsset(null);
+      }}>
+        <AlertDialog.Portal>
+          <AlertDialog.Backdrop className={s.deleteBackdrop} />
+          <AlertDialog.Popup className={s.deleteDialog} initialFocus={cancelDelete}
+            finalFocus={() => deleteTrigger.current?.isConnected ? deleteTrigger.current : storageHeading.current}>
+            <div className={s.deleteHeader}>
+              <span><Trash2 size={23} aria-hidden="true" /></span>
+              <div>
+                <AlertDialog.Title>{t.deleteTitle}</AlertDialog.Title>
+                <AlertDialog.Description>{t.deletePrompt}</AlertDialog.Description>
+              </div>
+            </div>
+            {deleteAsset && <div className={s.deletePreview}>
+              <div className={deleteAsset.kind === "logo" ? s.logoPreview : undefined}>
+                {deleteAsset.url && <Image src={deleteAsset.url} alt="" width={deleteAsset.width} height={deleteAsset.height}
+                  unoptimized onError={(event) => { event.currentTarget.hidden = true; }} />}
+                <ImageIcon size={22} aria-hidden="true" />
+              </div>
+              <div>
+                <strong title={deleteAsset.name}>{deleteAsset.name}</strong>
+                <span>{size(deleteAsset.sizeBytes)}</span>
+              </div>
+            </div>}
+            {error && <p className={s.deleteError} role="alert">{message(new Error(error))}</p>}
+            <div className={s.deleteActions}>
+              <AlertDialog.Close render={<Button ref={cancelDelete} type="button" variant="outline" disabled={busy} />}>
+                {t.cancel}
+              </AlertDialog.Close>
+              <Button type="button" className={s.deleteConfirm} disabled={busy || !deleteAsset} onClick={() => {
+                if (!deleteAsset) return;
+                void action(() => brandKitApi.remove(deleteAsset.id), t.deleted).then((value) => {
+                  if (value) setDeleteAsset(null);
+                });
+              }}>
+                {busy ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <Trash2 size={16} aria-hidden="true" />}
+                {busy ? t.deleting : t.remove}
+              </Button>
+            </div>
+          </AlertDialog.Popup>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
       <div aria-live="polite" aria-atomic="true" className={!notice && !busy ? s.fileInput : undefined}>
         {notice ? (
           <p className={s.notice}>
@@ -461,7 +537,7 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
           </p>
         ) : null}
       </div>
-      {error ? (
+      {error && !deleteAsset ? (
         <div role="alert" className={s.error}>
           {message(new Error(error))}
           {!kit ? (
@@ -489,10 +565,10 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
           <section className={s.storage} aria-label={t.storage}>
             <div>
               <span className={s.storageIcon}>
-                <Palette size={23} />
+                <Layers3 size={25} aria-hidden="true" />
               </span>
               <div>
-                <h2>{t.storage}</h2>
+                <h2 ref={storageHeading} tabIndex={-1}>{t.storage}</h2>
                 <p>{t.quota.replace("{mb}", String(kit.quotaBytes / 1024 / 1024))}</p>
               </div>
             </div>
@@ -524,15 +600,18 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
           {assets("logo")}
           <section className={s.card} aria-labelledby="brand-colors-heading">
             <div className={s.sectionHead}>
-              <div>
-                <h2 id="brand-colors-heading">
-                  <Palette size={19} />
-                  {t.colors}
-                  <span className={s.count}>{colors.length}/10</span>
-                </h2>
-                <p>{t.colorHint}</p>
+              <div className={s.sectionLabel}>
+                <Palette size={30} aria-hidden="true" />
+                <div>
+                  <h2 id="brand-colors-heading">
+                    {t.colors}
+                    <span className={s.count}>{colors.length}/10</span>
+                  </h2>
+                  <p>{t.colorHint}</p>
+                </div>
               </div>
               <Button
+                className={s.sectionAction}
                 type="button"
                 variant="outline"
                 disabled={busy || colors.length >= 10}
@@ -622,14 +701,17 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
                 ))}
               </div>
             ) : (
-              <p className={s.colorEmpty}>{t.noColors}</p>
+              <p className={s.colorEmpty}>
+                <Pipette size={20} aria-hidden="true" /> {t.noColors}
+                <span className={s.emptyDecoration} aria-hidden="true"><Palette /></span>
+              </p>
             )}
             {!validColors ? (
               <p className={s.validation} role="alert">
                 {t.colorInvalid}
               </p>
             ) : null}
-            <div className={s.colorFooter}>
+            {dirty && <div className={s.colorFooter}>
               <Button
                 type="button"
                 disabled={busy || !validColors || !dirty}
@@ -642,7 +724,7 @@ function BrandKitFolderPage({ folderId, busy, setBusy }: { folderId: string; bus
                 <Check size={16} />
                 {t.save}
               </Button>
-            </div>
+            </div>}
           </section>
           {assets("product")}
         </>
