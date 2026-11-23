@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CirclePlay, LoaderCircle, Video, X } from "lucide-react";
 import { EosVideoPlayer } from "@/components/media/eos-video-player";
 import { YouTubeVideoEmbed } from "@/components/media/youtube-video-embed";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { listPublicTutorials, type AdminTutorialSlot } from "@/lib/api/tutorials";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { isYouTubeVideoUrl } from "@/lib/media/youtube";
@@ -14,6 +15,7 @@ function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature:
   const [tutorial, setTutorial] = useState<AdminTutorialSlot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -37,9 +39,16 @@ function ImageTutorialDialog({ feature, featureName, mode, onClose }: { feature:
     return () => window.clearTimeout(timer);
   }, [load]);
 
+  useDialogFocus(true, dialogRef, "button");
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   const title = tutorial?.modeName ? `${featureName} · ${tutorial.modeName}` : `${featureName} tutorial`;
 
-  return <div className={cx("gen-tutorial-dialog")} role="dialog" aria-modal="true" aria-labelledby="image-tutorial-dialog-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+  return <div ref={dialogRef} className={cx("gen-tutorial-dialog")} role="dialog" aria-modal="true" aria-labelledby="image-tutorial-dialog-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <div className={cx("gen-tutorial-dialog-content")}>
       <header className={cx("gen-tutorial-dialog-header")}><div><span>{t("create.image.tutorial.title")}</span><h2 id="image-tutorial-dialog-title">{title}</h2><p>{tutorial?.mode ? "Mode-specific guide" : "Feature guide"}</p></div><button type="button" onClick={onClose} className={cx("gen-tutorial-dialog-close")} aria-label="Close tutorial"><X size={18} /></button></header>
       <div className={cx("gen-tutorial-dialog-body")}>
