@@ -780,6 +780,7 @@ export function VoiceCloneLayout({
           <input
             className={styles.altRange}
             type="range"
+            aria-label={t("create.audio.clone.speed")}
             min="0.5"
             max="2"
             step="0.05"
@@ -797,6 +798,7 @@ export function VoiceCloneLayout({
               <input
                 className={styles.altRange}
                 type="range"
+                aria-label={t("create.audio.clone.accuracy")}
                 min="0"
                 max="1"
                 step="0.05"
@@ -851,6 +853,7 @@ export function VoiceCloneLayout({
               <input
                 className={styles.altRange}
                 type="range"
+                aria-label={t("create.audio.pitch")}
                 min="-12"
                 max="12"
                 step="1"
@@ -866,6 +869,7 @@ export function VoiceCloneLayout({
               <input
                 className={styles.altRange}
                 type="range"
+                aria-label={t("create.audio.synthVolume")}
                 min="0.5"
                 max="10"
                 step="0.5"
