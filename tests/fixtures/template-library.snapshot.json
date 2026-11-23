@@ -1,0 +1,767 @@
+{
+  "modeOf": {
+    "plain": "create",
+    "motion": "motion",
+    "swap": "motion",
+    "edit": "edit",
+    "product": "create",
+    "tagged": "create",
+    "thai": "create",
+    "seeded": "create",
+    "system": "create",
+    "longName": "create",
+    "audio": "create",
+    "work": "create"
+  },
+  "promptOf": {
+    "plain": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "motion": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "swap": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "edit": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "product": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "tagged": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "thai": [
+      "พรอมต์ไทย",
+      "Create a premium product advertisement with intentional lighting, a clean composition, and a clear hero product."
+    ],
+    "seeded": [
+      "แสดงสินค้าของฉันในวิดีโอต้นฉบับ โดยคงการเคลื่อนกล้อง ทิศทางแสง และจังหวะเดิมไว้",
+      "Show my product in the source video, keeping the same camera motion, lighting direction and pacing."
+    ],
+    "system": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "longName": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "audio": [
+      "Make an ad",
+      "Make an ad"
+    ],
+    "work": [
+      "Make an ad",
+      "Make an ad"
+    ]
+  },
+  "copy": {
+    "plain": [
+      {
+        "title": "Product ad",
+        "description": "A description"
+      },
+      {
+        "title": "Product ad",
+        "description": "A description"
+      }
+    ],
+    "motion": [
+      {
+        "title": "Motion transfer: brand story",
+        "description": "A description"
+      },
+      {
+        "title": "Motion transfer: brand story",
+        "description": "A description"
+      }
+    ],
+    "swap": [
+      {
+        "title": "Product ad",
+        "description": "A description"
+      },
+      {
+        "title": "Product ad",
+        "description": "A description"
+      }
+    ],
+    "edit": [
+      {
+        "title": "Upscale",
+        "description": "A description"
+      },
+      {
+        "title": "Upscale",
+        "description": "A description"
+      }
+    ],
+    "product": [
+      {
+        "title": "Product ad",
+        "description": "A description"
+      },
+      {
+        "title": "Product ad",
+        "description": "A description"
+      }
+    ],
+    "tagged": [
+      {
+        "title": "Product ad",
+        "description": "A description"
+      },
+      {
+        "title": "Product ad",
+        "description": "A description"
+      }
+    ],
+    "thai": [
+      {
+        "title": "Social media post",
+        "description": "คำอธิบายไทย"
+      },
+      {
+        "title": "Social media post",
+        "description": "A description"
+      }
+    ],
+    "seeded": [
+      {
+        "title": "Training video",
+        "description": "A description"
+      },
+      {
+        "title": "Training video",
+        "description": "A description"
+      }
+    ],
+    "system": [
+      {
+        "title": "สร้างวิดีโอ",
+        "description": "ใช้ผลงานนี้เป็นต้นแบบ พร้อมปรับแต่งค่าก่อนสร้างงานของคุณ"
+      },
+      {
+        "title": "Create video",
+        "description": "Use this work as a starting point and adjust the settings before you create."
+      }
+    ],
+    "longName": [
+      {
+        "title": "A {brand_name} story that goes on and on for a very long time without ever stopping to breathe\nsecond line",
+        "description": "A description"
+      },
+      {
+        "title": "A {brand_name} story that goes on and on for a very long time without ever stopping to breathe\nsecond line",
+        "description": "A description"
+      }
+    ],
+    "audio": [
+      {
+        "title": "Product ad",
+        "description": "A description"
+      },
+      {
+        "title": "Product ad",
+        "description": "A description"
+      }
+    ],
+    "work": [
+      {
+        "title": "Product ad",
+        "description": "A description"
+      },
+      {
+        "title": "Product ad",
+        "description": "A description"
+      }
+    ]
+  },
+  "name": {
+    "plain": [
+      "เปลี่ยนสินค้าให้เป็นแคมเปญ",
+      "Product ad"
+    ],
+    "motion": [
+      "ถ่ายทอดการเคลื่อนไหว: เรื่องราวแบรนด์",
+      "Motion transfer: brand story"
+    ],
+    "swap": [
+      "เปลี่ยนสินค้าให้เป็นแคมเปญ",
+      "Product ad"
+    ],
+    "edit": [
+      "Upscale",
+      "Upscale"
+    ],
+    "product": [
+      "เปลี่ยนสินค้าให้เป็นแคมเปญ",
+      "Product ad"
+    ],
+    "tagged": [
+      "เปลี่ยนสินค้าให้เป็นแคมเปญ",
+      "Product ad"
+    ],
+    "thai": [
+      "ชื่อไทย",
+      "Social media post"
+    ],
+    "seeded": [
+      "วิดีโออบรมและสอน",
+      "Training video"
+    ],
+    "system": [
+      "สร้างวิดีโอ",
+      "Create video"
+    ],
+    "longName": [
+      "A brand name story that goes on and on for a very long time…",
+      "A brand name story that goes on and on for a very long time…"
+    ],
+    "audio": [
+      "เปลี่ยนสินค้าให้เป็นแคมเปญ",
+      "Product ad"
+    ],
+    "work": [
+      "เปลี่ยนสินค้าให้เป็นแคมเปญ",
+      "Product ad"
+    ]
+  },
+  "templateHref": {
+    "plain": "/create/video?template=slug-1",
+    "motion": "/create/video?tab=motion-transfer&template=motion-1",
+    "swap": "/create/video?template=swap-1",
+    "edit": "/create/image?tool=upscale&template=edit-1",
+    "product": "/create/video?template=product-1",
+    "tagged": "/create/video?template=tagged-1",
+    "thai": "/create/video?template=thai-1",
+    "seeded": "/create/video?template=seeded-1",
+    "system": "/create/video?template=system-1",
+    "longName": "/create/video?template=long-1",
+    "audio": "/create/audio?x=1&template=audio-1#top",
+    "work": "/create/video?template=work-w1"
+  },
+  "ratioOf": {
+    "plain": 1.7777777777777777,
+    "motion": 0.5625,
+    "swap": 1.7777777777777777,
+    "edit": 1.7777777777777777,
+    "product": 1.7777777777777777,
+    "tagged": 1.7777777777777777,
+    "thai": 1.7777777777777777,
+    "seeded": 1.7777777777777777,
+    "system": 1.7777777777777777,
+    "longName": 1.7777777777777777,
+    "audio": 1,
+    "work": 1.7777777777777777
+  },
+  "isProductTemplate": {
+    "plain": false,
+    "motion": false,
+    "swap": false,
+    "edit": false,
+    "product": true,
+    "tagged": true,
+    "thai": false,
+    "seeded": false,
+    "system": false,
+    "longName": false,
+    "audio": false,
+    "work": false
+  },
+  "inputImagesOf": {
+    "plain": [],
+    "motion": [],
+    "swap": [
+      "https://cdn.example/b.png",
+      "/api/template-assets/c.png",
+      "https://cdn.example/a.png"
+    ],
+    "edit": [],
+    "product": [],
+    "tagged": [],
+    "thai": [],
+    "seeded": [],
+    "system": [],
+    "longName": [],
+    "audio": [],
+    "work": [],
+    "none": []
+  },
+  "referenceVideoOf": {
+    "plain": "/api/template-assets/clip.mp4",
+    "motion": "https://cdn.example/src.mp4",
+    "edit": "/api/template-assets/clip.mp4",
+    "product": "/api/template-assets/clip.mp4",
+    "tagged": "/api/template-assets/clip.mp4",
+    "thai": "/api/template-assets/clip.mp4",
+    "seeded": "/api/template-assets/clip.mp4",
+    "system": "/api/template-assets/clip.mp4",
+    "longName": "/api/template-assets/clip.mp4",
+    "audio": "https://cdn.example/a.mp3",
+    "work": "/api/template-assets/clip.mp4"
+  },
+  "variantOf": {
+    "plain": "motion",
+    "motion": "motion",
+    "swap": "swap",
+    "edit": "motion",
+    "product": "motion",
+    "tagged": "motion",
+    "thai": "motion",
+    "seeded": "motion",
+    "system": "motion",
+    "longName": "motion",
+    "audio": "motion",
+    "work": "motion",
+    "none": "motion"
+  },
+  "tidyTitle": [
+    [
+      "",
+      ""
+    ],
+    [
+      "line two",
+      "line two"
+    ],
+    [
+      "Short",
+      "Short"
+    ],
+    [
+      "Hello product name here",
+      "Hello product name h…"
+    ],
+    [
+      "aaaaaaaaaaaaaaaaaaaa…",
+      "aaaaaaaaaaaaaaaaaaaa…"
+    ],
+    [
+      "word word word word word word word word word word word word…",
+      "word word word word…"
+    ],
+    [
+      "first",
+      "first"
+    ]
+  ],
+  "valid": [
+    false,
+    false,
+    true,
+    false,
+    true,
+    true,
+    false,
+    false,
+    false,
+    false
+  ],
+  "creditText": [
+    "",
+    "0",
+    "1",
+    "1.3",
+    "1097",
+    "0",
+    "2.6"
+  ],
+  "workSlug": [
+    "work-abc",
+    "work-a-b-c",
+    "work-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "work---"
+  ],
+  "templateOfWork": [
+    {
+      "id": "mine:AbC_123 xyz",
+      "slug": "work-abc-123-xyz",
+      "title": "My clip",
+      "description": "A prompt",
+      "category": "Video",
+      "kind": "video",
+      "format": "Video",
+      "thumbnailUrl": "",
+      "previewUrl": "https://cdn.example/out.mp4",
+      "targetPath": "",
+      "prompt": "A prompt",
+      "tags": [],
+      "featured": false,
+      "createdAt": "2026-02-01",
+      "updatedAt": "2026-02-02",
+      "settings": {
+        "ratio": "9:16",
+        "model": "seedance",
+        "duration": 10
+      }
+    },
+    {
+      "id": "mine:AbC_123 xyz",
+      "slug": "work-abc-123-xyz",
+      "title": "My clip",
+      "description": "A prompt",
+      "category": "Video",
+      "kind": "video",
+      "format": "Video",
+      "thumbnailUrl": "",
+      "previewUrl": "https://cdn.example/out.mp4",
+      "targetPath": "",
+      "prompt": "A prompt",
+      "tags": [],
+      "featured": false,
+      "createdAt": "2026-02-01",
+      "updatedAt": "2026-02-02",
+      "settings": {
+        "ratio": "9:16",
+        "model": "seedance",
+        "duration": 10,
+        "savedAsTemplate": true
+      }
+    },
+    {
+      "id": "mine:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "slug": "work-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "title": "Bare",
+      "description": "",
+      "category": "Video",
+      "kind": "video",
+      "format": "Video",
+      "thumbnailUrl": "",
+      "targetPath": "",
+      "prompt": "",
+      "tags": [],
+      "featured": false,
+      "createdAt": "a",
+      "updatedAt": "b",
+      "settings": {
+        "model": "kept",
+        "duration": 5
+      }
+    }
+  ],
+  "styleNameFromFile": [
+    "photo",
+    "my style",
+    "Untitled",
+    "Untitled",
+    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "Untitled",
+    "aaaaaaaaaaaaaaaaaaaaaaaaa",
+    "IMG 1234"
+  ],
+  "presetFacts": [
+    [
+      {
+        "key": "model",
+        "label": "templates.preview.factModel",
+        "value": "m"
+      },
+      {
+        "key": "ratio",
+        "label": "templates.preview.factRatio",
+        "value": "1:1"
+      },
+      {
+        "key": "resolution",
+        "label": "templates.preview.factResolution",
+        "value": "480p"
+      },
+      {
+        "key": "count",
+        "label": "templates.preview.factCount",
+        "value": "2"
+      },
+      {
+        "key": "duration",
+        "label": "templates.preview.factDuration",
+        "value": "templates.preview.seconds:{\"value\":10}"
+      },
+      {
+        "key": "file",
+        "label": "templates.preview.factFile",
+        "value": "mp4"
+      }
+    ],
+    [
+      {
+        "key": "model",
+        "label": "templates.preview.factModel",
+        "value": "id"
+      },
+      {
+        "key": "ratio",
+        "label": "templates.preview.factRatio",
+        "value": "16:9"
+      }
+    ],
+    []
+  ],
+  "storage": {
+    "emptyFavorites": [],
+    "emptyStyles": [],
+    "emptyRecent": [],
+    "emptyDismissed": [],
+    "favorites": [
+      "a",
+      "b"
+    ],
+    "brokenFavorites": [],
+    "dismissed": [
+      "r1",
+      "r3"
+    ],
+    "styles": [
+      {
+        "id": "a",
+        "name": "n",
+        "imageUrl": "u"
+      }
+    ],
+    "savedStyles": 50,
+    "recentAfterMany": [
+      "r13",
+      "r12",
+      "r11",
+      "r10",
+      "r9",
+      "r8",
+      "r7",
+      "r6",
+      "r5",
+      "r4",
+      "r3",
+      "r2"
+    ],
+    "remembered": [
+      "r5",
+      "r13",
+      "r12",
+      "r11",
+      "r10",
+      "r9",
+      "r8",
+      "r7",
+      "r6",
+      "r4",
+      "r3",
+      "r2"
+    ],
+    "recentFiltered": [
+      "ok"
+    ],
+    "recentCleared": false,
+    "keys": {
+      "favorites": "eos.templates.favorite-works"
+    }
+  },
+  "const:kindKeys": {
+    "all": "templates.kind.all",
+    "image": "templates.kind.image",
+    "video": "templates.kind.video",
+    "audio": "templates.kind.audio",
+    "document": "templates.kind.document"
+  },
+  "const:modes": [
+    "create",
+    "motion"
+  ],
+  "const:DEFAULT_MODE": "create",
+  "const:modeKeys": {
+    "create": "templates.mode.create",
+    "edit": "templates.mode.edit",
+    "motion": "templates.mode.motion"
+  },
+  "const:heroKeys": {
+    "create": {
+      "tag": "templates.hero.video.tag",
+      "title": "templates.hero.video.title",
+      "body": "templates.hero.video.body"
+    },
+    "edit": {
+      "tag": "templates.hero.edit.tag",
+      "title": "templates.hero.edit.title",
+      "body": "templates.hero.edit.body"
+    },
+    "motion": {
+      "tag": "templates.hero.motion.tag",
+      "title": "templates.hero.motion.title",
+      "body": "templates.hero.motion.body"
+    }
+  },
+  "const:stepsByMode": {
+    "create": [
+      [
+        "templates.how.step1.title",
+        "templates.how.step1.body"
+      ],
+      [
+        "templates.how.step2.title",
+        "templates.how.step2.body"
+      ],
+      [
+        "templates.how.step3.title",
+        "templates.how.step3.body"
+      ]
+    ],
+    "edit": [
+      [
+        "templates.how.edit.step1.title",
+        "templates.how.edit.step1.body"
+      ],
+      [
+        "templates.how.edit.step2.title",
+        "templates.how.edit.step2.body"
+      ],
+      [
+        "templates.how.edit.step3.title",
+        "templates.how.edit.step3.body"
+      ]
+    ],
+    "motion": [
+      [
+        "templates.how.motion.step1.title",
+        "templates.how.motion.step1.body"
+      ],
+      [
+        "templates.how.motion.step2.title",
+        "templates.how.motion.step2.body"
+      ],
+      [
+        "templates.how.motion.step3.title",
+        "templates.how.motion.step3.body"
+      ]
+    ]
+  },
+  "const:laneQuery": {
+    "eos": {
+      "source": "official",
+      "sort": "recommended"
+    },
+    "communityTrending": {
+      "source": "community",
+      "sort": "popular"
+    },
+    "communityNew": {
+      "source": "community",
+      "sort": "newest"
+    }
+  },
+  "const:laneOptions": [
+    [
+      "eos",
+      "templates.source.eos",
+      "WandSparkles"
+    ],
+    [
+      "communityTrending",
+      "templates.source.communityTrending",
+      "TrendingUp"
+    ],
+    [
+      "communityNew",
+      "templates.source.communityNew",
+      "Clock"
+    ]
+  ],
+  "const:editTools": [
+    {
+      "id": "edit",
+      "icon": "WandSparkles",
+      "title": "templates.edit.edit.title",
+      "desc": "templates.edit.edit.desc",
+      "href": "/create/video?tool=edit"
+    },
+    {
+      "id": "extend",
+      "icon": "FastForward",
+      "title": "templates.edit.extend.title",
+      "desc": "templates.edit.extend.desc",
+      "href": "/create/video?tab=extend-video"
+    },
+    {
+      "id": "reframe",
+      "icon": "Crop",
+      "title": "templates.edit.reframe.title",
+      "desc": "templates.edit.reframe.desc",
+      "href": "/create/video?tool=reframe"
+    },
+    {
+      "id": "upscale",
+      "icon": "Expand",
+      "title": "templates.edit.upscale.title",
+      "desc": "templates.edit.upscale.desc",
+      "href": "/create/video?tool=upscale"
+    },
+    {
+      "id": "removeBackground",
+      "icon": "Eraser",
+      "title": "templates.edit.removeBackground.title",
+      "desc": "templates.edit.removeBackground.desc",
+      "href": "/create/video?tool=remove-background",
+      "isNew": true
+    },
+    {
+      "id": "sdrToHdr",
+      "icon": "Sun",
+      "title": "templates.edit.sdrToHdr.title",
+      "desc": "templates.edit.sdrToHdr.desc",
+      "href": "/create/video?tool=sdr-to-hdr",
+      "isNew": true
+    },
+    {
+      "id": "fpsBoost",
+      "icon": "Gauge",
+      "title": "templates.edit.fpsBoost.title",
+      "desc": "templates.edit.fpsBoost.desc",
+      "href": "/create/video?tool=fps-boost",
+      "isNew": true
+    },
+    {
+      "id": "depthMap",
+      "icon": "ScanLine",
+      "title": "templates.edit.depthMap.title",
+      "desc": "templates.edit.depthMap.desc",
+      "href": "/create/video?tool=depth-map",
+      "isNew": true
+    }
+  ],
+  "const:modeFeatures": {
+    "create": [
+      "text-to-video",
+      "image-to-video"
+    ],
+    "edit": [
+      "extend-video",
+      "lipsync",
+      "people-video"
+    ],
+    "motion": [
+      "motion-transfer",
+      "video-swap"
+    ]
+  },
+  "const:workflowEvent": "eos:template-workflow-changed",
+  "const:modeCategory": {
+    "create": "Video",
+    "edit": "Edit video",
+    "motion": "Motion"
+  },
+  "const:modeCover": {
+    "create": "/generated-icons-v2/templates/ai-presenter-video.png",
+    "edit": "/generated-icons-v2/templates/training-video.png",
+    "motion": "/generated-icons-v2/templates/product-ad.png"
+  },
+  "const:favoriteWorksKey": "eos.templates.favorite-works",
+  "const:WORK_ID": "mine:",
+  "const:WORK_TEMPLATE_EVENT": "eos:work-template",
+  "const:DISMISSED_RUNS_KEY": "eos.templates.dismissedRuns"
+}
