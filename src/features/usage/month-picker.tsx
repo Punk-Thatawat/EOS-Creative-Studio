@@ -57,7 +57,7 @@ export function MonthPicker({ value, options, onChange, ariaLabel, className }: 
     {open ? <div className="absolute left-0 top-[calc(100%+6px)] z-50 w-[272px] rounded-[12px] border border-border bg-white p-3 shadow-[0_14px_32px_rgba(33,29,25,0.16)]" role="dialog" aria-label={ariaLabel}>
       <div className="mb-2 flex items-center justify-between">
         <button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted disabled:opacity-35" disabled={year <= years[0]} onClick={() => setYear((current) => current - 1)} aria-label={c("usage.month.prevYear")}><ChevronLeft size={16} /></button>
-        <strong className="text-sm font-bold">{year}</strong>
+        <strong className="text-sm font-bold">{locale === "th" ? year + 543 : year}</strong>
         <button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-muted disabled:opacity-35" disabled={year >= years[years.length - 1]} onClick={() => setYear((current) => current + 1)} aria-label={c("usage.month.nextYear")}><ChevronRight size={16} /></button>
       </div>
       <div className="grid grid-cols-3 gap-1.5">

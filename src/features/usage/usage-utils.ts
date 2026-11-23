@@ -10,7 +10,7 @@ export function calculateVat(amountThb: number, vatPercent: number) {
 }
 export const signed = (value: number) => `${value > 0 ? "+" : ""}${number(value)}`;
 export type UsageLocale = "th" | "en";
-const intlLocale = (locale: UsageLocale) => (locale === "en" ? "en-GB" : "th-TH-u-ca-gregory");
+const intlLocale = (locale: UsageLocale) => (locale === "en" ? "en-GB" : "th-TH");
 export const dateLabel = (value: string, locale: UsageLocale = "th") => new Intl.DateTimeFormat(intlLocale(locale), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(value));
 export const monthLabel = (value: string, locale: UsageLocale = "th") => new Intl.DateTimeFormat(intlLocale(locale), { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(value));
 /** Short month names for the month picker, in calendar order. */

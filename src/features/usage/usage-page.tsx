@@ -39,7 +39,7 @@ function ActivityRows({ items, history = false }: { items: Activity[]; history?:
 }
 
 function UsageChart({ dashboard }: { dashboard: UsageDashboard }) {
-  const { c } = useStudioCopy();
+  const { c, locale } = useStudioCopy();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -66,12 +66,12 @@ function UsageChart({ dashboard }: { dashboard: UsageDashboard }) {
       points.forEach((point, index) => {
         ctx.beginPath(); ctx.arc(x(index), y(point.credits), 3.5, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill(); ctx.stroke();
         ctx.fillStyle = "#53535d"; ctx.textAlign = "center";
-        ctx.fillText(new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(point.date)), x(index), height - 12);
+        ctx.fillText(new Intl.DateTimeFormat(locale === "en" ? "en-GB" : "th-TH", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(point.date)), x(index), height - 12);
         if (point.credits === peak && peak > 0) { ctx.fillStyle = "#d60076"; ctx.font = "bold 15px Arial"; ctx.fillText(number(peak), x(index), y(peak) - 15); ctx.font = "13px Arial"; }
       });
     };
     render(); const observer = new ResizeObserver(render); observer.observe(canvas); return () => observer.disconnect();
-  }, [dashboard]);
+  }, [dashboard, locale]);
   return <div className={styles.chart}><canvas ref={canvasRef} role="img" aria-label={c("usage.chart.aria", { points: visibleTrend(dashboard).map(point => c("usage.chart.point", { label: point.label, value: number(point.credits) })).join(", ") })} /><span className={styles.chartCaption}>{c("usage.chart.caption")}</span></div>;
 }
 
