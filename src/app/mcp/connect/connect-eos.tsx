@@ -7,25 +7,34 @@ import { fetchBackendSession } from "@/lib/auth/backend-session";
 
 const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:4000").replace(/\/+$/, "").replace(/\/api\/v1$/, "");
 
-function validTicket(ticket: string): boolean {
+function readTicket(ticket: string) {
   try {
     const payload = ticket.split(".")[1];
-    const data = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { typ?: unknown; exp?: unknown };
-    return data.typ === "mcp-login" && typeof data.exp === "number" && data.exp > Date.now() / 1000;
+    const data = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { typ?: unknown; exp?: unknown; callbackOrigin?: unknown };
+    if (typeof data.exp !== "number" || data.exp <= Date.now() / 1000) return null;
+    if (data.typ === "mcp-login") return { kind: "local" } as const;
+    if (data.typ === "mcp-remote-login" && typeof data.callbackOrigin === "string") {
+      const origin = new URL(data.callbackOrigin);
+      const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
+      if (origin.origin === data.callbackOrigin && (origin.protocol === "https:" || (loopback && origin.protocol === "http:"))) {
+        return { kind: "remote", origin: origin.origin } as const;
+      }
+    }
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
 export default function ConnectEos({ ticket }: { ticket: string }) {
-  const [ticketIsValid] = useState(() => validTicket(ticket));
+  const [connection] = useState(() => readTicket(ticket));
   const [status, setStatus] = useState<"checking" | "login" | "ready" | "submitting" | "expired" | "unavailable">("checking");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const returnPath = "/mcp/connect?" + new URLSearchParams({ ticket });
 
   useEffect(() => {
-    if (!ticketIsValid) return;
+    if (!connection) return;
     let active = true;
     async function check() {
       const token = await getApiAccessToken();
@@ -41,7 +50,7 @@ export default function ConnectEos({ ticket }: { ticket: string }) {
     }
     void check().catch(() => { if (active) setStatus("unavailable"); });
     return () => { active = false; };
-  }, [ticketIsValid]);
+  }, [connection]);
 
   async function approve() {
     setError("");
@@ -52,7 +61,8 @@ export default function ConnectEos({ ticket }: { ticket: string }) {
         setStatus("login");
         return;
       }
-      const response = await fetch(backendUrl + "/api/v1/auth/mcp/approve", {
+      const approvePath = connection?.kind === "remote" ? "/mcp/approve" : "/api/v1/auth/mcp/approve";
+      const response = await fetch(backendUrl + approvePath, {
         method: "POST",
         headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ ticket }),
@@ -69,8 +79,10 @@ export default function ConnectEos({ ticket }: { ticket: string }) {
       if (!response.ok) throw new Error("EOS approval failed");
       const payload = await response.json() as { data?: { callbackUrl?: string } };
       const callback = payload.data?.callbackUrl ? new URL(payload.data.callbackUrl) : null;
-      if (!callback || callback.protocol !== "http:" || callback.hostname !== "127.0.0.1"
-        || !callback.port || callback.pathname !== "/callback" || callback.username || callback.password) {
+      const validDestination = connection?.kind === "remote"
+        ? callback?.origin === connection.origin
+        : callback?.protocol === "http:" && callback.hostname === "127.0.0.1" && !!callback.port && callback.pathname === "/callback";
+      if (!callback || !validDestination || callback.username || callback.password || !callback.searchParams.has("code")) {
         throw new Error("Invalid EOS callback");
       }
       window.location.replace(callback.href);
@@ -80,7 +92,9 @@ export default function ConnectEos({ ticket }: { ticket: string }) {
     }
   }
 
-  const expired = !ticketIsValid || status === "expired";
+  const expired = !connection || status === "expired";
+  const remote = connection?.kind === "remote";
+  const title = remote ? "เชื่อมต่อ EOS MCP" : "เชื่อมต่อ EOS Local";
   const buttonClass = "inline-flex min-h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-bold text-primary-foreground disabled:opacity-60";
 
   return (
@@ -89,12 +103,15 @@ export default function ConnectEos({ ticket }: { ticket: string }) {
         <div className="mx-auto mb-5 grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
           <Link2 aria-hidden="true" />
         </div>
-        <h1 className="text-2xl font-bold">เชื่อมต่อ EOS Local</h1>
+        <h1 className="text-2xl font-bold">{title}</h1>
         {expired ? (
           <p className="mt-3 text-sm text-muted-foreground">ลิงก์นี้หมดอายุหรือถูกใช้แล้ว ให้ขอลิงก์ใหม่จาก EOS Local ใน Codex</p>
         ) : (
           <>
-            <p className="my-5 text-sm leading-6 text-muted-foreground">เชื่อมบัญชี EOS กับปลั๊กอิน EOS Local บนเครื่องนี้</p>
+            <p className="my-5 text-sm leading-6 text-muted-foreground">
+              {remote ? <>อนุญาตให้ <strong className="break-all">{connection.origin}</strong> เข้าถึงบัญชี EOS และส่งงานสร้างสื่อด้วยเครดิตของคุณ</>
+                : "เชื่อมบัญชี EOS กับปลั๊กอิน EOS Local บนเครื่องนี้"}
+            </p>
             {email && <p className="mb-4 break-all text-sm text-muted-foreground">{email}</p>}
             {status === "login" && (
               <a className={buttonClass} href={"/?" + new URLSearchParams({ login: "1", redirect: returnPath })}>เข้าสู่ระบบ EOS</a>
